@@ -1,0 +1,58 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '18.17.1'
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Add .env file
+        run: |
+          echo "OPEN_AI_API_KEY=\"$OPEN_AI_API_KEY\"" >> ./.env
+        env:
+          OPEN_AI_API_KEY: ${{secrets.OPEN_AI_API_KEY}}
+
+      - name: Test
+        run: yarn test
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: test
+    # Make sure the branch reference is 'main' as you've specified 'main' above in the on.push.branches section
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '18.17.1'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Build
+        run: yarn build
+
+      - name: Publish to NPM
+        run: yarn publish
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}

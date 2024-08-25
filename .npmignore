@@ -1,0 +1,11 @@
+src
+tests
+.github
+.prettierignore
+.prettierrc
+jest.config.ts
+tsconfig.json
+.yarnrc.yml
+.env
+coverage
+docs

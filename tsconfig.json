@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES5", // Target ECMAScript version
+    "module": "commonjs", // Module system
+    "declaration": true, // Generates corresponding '.d.ts' file
+    "outDir": "./dist", // Output directory for compiled JavaScript
+    "strict": true, // Enables strict type checking
+    "esModuleInterop": true, // Enables CommonJS/AMD/UMD module interop
+    "skipLibCheck": true, // Skip type checking of all declaration files
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "tests"]
+}

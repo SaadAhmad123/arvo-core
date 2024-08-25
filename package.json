@@ -1,0 +1,44 @@
+{
+  "name": "@arvo/core",
+  "version": "0.0.1",
+  "description": "This core package contains all the core classes and components of the Arvo Event Driven System",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node ./dist/index.js",
+    "dev": "ts-node ./src/index.ts",
+    "test": "jest --passWithNoTests --runInBand --detectOpenHandles --forceExit",
+    "format": "npx prettier --write ."
+  },
+  "keywords": [
+    "arvo",
+    "event-driven architecture",
+    "xorca",
+    "core",
+    "cloudevent",
+    "opentelemetry",
+    "orchestrator"
+  ],
+  "author": "Saad Ahmad <saadkwi12@hotmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^22.5.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.3.3",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4",
+    "@types/uuid": "^10.0.0",
+    "@opentelemetry/resources": "^1.25.1",
+    "@opentelemetry/sdk-node": "^0.52.1",
+    "@opentelemetry/sdk-trace-node": "^1.25.1",
+    "@opentelemetry/semantic-conventions": "^1.25.1"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
+  }
+}
