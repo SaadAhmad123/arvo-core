@@ -1,6 +1,6 @@
 /**
  * Checks if an object is JSON serializable.
- * 
+ *
  * @param obj - The object to check for JSON serializability.
  * @returns A boolean indicating whether the object is JSON serializable.
  * @throws {Error} If the object is not JSON serializable.
@@ -16,4 +16,4 @@ export const isJSONSerializable = (obj: unknown): boolean => {
   } catch {
     return false;
   }
-}
+};

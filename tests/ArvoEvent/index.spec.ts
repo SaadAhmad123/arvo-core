@@ -1,4 +1,4 @@
-import {createArvoEvent, ArvoEvent, ArvoDataContentType} from '../../src'
+import { createArvoEvent, ArvoEvent, ArvoDataContentType } from '../../src';
 import { telemetrySdk } from './utils';
 
 describe(`
@@ -6,21 +6,20 @@ describe(`
   and command-driven orchestration models while maintaining seamless integration with the CloudEvent standard, 
   ensuring portability across environments and vendors.    
 `, () => {
-  
   beforeAll(() => {
-    telemetrySdk.start()
-  })
+    telemetrySdk.start();
+  });
 
   afterAll(() => {
-    telemetrySdk.shutdown()
-  })
+    telemetrySdk.shutdown();
+  });
 
   const baseEvent = {
     source: 'test.producer',
     type: 'cmd.saad.test',
     subject: 'test.json',
     data: { message: 'Hello, World!' },
-    to: 'worker'
+    to: 'worker',
   };
 
   it('should throw an error when to is not provided for an Arvo event', () => {
@@ -29,12 +28,12 @@ describe(`
       type: 'cmd.saad.test',
       subject: 'test.json',
       data: { message: 'Hello, World!' },
-    })
+    });
 
-    expect(result.event).toBe(null)
-    expect(result.errors.length).toBe(1)
-    expect(result.warnings.length).toBe(0)
-  })
+    expect(result.event).toBe(null);
+    expect(result.errors.length).toBe(1);
+    expect(result.warnings.length).toBe(0);
+  });
 
   it('should output a warning when non Arvo datacontenttype is used', () => {
     const result = createArvoEvent({
@@ -43,12 +42,12 @@ describe(`
       subject: 'test.json',
       datacontenttype: 'application/json',
       data: { message: 'Hello, World!' },
-    })
+    });
 
-    expect(result.event).toBeTruthy()
-    expect(result.errors.length).toBe(0)
-    expect(result.warnings.length).toBe(1)
-  })
+    expect(result.event).toBeTruthy();
+    expect(result.errors.length).toBe(0);
+    expect(result.warnings.length).toBe(1);
+  });
 
   it('should not allow any Non-JSON datacontenttypes', () => {
     const result = createArvoEvent({
@@ -57,20 +56,20 @@ describe(`
       subject: 'test.json',
       datacontenttype: 'text/plain',
       data: { message: 'Hello, World!' },
-    })
+    });
 
-    expect(result.event).toBe(null)
-    expect(result.errors.length).toBe(1)
-    expect(result.warnings.length).toBe(1)
-  })
+    expect(result.event).toBe(null);
+    expect(result.errors.length).toBe(1);
+    expect(result.warnings.length).toBe(1);
+  });
 
   it('should create a valid ArvoEvent with minimal required fields', () => {
     const result = createArvoEvent(baseEvent);
-    
+
     expect(result.event).toBeInstanceOf(ArvoEvent);
     expect(result.errors).toHaveLength(0);
     expect(result.warnings).toHaveLength(0);
-    
+
     if (result.event) {
       expect(result.event.source).toBe('test.producer');
       expect(result.event.type).toBe('cmd.saad.test');
@@ -89,9 +88,9 @@ describe(`
       id: 'custom-id',
       time: '2023-05-01T12:00:00Z',
     };
-    
+
     const result = createArvoEvent(eventWithIdAndTime);
-    
+
     expect(result.event?.id).toBe('custom-id');
     expect(result.event?.time).toBe('2023-05-01T12:00:00Z');
   });
@@ -101,18 +100,20 @@ describe(`
       ...baseEvent,
       datacontenttype: 'application/json',
     };
-    
+
     const result = createArvoEvent(eventWithCustomDataContentType);
-    
+
     expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain('Warning! The provided datacontenttype');
+    expect(result.warnings[0]).toContain(
+      'Warning! The provided datacontenttype',
+    );
   });
 
   it('should handle custom extensions', () => {
     const customExtensions = {
       customfield: 'custom-value',
     };
-    
+
     const result = createArvoEvent(baseEvent, customExtensions);
     expect(result.event?.extensions.customfield).toBe('custom-value');
   });
@@ -125,9 +126,9 @@ describe(`
       redirectto: 'redirect-url',
       executionunits: 5,
     };
-    
+
     const result = createArvoEvent(eventWithArvoExtensions);
-    
+
     expect(result.event?.extensions.to).toBe('recipient');
     expect(result.event?.extensions.accesscontrol).toBe('public');
     expect(result.event?.extensions.redirectto).toBe('redirect-url');
@@ -140,9 +141,9 @@ describe(`
       traceparent: 'traceparent-value',
       tracestate: 'tracestate-value',
     };
-    
+
     const result = createArvoEvent(eventWithOTelExtensions);
-    
+
     expect(result.event?.extensions.traceparent).toBe('traceparent-value');
     expect(result.event?.extensions.tracestate).toBe('tracestate-value');
   });
@@ -152,9 +153,9 @@ describe(`
       ...baseEvent,
       data: { invalidField: Symbol('invalid') }, // Symbols are not valid JSON
     };
-    
+
     const result = createArvoEvent(invalidEvent);
-    
+
     expect(result.event).toBeNull();
     expect(result.errors).toHaveLength(1);
   });
@@ -167,13 +168,14 @@ describe(`
       to: 'recipient@example.com',
       redirectto: 'https://example.com/redirect?param=value',
     };
-    
+
     const result = createArvoEvent(eventWithSpecialChars);
-    
+
     expect(result.event?.source).toBe('test%20source%20with%20spaces');
     expect(result.event?.subject).toBe('test/subject');
     expect(result.event?.extensions.to).toBe('recipient@example.com');
-    expect(result.event?.extensions.redirectto).toBe('https://example.com/redirect?param=value');
+    expect(result.event?.extensions.redirectto).toBe(
+      'https://example.com/redirect?param=value',
+    );
   });
-
 });

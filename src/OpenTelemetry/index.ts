@@ -71,18 +71,18 @@ export const logToSpan = (
 export const exceptionToSpan = (
   span: Span,
   level: TelemetryLogLevel,
-  error: Error  
+  error: Error,
 ) => {
   logToSpan(span, {
     level: level,
-    message: error.message
-  })
+    message: error.message,
+  });
   span.setAttributes({
     'exception.type': `[${level}] ${error.name}`,
     'exception.message': error.message,
-    'exception.stacktrace': error.stack || OTelNull
-  })
-}
+    'exception.stacktrace': error.stack || OTelNull,
+  });
+};
 
 /**
  * A higher-order function that wraps the provided function with OpenTelemetry tracing.
@@ -128,16 +128,16 @@ export const newOtelSpan = <
       thisArg,
       ...args,
     );
-    activeSpan.end()
-    return result
-  } catch (e) { 
-    exceptionToSpan(activeSpan, "ERROR", e as Error)
-    activeSpan.end()
-    throw e
+    activeSpan.end();
+    return result;
+  } catch (e) {
+    exceptionToSpan(activeSpan, 'ERROR', e as Error);
+    activeSpan.end();
+    throw e;
   }
 };
 
 /**
  * A constant representing a null or not applicable value in OpenTelemetry context.
  */
-export const OTelNull = 'N/A'
+export const OTelNull = 'N/A';

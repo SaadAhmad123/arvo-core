@@ -18,9 +18,7 @@ export type OpenTelemetryExtension = z.infer<
   typeof OpenTelemetryExtensionSchema
 >;
 
-export type CreateArvoEvent<
-  TData extends ArvoEventData,
-> = {
+export type CreateArvoEvent<TData extends ArvoEventData> = {
   id?: string;
   source: string;
   type: string;
@@ -33,16 +31,16 @@ export type CreateArvoEvent<
   traceparent?: string;
   tracestate?: string;
   datacontenttype?: string;
-  specversion?: "1.0";
+  specversion?: '1.0';
   time?: string;
   dataschema?: string;
-}
+};
 
 export type CreateArvoEventResult<
   TData extends ArvoEventData,
   TExtension extends CloudEventExtension,
 > = {
-  event: ArvoEvent<TData, TExtension> |  null,
-  errors: Error[],
-  warnings: string[]
-}
+  event: ArvoEvent<TData, TExtension> | null;
+  errors: Error[];
+  warnings: string[];
+};

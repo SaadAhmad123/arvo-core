@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { cleanString, validateURI } from '../utils';
 import { isJSONSerializable } from './utils';
 
-export const ArvoDataContentType = "application/cloudevents+json;charset=UTF-8;profile=arvo"
+export const ArvoDataContentType =
+  'application/cloudevents+json;charset=UTF-8;profile=arvo';
 
 export const CloudEventContextSchema = z
   .object({
@@ -115,11 +116,12 @@ export const CloudEventExtensionSchema = z
     'Schema for custom CloudEvent extensions. Allows for additional custom fields in the CloudEvent.',
   );
 
-
-
 export const ArvoDataSchema = z
   .record(z.string(), z.any())
-  .refine(isJSONSerializable, "The Arvo data object must be a JSON serializable object")
+  .refine(
+    isJSONSerializable,
+    'The Arvo data object must be a JSON serializable object',
+  )
   .describe('A JSON serialisable object as ArvoEvent payload data');
 
 export const ArvoExtensionSchema = z
