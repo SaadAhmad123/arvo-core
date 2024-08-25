@@ -62,6 +62,12 @@ export const logToSpan = (
   });
 };
 
+/**
+ * Logs an exception to a span and sets exception-related attributes.
+ * @param span - The span to log the exception to.
+ * @param level - The log level for the exception.
+ * @param error - The error object to be logged.
+ */
 export const exceptionToSpan = (
   span: Span,
   level: TelemetryLogLevel,
@@ -84,7 +90,7 @@ export const exceptionToSpan = (
  * @template A - The type of the arguments array for the wrapped function.
  * @template F - The type of the function to be wrapped.
  *
- * @param {HandlerOpenTelemetryContext} openTelemetry - The OpenTelemetry context object.
+ * @param {TelemetryContext} openTelemetry - The OpenTelemetry context object.
  * @param {string} spanTitle - The title of the span to be created.
  * @param {SpanOptions | undefined} spanOptions - Optional configuration for the span.
  * @param {F} fn - The function to be wrapped with OpenTelemetry tracing.
@@ -131,4 +137,7 @@ export const newOtelSpan = <
   }
 };
 
+/**
+ * A constant representing a null or not applicable value in OpenTelemetry context.
+ */
 export const OTelNull = 'N/A'

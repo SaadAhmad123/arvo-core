@@ -114,7 +114,6 @@ describe(`
     };
     
     const result = createArvoEvent(baseEvent, customExtensions);
-    
     expect(result.event?.extensions.customfield).toBe('custom-value');
   });
 
