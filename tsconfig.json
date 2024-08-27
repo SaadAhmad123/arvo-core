@@ -10,6 +10,21 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "tests"]
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "tests"
+  ],
+  "typedocOptions": {
+    "entryPoints": [
+      "src/index.ts"
+    ],
+    "projectDocuments": [
+      "src/ArvoEvent/README.md"
+    ],
+    "plugin": ["typedoc-plugin-zod"],
+    "out": "docs"
+  }
 }

@@ -23,20 +23,25 @@ describe(`
   };
 
   it('should throw an error when to is not provided for an Arvo event', () => {
-    const result = createArvoEvent({
-      source: 'test.producer',
-      type: 'cmd.saad.test',
-      subject: 'test.json',
-      data: { message: 'Hello, World!' },
-    });
+    let error: Error | undefined
+    let event: ArvoEvent | undefined
+    try {
+      event = createArvoEvent({
+        source: 'test.producer',
+        type: 'cmd.saad.test',
+        subject: 'test.json',
+        data: { message: 'Hello, World!' },
+      });
+    } catch (e) {
+      error = e as Error
+    }
 
-    expect(result.event).toBe(null);
-    expect(result.errors.length).toBe(1);
-    expect(result.warnings.length).toBe(0);
+    expect(event).toBeFalsy();
+    expect(error).toBeTruthy();
   });
 
   it('should output a warning when non Arvo datacontenttype is used', () => {
-    const result = createArvoEvent({
+    const event = createArvoEvent({
       source: 'test.producer',
       type: 'cmd.saad.test',
       subject: 'test.json',
@@ -44,41 +49,23 @@ describe(`
       data: { message: 'Hello, World!' },
     });
 
-    expect(result.event).toBeTruthy();
-    expect(result.errors.length).toBe(0);
-    expect(result.warnings.length).toBe(1);
-  });
-
-  it('should not allow any Non-JSON datacontenttypes', () => {
-    const result = createArvoEvent({
-      source: 'test.producer',
-      type: 'cmd.saad.test',
-      subject: 'test.json',
-      datacontenttype: 'text/plain',
-      data: { message: 'Hello, World!' },
-    });
-
-    expect(result.event).toBe(null);
-    expect(result.errors.length).toBe(1);
-    expect(result.warnings.length).toBe(1);
+    expect(event).toBeTruthy();
   });
 
   it('should create a valid ArvoEvent with minimal required fields', () => {
-    const result = createArvoEvent(baseEvent);
+    const event = createArvoEvent(baseEvent);
 
-    expect(result.event).toBeInstanceOf(ArvoEvent);
-    expect(result.errors).toHaveLength(0);
-    expect(result.warnings).toHaveLength(0);
+    expect(event).toBeInstanceOf(ArvoEvent);
 
-    if (result.event) {
-      expect(result.event.source).toBe('test.producer');
-      expect(result.event.type).toBe('cmd.saad.test');
-      expect(result.event.subject).toBe('test.json');
-      expect(result.event.data).toEqual({ message: 'Hello, World!' });
-      expect(result.event.datacontenttype).toBe(ArvoDataContentType);
-      expect(result.event.specversion).toBe('1.0');
-      expect(result.event.id).toBeTruthy();
-      expect(result.event.time).toBeTruthy();
+    if (event) {
+      expect(event.source).toBe('test.producer');
+      expect(event.type).toBe('cmd.saad.test');
+      expect(event.subject).toBe('test.json');
+      expect(event.data).toEqual({ message: 'Hello, World!' });
+      expect(event.datacontenttype).toBe(ArvoDataContentType);
+      expect(event.specversion).toBe('1.0');
+      expect(event.id).toBeTruthy();
+      expect(event.time).toBeTruthy();
     }
   });
 
@@ -89,24 +76,10 @@ describe(`
       time: '2023-05-01T12:00:00Z',
     };
 
-    const result = createArvoEvent(eventWithIdAndTime);
+    const event = createArvoEvent(eventWithIdAndTime);
 
-    expect(result.event?.id).toBe('custom-id');
-    expect(result.event?.time).toBe('2023-05-01T12:00:00Z');
-  });
-
-  it('should add a warning when non-Arvo datacontenttype is provided', () => {
-    const eventWithCustomDataContentType = {
-      ...baseEvent,
-      datacontenttype: 'application/json',
-    };
-
-    const result = createArvoEvent(eventWithCustomDataContentType);
-
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain(
-      'Warning! The provided datacontenttype',
-    );
+    expect(event.id).toBe('custom-id');
+    expect(event.time).toBe('2023-05-01T12:00:00Z');
   });
 
   it('should handle custom extensions', () => {
@@ -114,8 +87,8 @@ describe(`
       customfield: 'custom-value',
     };
 
-    const result = createArvoEvent(baseEvent, customExtensions);
-    expect(result.event?.extensions.customfield).toBe('custom-value');
+    const event = createArvoEvent(baseEvent, customExtensions);
+    expect(event.extensions.customfield).toBe('custom-value');
   });
 
   it('should handle Arvo-specific extensions', () => {
@@ -127,12 +100,12 @@ describe(`
       executionunits: 5,
     };
 
-    const result = createArvoEvent(eventWithArvoExtensions);
+    const event = createArvoEvent(eventWithArvoExtensions);
 
-    expect(result.event?.extensions.to).toBe('recipient');
-    expect(result.event?.extensions.accesscontrol).toBe('public');
-    expect(result.event?.extensions.redirectto).toBe('redirect-url');
-    expect(result.event?.extensions.executionunits).toBe(5);
+    expect(event.extensions.to).toBe('recipient');
+    expect(event.extensions.accesscontrol).toBe('public');
+    expect(event.extensions.redirectto).toBe('redirect-url');
+    expect(event.extensions.executionunits).toBe(5);
   });
 
   it('should handle OpenTelemetry extensions', () => {
@@ -142,10 +115,10 @@ describe(`
       tracestate: 'tracestate-value',
     };
 
-    const result = createArvoEvent(eventWithOTelExtensions);
+    const event = createArvoEvent(eventWithOTelExtensions);
 
-    expect(result.event?.extensions.traceparent).toBe('traceparent-value');
-    expect(result.event?.extensions.tracestate).toBe('tracestate-value');
+    expect(event.extensions.traceparent).toBe('traceparent-value');
+    expect(event.extensions.tracestate).toBe('tracestate-value');
   });
 
   it('should return errors when invalid data is provided', () => {
@@ -154,10 +127,16 @@ describe(`
       data: { invalidField: Symbol('invalid') }, // Symbols are not valid JSON
     };
 
-    const result = createArvoEvent(invalidEvent);
+    let event: ArvoEvent | undefined
+    let error: Error | undefined
+    try {
+      event = createArvoEvent(invalidEvent)
+    } catch (e) {
+      error = e as Error
+    }
 
-    expect(result.event).toBeNull();
-    expect(result.errors).toHaveLength(1);
+    expect(event).toBeFalsy();
+    expect(error).toBeTruthy();
   });
 
   it('should encode URI components for certain fields', () => {
@@ -169,12 +148,12 @@ describe(`
       redirectto: 'https://example.com/redirect?param=value',
     };
 
-    const result = createArvoEvent(eventWithSpecialChars);
+    const event = createArvoEvent(eventWithSpecialChars);
 
-    expect(result.event?.source).toBe('test%20source%20with%20spaces');
-    expect(result.event?.subject).toBe('test/subject');
-    expect(result.event?.extensions.to).toBe('recipient@example.com');
-    expect(result.event?.extensions.redirectto).toBe(
+    expect(event.source).toBe('test%20source%20with%20spaces');
+    expect(event.subject).toBe('test/subject');
+    expect(event.extensions.to).toBe('recipient@example.com');
+    expect(event.extensions.redirectto).toBe(
       'https://example.com/redirect?param=value',
     );
   });

@@ -15,14 +15,13 @@ import {
   ArvoExtension,
   OpenTelemetryExtension,
   CreateArvoEvent,
-  CreateArvoEventResult,
 } from './ArvoEvent/types';
 import {
   exceptionToSpan,
   logToSpan,
   getTelemetryContext,
   getTelemetryCarrier,
-  newOtelSpan,
+  createOtelSpan,
   OTelNull,
 } from './OpenTelemetry';
 import {
@@ -32,6 +31,14 @@ import {
 } from './OpenTelemetry/types';
 import { validateURI, cleanString } from './utils';
 
+/**
+ * Collection of Zod schemas for validating various aspects of Arvo events.
+ * @property {z.ZodObject} CloudEventContextSchema - Schema for core CloudEvent properties.
+ * @property {z.ZodRecord} CloudEventExtensionSchema - Schema for custom CloudEvent extensions.
+ * @property {z.ZodRecord} ArvoDataSchema - Schema for Arvo event data payload.
+ * @property {z.ZodObject} ArvoExtensionSchema - Schema for Arvo-specific CloudEvent extensions.
+ * @property {z.ZodObject} OpenTelemetryExtensionSchema - Schema for OpenTelemetry extensions.
+ */
 const ArvoEventSchemas = {
   CloudEventContextSchema,
   CloudEventExtensionSchema,
@@ -50,13 +57,12 @@ export {
   CloudEventContext,
   ArvoExtension,
   OpenTelemetryExtension,
-  CreateArvoEventResult,
   CreateArvoEvent,
   exceptionToSpan,
   logToSpan,
   getTelemetryCarrier,
   getTelemetryContext,
-  newOtelSpan,
+  createOtelSpan,
   TelemetryCarrier,
   TelemetryContext,
   TelemetryLogLevel,

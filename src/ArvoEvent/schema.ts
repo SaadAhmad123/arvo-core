@@ -2,9 +2,18 @@ import { z } from 'zod';
 import { cleanString, validateURI } from '../utils';
 import { isJSONSerializable } from './utils';
 
+/**
+ * The content type for Arvo data in CloudEvents.
+ * This is the recommended content type for Arvo events.
+ */
 export const ArvoDataContentType =
   'application/cloudevents+json;charset=UTF-8;profile=arvo';
 
+/**
+ * Zod schema for validating the core properties of a CloudEvent.
+ * This schema defines the structure and validation rules for the mandatory
+ * and optional attributes of a CloudEvent as per the CloudEvents specification.
+ */
 export const CloudEventContextSchema = z
   .object({
     id: z
@@ -97,6 +106,11 @@ export const CloudEventContextSchema = z
   `),
   );
 
+/**
+ * Zod schema for validating custom CloudEvent extensions.
+ * This schema allows for additional custom fields in the CloudEvent,
+ * following the CloudEvents specification for extension attributes.
+ */  
 export const CloudEventExtensionSchema = z
   .record(
     z.string().regex(
@@ -116,6 +130,10 @@ export const CloudEventExtensionSchema = z
     'Schema for custom CloudEvent extensions. Allows for additional custom fields in the CloudEvent.',
   );
 
+/**
+ * Zod schema for validating the data payload of an Arvo event.
+ * The data must be a JSON serializable object.
+ */
 export const ArvoDataSchema = z
   .record(z.string(), z.any())
   .refine(
@@ -124,6 +142,11 @@ export const ArvoDataSchema = z
   )
   .describe('A JSON serialisable object as ArvoEvent payload data');
 
+/**
+ * Zod schema for validating Arvo-specific extensions to the CloudEvent.
+ * This schema defines additional fields used by Arvo for event routing,
+ * access control, and execution metrics.
+ */
 export const ArvoExtensionSchema = z
   .object({
     to: z
@@ -194,6 +217,11 @@ export const ArvoExtensionSchema = z
   })
   .describe('Schema for Arvo-specific extensions to the CloudEvent.');
 
+/**
+ * Zod schema for validating OpenTelemetry extensions to the CloudEvent.
+ * This schema includes fields for distributed tracing as per the
+ * OpenTelemetry specification.
+ */  
 export const OpenTelemetryExtensionSchema = z
   .object({
     traceparent: z

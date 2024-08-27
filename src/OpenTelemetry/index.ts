@@ -5,6 +5,8 @@ import {
   Context,
   Span,
   SpanOptions,
+  Tracer,
+  SpanStatusCode,
 } from '@opentelemetry/api';
 import { TelemetryCarrier, TelemetryLogLevel, TelemetryContext } from './types';
 
@@ -47,7 +49,6 @@ export const getTelemetryCarrier = (
  * @param params - The parameters for the log message.
  * @param params.level - The log level.
  * @param params.message - The log message.
- * @param params[key] - Additional key-value pairs to include in the log.
  */
 export const logToSpan = (
   span: Span,
@@ -85,55 +86,101 @@ export const exceptionToSpan = (
 };
 
 /**
- * A higher-order function that wraps the provided function with OpenTelemetry tracing.
+ * Creates a new OpenTelemetry span and executes the provided function within its context.
+ * 
+ * This function enhances tracing by creating a new span, executing the given function within
+ * that span's context, and properly handling any errors that may occur. It also ensures that
+ * the wrapped function has access to the current span.
  *
- * @template A - The type of the arguments array for the wrapped function.
- * @template F - The type of the function to be wrapped.
+ * @template TArgs - The type of the arguments array for the wrapped function.
+ * @template TReturn - The return type of the wrapped function.
  *
- * @param {TelemetryContext} openTelemetry - The OpenTelemetry context object.
- * @param {string} spanTitle - The title of the span to be created.
- * @param {SpanOptions | undefined} spanOptions - Optional configuration for the span.
- * @param {F} fn - The function to be wrapped with OpenTelemetry tracing.
- * @param {ThisParameterType<F>} [thisArg] - The 'this' context to be used when calling the wrapped function.
- * @param {...A} args - The arguments to be passed to the wrapped function.
+ * @param {TelemetryContext | string} telemetryContext - The OpenTelemetry context object or a tracer name.
+ * @param {string} spanName - The name of the span to be created.
+ * @param {SpanOptions} [spanOptions] - Optional configuration for the span.
+ * @param {(currentSpan: Span, ...args: TArgs) => TReturn} wrappedFunction - The function to be executed within the new span.
+ *   This function will receive the current span as its first argument.
+ * @param {ThisParameterType<TFunction>} [thisArg] - The 'this' context to be used when calling the wrapped function.
+ * @param {...TArgs} args - The arguments to be passed to the wrapped function.
  *
- * @returns {ReturnType<F>} The result of the wrapped function execution.
+ * @returns {TReturn} The result of the wrapped function execution.
  *
- * @description
- * This function creates a new span using the provided OpenTelemetry context and wraps the execution
- * of the given function within this span. It ensures that the function is executed within the
- * correct tracing context.
+ * @throws {Error} Rethrows any error that occurs during the execution of the wrapped function.
+ *
+ * @example
+ * // Using with TelemetryContext
+ * const telemetryContext: TelemetryContext = {
+ *   span: currentSpan,
+ *   tracer: currentTracer,
+ *   context: { traceparent: 'traceparent-value', tracestate: 'tracestate-value' }
+ * };
+ * const result = createOtelSpan(
+ *   telemetryContext,
+ *   'ProcessOrder',
+ *   { attributes: { orderId: '12345' } },
+ *   (span, orderId) => {
+ *     span.addEvent('Processing order');
+ *     return processOrder(orderId);
+ *   },
+ *   null,
+ *   '12345'
+ * );
+ *
+ * @example
+ * // Using with tracer name
+ * const result = createOtelSpan(
+ *   'OrderService',
+ *   'FetchOrderDetails',
+ *   undefined,
+ *   (span, orderId) => {
+ *     span.setAttribute('orderId', orderId);
+ *     return fetchOrderDetails(orderId);
+ *   },
+ *   null,
+ *   '12345'
+ * );
  */
-export const newOtelSpan = <
-  A extends unknown[],
-  F extends (...args: A) => ReturnType<F>,
+export const createOtelSpan = <
+  TArgs extends unknown[],
+  TReturn
 >(
-  openTelemetry: TelemetryContext,
-  spanTitle: string,
+  telemetryContext: TelemetryContext | string,
+  spanName: string,
   spanOptions: SpanOptions | undefined,
-  fn: F,
-  thisArg?: ThisParameterType<F>,
-  ...args: A
-): ReturnType<F> => {
-  const activeContext = getTelemetryContext(openTelemetry.context.traceparent);
-  const activeSpan = openTelemetry.tracer.startSpan(
-    spanTitle,
-    spanOptions,
-    activeContext,
-  );
+  wrappedFunction: (currentSpan: Span, ...args: TArgs) => TReturn,
+  thisArg?: ThisParameterType<typeof wrappedFunction>,
+  ...args: TArgs
+): TReturn => {
+  let activeContext: Context = context.active();
+  let activeTracer: Tracer;
+
+  if (typeof telemetryContext === "string") {
+    activeTracer = trace.getTracer(telemetryContext);
+  } else {
+    activeContext = getTelemetryContext(telemetryContext.context.traceparent);
+    activeTracer = telemetryContext.tracer;
+  }
+
+  const newSpan: Span = activeTracer.startSpan(spanName, spanOptions, activeContext);
+
   try {
     const result = context.with(
-      trace.setSpan(activeContext, activeSpan),
-      fn,
-      thisArg,
-      ...args,
+      trace.setSpan(activeContext, newSpan),
+      () => wrappedFunction.call(thisArg, newSpan, ...args)
     );
-    activeSpan.end();
+    newSpan.setStatus({
+      code: SpanStatusCode.OK
+    })
+    newSpan.end();
     return result;
-  } catch (e) {
-    exceptionToSpan(activeSpan, 'ERROR', e as Error);
-    activeSpan.end();
-    throw e;
+  } catch (error) {
+    exceptionToSpan(newSpan, 'ERROR', error as Error);
+    newSpan.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: (error as Error).message
+    })
+    newSpan.end();
+    throw error;
   }
 };
 

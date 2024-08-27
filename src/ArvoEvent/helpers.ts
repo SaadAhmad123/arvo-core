@@ -1,7 +1,6 @@
 import ArvoEvent from '.';
 import {
-  exceptionToSpan,
-  getTelemetryContext,
+  createOtelSpan,
   logToSpan,
 } from '../OpenTelemetry';
 import { TelemetryContext } from '../OpenTelemetry/types';
@@ -11,22 +10,44 @@ import {
   ArvoEventData,
   CloudEventExtension,
   CreateArvoEvent,
-  CreateArvoEventResult,
 } from './types';
-import { SpanStatusCode, trace } from '@opentelemetry/api';
 import { v4 as uuid4 } from 'uuid';
 
 /**
  * Creates an ArvoEvent with the provided data and extensions.
  *
+ * This function creates a new ArvoEvent instance using the provided event data and optional extensions.
+ * It also supports OpenTelemetry tracing if a telemetry context is provided.
+ *
  * @template TData - The type of the event data, extending ArvoEventData.
  * @template TExtension - The type of the cloud event extension, extending CloudEventExtension.
  *
- * @param {CreateArvoEvent<TData, TExtension>} event - The event data and metadata to create the ArvoEvent.
+ * @param {CreateArvoEvent<TData>} event - The event data and metadata to create the ArvoEvent.
+ * @param {TExtension} [extensions] - Optional cloud event extensions.
  * @param {TelemetryContext} [telemetry] - Optional telemetry context for tracing.
  *
- * @returns {CreateArvoEventResult<TData, TExtension>} An object containing the created ArvoEvent (or null if creation failed),
- * any errors encountered, and any warnings generated during the creation process.
+ * @returns {ArvoEvent<TData, TExtension>} The created ArvoEvent instance.
+ *
+ * @throws {Error} If there's an error during the creation process.
+ *
+ * @remarks
+ * - If no `id` is provided in the event object, a UUID v4 will be generated.
+ * - If no `time` is provided, the current timestamp will be used.
+ * - If no `datacontenttype` is provided, it defaults to `application/cloudevents+json;charset=UTF-8;profile=arvo`.
+ * - If a non-compatible `datacontenttype` is provided, a warning will be logged to the span.
+ * - The `source`, `subject`, `to`, `redirectto`, and `dataschema` fields are URI-encoded.
+ *
+ * @example
+ * const event = createArvoEvent(
+ *   {
+ *     type: 'com.example.event',
+ *     source: '/example/source',
+ *     subject: 'example-subject',
+ *     data: { key: 'value' }
+ *   },
+ *   { customExtension: 'value' },
+ *   telemetryContext
+ * );
  */
 export const createArvoEvent = <
   TData extends ArvoEventData,
@@ -35,25 +56,12 @@ export const createArvoEvent = <
   event: CreateArvoEvent<TData>,
   extensions?: TExtension,
   telemetry?: TelemetryContext,
-): CreateArvoEventResult<TData, TExtension> => {
-  const activeContext = getTelemetryContext(
-    telemetry?.context.traceparent || null,
-  );
-  const activeTracer =
-    telemetry?.tracer || trace.getTracer('ArvoEvent Creation');
-  const activeSpan = activeTracer.startSpan(
-    'Create ArvoEvent',
-    {},
-    activeContext,
-  );
+): ArvoEvent<TData, TExtension> => createOtelSpan(
+  telemetry || "ArvoEvent Creation Tracer",
+  "Create ArvoEvent",
+  {},
+  (span) => {
 
-  const result: CreateArvoEventResult<TData, TExtension> = {
-    event: null,
-    errors: [],
-    warnings: [],
-  };
-
-  try {
     if (
       event.datacontenttype &&
       event.datacontenttype !== ArvoDataContentType
@@ -63,14 +71,13 @@ export const createArvoEvent = <
         is not ArvoEvent compatible (=${ArvoDataContentType}). There may 
         be some limited functionality.
       `);
-      logToSpan(activeSpan, {
+      logToSpan(span, {
         level: 'WARNING',
         message: warning,
       });
-      result.warnings.push(warning);
     }
 
-    result.event = new ArvoEvent<TData, TExtension>(
+    return new ArvoEvent<TData, TExtension>(
       {
         id: event.id || uuid4(),
         type: event.type,
@@ -89,19 +96,6 @@ export const createArvoEvent = <
       },
       event.data,
       extensions,
-    );
-
-    activeSpan.setStatus({ code: SpanStatusCode.OK });
-  } catch (e) {
-    exceptionToSpan(activeSpan, 'ERROR', e as Error);
-    result.errors.push(e as Error);
-    activeSpan.setStatus({
-      code: SpanStatusCode.ERROR,
-      message: (e as Error).message,
-    });
-  } finally {
-    activeSpan.end();
+    )
   }
-
-  return result;
-};
+)
