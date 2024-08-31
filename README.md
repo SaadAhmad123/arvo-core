@@ -39,3 +39,10 @@ The package also includes utility functions for:
 - Creating ArvoEvents
 - Integrating with OpenTelemetry
 - TypeScript types for core components
+
+## License
+
+This package is available under the MIT License. For more details, refer to the [LICENSE.md](LICENSE.md) file in the project repository.
+
+## Change Logs
+See the package change logs [here](CHANGELOG.md).

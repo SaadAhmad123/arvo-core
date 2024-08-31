@@ -6,6 +6,9 @@ tests
 jest.config.ts
 tsconfig.json
 .yarnrc.yml
+.npmrc
 .env
 coverage
 docs
+node_modules
+generate-changelog.sh
