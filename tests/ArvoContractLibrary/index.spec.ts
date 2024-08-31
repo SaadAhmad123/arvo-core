@@ -1,8 +1,17 @@
 import { z } from 'zod'
 import { createArvoContract, ArvoContractLibrary } from "../../src";
-
+import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
 describe('ArvoContractLibrary', () => {
+
+  beforeAll(() => {
+    telemetrySdkStart();
+  });
+
+  afterAll(() => {
+    telemetrySdkStop();
+  });
+
   const contract1 = createArvoContract({
     uri: '#/contracts/contract1',
     accepts: {

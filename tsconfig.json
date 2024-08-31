@@ -18,6 +18,7 @@
       "src/ArvoEvent/README.md",
       "src/ArvoContract/README.md",
       "src/ArvoContractLibrary/README.md",
+      "CHANGELOG.md"
     ],
     "plugin": ["typedoc-plugin-zod"],
     "out": "docs"

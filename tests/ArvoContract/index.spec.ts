@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ArvoContract, createArvoContract, ArvoContractLibrary, ResolveArvoContractRecord } from '../../src';
+import { ArvoContract, createArvoContract } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
 describe('ArvoContract', () => {
@@ -24,7 +24,7 @@ describe('ArvoContract', () => {
       },
     ],
   };
-  
+
   describe('createArvoContract', () => {
     it('should create a valid ArvoContract instance', () => {
       const contract = createArvoContract(validContractSpec);

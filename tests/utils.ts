@@ -17,9 +17,9 @@ export const telemetrySdk = new NodeSDK({
 });
 
 export const telemetrySdkStart = () => {
-  //telemetrySdk.start()
+  telemetrySdk.start()
 };
 
 export const telemetrySdkStop = () => {
-  //telemetrySdk.shutdown
+  telemetrySdk.shutdown()
 };
