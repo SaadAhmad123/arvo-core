@@ -1,3 +1,5 @@
+
+
 # Arvo
 
 ## What is Arvo
@@ -24,9 +26,31 @@ Whether you're building a small microservice or a large-scale distributed system
 
 This core package defines primitive types and utility functions to help you quickly start building interesting and robust event-driven applications.
 
-At its core, Arvo has only two main data structures:
+## Documentation & Resources
+
+
+| Source          | Link                   |
+| --------------- | ------------------------ 
+| Package         | https://www.npmjs.com/package/arvo-core?activeTab=readme  |
+| Github          | https://github.com/SaadAhmad123/arvo-core                 |
+| Documenation    | https://saadahmad123.github.io/arvo-core/index.html       |
+
+
+## Installation
+
+You can install the core package via `npm` or `yarn`
+
+```bash
+npm install arvo-core
+```
+```bash
+yarn add arvo-core
+```
+
 
 ## Components
+
+At its core, Arvo has only three main data structures:
 
 - [ArvoEvent](src/ArvoEvent/README.md) aims to provide a extendible variant of the open-source CloudEvent spec-ed object to define all the event in the system.
 - [ArvoContract](src/ArvoContract/README.md) is a basic class to define and impose contracts between services, ensuring trust in decoupled systems during build and development.
@@ -36,13 +60,24 @@ At its core, Arvo has only two main data structures:
 
 The package also includes utility functions for:
 
-- Creating ArvoEvents
+- Creating ArvoEvents, ArvoContracts, and contract libraries
 - Integrating with OpenTelemetry
 - TypeScript types for core components
+
+## Getting Started
+
+To start using Arvo in your project:
+
+- Install the package as shown in the Installation section.
+- Import the necessary components:
+```javascript
+import { createArvoEvent, createArvoContract, createArvoContractLibrary } from 'arvo-core';
+```
+- Begin defining your events and contracts using the provided classes.
 
 ## License
 
 This package is available under the MIT License. For more details, refer to the [LICENSE.md](LICENSE.md) file in the project repository.
 
 ## Change Logs
-See the package change logs [here](CHANGELOG.md).
+For a detailed list of changes and updates, please refer to the [document](CHANGELOG.md) file.
