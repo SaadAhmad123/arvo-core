@@ -1,6 +1,6 @@
-import { createArvoContract, createContractualArvoEvent } from '../src';
+import { createArvoContract, createContractualArvoEvent } from '../../src';
 import { z } from 'zod';
-import { telemetrySdkStart, telemetrySdkStop } from './utils';
+import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
 describe('createContractualArvoEvent', () => {
   beforeAll(() => {
