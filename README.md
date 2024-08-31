@@ -1,5 +1,3 @@
-
-
 # Arvo
 
 ## What is Arvo
@@ -28,13 +26,11 @@ This core package defines primitive types and utility functions to help you quic
 
 ## Documentation & Resources
 
-
-| Source          | Link                   |
-| --------------- | ------------------------ 
-| Package         | https://www.npmjs.com/package/arvo-core?activeTab=readme  |
-| Github          | https://github.com/SaadAhmad123/arvo-core                 |
-| Documenation    | https://saadahmad123.github.io/arvo-core/index.html       |
-
+| Source       | Link                                                     |
+| ------------ | -------------------------------------------------------- |
+| Package      | https://www.npmjs.com/package/arvo-core?activeTab=readme |
+| Github       | https://github.com/SaadAhmad123/arvo-core                |
+| Documenation | https://saadahmad123.github.io/arvo-core/index.html      |
 
 ## Installation
 
@@ -43,10 +39,10 @@ You can install the core package via `npm` or `yarn`
 ```bash
 npm install arvo-core
 ```
+
 ```bash
 yarn add arvo-core
 ```
-
 
 ## Components
 
@@ -70,9 +66,15 @@ To start using Arvo in your project:
 
 - Install the package as shown in the Installation section.
 - Import the necessary components:
+
 ```javascript
-import { createArvoEvent, createArvoContract, createArvoContractLibrary } from 'arvo-core';
+import {
+  createArvoEvent,
+  createArvoContract,
+  createArvoContractLibrary,
+} from 'arvo-core';
 ```
+
 - Begin defining your events and contracts using the provided classes.
 
 ## License
@@ -80,4 +82,5 @@ import { createArvoEvent, createArvoContract, createArvoContractLibrary } from '
 This package is available under the MIT License. For more details, refer to the [LICENSE.md](LICENSE.md) file in the project repository.
 
 ## Change Logs
+
 For a detailed list of changes and updates, please refer to the [document](CHANGELOG.md) file.

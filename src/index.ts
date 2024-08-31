@@ -31,7 +31,11 @@ import {
 } from './OpenTelemetry/types';
 import { validateURI, cleanString } from './utils';
 import ArvoContract from './ArvoContract';
-import { createArvoContract, InferArvoContract } from './ArvoContract/helpers';
+import {
+  createArvoContract,
+  InferArvoContract,
+  createContractualArvoEvent,
+} from './ArvoContract/helpers';
 import { ArvoContractValidators } from './ArvoContract/validators';
 import {
   ArvoContractRecord,
@@ -88,4 +92,5 @@ export {
   ResolveArvoContractRecord,
   ArvoContractLibrary,
   createArvoContractLibrary,
+  createContractualArvoEvent,
 };

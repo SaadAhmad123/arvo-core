@@ -40,7 +40,10 @@ export type OpenTelemetryExtension = z.infer<
  * @template TData - The type of the event data, extending ArvoEventData.
  * @template TType - The type name of the event
  */
-export type CreateArvoEvent<TData extends ArvoEventData, TType extends string> = {
+export type CreateArvoEvent<
+  TData extends ArvoEventData,
+  TType extends string,
+> = {
   /** Unique identifier of the event. Must be a non-empty string. If not provided, a UUID will be generated. */
   id?: string;
   /** Timestamp of when the occurrence happened. Must be in ISO 8601 format with timezone offset. */

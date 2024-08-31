@@ -7,7 +7,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
  * Extracts the event type from a given type T.
  * @template T - The type to extract the event type from.
  */
-type ExtractEventType<T> = T extends { type: infer U } ? U : never;
+export type ExtractEventType<T> = T extends { type: infer U } ? U : never;
 
 /**
  * ArvoContract class represents a contract with defined input and output schemas.
@@ -25,7 +25,7 @@ export default class ArvoContract<
   private readonly _uri: T;
   private readonly _accepts: TAccepts;
   private readonly _emits: Array<TEmits>;
-  
+
   /** (Optional) The Contract description */
   readonly description: string | null;
 

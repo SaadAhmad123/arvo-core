@@ -46,7 +46,7 @@ import { v4 as uuid4 } from 'uuid';
 export const createArvoEvent = <
   TData extends ArvoEventData,
   TExtension extends CloudEventExtension,
-  TType extends string
+  TType extends string,
 >(
   event: CreateArvoEvent<TData, TType>,
   extensions?: TExtension,
@@ -54,7 +54,7 @@ export const createArvoEvent = <
 ): ArvoEvent<TData, TExtension> =>
   createOtelSpan(
     telemetry || 'ArvoEvent Creation Tracer',
-    'Create ArvoEvent',
+    'createArvoEvent',
     {},
     (span) => {
       if (

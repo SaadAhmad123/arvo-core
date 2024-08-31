@@ -12,3 +12,7 @@
 
 - Making type in ArvoEvent a generic string for better type control
 
+## [0.0.4] - 2024-08-31
+
+- Created an event factory generator for creating contractually compliant events
+

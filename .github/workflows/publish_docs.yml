@@ -8,14 +8,14 @@ on:
 jobs:
   publish_docs:
     permissions:
-      id-token: "write"
-      pages: "write"
+      id-token: 'write'
+      pages: 'write'
 
     environment:
-      name: "github-pages"
-      url: "${{ steps.deployment.outputs.page_url }}"
+      name: 'github-pages'
+      url: '${{ steps.deployment.outputs.page_url }}'
 
-    runs-on: "ubuntu-latest"
+    runs-on: 'ubuntu-latest'
 
     steps:
       - name: Checkout code
@@ -32,16 +32,13 @@ jobs:
 
       - name: Build
         run: npm run doc
-      
-      - id: "upload-documentation"
-        name: "Upload Pages artifact"
-        uses: "actions/upload-pages-artifact@v2"
+
+      - id: 'upload-documentation'
+        name: 'Upload Pages artifact'
+        uses: 'actions/upload-pages-artifact@v2'
         with:
-          path: "docs/"
+          path: 'docs/'
 
-      - id: "deployment"
-        name: "Deploy documentation to GitHub Pages"
-        uses: "actions/deploy-pages@v2"
-
-
-
+      - id: 'deployment'
+        name: 'Deploy documentation to GitHub Pages'
+        uses: 'actions/deploy-pages@v2'
