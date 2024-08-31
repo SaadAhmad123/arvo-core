@@ -278,6 +278,4 @@ describe('ArvoContract', () => {
       const _invalidEmits: string[] = contract.emits;
     });
   });
-
-
 });

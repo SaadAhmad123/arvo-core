@@ -1,9 +1,8 @@
-import { z } from 'zod'
-import { createArvoContract, ArvoContractLibrary } from "../../src";
+import { z } from 'zod';
+import { createArvoContract, ArvoContractLibrary } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
 describe('ArvoContractLibrary', () => {
-
   beforeAll(() => {
     telemetrySdkStart();
   });

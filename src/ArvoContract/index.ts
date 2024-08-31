@@ -182,19 +182,19 @@ export default class ArvoContract<
    *   - description: The contract's description (if available)
    *   - accepts: An object containing the accepted input type and its JSON Schema representation
    *   - emits: An array of objects, each containing an emitted event type and its JSON Schema representation
-   */  
+   */
   public toJsonSchema() {
     return {
       uri: this._uri,
       description: this.description,
       accepts: {
         type: this._accepts.type,
-        schema: zodToJsonSchema(this._accepts.schema) 
+        schema: zodToJsonSchema(this._accepts.schema),
       },
-      emits: this._emits.map(item => ({
+      emits: this._emits.map((item) => ({
         type: z.literal(item.type),
-        schema: zodToJsonSchema(item.schema)
-      }))
-    }
+        schema: zodToJsonSchema(item.schema),
+      })),
+    };
   }
 }

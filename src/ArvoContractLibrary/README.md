@@ -20,7 +20,7 @@ The ArvoContractLibrary is a utility class designed to manage and access multipl
 ### Creating an ArvoContractLibrary
 
 ```typescript
-import { ArvoContractLibrary, createArvoContract } from '@arvo/core';
+import { createArvoContractLibrary, createArvoContract } from '@arvo/core';
 import { z } from 'zod';
 
 const contract1 = createArvoContract({
@@ -51,7 +51,7 @@ const contract2 = createArvoContract({
   ],
 });
 
-const library = new ArvoContractLibrary([contract1, contract2]);
+const library = new createArvoContractLibrary([contract1, contract2]);
 ```
 
 ### Retrieving Contracts
@@ -81,7 +81,7 @@ const contractCount = library.size;
 ## Best Practices
 
 1. **Single Instance**: Create a single instance of ArvoContractLibrary for your entire application to ensure consistency.
-3. **Early Initialization**: Initialize the ArvoContractLibrary early in your application's lifecycle to ensure all contracts are available when needed.
-4. **Error Handling**: Always handle potential errors when retrieving contracts, especially when using the `get` method, which can throw an error if the contract is not found.
+2. **Early Initialization**: Initialize the ArvoContractLibrary early in your application's lifecycle to ensure all contracts are available when needed.
+3. **Error Handling**: Always handle potential errors when retrieving contracts, especially when using the `get` method, which can throw an error if the contract is not found.
 
 By incorporating ArvoContractLibrary into your project, you can streamline the management and usage of ArvoContracts, leading to more maintainable and robust code.

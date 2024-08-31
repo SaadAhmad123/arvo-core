@@ -154,7 +154,6 @@ console.log(JSON.stringify(jsonSchema, null, 2));
 
 This will output a JSON Schema representation of the contract, which can be used for documentation or integration with other tools that support JSON Schema.
 
-
 # ArvoContractLibrary
 
 The ArvoContractLibrary is a utility class designed to manage and access multiple ArvoContract instances efficiently. It provides a centralized way to store, retrieve, and query contracts within your application.
@@ -210,7 +209,9 @@ const library = new ArvoContractLibrary([contract1, contract2]);
 
 ```typescript
 // Get a contract by its URI
-const retrievedContract1 = library.get('https://example.com/contracts/contract1');
+const retrievedContract1 = library.get(
+  'https://example.com/contracts/contract1',
+);
 
 // Check if a contract exists
 const hasContract = library.has('https://example.com/contracts/contract2');

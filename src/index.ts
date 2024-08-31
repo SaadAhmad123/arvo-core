@@ -38,7 +38,8 @@ import {
   IArvoContract,
   ResolveArvoContractRecord,
 } from './ArvoContract/types';
-import ArvoContractLibrary from './ArvoContractLibrary'
+import ArvoContractLibrary from './ArvoContractLibrary';
+import { createArvoContractLibrary } from './ArvoContractLibrary/helpers';
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -86,4 +87,5 @@ export {
   IArvoContract,
   ResolveArvoContractRecord,
   ArvoContractLibrary,
+  createArvoContractLibrary,
 };

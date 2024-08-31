@@ -1,4 +1,4 @@
-import ArvoContract from "../ArvoContract";
+import ArvoContract from '../ArvoContract';
 
 /**
  * Extracts the URI type from a given ArvoContract type.
@@ -25,7 +25,7 @@ export default class ArvoContractLibrary<T extends ArvoContract> {
    */
   constructor(contracts: T[]) {
     const uriSet = new Set<string>();
-    contracts.forEach(contract => {
+    contracts.forEach((contract) => {
       if (uriSet.has(contract.uri)) {
         throw new Error(`Duplicate contract URI found: ${contract.uri}`);
       }
@@ -52,7 +52,9 @@ export default class ArvoContractLibrary<T extends ArvoContract> {
   public get<U extends ExtractContractUri<T>>(uri: U): Extract<T, { uri: U }> {
     const contract = this._contracts.find((item) => item.uri === uri);
     if (!contract) {
-      throw new Error(`ArvoContract with URI "${uri}" not found in the library`);
+      throw new Error(
+        `ArvoContract with URI "${uri}" not found in the library`,
+      );
     }
     return Object.freeze(contract) as Extract<T, { uri: U }>;
   }

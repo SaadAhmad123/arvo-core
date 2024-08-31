@@ -39,4 +39,5 @@ export type InferArvoContract<T> =
  */
 export const createArvoContract = <const TContract extends IArvoContract>(
   contract: TContract,
-): InferArvoContract<TContract> => new ArvoContract(contract) as InferArvoContract<TContract>
+): InferArvoContract<TContract> =>
+  new ArvoContract(contract) as InferArvoContract<TContract>;
