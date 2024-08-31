@@ -14,6 +14,7 @@ import { v4 as uuid4 } from 'uuid';
  *
  * @template TData - The type of the event data, extending ArvoEventData.
  * @template TExtension - The type of the cloud event extension, extending CloudEventExtension.
+ * @template TType - The type name of the event
  *
  * @param {CreateArvoEvent<TData>} event - The event data and metadata to create the ArvoEvent.
  * @param {TExtension} [extensions] - Optional cloud event extensions.
