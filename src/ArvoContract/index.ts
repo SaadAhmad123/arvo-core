@@ -25,6 +25,8 @@ export default class ArvoContract<
   private readonly _uri: T;
   private readonly _accepts: TAccepts;
   private readonly _emits: Array<TEmits>;
+  
+  /** (Optional) The Contract description */
   readonly description: string | null;
 
   /**
@@ -40,10 +42,18 @@ export default class ArvoContract<
     Object.freeze(this);
   }
 
+  /**
+   * Gets the URI of the contract.
+   * @returns {T} The contract's URI.
+   */
   public get uri(): T {
     return this._uri;
   }
 
+  /**
+   * Gets the accepted record type and schema.
+   * @returns {Readonly<TAccepts>} The frozen accepts object.
+   */
   public get accepts(): TAccepts {
     return Object.freeze(this._accepts);
   }
@@ -51,6 +61,7 @@ export default class ArvoContract<
   /**
    * Gets all emitted event types and schemas as a readonly record.
    * Use this when you need to access all emitted events at once.
+   * @returns {Readonly<Record<ExtractEventType<TEmits>, TEmits>>} A frozen record of all emitted events.
    */
   public get emits(): Record<ExtractEventType<TEmits>, TEmits> {
     return Object.freeze(
@@ -177,7 +188,7 @@ export default class ArvoContract<
    * This method provides a way to represent the contract's structure and validation rules
    * in a format that conforms to the JSON Schema specification.
    *
-   * @returns An object representing the contract in JSON Schema format, including:
+   * @returns {Object} An object representing the contract in JSON Schema format, including:
    *   - uri: The contract's URI
    *   - description: The contract's description (if available)
    *   - accepts: An object containing the accepted input type and its JSON Schema representation
