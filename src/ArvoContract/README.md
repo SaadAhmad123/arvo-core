@@ -66,7 +66,7 @@ The `createContractualArvoEvent` function is a utility that creates ArvoEvent fa
 First, create an ArvoContract:
 
 ```typescript
-import { createArvoContract } from '@arvo/core';
+import { createArvoContract } from 'arvo-core';
 import { z } from 'zod';
 
 const myContract = createArvoContract({
@@ -87,7 +87,7 @@ const myContract = createArvoContract({
 Then, use `createContractualArvoEvent` to create event factories:
 
 ```typescript
-import { createContractualArvoEvent } from '@arvo/core';
+import { createContractualArvoEvent } from 'arvo-core';
 
 const eventFactory = createContractualArvoEvent(myContract);
 ```

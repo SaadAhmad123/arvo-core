@@ -20,7 +20,7 @@ The ArvoContractLibrary is a utility class designed to manage and access multipl
 ### Creating an ArvoContractLibrary
 
 ```typescript
-import { createArvoContractLibrary, createArvoContract } from '@arvo/core';
+import { createArvoContractLibrary, createArvoContract } from 'arvo-core';
 import { z } from 'zod';
 
 const contract1 = createArvoContract({

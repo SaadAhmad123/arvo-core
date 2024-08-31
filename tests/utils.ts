@@ -10,7 +10,7 @@ diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 // Console Logger
 export const telemetrySdk = new NodeSDK({
   resource: new Resource({
-    [ATTR_SERVICE_NAME]: '@arvo/core',
+    [ATTR_SERVICE_NAME]: 'arvo-core',
   }),
   traceExporter: new ConsoleSpanExporter(),
   instrumentations: [getNodeAutoInstrumentations()],

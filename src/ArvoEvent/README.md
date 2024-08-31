@@ -31,7 +31,7 @@ import {
   ArvoEventData,
   CloudEventExtension,
   TelemetryContext,
-} from '@arvo/core';
+} from 'arvo-core';
 
 // Define your event data type
 interface MyEventData extends ArvoEventData {

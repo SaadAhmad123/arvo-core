@@ -16,3 +16,7 @@
 
 - Created an event factory generator for creating contractually compliant events
 
+## [0.0.5] - 2024-08-31
+
+- Updated README documentation
+
