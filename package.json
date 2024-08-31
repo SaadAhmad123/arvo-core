@@ -1,5 +1,5 @@
 {
-  "name": "@arvo/core",
+  "name": "arvo-core",
   "version": "0.0.2",
   "description": "This core package contains all the core classes and components of the Arvo Event Driven System",
   "main": "dist/index.js",
