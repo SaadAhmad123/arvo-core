@@ -110,7 +110,7 @@ export const CloudEventContextSchema = z
  * Zod schema for validating custom CloudEvent extensions.
  * This schema allows for additional custom fields in the CloudEvent,
  * following the CloudEvents specification for extension attributes.
- */  
+ */
 export const CloudEventExtensionSchema = z
   .record(
     z.string().regex(
@@ -221,7 +221,7 @@ export const ArvoExtensionSchema = z
  * Zod schema for validating OpenTelemetry extensions to the CloudEvent.
  * This schema includes fields for distributed tracing as per the
  * OpenTelemetry specification.
- */  
+ */
 export const OpenTelemetryExtensionSchema = z
   .object({
     traceparent: z

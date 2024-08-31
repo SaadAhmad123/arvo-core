@@ -26,7 +26,12 @@ ArvoEvent is a powerful and flexible class for creating and managing CloudEvents
 ### Creating an ArvoEvent
 
 ```typescript
-import { createArvoEvent, ArvoEventData, CloudEventExtension, TelemetryContext } from '@arvo/core';
+import {
+  createArvoEvent,
+  ArvoEventData,
+  CloudEventExtension,
+  TelemetryContext,
+} from '@arvo/core';
 
 // Define your event data type
 interface MyEventData extends ArvoEventData {
@@ -53,7 +58,7 @@ const event = createArvoEvent<MyEventData, MyExtensions>(
     to: 'event.consumer',
   },
   { customfield: 'Custom Value' },
-  telemetryContext
+  telemetryContext,
 );
 
 console.log('Event created:', event.toString());
@@ -89,23 +94,23 @@ const otelAttributes = event.otelAttributes;
 
 The following table describes all the fields used by the ArvoEvent:
 
-| Field | Schema | Description |
-|-------|--------|-------------|
-| id | String | Unique identifier of the event. If not provided, a UUID v4 will be generated. |
-| time | String (DateTime) | Timestamp of when the occurrence happened. If not provided, the current timestamp will be used. |
-| source | String (URI) | Identifies the context in which an event happened. Must be a valid URI representing the event producer. |
-| specversion | String | The version of the CloudEvents specification used. Defaults to '1.0'. |
-| type | String | Describes the type of event. Should be prefixed with a reverse-DNS name. |
-| subject | String (URI) | Identifies the subject of the event. For Arvo, this must be the Process Id. |
-| datacontenttype | String | Content type of the data value. Defaults to 'application/cloudevents+json;charset=UTF-8;profile=arvo'. |
-| dataschema | String (URI) or null | Identifies the schema that data adheres to. Must be a valid URI if present. |
-| data | JSON serializable object | The event payload. This payload must be JSON serializable. |
-| to | String (URI) or null | Defines the consumer machine of the event. Used for event routing. |
-| accesscontrol | String or null | Defines access controls for the event. Can be a UserID, encrypted string, or key-value pairs. |
-| redirectto | String (URI) or null | Indicates alternative recipients or destinations for events. |
-| executionunits | Number or null | Represents the cost associated with generating the CloudEvent. |
-| traceparent | String or null | Contains trace context information for distributed tracing (OpenTelemetry). |
-| tracestate | String or null | Conveys vendor-specific trace information across service boundaries (OpenTelemetry). |
+| Field           | Schema                   | Description                                                                                             |
+| --------------- | ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| id              | String                   | Unique identifier of the event. If not provided, a UUID v4 will be generated.                           |
+| time            | String (DateTime)        | Timestamp of when the occurrence happened. If not provided, the current timestamp will be used.         |
+| source          | String (URI)             | Identifies the context in which an event happened. Must be a valid URI representing the event producer. |
+| specversion     | String                   | The version of the CloudEvents specification used. Defaults to '1.0'.                                   |
+| type            | String                   | Describes the type of event. Should be prefixed with a reverse-DNS name.                                |
+| subject         | String (URI)             | Identifies the subject of the event. For Arvo, this must be the Process Id.                             |
+| datacontenttype | String                   | Content type of the data value. Defaults to 'application/cloudevents+json;charset=UTF-8;profile=arvo'.  |
+| dataschema      | String (URI) or null     | Identifies the schema that data adheres to. Must be a valid URI if present.                             |
+| data            | JSON serializable object | The event payload. This payload must be JSON serializable.                                              |
+| to              | String (URI) or null     | Defines the consumer machine of the event. Used for event routing.                                      |
+| accesscontrol   | String or null           | Defines access controls for the event. Can be a UserID, encrypted string, or key-value pairs.           |
+| redirectto      | String (URI) or null     | Indicates alternative recipients or destinations for events.                                            |
+| executionunits  | Number or null           | Represents the cost associated with generating the CloudEvent.                                          |
+| traceparent     | String or null           | Contains trace context information for distributed tracing (OpenTelemetry).                             |
+| tracestate      | String or null           | Conveys vendor-specific trace information across service boundaries (OpenTelemetry).                    |
 
 ## Best Practices
 

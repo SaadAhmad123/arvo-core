@@ -87,7 +87,7 @@ export const exceptionToSpan = (
 
 /**
  * Creates a new OpenTelemetry span and executes the provided function within its context.
- * 
+ *
  * This function enhances tracing by creating a new span, executing the given function within
  * that span's context, and properly handling any errors that may occur. It also ensures that
  * the wrapped function has access to the current span.
@@ -140,10 +140,7 @@ export const exceptionToSpan = (
  *   '12345'
  * );
  */
-export const createOtelSpan = <
-  TArgs extends unknown[],
-  TReturn
->(
+export const createOtelSpan = <TArgs extends unknown[], TReturn>(
   telemetryContext: TelemetryContext | string,
   spanName: string,
   spanOptions: SpanOptions | undefined,
@@ -154,31 +151,34 @@ export const createOtelSpan = <
   let activeContext: Context = context.active();
   let activeTracer: Tracer;
 
-  if (typeof telemetryContext === "string") {
+  if (typeof telemetryContext === 'string') {
     activeTracer = trace.getTracer(telemetryContext);
   } else {
     activeContext = getTelemetryContext(telemetryContext.context.traceparent);
     activeTracer = telemetryContext.tracer;
   }
 
-  const newSpan: Span = activeTracer.startSpan(spanName, spanOptions, activeContext);
+  const newSpan: Span = activeTracer.startSpan(
+    spanName,
+    spanOptions,
+    activeContext,
+  );
 
   try {
-    const result = context.with(
-      trace.setSpan(activeContext, newSpan),
-      () => wrappedFunction.call(thisArg, newSpan, ...args)
+    const result = context.with(trace.setSpan(activeContext, newSpan), () =>
+      wrappedFunction.call(thisArg, newSpan, ...args),
     );
     newSpan.setStatus({
-      code: SpanStatusCode.OK
-    })
+      code: SpanStatusCode.OK,
+    });
     newSpan.end();
     return result;
   } catch (error) {
     exceptionToSpan(newSpan, 'ERROR', error as Error);
     newSpan.setStatus({
       code: SpanStatusCode.ERROR,
-      message: (error as Error).message
-    })
+      message: (error as Error).message,
+    });
     newSpan.end();
     throw error;
   }

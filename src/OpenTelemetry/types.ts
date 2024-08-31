@@ -31,7 +31,7 @@ export type TelemetryCarrier = {
  * See reference documentation [here](https://opentelemetry.io/docs/languages/js/instrumentation/#traces)
  */
 export type TelemetryContext = {
-  /** 
+  /**
    * The current OpenTelemetry Span. If passed to a function,
    * then for that function, this is the parent span object
    */

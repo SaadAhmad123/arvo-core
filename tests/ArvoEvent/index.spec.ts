@@ -23,8 +23,8 @@ describe(`
   };
 
   it('should throw an error when to is not provided for an Arvo event', () => {
-    let error: Error | undefined
-    let event: ArvoEvent | undefined
+    let error: Error | undefined;
+    let event: ArvoEvent | undefined;
     try {
       event = createArvoEvent({
         source: 'test.producer',
@@ -33,7 +33,7 @@ describe(`
         data: { message: 'Hello, World!' },
       });
     } catch (e) {
-      error = e as Error
+      error = e as Error;
     }
 
     expect(event).toBeFalsy();
@@ -127,12 +127,12 @@ describe(`
       data: { invalidField: Symbol('invalid') }, // Symbols are not valid JSON
     };
 
-    let event: ArvoEvent | undefined
-    let error: Error | undefined
+    let event: ArvoEvent | undefined;
+    let error: Error | undefined;
     try {
-      event = createArvoEvent(invalidEvent)
+      event = createArvoEvent(invalidEvent);
     } catch (e) {
-      error = e as Error
+      error = e as Error;
     }
 
     expect(event).toBeFalsy();

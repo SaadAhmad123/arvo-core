@@ -30,6 +30,10 @@ import {
   TelemetryLogLevel,
 } from './OpenTelemetry/types';
 import { validateURI, cleanString } from './utils';
+import ArvoContract from './ArvoContract';
+import { createArvoContract, InferArvoContract } from './ArvoContract/helpers';
+import { ArvoContractValidators } from './ArvoContract/validators';
+import { ArvoContractRecord, IArvoContract, ResolveArvoContractRecord } from './ArvoContract/types'
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -69,4 +73,11 @@ export {
   OTelNull,
   validateURI,
   cleanString,
+  ArvoContract,
+  createArvoContract,
+  ArvoContractValidators,
+  ArvoContractRecord,
+  InferArvoContract, 
+  IArvoContract,
+  ResolveArvoContractRecord
 };

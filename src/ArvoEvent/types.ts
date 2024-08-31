@@ -52,8 +52,8 @@ export type CreateArvoEvent<TData extends ArvoEventData> = {
   type: string;
   /** Identifies the subject of the event. For Arvo, this must be the Process Id. */
   subject: string;
-  /** Content type of the data value. Must include 'application/cloudevents+json' or 
-   * 'application/json'. For an ArvoEvent, it is set automatically to 
+  /** Content type of the data value. Must include 'application/cloudevents+json' or
+   * 'application/json'. For an ArvoEvent, it is set automatically to
    * 'application/cloudevents+json;charset=UTF-8;profile=arvo'
    */
   datacontenttype?: string;

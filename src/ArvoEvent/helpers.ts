@@ -1,16 +1,9 @@
 import ArvoEvent from '.';
-import {
-  createOtelSpan,
-  logToSpan,
-} from '../OpenTelemetry';
+import { createOtelSpan, logToSpan } from '../OpenTelemetry';
 import { TelemetryContext } from '../OpenTelemetry/types';
 import { cleanString, createTimestamp } from '../utils';
 import { ArvoDataContentType } from './schema';
-import {
-  ArvoEventData,
-  CloudEventExtension,
-  CreateArvoEvent,
-} from './types';
+import { ArvoEventData, CloudEventExtension, CreateArvoEvent } from './types';
 import { v4 as uuid4 } from 'uuid';
 
 /**
@@ -56,46 +49,46 @@ export const createArvoEvent = <
   event: CreateArvoEvent<TData>,
   extensions?: TExtension,
   telemetry?: TelemetryContext,
-): ArvoEvent<TData, TExtension> => createOtelSpan(
-  telemetry || "ArvoEvent Creation Tracer",
-  "Create ArvoEvent",
-  {},
-  (span) => {
-
-    if (
-      event.datacontenttype &&
-      event.datacontenttype !== ArvoDataContentType
-    ) {
-      const warning = cleanString(`
+): ArvoEvent<TData, TExtension> =>
+  createOtelSpan(
+    telemetry || 'ArvoEvent Creation Tracer',
+    'Create ArvoEvent',
+    {},
+    (span) => {
+      if (
+        event.datacontenttype &&
+        event.datacontenttype !== ArvoDataContentType
+      ) {
+        const warning = cleanString(`
         Warning! The provided datacontenttype(=${event.datacontenttype})
         is not ArvoEvent compatible (=${ArvoDataContentType}). There may 
         be some limited functionality.
       `);
-      logToSpan(span, {
-        level: 'WARNING',
-        message: warning,
-      });
-    }
+        logToSpan(span, {
+          level: 'WARNING',
+          message: warning,
+        });
+      }
 
-    return new ArvoEvent<TData, TExtension>(
-      {
-        id: event.id || uuid4(),
-        type: event.type,
-        accesscontrol: event.accesscontrol || null,
-        executionunits: event.executionunits || null,
-        traceparent: event.traceparent || null,
-        tracestate: event.tracestate || null,
-        datacontenttype: event.datacontenttype || ArvoDataContentType,
-        specversion: event.specversion || '1.0',
-        time: event.time || createTimestamp(),
-        source: encodeURI(event.source),
-        subject: encodeURI(event.subject),
-        to: event.to ? encodeURI(event.to) : null,
-        redirectto: event.redirectto ? encodeURI(event.redirectto) : null,
-        dataschema: event.dataschema ? encodeURI(event.dataschema) : null,
-      },
-      event.data,
-      extensions,
-    )
-  }
-)
+      return new ArvoEvent<TData, TExtension>(
+        {
+          id: event.id || uuid4(),
+          type: event.type,
+          accesscontrol: event.accesscontrol || null,
+          executionunits: event.executionunits || null,
+          traceparent: event.traceparent || null,
+          tracestate: event.tracestate || null,
+          datacontenttype: event.datacontenttype || ArvoDataContentType,
+          specversion: event.specversion || '1.0',
+          time: event.time || createTimestamp(),
+          source: encodeURI(event.source),
+          subject: encodeURI(event.subject),
+          to: event.to ? encodeURI(event.to) : null,
+          redirectto: event.redirectto ? encodeURI(event.redirectto) : null,
+          dataschema: event.dataschema ? encodeURI(event.dataschema) : null,
+        },
+        event.data,
+        extensions,
+      );
+    },
+  );
