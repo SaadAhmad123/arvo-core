@@ -1,8 +1,3 @@
----
-title: ArvoEvent
-group: Guides
----
-
 # Arvo
 
 ## What is Arvo
