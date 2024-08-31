@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ArvoContractRecord, IArvoContract } from './types';
 import { ArvoContractValidators } from './validators';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
 /**
  * Extracts the event type from a given type T.
@@ -23,7 +24,8 @@ export default class ArvoContract<
 > {
   private readonly _uri: T;
   private readonly _accepts: TAccepts;
-  private readonly _emits: ReadonlyArray<TEmits>;
+  private readonly _emits: Array<TEmits>;
+  readonly description: string | null;
 
   /**
    * Creates an instance of ArvoContract.
@@ -33,6 +35,7 @@ export default class ArvoContract<
     this._uri = ArvoContractValidators.contract.uri.parse(params.uri) as T;
     this._accepts = this.validateAccepts(params.accepts);
     this._emits = this.validateEmits(params.emits);
+    this.description = params.description || null;
 
     Object.freeze(this);
   }
@@ -41,15 +44,15 @@ export default class ArvoContract<
     return this._uri;
   }
 
-  public get accepts(): Readonly<TAccepts> {
-    return this._accepts;
+  public get accepts(): TAccepts {
+    return Object.freeze(this._accepts);
   }
 
   /**
    * Gets all emitted event types and schemas as a readonly record.
    * Use this when you need to access all emitted events at once.
    */
-  public get emits(): Readonly<Record<ExtractEventType<TEmits>, TEmits>> {
+  public get emits(): Record<ExtractEventType<TEmits>, TEmits> {
     return Object.freeze(
       this._emits.reduce(
         (acc, emit) => {
@@ -72,12 +75,12 @@ export default class ArvoContract<
    */
   public getEmit<U extends ExtractEventType<TEmits>>(
     type: U,
-  ): Readonly<Extract<TEmits, { type: U }>> {
+  ): Extract<TEmits, { type: U }> {
     const emit = this._emits.find((item) => item.type === type);
     if (!emit) {
       throw new Error(`Emit type "${type}" not found in contract`);
     }
-    return emit as Extract<TEmits, { type: U }>;
+    return Object.freeze(emit) as Extract<TEmits, { type: U }>;
   }
 
   /**
@@ -136,15 +139,62 @@ export default class ArvoContract<
   /**
    * Validates the emits records.
    * @param {TEmits[]} emits - The emits records to validate.
-   * @returns {ReadonlyArray<TEmits>} The validated emits records.
+   * @returns {Array<TEmits>} The validated emits records.
    * @private
    */
-  private validateEmits(emits: TEmits[]): ReadonlyArray<TEmits> {
+  private validateEmits(emits: TEmits[]): Array<TEmits> {
     return Object.freeze(
       emits.map((item) => ({
         type: ArvoContractValidators.record.type.parse(item.type),
         schema: item.schema,
       })),
-    ) as ReadonlyArray<TEmits>;
+    ) as Array<TEmits>;
+  }
+
+  /**
+   * Exports the ArvoContract instance as a plain object conforming to the IArvoContract interface.
+   * This method can be used to serialize the contract or to create a new instance with the same parameters.
+   *
+   * @returns {IArvoContract<T, TAccepts, TEmits>} An object representing the contract, including its URI, accepts, and emits properties.
+   */
+  public export(): IArvoContract<T, TAccepts, TEmits> {
+    return {
+      uri: this._uri,
+      description: this.description,
+      accepts: {
+        type: this._accepts.type,
+        schema: this._accepts.schema,
+      } as TAccepts,
+      emits: this._emits.map((emit) => ({
+        type: emit.type,
+        schema: emit.schema,
+      })) as TEmits[],
+    };
+  }
+
+  /**
+   * Converts the ArvoContract instance to a JSON Schema representation.
+   * This method provides a way to represent the contract's structure and validation rules
+   * in a format that conforms to the JSON Schema specification.
+   *
+   * @returns An object representing the contract in JSON Schema format, including:
+   *   - uri: The contract's URI
+   *   - description: The contract's description (if available)
+   *   - accepts: An object containing the accepted input type and its JSON Schema representation
+   *   - emits: An array of objects, each containing an emitted event type and its JSON Schema representation
+   */  
+  public toJsonSchema() {
+    return {
+      uri: this._uri,
+      description: this.description,
+      accepts: {
+        type: this._accepts.type,
+        schema: zodToJsonSchema(this._accepts.schema) 
+      },
+      emits: this._emits.map(item => ({
+        type: z.literal(item.type),
+        schema: zodToJsonSchema(item.schema)
+      }))
+    }
   }
 }

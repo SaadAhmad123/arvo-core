@@ -14,7 +14,11 @@
   "exclude": ["node_modules", "tests"],
   "typedocOptions": {
     "entryPoints": ["src/index.ts"],
-    "projectDocuments": ["src/ArvoEvent/README.md", "src/ArvoContract/README.md"],
+    "projectDocuments": [
+      "src/ArvoEvent/README.md",
+      "src/ArvoContract/README.md",
+      "src/ArvoContractLibrary/README.md",
+    ],
     "plugin": ["typedoc-plugin-zod"],
     "out": "docs"
   }

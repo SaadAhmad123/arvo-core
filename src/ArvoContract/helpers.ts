@@ -13,19 +13,19 @@ export type InferArvoContract<T> =
 
 /**
  * Creates an ArvoContract instance from the given contract specification.
- * 
+ *
  * This function provides a convenient way to create and initialize an ArvoContract
  * with proper type inference. It also supports optional telemetry for tracing.
- * 
+ *
  * @template TContract - The type of the contract specification.
  * @param {TContract} contractSpec - The contract specification object.
  *   This should include the URI, accepts, and emits properties as defined in IArvoContract.
  * @param {TelemetryContext} [telemetry] - Optional telemetry context for tracing.
  *   If provided, it will be used to create an OpenTelemetry span for the contract creation.
- * 
+ *
  * @returns {InferArvoContract<TContract>} The created ArvoContract instance.
  *   The returned type is inferred from the input contract specification.
- * 
+ *
  * @example
  * const myContract = createArvoContract({
  *   uri: 'https://example.com/contracts/myContract',

@@ -33,7 +33,12 @@ import { validateURI, cleanString } from './utils';
 import ArvoContract from './ArvoContract';
 import { createArvoContract, InferArvoContract } from './ArvoContract/helpers';
 import { ArvoContractValidators } from './ArvoContract/validators';
-import { ArvoContractRecord, IArvoContract, ResolveArvoContractRecord } from './ArvoContract/types'
+import {
+  ArvoContractRecord,
+  IArvoContract,
+  ResolveArvoContractRecord,
+} from './ArvoContract/types';
+import ArvoContractLibrary from './ArvoContractLibrary'
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -77,7 +82,8 @@ export {
   createArvoContract,
   ArvoContractValidators,
   ArvoContractRecord,
-  InferArvoContract, 
+  InferArvoContract,
   IArvoContract,
-  ResolveArvoContractRecord
+  ResolveArvoContractRecord,
+  ArvoContractLibrary,
 };

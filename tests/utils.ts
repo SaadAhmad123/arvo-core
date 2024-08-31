@@ -15,3 +15,11 @@ export const telemetrySdk = new NodeSDK({
   traceExporter: new ConsoleSpanExporter(),
   instrumentations: [getNodeAutoInstrumentations()],
 });
+
+export const telemetrySdkStart = () => {
+  //telemetrySdk.start()
+};
+
+export const telemetrySdkStop = () => {
+  //telemetrySdk.shutdown
+};

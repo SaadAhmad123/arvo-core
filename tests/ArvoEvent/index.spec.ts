@@ -1,5 +1,5 @@
 import { createArvoEvent, ArvoEvent, ArvoDataContentType } from '../../src';
-import { telemetrySdk } from './utils';
+import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
 describe(`
   An ArvoEvent extends CloudEvent, enhancing scalability for event-driven systems. It supports both choreography 
@@ -7,11 +7,11 @@ describe(`
   ensuring portability across environments and vendors.    
 `, () => {
   beforeAll(() => {
-    telemetrySdk.start();
+    telemetrySdkStart();
   });
 
   afterAll(() => {
-    telemetrySdk.shutdown();
+    telemetrySdkStop();
   });
 
   const baseEvent = {

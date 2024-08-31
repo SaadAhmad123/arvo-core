@@ -32,6 +32,8 @@ export interface IArvoContract<
   accepts: TAccepts;
   /** An array of record types that the contract can emit */
   emits: TEmits[];
+  /** (Optional) The description of the contract or its handler */
+  description?: string | null;
 }
 
 /**
