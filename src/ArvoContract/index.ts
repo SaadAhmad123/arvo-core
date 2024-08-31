@@ -52,7 +52,7 @@ export default class ArvoContract<
 
   /**
    * Gets the accepted record type and schema.
-   * @returns {Readonly<TAccepts>} The frozen accepts object.
+   * @returns {TAccepts} The frozen accepts object.
    */
   public get accepts(): TAccepts {
     return Object.freeze(this._accepts);
@@ -61,7 +61,7 @@ export default class ArvoContract<
   /**
    * Gets all emitted event types and schemas as a readonly record.
    * Use this when you need to access all emitted events at once.
-   * @returns {Readonly<Record<ExtractEventType<TEmits>, TEmits>>} A frozen record of all emitted events.
+   * @returns {Record<ExtractEventType<TEmits>, TEmits>} A frozen record of all emitted events.
    */
   public get emits(): Record<ExtractEventType<TEmits>, TEmits> {
     return Object.freeze(
@@ -81,7 +81,7 @@ export default class ArvoContract<
    * Use this when you need to access a single emitted event by its type.
    * @template U - The type of the emit record to retrieve.
    * @param {U} type - The type of the emit record.
-   * @returns {Readonly<Extract<TEmits, { type: U }>>} The emit record.
+   * @returns {Extract<TEmits, { type: U }>} The emit record.
    * @throws {Error} If the emit type is not found in the contract.
    */
   public getEmit<U extends ExtractEventType<TEmits>>(

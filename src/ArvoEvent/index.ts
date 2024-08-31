@@ -19,15 +19,17 @@ import { OTelNull } from '../OpenTelemetry';
  * Represents an ArvoEvent, which extends the CloudEvent specification.
  * @template TData - The type of the event data, extending ArvoEventData.
  * @template TExtension - The type of additional extensions, extending CloudEventExtension.
+ * @template TType - The type name of the event
  */
 export default class ArvoEvent<
   TData extends ArvoEventData = ArvoEventData,
   TExtension extends CloudEventExtension = CloudEventExtension,
+  TType extends string = string,
 > {
   readonly id: string;
   readonly source: string;
   readonly specversion: string;
-  readonly type: string;
+  readonly type: TType;
   readonly subject: string;
   readonly datacontenttype: string;
   readonly dataschema: string | null;
@@ -49,7 +51,7 @@ export default class ArvoEvent<
     const cloudEventContext = CloudEventContextSchema.parse(context);
     this.id = cloudEventContext.id;
     this.time = cloudEventContext.time;
-    this.type = cloudEventContext.type;
+    this.type = cloudEventContext.type as TType;
     this.subject = cloudEventContext.subject;
     this.source = cloudEventContext.source;
     this.datacontenttype = cloudEventContext.datacontenttype;

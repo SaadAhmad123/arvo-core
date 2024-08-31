@@ -45,8 +45,9 @@ import { v4 as uuid4 } from 'uuid';
 export const createArvoEvent = <
   TData extends ArvoEventData,
   TExtension extends CloudEventExtension,
+  TType extends string
 >(
-  event: CreateArvoEvent<TData>,
+  event: CreateArvoEvent<TData, TType>,
   extensions?: TExtension,
   telemetry?: TelemetryContext,
 ): ArvoEvent<TData, TExtension> =>

@@ -39,7 +39,7 @@ export type OpenTelemetryExtension = z.infer<
  * Represents the input parameters for creating an ArvoEvent.
  * @template TData - The type of the event data, extending ArvoEventData.
  */
-export type CreateArvoEvent<TData extends ArvoEventData> = {
+export type CreateArvoEvent<TData extends ArvoEventData, TType extends string> = {
   /** Unique identifier of the event. Must be a non-empty string. If not provided, a UUID will be generated. */
   id?: string;
   /** Timestamp of when the occurrence happened. Must be in ISO 8601 format with timezone offset. */
@@ -49,7 +49,7 @@ export type CreateArvoEvent<TData extends ArvoEventData> = {
   /** The version of the CloudEvents specification used. Must be '1.0' for this version. */
   specversion?: '1.0';
   /** Describes the type of event. Should be prefixed with a reverse-DNS name. */
-  type: string;
+  type: TType;
   /** Identifies the subject of the event. For Arvo, this must be the Process Id. */
   subject: string;
   /** Content type of the data value. Must include 'application/cloudevents+json' or

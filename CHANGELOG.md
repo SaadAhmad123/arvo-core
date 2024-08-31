@@ -8,3 +8,7 @@
 
 - Update ArvoContract description
 
+## [1.0.3] - 2024-08-31
+
+- Making type in ArvoEvent a generic string for better type control
+
