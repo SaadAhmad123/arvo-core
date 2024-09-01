@@ -171,7 +171,7 @@ export default class ArvoContract<
    *   - accepts: An object containing the accepted input type and its JSON Schema representation
    *   - emits: An array of objects, each containing an emitted event type and its JSON Schema representation
    */
-  public toJsonSchema() {
+  public toJsonSchema(): Object {
     return {
       uri: this._uri,
       description: this.description,
@@ -180,7 +180,7 @@ export default class ArvoContract<
         schema: zodToJsonSchema(this._accepts.schema),
       },
       emits: Object.entries(this._emits).map(([key, value]) => ({
-        type: z.literal(key),
+        type: key,
         schema: zodToJsonSchema(value),
       })),
     };
