@@ -34,7 +34,6 @@ import ArvoContract from './ArvoContract';
 import {
   createArvoContract,
   InferArvoContract,
-  contractualArvoEventFactory,
 } from './ArvoContract/helpers';
 import { ArvoContractValidators } from './ArvoContract/validators';
 import {
@@ -44,6 +43,9 @@ import {
 } from './ArvoContract/types';
 import ArvoContractLibrary from './ArvoContractLibrary';
 import { createArvoContractLibrary } from './ArvoContractLibrary/helpers';
+import ArvoEventFactory from './ArvoEventFactory';
+import { createArvoEventFactory } from './ArvoEventFactory/helpers';
+import { ArvoErrorSchema } from './schema';
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -92,5 +94,7 @@ export {
   ResolveArvoContractRecord,
   ArvoContractLibrary,
   createArvoContractLibrary,
-  contractualArvoEventFactory,
+  ArvoEventFactory,
+  createArvoEventFactory,
+  ArvoErrorSchema
 };

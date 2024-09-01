@@ -41,7 +41,7 @@ const myContract = createArvoContract({
 
 ## Creating Contractual Events
 
-The `createContractualArvoEvent` function is a utility that creates ArvoEvent factories based on a given ArvoContract. It provides a type-safe and contract-compliant way to create events that adhere to the contract's specifications.
+The `createArvoEventFactory` function is a utility that creates ArvoEvent factories based on a given ArvoContract. It provides a type-safe and contract-compliant way to create events that adhere to the contract's specifications.
 
 ### Why use it?
 
@@ -78,7 +78,7 @@ const myContract = createArvoContract({
 });
 ```
 
-Then, use `createContractualArvoEvent` to create event factories:
+Then, use `createArvoEventFactory` to create event factories:
 
 ```typescript
 import { contractualArvoEventFactory } from 'arvo-core';
@@ -108,4 +108,4 @@ const outputEvent = eventFactory.emits({
 
 Combine this with `ArvoContractLibrary` for efficient contract management across your application.
 
-By incorporating `createContractualArvoEvent` into your code, you can ensure that all created events are compliant with your defined contracts, leading to more robust and maintainable event-driven systems.
+By incorporating `createArvoEventFactory` into your code, you can ensure that all created events are compliant with your defined contracts, leading to more robust and maintainable event-driven systems.

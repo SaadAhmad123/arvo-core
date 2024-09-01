@@ -51,6 +51,7 @@ At its core, Arvo has only three main data structures:
 - [ArvoEvent](src/ArvoEvent/README.md) aims to provide a extendible variant of the open-source CloudEvent spec-ed object to define all the event in the system.
 - [ArvoContract](src/ArvoContract/README.md) is a basic class to define and impose contracts between services, ensuring trust in decoupled systems during build and development.
 - [ArvoContractLibrary](src/ArvoContractLibrary/README.md) is a utility class designed to manage and access multiple ArvoContract instances efficiently.
+- `ArvoErrorSchema` is the recommeded zod schema for all the errors in the ArvoEvents
 
 ## Utilities
 

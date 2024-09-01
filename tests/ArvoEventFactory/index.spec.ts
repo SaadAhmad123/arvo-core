@@ -1,8 +1,8 @@
-import { createArvoContract, contractualArvoEventFactory } from '../../src';
+import { createArvoContract, createArvoEventFactory } from '../../src';
 import { z } from 'zod';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
-describe('createContractualArvoEvent', () => {
+describe('createArvoEventFactory', () => {
   beforeAll(() => {
     telemetrySdkStart();
   });
@@ -30,7 +30,7 @@ describe('createContractualArvoEvent', () => {
 
   describe('emits', () => {
     it('should create a valid event when data matches the schema', async () => {
-      const event = contractualArvoEventFactory(mockContract).emits({
+      const event = createArvoEventFactory(mockContract).emits({
         type: 'test.output.0',
         source: 'test-source',
         subject: 'test-subject',
@@ -42,7 +42,7 @@ describe('createContractualArvoEvent', () => {
       expect(event.type).toBe('test.output.0');
       expect(event.data).toEqual({ output: 42 });
 
-      const event1 = contractualArvoEventFactory(mockContract).emits({
+      const event1 = createArvoEventFactory(mockContract).emits({
         type: 'test.output.1',
         source: 'test-source',
         subject: 'test-subject',
@@ -57,7 +57,7 @@ describe('createContractualArvoEvent', () => {
 
     it('should throw an error when data does not match the schema', async () => {
       expect(() =>
-        contractualArvoEventFactory(mockContract).emits({
+        createArvoEventFactory(mockContract).emits({
           type: 'test.output.0',
           source: 'test-source',
           subject: 'test-subject',
@@ -69,7 +69,7 @@ describe('createContractualArvoEvent', () => {
 
     it('should throw an error for unknown event type', async () => {
       expect(() =>
-        contractualArvoEventFactory(mockContract).emits({
+        createArvoEventFactory(mockContract).emits({
           type: 'unknown.type.0' as any,
           source: 'test-source',
           subject: 'test-subject',
@@ -82,7 +82,7 @@ describe('createContractualArvoEvent', () => {
 
   describe('accepts', () => {
     it('should create a valid event when data matches the schema', async () => {
-      const event = contractualArvoEventFactory(mockContract).accepts({
+      const event = createArvoEventFactory(mockContract).accepts({
         type: 'test.input.0',
         source: 'test-source',
         subject: 'test-subject',
@@ -97,7 +97,7 @@ describe('createContractualArvoEvent', () => {
 
     it('should throw an error when data does not match the schema', async () => {
       expect(() =>
-        contractualArvoEventFactory(mockContract).accepts({
+        createArvoEventFactory(mockContract).accepts({
           type: 'test.input.0',
           source: 'test-source',
           subject: 'test-subject',
@@ -109,7 +109,7 @@ describe('createContractualArvoEvent', () => {
 
     it('should throw an error for unknown event type', async () => {
       expect(() =>
-        contractualArvoEventFactory(mockContract).accepts({
+        createArvoEventFactory(mockContract).accepts({
           type: 'unknown.type.0' as any,
           source: 'test-source',
           subject: 'test-subject',
@@ -119,4 +119,10 @@ describe('createContractualArvoEvent', () => {
       ).toThrow('Accept type "unknown.type.0" not found in contract');
     });
   });
+
+  describe('systemError', () => {
+    it('should create system error message as per the contract', () => {
+      const eventFactory = createArvoEventFactory(mockContract).systemError
+    })
+  })
 });

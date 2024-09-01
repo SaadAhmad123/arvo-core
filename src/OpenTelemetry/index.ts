@@ -144,7 +144,10 @@ export const createOtelSpan = <TArgs extends unknown[], TReturn>(
   telemetryContext: TelemetryContext | string,
   spanName: string,
   spanOptions: SpanOptions | undefined,
-  wrappedFunction: (telemetryContext: TelemetryContext, ...args: TArgs) => TReturn,
+  wrappedFunction: (
+    telemetryContext: TelemetryContext,
+    ...args: TArgs
+  ) => TReturn,
   thisArg?: ThisParameterType<typeof wrappedFunction>,
   ...args: TArgs
 ): TReturn => {
@@ -166,11 +169,15 @@ export const createOtelSpan = <TArgs extends unknown[], TReturn>(
 
   try {
     const result = context.with(trace.setSpan(activeContext, newSpan), () =>
-      wrappedFunction.call(thisArg, {
-        span: newSpan,
-        tracer: activeTracer,
-        carrier: getTelemetryCarrier(newSpan, activeContext)
-      }, ...args),
+      wrappedFunction.call(
+        thisArg,
+        {
+          span: newSpan,
+          tracer: activeTracer,
+          carrier: getTelemetryCarrier(newSpan, activeContext),
+        },
+        ...args,
+      ),
     );
     newSpan.setStatus({
       code: SpanStatusCode.OK,

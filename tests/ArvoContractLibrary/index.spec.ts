@@ -1,9 +1,8 @@
-import { z } from 'zod'
-import { createArvoContract, ArvoContractLibrary } from "../../src";
+import { z } from 'zod';
+import { createArvoContract, ArvoContractLibrary } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
 describe('ArvoContractLibrary', () => {
-
   beforeAll(() => {
     telemetrySdkStart();
   });
@@ -18,11 +17,9 @@ describe('ArvoContractLibrary', () => {
       type: 'com.example.input1',
       schema: z.object({ name: z.string() }),
     },
-    emits: 
-      {
-        'com.example.output1' : z.object({ result: z.number() }),
-      },
-    
+    emits: {
+      'com.example.output1': z.object({ result: z.number() }),
+    },
   });
 
   const contract2 = createArvoContract({
@@ -31,11 +28,9 @@ describe('ArvoContractLibrary', () => {
       type: 'com.example.input2',
       schema: z.object({ age: z.number() }),
     },
-    emits: 
-      {
-        'com.example.output2': z.object({ success: z.boolean() }),
-      },
-    
+    emits: {
+      'com.example.output2': z.object({ success: z.boolean() }),
+    },
   });
 
   describe('constructor', () => {
