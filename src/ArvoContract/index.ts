@@ -84,7 +84,7 @@ export default class ArvoContract<
   public validateInput<U>(
     type: TType,
     input: U,
-  ): z.SafeParseReturnType<U, z.infer<TAcceptSchema>> {
+  ) {
     if (type !== this._accepts.type) {
       throw new Error(`Accept type "${type}" not found in contract`);
     }
@@ -103,10 +103,7 @@ export default class ArvoContract<
   public validateOutput<U extends keyof TEmits>(
     type: U,
     output: unknown,
-  ): z.SafeParseReturnType<
-    unknown,
-    z.infer<Extract<TEmits, { type: U }>['schema']>
-  > {
+  ) {
     const emit = this.emits[type];
     if (!emit) {
       throw new Error(`Emit type "${type.toString()}" not found in contract`);
