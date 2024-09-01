@@ -33,12 +33,9 @@ const myContract = createArvoContract({
     type: 'com.example.input',
     schema: z.object({ name: z.string() }),
   },
-  emits: [
-    {
-      type: 'com.example.output',
-      schema: z.object({ result: z.number() }),
-    },
-  ],
+  emits: {
+    'com.example.output': z.object({ result: z.number() }),
+  },
 });
 ```
 
@@ -75,21 +72,18 @@ const myContract = createArvoContract({
     type: 'com.example.input',
     schema: z.object({ name: z.string() }),
   },
-  emits: [
-    {
-      type: 'com.example.output',
-      schema: z.object({ result: z.number() }),
-    },
-  ],
+  emits: {
+    'com.example.output': z.object({ result: z.number() }),
+  },
 });
 ```
 
 Then, use `createContractualArvoEvent` to create event factories:
 
 ```typescript
-import { createContractualArvoEvent } from 'arvo-core';
+import { contractualArvoEventFactory } from 'arvo-core';
 
-const eventFactory = createContractualArvoEvent(myContract);
+const eventFactory = contractualArvoEventFactory(myContract);
 ```
 
 Now you can use the factory to create events:
@@ -111,7 +105,6 @@ const outputEvent = eventFactory.emits({
   subject: 'example-subject',
 });
 ```
-
 
 Combine this with `ArvoContractLibrary` for efficient contract management across your application.
 
