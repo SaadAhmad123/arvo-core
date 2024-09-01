@@ -106,7 +106,7 @@ export default class ArvoEventFactory<
           );
         }
         return createArvoEvent<
-          z.infer<Extract<TEmits, { type: U }>['schema']>,
+          z.infer<z.infer<TEmits[U]>>,
           TExtension,
           U
         >(
