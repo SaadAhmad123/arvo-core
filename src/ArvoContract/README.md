@@ -81,9 +81,9 @@ const myContract = createArvoContract({
 Then, use `createArvoEventFactory` to create event factories:
 
 ```typescript
-import { contractualArvoEventFactory } from 'arvo-core';
+import { createArvoEventFactory } from 'arvo-core';
 
-const eventFactory = contractualArvoEventFactory(myContract);
+const eventFactory = createArvoEventFactory(myContract);
 ```
 
 Now you can use the factory to create events:
