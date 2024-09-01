@@ -1,5 +1,5 @@
 import { IArvoContract } from './types';
-import ArvoContract, { ExtractEventType } from '.';
+import ArvoContract from '.';
 import { createArvoEvent } from '../ArvoEvent/helpers';
 import { CreateArvoEvent } from '../ArvoEvent/types';
 import { createOtelSpan } from '../OpenTelemetry';
@@ -52,15 +52,15 @@ export const createArvoContract = <const TContract extends IArvoContract>(
  * Creates a contractual ArvoEvent factory based on the provided contract.
  *
  * @template T - The type of the contract.
- * @template TAccepts - The type of events the contract accepts.
- * @template TEmits - The type of events the contract emits.
+ * @template TAccepts - The type of record the contract bound handler accepts, defaults to ArvoContractRecord.
+ * @template TEmits - The type of records the contract bound handler emits.
  * @param {ArvoContract<T, TAccepts, TEmits>} contract - The ArvoContract to base the events on.
  * @returns {Object} An object with 'accepts' and 'emits' methods for creating events.
  */
-export const createContractualArvoEvent = <
+export const contractualArvoEventFactory = <
   T extends string = string,
   TAccepts extends ArvoContractRecord = ArvoContractRecord,
-  TEmits extends ArvoContractRecord = ArvoContractRecord,
+  TEmits extends Record<string, z.ZodTypeAny> = Record<string, z.ZodTypeAny>,
 >(
   contract: ArvoContract<T, TAccepts, TEmits>,
 ) => ({
@@ -81,7 +81,7 @@ export const createContractualArvoEvent = <
   ) =>
     createOtelSpan(
       telemetry || 'ArvoEvent Creation Tracer',
-      'createArvoContractEvent.accepts',
+      'contractualArvoEventFactory.accepts',
       {},
       () => {
         const validationResult = contract.validateInput(event.type, event.data);
@@ -117,16 +117,16 @@ export const createContractualArvoEvent = <
    * @throws {Error} If the event data fails validation against the contract.
    */
   emits: <
-    U extends ExtractEventType<TEmits>,
+    U extends keyof TEmits & string,
     TExtension extends Record<string, any>,
   >(
-    event: CreateArvoEvent<z.infer<Extract<TEmits, { type: U }>['schema']>, U>,
+    event: CreateArvoEvent<z.infer<TEmits[U]>, U>,
     extensions?: TExtension,
     telemetry?: TelemetryContext,
   ) =>
     createOtelSpan(
       telemetry || 'ArvoEvent Creation Tracer',
-      'createArvoContractEvent.emits',
+      'contractualArvoEventFactory.emits',
       {},
       () => {
         const validationResult = contract.validateOutput(

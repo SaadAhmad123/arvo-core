@@ -4,37 +4,33 @@ import { ArvoContractValidators } from './validators';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 /**
- * Extracts the event type from a given type T.
- * @template T - The type to extract the event type from.
- */
-export type ExtractEventType<T> = T extends { type: infer U } ? U : never;
-
-/**
  * ArvoContract class represents a contract with defined input and output schemas.
  * It provides methods for validating inputs and outputs based on the contract's specifications.
+ * An event handler can be bound to it so the this contract may impose the types
+ * on inputs and outputs of it
  *
- * @template T - The URI type.
- * @template TAccepts - The accepted record type.
- * @template TEmits - The emitted record type.
+ * @template TUri - The URI type, defaults to string.
+ * @template TAccepts - The type of record the contract bound handler accepts, defaults to ArvoContractRecord.
+ * @template TEmits - The type of records the contract bound handler emits.
  */
 export default class ArvoContract<
-  T extends string = string,
+  TUri extends string = string,
   TAccepts extends ArvoContractRecord = ArvoContractRecord,
-  TEmits extends ArvoContractRecord = ArvoContractRecord,
+  TEmits extends Record<string, z.ZodTypeAny> = Record<string, z.ZodTypeAny>,
 > {
-  private readonly _uri: T;
+  private readonly _uri: TUri;
   private readonly _accepts: TAccepts;
-  private readonly _emits: Array<TEmits>;
+  private readonly _emits: TEmits;
 
   /** (Optional) The Contract description */
   readonly description: string | null;
 
   /**
    * Creates an instance of ArvoContract.
-   * @param {IArvoContract<T, TAccepts, TEmits>} params - The contract parameters.
+   * @param {IArvoContract<TUri, TAccepts, TEmits>} params - The contract parameters.
    */
-  constructor(params: IArvoContract<T, TAccepts, TEmits>) {
-    this._uri = ArvoContractValidators.contract.uri.parse(params.uri) as T;
+  constructor(params: IArvoContract<TUri, TAccepts, TEmits>) {
+    this._uri = ArvoContractValidators.contract.uri.parse(params.uri) as TUri;
     this._accepts = this.validateAccepts(params.accepts);
     this._emits = this.validateEmits(params.emits);
     this.description = params.description || null;
@@ -46,12 +42,13 @@ export default class ArvoContract<
    * Gets the URI of the contract.
    * @returns {T} The contract's URI.
    */
-  public get uri(): T {
+  public get uri(): TUri {
     return this._uri;
   }
 
   /**
-   * Gets the accepted record type and schema.
+   * Gets the type and schema of the event that the contact
+   * bound handler listens to.
    * @returns {TAccepts} The frozen accepts object.
    */
   public get accepts(): TAccepts {
@@ -59,46 +56,21 @@ export default class ArvoContract<
   }
 
   /**
-   * Gets all emitted event types and schemas as a readonly record.
-   * Use this when you need to access all emitted events at once.
-   * @returns {Record<ExtractEventType<TEmits>, TEmits>} A frozen record of all emitted events.
+   * Gets all event types and schemas that can be emitted by the
+   * contract bound handler.
+   *
+   * @returns {TEmits} A record of all emitted events.
    */
-  public get emits(): Record<ExtractEventType<TEmits>, TEmits> {
-    return Object.freeze(
-      this._emits.reduce(
-        (acc, emit) => {
-          // @ts-ignore
-          acc[emit.type] = emit;
-          return acc;
-        },
-        {} as Record<ExtractEventType<TEmits>, TEmits>,
-      ),
-    );
+  public get emits(): TEmits {
+    return { ...this._emits };
   }
 
   /**
-   * Gets a specific emitted event type and schema.
-   * Use this when you need to access a single emitted event by its type.
-   * @template U - The type of the emit record to retrieve.
-   * @param {U} type - The type of the emit record.
-   * @returns {Extract<TEmits, { type: U }>} The emit record.
-   * @throws {Error} If the emit type is not found in the contract.
-   */
-  public getEmit<U extends ExtractEventType<TEmits>>(
-    type: U,
-  ): Extract<TEmits, { type: U }> {
-    const emit = this._emits.find((item) => item.type === type);
-    if (!emit) {
-      throw new Error(`Emit type "${type}" not found in contract`);
-    }
-    return Object.freeze(emit) as Extract<TEmits, { type: U }>;
-  }
-
-  /**
-   * Validates the input against the contract's accept schema.
+   * Validates the contract bound handler's input against the
+   * contract's accept schema.
    * @template U - The type of the input to validate.
-   * @param {TAccepts['type']} type - The type of the input.
-   * @param {U} input - The input to validate.
+   * @param {TAccepts['type']} type - The type of the input event.
+   * @param {U} input - The input data to validate.
    * @returns {z.SafeParseReturnType<U, z.infer<TAccepts['schema']>>} The validation result.
    * @throws {Error} If the accept type is not found in the contract.
    */
@@ -113,14 +85,15 @@ export default class ArvoContract<
   }
 
   /**
-   * Validates the output against the contract's emit schema.
+   * Validates the contract bound handler's output against the
+   * contract's emit schema.
    * @template U - The type of the output to validate.
-   * @param {U} type - The type of the output.
-   * @param {unknown} output - The output to validate.
+   * @param {U} type - The type of the output event.
+   * @param {unknown} output - The output data to validate.
    * @returns {z.SafeParseReturnType<unknown, z.infer<Extract<TEmits, { type: U }>['schema']>>} The validation result.
    * @throws {Error} If the emit type is not found in the contract.
    */
-  public validateOutput<U extends ExtractEventType<TEmits>>(
+  public validateOutput<U extends keyof TEmits>(
     type: U,
     output: unknown,
   ): z.SafeParseReturnType<
@@ -129,9 +102,9 @@ export default class ArvoContract<
   > {
     const emit = this.emits[type];
     if (!emit) {
-      throw new Error(`Emit type "${type}" not found in contract`);
+      throw new Error(`Emit type "${type.toString()}" not found in contract`);
     }
-    return emit.schema.safeParse(output);
+    return emit.safeParse(output);
   }
 
   /**
@@ -149,26 +122,24 @@ export default class ArvoContract<
 
   /**
    * Validates the emits records.
-   * @param {TEmits[]} emits - The emits records to validate.
-   * @returns {Array<TEmits>} The validated emits records.
+   * @param {TEmits} emits - The emits records to validate.
+   * @returns {TEmits} The validated emits records.
    * @private
    */
-  private validateEmits(emits: TEmits[]): Array<TEmits> {
-    return Object.freeze(
-      emits.map((item) => ({
-        type: ArvoContractValidators.record.type.parse(item.type),
-        schema: item.schema,
-      })),
-    ) as Array<TEmits>;
+  private validateEmits(emits: TEmits): TEmits {
+    Object.entries(emits).forEach(([key]) =>
+      ArvoContractValidators.record.type.parse(key),
+    );
+    return Object.freeze(emits);
   }
 
   /**
    * Exports the ArvoContract instance as a plain object conforming to the IArvoContract interface.
    * This method can be used to serialize the contract or to create a new instance with the same parameters.
    *
-   * @returns {IArvoContract<T, TAccepts, TEmits>} An object representing the contract, including its URI, accepts, and emits properties.
+   * @returns {IArvoContract<TUri, TAccepts, TEmits>} An object representing the contract, including its URI, accepts, and emits properties.
    */
-  public export(): IArvoContract<T, TAccepts, TEmits> {
+  public export(): IArvoContract<TUri, TAccepts, TEmits> {
     return {
       uri: this._uri,
       description: this.description,
@@ -176,10 +147,7 @@ export default class ArvoContract<
         type: this._accepts.type,
         schema: this._accepts.schema,
       } as TAccepts,
-      emits: this._emits.map((emit) => ({
-        type: emit.type,
-        schema: emit.schema,
-      })) as TEmits[],
+      emits: { ...this._emits } as TEmits,
     };
   }
 
@@ -202,9 +170,9 @@ export default class ArvoContract<
         type: this._accepts.type,
         schema: zodToJsonSchema(this._accepts.schema),
       },
-      emits: this._emits.map((item) => ({
-        type: z.literal(item.type),
-        schema: zodToJsonSchema(item.schema),
+      emits: Object.entries(this._emits).map(([key, value]) => ({
+        type: z.literal(key),
+        schema: zodToJsonSchema(value),
       })),
     };
   }

@@ -17,12 +17,9 @@ describe('ArvoContract', () => {
       type: 'com.example.input',
       schema: z.object({ name: z.string() }),
     },
-    emits: [
-      {
-        type: 'com.example.output',
-        schema: z.object({ result: z.number() }),
-      },
-    ],
+    emits: {
+      'com.example.output': z.object({ result: z.number() }),
+    },
   };
 
   describe('createArvoContract', () => {
@@ -51,7 +48,10 @@ describe('ArvoContract', () => {
     it('should throw an error for invalid emit type', () => {
       const invalidSpec = {
         ...validContractSpec,
-        emits: [{ ...validContractSpec.emits[0], type: 'invalid-type' }],
+        emits: {
+          ...validContractSpec.emits,
+          'invalid-type': z.object({}),
+        },
       };
       expect(() => createArvoContract(invalidSpec)).toThrow();
     });
@@ -59,24 +59,22 @@ describe('ArvoContract', () => {
     it('should create a contract with multiple emits', () => {
       const contract = createArvoContract({
         ...validContractSpec,
-        emits: [
+        emits: {
           ...validContractSpec.emits,
-          {
-            type: 'com.example.error',
-            schema: z.object({
-              message: z.string(),
-            }),
-          },
-        ],
+          'com.example.error': z.object({
+            message: z.string(),
+          }),
+        },
       });
       expect(Object.keys(contract.emits)).toHaveLength(2);
       expect(contract.emits['com.example.output']).toBeTruthy();
       expect(contract.emits['com.example.error']).toBeTruthy();
+      // @ts-ignore
       expect(contract.emits['com.example.error.saad']).toBeFalsy();
     });
 
     it('should throw an error for empty emits array', () => {
-      const invalidSpec = { ...validContractSpec, emits: [] };
+      const invalidSpec = { ...validContractSpec, emits: {} };
       expect(() => createArvoContract(invalidSpec)).not.toThrow();
     });
   });
@@ -100,39 +98,6 @@ describe('ArvoContract', () => {
       expect(() => {
         (contract as any).accepts = {};
       }).toThrow();
-    });
-
-    it('should have a readonly emits property', () => {
-      expect(contract.getEmit('com.example.output')).toBeTruthy();
-      expect(() => {
-        (contract as any).emits = {};
-      }).toThrow();
-    });
-
-    describe('emits property', () => {
-      it('should return a frozen object', () => {
-        expect(Object.isFrozen(contract.emits)).toBe(true);
-      });
-
-      it('should not allow modification of emits', () => {
-        expect(() => {
-          (contract.emits as any)['com.example.new'] = {
-            type: 'com.example.new',
-            schema: z.any(),
-          };
-        }).toThrow();
-      });
-    });
-
-    describe('getEmit', () => {
-      it('should return the correct emit schema for a valid type', () => {
-        const emit = contract.getEmit('com.example.output');
-        expect(emit).toEqual(validContractSpec.emits[0]);
-      });
-
-      it('should throw an error for an invalid emit type', () => {
-        expect(() => contract.getEmit('invalid-type')).toThrow();
-      });
     });
 
     describe('validateInput', () => {
@@ -201,19 +166,18 @@ describe('ArvoContract', () => {
       });
 
       it('should throw an error for an invalid output type', () => {
-        expect(() => contract.validateOutput('invalid-type', {})).toThrow();
+        expect(() =>
+          contract.validateOutput('invalid-type' as any, {}),
+        ).toThrow();
       });
 
       it('should validate multiple emit types', () => {
         const contract = createArvoContract({
           ...validContractSpec,
-          emits: [
+          emits: {
             ...validContractSpec.emits,
-            {
-              type: 'com.example.error',
-              schema: z.object({ message: z.string() }),
-            },
-          ],
+            'com.example.error': z.object({ message: z.string() }),
+          },
         });
         const outputResult = contract.validateOutput('com.example.output', {
           result: 42,
@@ -229,16 +193,13 @@ describe('ArvoContract', () => {
       it('should handle complex output schemas', () => {
         const complexContract = createArvoContract({
           ...validContractSpec,
-          emits: [
-            {
-              type: 'com.example.complex',
-              schema: z.object({
-                id: z.number(),
-                data: z.array(z.string()),
-                nested: z.object({ flag: z.boolean() }),
-              }),
-            },
-          ],
+          emits: {
+            'com.example.complex': z.object({
+              id: z.number(),
+              data: z.array(z.string()),
+              nested: z.object({ flag: z.boolean() }),
+            }),
+          },
         });
 
         const validOutput = { id: 1, data: ['a', 'b'], nested: { flag: true } };
@@ -257,25 +218,6 @@ describe('ArvoContract', () => {
             .success,
         ).toBe(false);
       });
-    });
-  });
-
-  describe('Type inference', () => {
-    it('should correctly infer types from the contract specification', () => {
-      const contract = createArvoContract(validContractSpec);
-
-      // These type assertions should compile without errors
-      const _uri: string = contract.uri;
-      const _accepts: { type: string; schema: z.ZodSchema } = contract.accepts;
-      const _emits: Record<string, { type: string; schema: z.ZodSchema }> =
-        contract.emits;
-
-      // @ts-expect-error
-      const _invalidUri: number = contract.uri;
-      // @ts-expect-error
-      const _invalidAccepts: string = contract.accepts;
-      // @ts-expect-error
-      const _invalidEmits: string[] = contract.emits;
     });
   });
 });

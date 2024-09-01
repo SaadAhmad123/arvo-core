@@ -34,7 +34,7 @@ import ArvoContract from './ArvoContract';
 import {
   createArvoContract,
   InferArvoContract,
-  createContractualArvoEvent,
+  contractualArvoEventFactory,
 } from './ArvoContract/helpers';
 import { ArvoContractValidators } from './ArvoContract/validators';
 import {
@@ -92,5 +92,5 @@ export {
   ResolveArvoContractRecord,
   ArvoContractLibrary,
   createArvoContractLibrary,
-  createContractualArvoEvent,
+  contractualArvoEventFactory,
 };

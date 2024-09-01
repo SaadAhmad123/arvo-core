@@ -18,20 +18,20 @@ export type ArvoContractRecord<
 /**
  * Interface for an Arvo contract.
  * @template TUri - The URI type, defaults to string.
- * @template TAccepts - The type of record the contract accepts, defaults to ArvoContractRecord.
- * @template TEmits - The type of record the contract emits, defaults to ArvoContractRecord.
+ * @template TAccepts - The type of record the contract bound handler accepts, defaults to ArvoContractRecord.
+ * @template TEmits - The type of records the contract bound handler emits.
  */
 export interface IArvoContract<
   TUri extends string = string,
   TAccepts extends ArvoContractRecord = ArvoContractRecord,
-  TEmits extends ArvoContractRecord = ArvoContractRecord,
+  TEmits extends Record<string, z.ZodTypeAny> = Record<string, z.ZodTypeAny>,
 > {
   /** The unique identifier for the contract */
   uri: TUri;
   /** The record type that the contract accepts */
   accepts: TAccepts;
   /** An array of record types that the contract can emit */
-  emits: TEmits[];
+  emits: TEmits;
   /** (Optional) The description of the contract or its handler */
   description?: string | null;
 }

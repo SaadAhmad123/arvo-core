@@ -20,3 +20,7 @@
 
 - Updated README documentation
 
+## [1.0.6] - 2024-09-01
+
+- Updated ArvoContract typing mechanism
+
