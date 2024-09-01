@@ -56,7 +56,7 @@ export const createArvoEvent = <
     telemetry || 'ArvoEvent Creation Tracer',
     'createArvoEvent',
     {},
-    (span) => {
+    (telemetryContext) => {
       if (
         event.datacontenttype &&
         event.datacontenttype !== ArvoDataContentType
@@ -66,7 +66,7 @@ export const createArvoEvent = <
         is not ArvoEvent compatible (=${ArvoDataContentType}). There may 
         be some limited functionality.
       `);
-        logToSpan(span, {
+        logToSpan(telemetryContext.span, {
           level: 'WARNING',
           message: warning,
         });

@@ -46,5 +46,5 @@ export type TelemetryContext = {
   /**
    * The telemetry headers
    */
-  context: TelemetryCarrier;
+  carrier: TelemetryCarrier;
 };

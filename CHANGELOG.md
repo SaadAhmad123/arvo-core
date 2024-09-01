@@ -24,3 +24,7 @@
 
 - Updated ArvoContract typing mechanism
 
+## [1.0.7] - 2024-09-01
+
+- Updates to OpenTelemetry functions
+
