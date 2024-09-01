@@ -28,3 +28,7 @@
 
 - Updates to OpenTelemetry functions
 
+## [1.0.8] - 2024-09-01
+
+- Added support for system error in ArvoContract
+
