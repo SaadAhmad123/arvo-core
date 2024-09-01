@@ -171,7 +171,7 @@ export default class ArvoContract<
    *   - accepts: An object containing the accepted input type and its JSON Schema representation
    *   - emits: An array of objects, each containing an emitted event type and its JSON Schema representation
    */
-  public toJsonSchema(): Object {
+  public toJsonSchema(): Record<string, any> {
     return {
       uri: this._uri,
       description: this.description,
