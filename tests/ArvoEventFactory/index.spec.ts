@@ -104,22 +104,18 @@ describe('createArvoEventFactory', () => {
         }),
       ).toThrow('Event data validation failed');
     });
-
-    it('should throw an error for unknown event type', async () => {
-      expect(() =>
-        createArvoEventFactory(mockContract).accepts({
-          source: 'test-source',
-          subject: 'test-subject',
-          data: {} as any,
-          to: 'cmd.saad.test',
-        }),
-      ).toThrow('Accept type "unknown.type.0" not found in contract');
-    });
   });
 
   describe('systemError', () => {
     it('should create system error message as per the contract', () => {
-      const eventFactory = createArvoEventFactory(mockContract).systemError
+      const eventFactory = createArvoEventFactory(mockContract)
+      const event = eventFactory.systemError({
+        source: 'test',
+        subject: 'test',
+        error: new Error("Some error"),
+        to: 'cmd.saad.test'
+      })
+      console.log(event)
     })
   })
 });

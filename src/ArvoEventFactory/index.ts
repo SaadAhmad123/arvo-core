@@ -43,7 +43,7 @@ export default class ArvoEventFactory<
    * @throws If the event data fails validation against the contract.
    */
   accepts<TExtension extends Record<string, any>>(
-    event: Omit<CreateArvoEvent<z.infer<TAcceptSchema>, TType>, 'type'>,
+    event: Omit<CreateArvoEvent<z.infer<TAcceptSchema>, TType>, 'type'> & {to: string},
     extensions?: TExtension,
     telemetry?: TelemetryContext,
   ) {
@@ -88,7 +88,7 @@ export default class ArvoEventFactory<
     U extends keyof TEmits & string,
     TExtension extends Record<string, any>,
   >(
-    event: CreateArvoEvent<z.infer<TEmits[U]>, U>,
+    event: CreateArvoEvent<z.infer<TEmits[U]>, U> & {to: string},
     extensions?: TExtension,
     telemetry?: TelemetryContext,
   ) {
@@ -136,6 +136,7 @@ export default class ArvoEventFactory<
   systemError<TExtension extends Record<string, any>>(
     event: Omit<CreateArvoEvent<any, any>, 'data' | 'type'> & {
       error: Error;
+      to: string;
     },
     extensions?: TExtension,
     telemetry?: TelemetryContext,
