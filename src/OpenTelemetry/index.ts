@@ -167,6 +167,10 @@ export const createOtelSpan = <TArgs extends unknown[], TReturn>(
     activeContext,
   );
 
+  newSpan.setStatus({
+    code: SpanStatusCode.OK,
+  });
+  
   try {
     const result = context.with(trace.setSpan(activeContext, newSpan), () =>
       wrappedFunction.call(
@@ -179,9 +183,6 @@ export const createOtelSpan = <TArgs extends unknown[], TReturn>(
         ...args,
       ),
     );
-    newSpan.setStatus({
-      code: SpanStatusCode.OK,
-    });
     newSpan.end();
     return result;
   } catch (error) {
