@@ -12,7 +12,7 @@ describe('createArvoEventFactory', () => {
   });
 
   const mockContract = createArvoContract({
-    uri: 'test-uri',
+    uri: '#/mock/contract',
     accepts: {
       type: 'test.input.0',
       schema: z.object({ input: z.string() }),
@@ -41,6 +41,7 @@ describe('createArvoEventFactory', () => {
       expect(event).toBeDefined();
       expect(event.type).toBe('test.output.0');
       expect(event.data).toEqual({ output: 42 });
+      expect(event.dataschema).toEqual('#/mock/contract')
 
       const event1 = createArvoEventFactory(mockContract).emits({
         type: 'test.output.1',
@@ -115,7 +116,9 @@ describe('createArvoEventFactory', () => {
         error: new Error("Some error"),
         to: 'cmd.saad.test'
       })
-      console.log(event)
+      expect(event.data.errorName).toBe('Error')
+      expect(event.data.errorMessage).toBe('Some error')
+      expect(event.data.errorStack).toBeTruthy()
     })
   })
 });
