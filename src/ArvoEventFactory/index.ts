@@ -36,14 +36,14 @@ export default class ArvoEventFactory<
    * Creates an ArvoEvent as per the accept record of the contract.
    *
    * @template TExtension - The type of extensions to add to the event.
-   * @param event - The event to create.
+   * @param event - The event to create. The field 'type' is automatically infered
    * @param [extensions] - Optional extensions to add to the event.
    * @param [telemetry] - Optional telemetry context for tracing.
    * @returns The created ArvoEvent as per the accept record of the contract.
    * @throws If the event data fails validation against the contract.
    */
   accepts<TExtension extends Record<string, any>>(
-    event: CreateArvoEvent<z.infer<TAcceptSchema>, TType>,
+    event: Omit<CreateArvoEvent<z.infer<TAcceptSchema>, TType>, 'type'>,
     extensions?: TExtension,
     telemetry?: TelemetryContext,
   ) {
@@ -52,7 +52,7 @@ export default class ArvoEventFactory<
       'ContractualArvoEventFactory.accepts',
       {},
       () => {
-        const validationResult = this.contract.validateInput(event.type, event.data);
+        const validationResult = this.contract.validateInput(this.contract.accepts.type, event.data);
         if (!validationResult.success) {
           throw new Error(
             `Accept Event data validation failed: ${validationResult.error.message}`,
@@ -61,6 +61,7 @@ export default class ArvoEventFactory<
         return createArvoEvent<z.infer<TAcceptSchema>, TExtension, TType>(
           {
             ...event,
+            type: this.contract.accepts.type,
             datacontenttype: ArvoDataContentType,
             dataschema: this.contract.uri,
             data: validationResult.data,

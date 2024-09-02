@@ -83,7 +83,6 @@ describe('createArvoEventFactory', () => {
   describe('accepts', () => {
     it('should create a valid event when data matches the schema', async () => {
       const event = createArvoEventFactory(mockContract).accepts({
-        type: 'test.input.0',
         source: 'test-source',
         subject: 'test-subject',
         data: { input: 'test' },
@@ -98,7 +97,6 @@ describe('createArvoEventFactory', () => {
     it('should throw an error when data does not match the schema', async () => {
       expect(() =>
         createArvoEventFactory(mockContract).accepts({
-          type: 'test.input.0',
           source: 'test-source',
           subject: 'test-subject',
           data: { input: 42 as any },
@@ -110,7 +108,6 @@ describe('createArvoEventFactory', () => {
     it('should throw an error for unknown event type', async () => {
       expect(() =>
         createArvoEventFactory(mockContract).accepts({
-          type: 'unknown.type.0' as any,
           source: 'test-source',
           subject: 'test-subject',
           data: {} as any,
