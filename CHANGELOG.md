@@ -32,3 +32,7 @@
 
 - Added support for system error in ArvoContract
 
+## [1.0.15] - 2024-09-07
+
+- Added ArvoEvent spec-ed extension getter for a more ergonomic experience
+

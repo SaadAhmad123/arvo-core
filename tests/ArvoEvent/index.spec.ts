@@ -139,22 +139,34 @@ describe(`
     expect(error).toBeTruthy();
   });
 
-  it('should encode URI components for certain fields', () => {
+  it('should encode URI components for certain fields and allow ArvoEvent extensions to be accessed', () => {
     const eventWithSpecialChars = {
       ...baseEvent,
       source: 'test source with spaces',
       subject: 'test/subject',
       to: 'recipient@example.com',
       redirectto: 'https://example.com/redirect?param=value',
+      
     };
 
-    const event = createArvoEvent(eventWithSpecialChars);
+    const event = createArvoEvent({
+      ...eventWithSpecialChars,
+      accesscontrol: 'userid=1234',
+      executionunits: 100
+    });
 
     expect(event.source).toBe('test%20source%20with%20spaces');
     expect(event.subject).toBe('test/subject');
-    expect(event.extensions.to).toBe('recipient@example.com');
-    expect(event.extensions.redirectto).toBe(
+    
+    expect(event.to).toBe('recipient@example.com');
+    expect(event.redirectto).toBe(
       'https://example.com/redirect?param=value',
     );
+    expect(event.accesscontrol).toBe('userid=1234')
+    expect(event.executionunits).toBe(100)
+
+    expect(event.cloudevent.extensions.executionunits).toBe(100)
+    expect(event.extensions.executionunits).toBe(100)
+  
   });
 });
