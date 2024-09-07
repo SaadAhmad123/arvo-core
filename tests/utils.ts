@@ -4,6 +4,8 @@ import { Resource } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { diag, DiagConsoleLogger, DiagLogLevel } from '@opentelemetry/api';
+import * as dotenv from 'dotenv'
+dotenv.config()
 
 diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
@@ -17,9 +19,11 @@ export const telemetrySdk = new NodeSDK({
 });
 
 export const telemetrySdkStart = () => {
-  // telemetrySdk.start();
+  if (process.env.ENABLE_OTEL) {
+    telemetrySdk.start();
+  }
 };
 
 export const telemetrySdkStop = () => {
-  // telemetrySdk.shutdown();
+  telemetrySdk.shutdown();
 };

@@ -40,3 +40,7 @@
 
 - Fix a type bug in ArvoEvent creation
 
+## [1.0.20] - 2024-09-07
+
+- Updated OpenTelemetry
+
