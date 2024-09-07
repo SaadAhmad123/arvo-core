@@ -36,3 +36,7 @@
 
 - Added ArvoEvent spec-ed extension getter for a more ergonomic experience
 
+## [1.0.17] - 2024-09-07
+
+- Fix a type bug in ArvoEvent creation
+

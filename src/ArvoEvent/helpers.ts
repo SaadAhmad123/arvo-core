@@ -72,7 +72,7 @@ export const createArvoEvent = <
         });
       }
 
-      return new ArvoEvent<TData, TExtension>(
+      return new ArvoEvent<TData, TExtension, TType>(
         {
           id: event.id || uuid4(),
           type: event.type,
