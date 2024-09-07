@@ -118,8 +118,8 @@ export const exceptionToSpan = (
  *   telemetryContext,
  *   'ProcessOrder',
  *   { attributes: { orderId: '12345' } },
- *   (span, orderId) => {
- *     span.addEvent('Processing order');
+ *   (telemetryContext, orderId) => {
+ *     telemetryContext.span.addEvent('Processing order');
  *     return processOrder(orderId);
  *   },
  *   null,
@@ -132,8 +132,8 @@ export const exceptionToSpan = (
  *   'OrderService',
  *   'FetchOrderDetails',
  *   undefined,
- *   (span, orderId) => {
- *     span.setAttribute('orderId', orderId);
+ *   (telemetryContext, orderId) => {
+ *     telemetryContext.span.setAttribute('orderId', orderId);
  *     return fetchOrderDetails(orderId);
  *   },
  *   null,
