@@ -19,22 +19,15 @@ import {
 import {
   exceptionToSpan,
   logToSpan,
-  getTelemetryContext,
-  getTelemetryCarrier,
-  createOtelSpan,
   OTelNull,
 } from './OpenTelemetry';
 import {
-  TelemetryCarrier,
-  TelemetryContext,
+  OpenTelemetryHeaders,
   TelemetryLogLevel,
 } from './OpenTelemetry/types';
 import { validateURI, cleanString } from './utils';
 import ArvoContract from './ArvoContract';
-import {
-  createArvoContract,
-  InferArvoContract,
-} from './ArvoContract/helpers';
+import { createArvoContract, InferArvoContract } from './ArvoContract/helpers';
 import { ArvoContractValidators } from './ArvoContract/validators';
 import {
   ArvoContractRecord,
@@ -76,11 +69,7 @@ export {
   CreateArvoEvent,
   exceptionToSpan,
   logToSpan,
-  getTelemetryCarrier,
-  getTelemetryContext,
-  createOtelSpan,
-  TelemetryCarrier,
-  TelemetryContext,
+  OpenTelemetryHeaders,
   TelemetryLogLevel,
   OTelNull,
   validateURI,
@@ -96,5 +85,5 @@ export {
   createArvoContractLibrary,
   ArvoEventFactory,
   createArvoEventFactory,
-  ArvoErrorSchema
+  ArvoErrorSchema,
 };

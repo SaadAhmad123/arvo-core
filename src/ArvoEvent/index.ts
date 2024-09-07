@@ -159,8 +159,8 @@ export default class ArvoEvent<
    * Gets the 'to' field from the ArvoExtension.
    * This field represents the intended recipient or destination of the event.
    * @returns The value of the 'to' field.
-   * 
-   * @remark 
+   *
+   * @remark
    * This is a convenience getter for the data in `this.extensions.to` as this
    * is an ArvoEvent object which natively defines this extension on the CloudEvent
    * spec.
@@ -173,8 +173,8 @@ export default class ArvoEvent<
    * Gets the 'accesscontrol' field from the ArvoExtension.
    * This field contains access control information for the event.
    * @returns The value of the 'accesscontrol' field.
-   * 
-   * @remark 
+   *
+   * @remark
    * This is a convenience getter for the data in `this.extensions.accesscontrol` as this
    * is an ArvoEvent object which natively defines this extension on the CloudEvent
    * spec.
@@ -187,8 +187,8 @@ export default class ArvoEvent<
    * Gets the 'redirectto' field from the ArvoExtension.
    * This field indicate an alternative destination for the event.
    * @returns The value of the 'redirectto' field.
-   * 
-   * @remark 
+   *
+   * @remark
    * This is a convenience getter for the data in `this.extensions.redirectto` as this
    * is an ArvoEvent object which natively defines this extension on the CloudEvent
    * spec.
@@ -201,8 +201,8 @@ export default class ArvoEvent<
    * Gets the 'executionunits' field from the ArvoExtension.
    * This field contains information about the execution units associated with the event.
    * @returns The value of the 'executionunits' field.
-   * 
-   * @remark 
+   *
+   * @remark
    * This is a convenience getter for the data in `this.extensions.executionunits` as this
    * is an ArvoEvent object which natively defines this extension on the CloudEvent
    * spec.
@@ -215,8 +215,8 @@ export default class ArvoEvent<
    * Gets the 'traceparent' field from the OpenTelemetryExtension.
    * This field contains the W3C Trace Context traceparent header.
    * @returns The value of the 'traceparent' field.
-   * 
-   * @remark 
+   *
+   * @remark
    * This is a convenience getter for the data in `this.extensions.traceparent` as this
    * is an ArvoEvent object which natively defined this extension on the CloudEvent
    * spec.
@@ -229,8 +229,8 @@ export default class ArvoEvent<
    * Gets the 'tracestate' field from the OpenTelemetryExtension.
    * This field contains the W3C Trace Context tracestate header.
    * @returns The value of the 'tracestate' field, or undefined if not set.
-   * 
-   * @remark 
+   *
+   * @remark
    * This is a convenience getter for the data in `this.extensions.tracestate` as this
    * is an ArvoEvent object which natively defined this extension on the CloudEvent
    * spec.

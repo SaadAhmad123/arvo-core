@@ -1,6 +1,6 @@
-import ArvoEventFactory from ".";
-import ArvoContract from "../ArvoContract";
-import { z } from 'zod'
+import ArvoEventFactory from '.';
+import ArvoContract from '../ArvoContract';
+import { z } from 'zod';
 
 /**
  * Creates a ArvoEventFactory instance based on the provided contract.

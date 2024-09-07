@@ -41,7 +41,7 @@ describe('createArvoEventFactory', () => {
       expect(event).toBeDefined();
       expect(event.type).toBe('test.output.0');
       expect(event.data).toEqual({ output: 42 });
-      expect(event.dataschema).toEqual('#/mock/contract')
+      expect(event.dataschema).toEqual('#/mock/contract');
 
       const event1 = createArvoEventFactory(mockContract).emits({
         type: 'test.output.1',
@@ -109,16 +109,16 @@ describe('createArvoEventFactory', () => {
 
   describe('systemError', () => {
     it('should create system error message as per the contract', () => {
-      const eventFactory = createArvoEventFactory(mockContract)
+      const eventFactory = createArvoEventFactory(mockContract);
       const event = eventFactory.systemError({
         source: 'test',
         subject: 'test',
-        error: new Error("Some error"),
-        to: 'cmd.saad.test'
-      })
-      expect(event.data.errorName).toBe('Error')
-      expect(event.data.errorMessage).toBe('Some error')
-      expect(event.data.errorStack).toBeTruthy()
-    })
-  })
+        error: new Error('Some error'),
+        to: 'cmd.saad.test',
+      });
+      expect(event.data.errorName).toBe('Error');
+      expect(event.data.errorMessage).toBe('Some error');
+      expect(event.data.errorStack).toBeTruthy();
+    });
+  });
 });

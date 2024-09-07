@@ -81,10 +81,7 @@ export default class ArvoContract<
    * @returns The validation result.
    * @throws If the accept type is not found in the contract.
    */
-  public validateInput<U>(
-    type: TType,
-    input: U,
-  ) {
+  public validateInput<U>(type: TType, input: U) {
     if (type !== this._accepts.type) {
       throw new Error(`Accept type "${type}" not found in contract`);
     }
@@ -100,10 +97,7 @@ export default class ArvoContract<
    * @returns The validation result.
    * @throws If the emit type is not found in the contract.
    */
-  public validateOutput<U extends keyof TEmits>(
-    type: U,
-    output: unknown,
-  ) {
+  public validateOutput<U extends keyof TEmits>(type: U, output: unknown) {
     const emit = this.emits[type];
     if (!emit) {
       throw new Error(`Emit type "${type.toString()}" not found in contract`);

@@ -19,32 +19,9 @@ export type TelemetryLogLevel =
  * Represents the context for telemetry.
  * See reference standard documentation [here](https://www.w3.org/TR/trace-context/#design-overview)
  */
-export type TelemetryCarrier = {
+export type OpenTelemetryHeaders = {
   /** The traceparent header value */
   traceparent: string | null;
   /** The tracestate header value */
   tracestate: string | null;
-};
-
-/**
- * Represents the OpenTelemetry context for a handler.
- * See reference documentation [here](https://opentelemetry.io/docs/languages/js/instrumentation/#traces)
- */
-export type TelemetryContext = {
-  /**
-   * The current OpenTelemetry Span. If passed to a function,
-   * then for that function, this is the parent span object
-   */
-  span: Span;
-
-  /**
-   * The current OpenTelemetry tracer object being
-   * used.
-   */
-  tracer: Tracer;
-
-  /**
-   * The telemetry headers
-   */
-  carrier: TelemetryCarrier;
 };

@@ -1,6 +1,6 @@
+import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import ArvoEvent from '.';
-import { createOtelSpan, logToSpan } from '../OpenTelemetry';
-import { TelemetryContext } from '../OpenTelemetry/types';
+import { ArvoCoreTracer, exceptionToSpan, logToSpan } from '../OpenTelemetry';
 import { cleanString, createTimestamp } from '../utils';
 import { ArvoDataContentType } from './schema';
 import { ArvoEventData, CloudEventExtension, CreateArvoEvent } from './types';
@@ -10,7 +10,6 @@ import { v4 as uuid4 } from 'uuid';
  * Creates an ArvoEvent with the provided data and extensions.
  *
  * This function creates a new ArvoEvent instance using the provided event data and optional extensions.
- * It also supports OpenTelemetry tracing if a telemetry context is provided.
  *
  * @template TData - The type of the event data, extending ArvoEventData.
  * @template TExtension - The type of the cloud event extension, extending CloudEventExtension.
@@ -18,7 +17,6 @@ import { v4 as uuid4 } from 'uuid';
  *
  * @param {CreateArvoEvent<TData>} event - The event data and metadata to create the ArvoEvent.
  * @param {TExtension} [extensions] - Optional cloud event extensions.
- * @param {TelemetryContext} [telemetry] - Optional telemetry context for tracing.
  *
  * @returns {ArvoEvent<TData, TExtension>} The created ArvoEvent instance.
  *
@@ -40,7 +38,6 @@ import { v4 as uuid4 } from 'uuid';
  *     data: { key: 'value' }
  *   },
  *   { customExtension: 'value' },
- *   telemetryContext
  * );
  */
 export const createArvoEvent = <
@@ -50,13 +47,11 @@ export const createArvoEvent = <
 >(
   event: CreateArvoEvent<TData, TType>,
   extensions?: TExtension,
-  telemetry?: TelemetryContext,
-): ArvoEvent<TData, TExtension, TType> =>
-  createOtelSpan(
-    telemetry || 'ArvoEvent Creation Tracer',
-    `createArvoEvent<${event.type}>`,
-    {},
-    (telemetryContext) => {
+): ArvoEvent<TData, TExtension, TType> => {
+  const span = ArvoCoreTracer.startSpan(`createArvoEvent<${event.type}>`, {});
+  return context.with(trace.setSpan(context.active(), span), () => {
+    span.setStatus({ code: SpanStatusCode.OK })
+    try {
       if (
         event.datacontenttype &&
         event.datacontenttype !== ArvoDataContentType
@@ -66,7 +61,7 @@ export const createArvoEvent = <
         is not ArvoEvent compatible (=${ArvoDataContentType}). There may 
         be some limited functionality.
       `);
-        logToSpan(telemetryContext.span, {
+        logToSpan(span, {
           level: 'WARNING',
           message: warning,
         });
@@ -92,5 +87,15 @@ export const createArvoEvent = <
         event.data,
         extensions,
       );
-    },
-  );
+    } catch (error) {
+      exceptionToSpan(span, error as Error)
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: (error as Error).message,
+      });
+      throw error;
+    } finally {
+      span.end();
+    }
+  })
+};
