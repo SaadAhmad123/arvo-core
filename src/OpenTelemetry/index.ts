@@ -38,9 +38,6 @@ export const getTelemetryCarrier = (
     tracestate: null,
   };
   propagation.inject(activeContext, carrier);
-  if (!carrier.traceparent) {
-    carrier.traceparent = `00-${span.spanContext().traceId}-${span.spanContext().spanId}-0${span.spanContext().traceFlags}`;
-  }
   return carrier;
 };
 
