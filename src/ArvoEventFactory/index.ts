@@ -49,7 +49,7 @@ export default class ArvoEventFactory<
   ) {
     return createOtelSpan(
       telemetry || 'ArvoEvent Creation Tracer',
-      'ContractualArvoEventFactory.accepts',
+      `ContractualArvoEventFactory<${this.contract.uri}>.accepts<${this.contract.accepts.type}>.create`,
       {},
       (telemetryContext) => {
         const validationResult = this.contract.validateInput(this.contract.accepts.type, event.data);
@@ -94,7 +94,7 @@ export default class ArvoEventFactory<
   ) {
     return createOtelSpan(
       telemetry || 'ArvoEvent Creation Tracer',
-      'ContractualArvoEventFactory.emits',
+      `ContractualArvoEventFactory<${this.contract.uri}>.emits<${event.type}>.create`,
       {},
       (telemetryContext) => {
         const validationResult = this.contract.validateOutput(
@@ -143,7 +143,7 @@ export default class ArvoEventFactory<
   ) {
     return createOtelSpan(
       telemetry || 'ArvoEvent Creation Tracer',
-      'ContractualArvoEventFactory.systemError',
+      `ContractualArvoEventFactory<${this.contract.uri}>.systemError<sys.${this.contract.accepts.type}.error>.create`,
       {},
       (telemetryContext) => {
         const { error, ..._events } = event;
