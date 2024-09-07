@@ -51,7 +51,7 @@ export const createArvoEvent = <
   event: CreateArvoEvent<TData, TType>,
   extensions?: TExtension,
   telemetry?: TelemetryContext,
-): ArvoEvent<TData, TExtension> =>
+): ArvoEvent<TData, TExtension, TType> =>
   createOtelSpan(
     telemetry || 'ArvoEvent Creation Tracer',
     'createArvoEvent',
