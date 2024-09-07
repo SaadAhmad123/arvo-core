@@ -51,7 +51,7 @@ export default class ArvoEventFactory<
       telemetry || 'ArvoEvent Creation Tracer',
       'ContractualArvoEventFactory.accepts',
       {},
-      () => {
+      (telemetryContext) => {
         const validationResult = this.contract.validateInput(this.contract.accepts.type, event.data);
         if (!validationResult.success) {
           throw new Error(
@@ -67,7 +67,7 @@ export default class ArvoEventFactory<
             data: validationResult.data,
           },
           extensions,
-          telemetry,
+          telemetryContext,
         );
       },
     );
@@ -96,7 +96,7 @@ export default class ArvoEventFactory<
       telemetry || 'ArvoEvent Creation Tracer',
       'ContractualArvoEventFactory.emits',
       {},
-      () => {
+      (telemetryContext) => {
         const validationResult = this.contract.validateOutput(
           event.type,
           event.data,
@@ -118,7 +118,7 @@ export default class ArvoEventFactory<
             data: validationResult.data,
           },
           extensions,
-          telemetry,
+          telemetryContext,
         );
       },
     );
@@ -145,7 +145,7 @@ export default class ArvoEventFactory<
       telemetry || 'ArvoEvent Creation Tracer',
       'ContractualArvoEventFactory.systemError',
       {},
-      () => {
+      (telemetryContext) => {
         const { error, ..._events } = event;
         return createArvoEvent<
           z.infer<typeof ArvoErrorSchema>,
@@ -164,7 +164,7 @@ export default class ArvoEventFactory<
             dataschema: this.contract.uri,
           },
           extensions,
-          telemetry,
+          telemetryContext,
         );
       },
     );
