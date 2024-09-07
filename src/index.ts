@@ -20,6 +20,7 @@ import {
   exceptionToSpan,
   logToSpan,
   OTelNull,
+  currentOpenTelemetryHeaders,
 } from './OpenTelemetry';
 import {
   OpenTelemetryHeaders,
@@ -86,4 +87,5 @@ export {
   ArvoEventFactory,
   createArvoEventFactory,
   ArvoErrorSchema,
+  currentOpenTelemetryHeaders,
 };
