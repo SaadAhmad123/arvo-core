@@ -91,17 +91,26 @@ Now you can use the factory to create events:
 ```typescript
 // Create an "accepts" event
 const inputEvent = eventFactory.accepts({
-  type: 'com.example.input',
+  to: 'some.event.consumer',
   data: { name: 'John Doe' },
-  source: '/example/source',
+  source: 'some.event.producer',
   subject: 'example-subject',
 });
 
 // Create an "emits" event
 const outputEvent = eventFactory.emits({
+  to: 'some.event.producer',
   type: 'com.example.output',
   data: { result: 42 },
-  source: '/example/source',
+  source: 'some.event.consumer',
+  subject: 'example-subject',
+});
+
+// Create a "system error" event
+const outputEvent = eventFactory.systemError({
+  to: 'some.event.producer',
+  error: new Error("Some error"),
+  source: 'some.event.consumer',
   subject: 'example-subject',
 });
 ```
