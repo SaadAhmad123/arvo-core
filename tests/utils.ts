@@ -19,7 +19,7 @@ export const telemetrySdk = new NodeSDK({
 });
 
 export const telemetrySdkStart = () => {
-  if (process.env.ENABLE_OTEL) {
+  if (process.env.ENABLE_OTEL === "TRUE") {
     telemetrySdk.start();
   }
 };
