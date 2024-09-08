@@ -17,39 +17,54 @@ export const ArvoCoreTracer = trace.getTracer(pkg.name, pkg.version);
 
 /**
  * Logs a message to a span with additional parameters.
- * @param span - The span to log the message to.
  * @param params - The parameters for the log message.
- * @param params.level - The log level.
- * @param params.message - The log message.
+ * @param params.level - The log level of the message.
+ * @param params.message - The main content of the log message.
+ * @param span - The span to log the message to. If not provided, the active span is used.
+ *               If no active span is available, the message is logged to the console.
  */
 export const logToSpan = (
-  span: Span,
   params: {
+    /** The log level */
     level: TelemetryLogLevel;
+    /** The log message */
     message: string;
+    /** Other log parameters */
+    [key: string]: string;
   },
+  span: Span | undefined = trace.getActiveSpan(),
 ): void => {
-  span.addEvent('log_message', {
+  const toLog = {
     ...params,
     timestamp: performance.now(),
-  });
+  }
+  if (span) {
+    span.addEvent('log_message', toLog);
+  } else {
+    console.log(JSON.stringify(toLog, null, 2))
+  }
+  
 };
 
 /**
  * Logs an exception to a span and sets exception-related attributes.
- * @param span - The span to log the exception to.
- * @param level - The log level for the exception.
  * @param error - The error object to be logged.
+ * @param span - The span to log the exception to. If not provided, the active span is used.
+ *               If no active span is available, the error is logged to the console.
  */
 export const exceptionToSpan = (
-  span: Span,
   error: Error,
+  span: Span | undefined = trace.getActiveSpan(),
 ) => {
-  span.setAttributes({
-    'exception.type': error.name,
-    'exception.message': error.message,
-  });
-  span.recordException(error);
+  if (span) {
+    span.setAttributes({
+      'exception.type': error.name,
+      'exception.message': error.message,
+    });
+    span.recordException(error);
+  } else {
+    console.error(error)
+  }
 };
 
 /**

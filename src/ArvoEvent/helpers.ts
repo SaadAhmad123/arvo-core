@@ -61,7 +61,7 @@ export const createArvoEvent = <
         is not ArvoEvent compatible (=${ArvoDataContentType}). There may 
         be some limited functionality.
       `);
-        logToSpan(span, {
+        logToSpan({
           level: 'WARNING',
           message: warning,
         });
@@ -88,7 +88,7 @@ export const createArvoEvent = <
         extensions,
       );
     } catch (error) {
-      exceptionToSpan(span, error as Error)
+      exceptionToSpan(error as Error)
       span.setStatus({
         code: SpanStatusCode.ERROR,
         message: (error as Error).message,
