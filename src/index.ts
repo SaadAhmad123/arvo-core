@@ -40,6 +40,10 @@ import { createArvoContractLibrary } from './ArvoContractLibrary/helpers';
 import ArvoEventFactory from './ArvoEventFactory';
 import { createArvoEventFactory } from './ArvoEventFactory/helpers';
 import { ArvoErrorSchema } from './schema';
+import OpenInference from './OpenTelemetry/OpenInference';
+import ArvoExecution from './OpenTelemetry/ArvoExecution';
+import { ArvoExecutionSpanKind } from './OpenTelemetry/ArvoExecution/types';
+import { OpenInferenceSpanKind } from './OpenTelemetry/OpenInference/types';
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -88,4 +92,8 @@ export {
   createArvoEventFactory,
   ArvoErrorSchema,
   currentOpenTelemetryHeaders,
+  OpenInference,
+  OpenInferenceSpanKind,
+  ArvoExecution,
+  ArvoExecutionSpanKind,
 };

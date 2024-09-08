@@ -44,3 +44,7 @@
 
 - Updated OpenTelemetry propagation and fixed propagation in the event factory
 
+## [1.0.26] - 2024-09-08
+
+- Added OpenTelemetry attributes for Arvo and OpenInference
+
