@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import zodToJsonSchema from 'zod-to-json-schema';
 
 /**
  * Represents a record in an Arvo contract.
@@ -46,3 +47,32 @@ export interface IArvoContract<
 export type ResolveArvoContractRecord<T extends ArvoContractRecord> = z.infer<
   T['schema']
 >;
+
+/**
+ * Represents the JSON Schema representation of an ArvoContract.
+ */
+export type ArvoContractJSONSchema = {
+  /** The unique identifier (URI) of the contract */
+  uri: string;
+
+  /** The description of the contract (null if not provided) */
+  description: string | null;
+
+  /** The accepted input schema for the contract */
+  accepts: {
+    /** The type identifier for the accepted input */
+    type: string;
+
+    /** The JSON Schema representation of the accepted input schema */
+    schema: ReturnType<typeof zodToJsonSchema>;
+  };
+
+  /** An array of emitted event schemas for the contract */
+  emits: {
+    /** The type identifier for the emitted event */
+    type: string;
+
+    /** The JSON Schema representation of the emitted event schema */
+    schema: ReturnType<typeof zodToJsonSchema>;
+  }[];
+};

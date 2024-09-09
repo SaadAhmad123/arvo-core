@@ -34,6 +34,7 @@ import {
   ArvoContractRecord,
   IArvoContract,
   ResolveArvoContractRecord,
+  ArvoContractJSONSchema
 } from './ArvoContract/types';
 import ArvoContractLibrary from './ArvoContractLibrary';
 import { createArvoContractLibrary } from './ArvoContractLibrary/helpers';
@@ -96,4 +97,5 @@ export {
   OpenInferenceSpanKind,
   ArvoExecution,
   ArvoExecutionSpanKind,
+  ArvoContractJSONSchema,
 };

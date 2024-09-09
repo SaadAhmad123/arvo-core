@@ -218,7 +218,7 @@ export default class ArvoEvent<
    *
    * @remark
    * This is a convenience getter for the data in `this.extensions.traceparent` as this
-   * is an ArvoEvent object which natively defined this extension on the CloudEvent
+   * is an ArvoEvent object which natively defines this extension on the CloudEvent
    * spec.
    */
   get traceparent() {
@@ -232,7 +232,7 @@ export default class ArvoEvent<
    *
    * @remark
    * This is a convenience getter for the data in `this.extensions.tracestate` as this
-   * is an ArvoEvent object which natively defined this extension on the CloudEvent
+   * is an ArvoEvent object which natively defines this extension on the CloudEvent
    * spec.
    */
   get tracestate() {

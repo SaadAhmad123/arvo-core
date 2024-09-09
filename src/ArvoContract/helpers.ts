@@ -1,4 +1,4 @@
-import { IArvoContract } from './types';
+import { ArvoContractJSONSchema, IArvoContract } from './types';
 import ArvoContract from '.';
 
 /**

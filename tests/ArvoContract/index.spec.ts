@@ -100,23 +100,23 @@ describe('ArvoContract', () => {
       }).toThrow();
     });
 
-    describe('validateInput', () => {
+    describe('validateAccepts', () => {
       it('should validate a correct input', () => {
-        const result = contract.validateInput('com.example.input', {
+        const result = contract.validateAccepts('com.example.input', {
           name: 'John',
         });
         expect(result.success).toBe(true);
       });
 
       it('should invalidate an incorrect input', () => {
-        const result = contract.validateInput('com.example.input', {
+        const result = contract.validateAccepts('com.example.input', {
           name: 123,
         });
         expect(result.success).toBe(false);
       });
 
       it('should throw an error for an invalid input type', () => {
-        expect(() => contract.validateInput('invalid-type', {})).toThrow();
+        expect(() => contract.validateAccepts('invalid-type', {})).toThrow();
       });
 
       it('should handle complex input schemas', () => {
@@ -140,26 +140,26 @@ describe('ArvoContract', () => {
         };
 
         expect(
-          complexContract.validateInput('com.example.complex', validInput)
+          complexContract.validateAccepts('com.example.complex', validInput)
             .success,
         ).toBe(true);
         expect(
-          complexContract.validateInput('com.example.complex', invalidInput)
+          complexContract.validateAccepts('com.example.complex', invalidInput)
             .success,
         ).toBe(false);
       });
     });
 
-    describe('validateOutput', () => {
+    describe('validateEmits', () => {
       it('should validate a correct output', () => {
-        const result = contract.validateOutput('com.example.output', {
+        const result = contract.validateEmits('com.example.output', {
           result: 42,
         });
         expect(result.success).toBe(true);
       });
 
       it('should invalidate an incorrect output', () => {
-        const result = contract.validateOutput('com.example.output', {
+        const result = contract.validateEmits('com.example.output', {
           result: 'not a number',
         });
         expect(result.success).toBe(false);
@@ -167,7 +167,7 @@ describe('ArvoContract', () => {
 
       it('should throw an error for an invalid output type', () => {
         expect(() =>
-          contract.validateOutput('invalid-type' as any, {}),
+          contract.validateEmits('invalid-type' as any, {}),
         ).toThrow();
       });
 
@@ -179,10 +179,10 @@ describe('ArvoContract', () => {
             'com.example.error': z.object({ message: z.string() }),
           },
         });
-        const outputResult = contract.validateOutput('com.example.output', {
+        const outputResult = contract.validateEmits('com.example.output', {
           result: 42,
         });
-        const errorResult = contract.validateOutput('com.example.error', {
+        const errorResult = contract.validateEmits('com.example.error', {
           message: 'Error occurred',
         });
 
@@ -210,11 +210,11 @@ describe('ArvoContract', () => {
         };
 
         expect(
-          complexContract.validateOutput('com.example.complex', validOutput)
+          complexContract.validateEmits('com.example.complex', validOutput)
             .success,
         ).toBe(true);
         expect(
-          complexContract.validateOutput('com.example.complex', invalidOutput)
+          complexContract.validateEmits('com.example.complex', invalidOutput)
             .success,
         ).toBe(false);
       });

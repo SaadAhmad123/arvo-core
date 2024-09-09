@@ -73,6 +73,7 @@ import {
   createArvoEvent,
   createArvoContract,
   createArvoContractLibrary,
+  createArvoEventFactory,
 } from 'arvo-core';
 ```
 

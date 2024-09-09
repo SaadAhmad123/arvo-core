@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ArvoContractRecord, IArvoContract } from './types';
+import { ArvoContractJSONSchema, ArvoContractRecord, IArvoContract } from './types';
 import { ArvoContractValidators } from './validators';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { ArvoErrorSchema } from '../schema';
@@ -34,8 +34,8 @@ export default class ArvoContract<
    */
   constructor(params: IArvoContract<TUri, TType, TAcceptSchema, TEmits>) {
     this._uri = ArvoContractValidators.contract.uri.parse(params.uri) as TUri;
-    this._accepts = this.validateAccepts(params.accepts);
-    this._emits = this.validateEmits(params.emits);
+    this._accepts = this._validateAccepts(params.accepts);
+    this._emits = this._validateEmits(params.emits);
     this.description = params.description || null;
   }
 
@@ -73,7 +73,7 @@ export default class ArvoContract<
   }
 
   /**
-   * Validates the contract bound handler's input against the
+   * Validates the contract bound handler's input/ accept event against the
    * contract's accept schema.
    * @template U - The type of the input to validate.
    * @param type - The type of the input event.
@@ -81,7 +81,7 @@ export default class ArvoContract<
    * @returns The validation result.
    * @throws If the accept type is not found in the contract.
    */
-  public validateInput<U>(type: TType, input: U) {
+  public validateAccepts<U>(type: TType, input: U) {
     if (type !== this._accepts.type) {
       throw new Error(`Accept type "${type}" not found in contract`);
     }
@@ -89,7 +89,7 @@ export default class ArvoContract<
   }
 
   /**
-   * Validates the contract bound handler's output against the
+   * Validates the contract bound handler's output/ emits against the
    * contract's emit schema.
    * @template U - The type of the output to validate.
    * @param type - The type of the output event.
@@ -97,7 +97,7 @@ export default class ArvoContract<
    * @returns The validation result.
    * @throws If the emit type is not found in the contract.
    */
-  public validateOutput<U extends keyof TEmits>(type: U, output: unknown) {
+  public validateEmits<U extends keyof TEmits>(type: U, output: unknown) {
     const emit = this.emits[type];
     if (!emit) {
       throw new Error(`Emit type "${type.toString()}" not found in contract`);
@@ -111,7 +111,7 @@ export default class ArvoContract<
    * @returns The validated accepts record.
    * @private
    */
-  private validateAccepts(
+  private _validateAccepts(
     accepts: ArvoContractRecord<TType, TAcceptSchema>,
   ): ArvoContractRecord<TType, TAcceptSchema> {
     return {
@@ -126,7 +126,7 @@ export default class ArvoContract<
    * @returns The validated emits records.
    * @private
    */
-  private validateEmits(emits: TEmits): TEmits {
+  private _validateEmits(emits: TEmits): TEmits {
     Object.entries(emits).forEach(([key]) =>
       ArvoContractValidators.record.type.parse(key),
     );
@@ -162,7 +162,7 @@ export default class ArvoContract<
    *   - accepts: An object containing the accepted input type and its JSON Schema representation
    *   - emits: An array of objects, each containing an emitted event type and its JSON Schema representation
    */
-  public toJsonSchema(): Record<string, any> {
+  public toJsonSchema(): ArvoContractJSONSchema {
     return {
       uri: this._uri,
       description: this.description,

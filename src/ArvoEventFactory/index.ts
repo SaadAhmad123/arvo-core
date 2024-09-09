@@ -51,7 +51,7 @@ export default class ArvoEventFactory<
     return context.with(trace.setSpan(context.active(), span), () => {
       span.setStatus({ code: SpanStatusCode.OK })
       try {
-        const validationResult = this.contract.validateInput(
+        const validationResult = this.contract.validateAccepts(
           this.contract.accepts.type,
           event.data,
         );
@@ -106,7 +106,7 @@ export default class ArvoEventFactory<
     return context.with(trace.setSpan(context.active(), span), () => {
       span.setStatus({ code: SpanStatusCode.OK })
       try {
-        const validationResult = this.contract.validateOutput(
+        const validationResult = this.contract.validateEmits(
           event.type,
           event.data,
         );
