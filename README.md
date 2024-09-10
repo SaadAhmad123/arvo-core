@@ -1,3 +1,7 @@
+[![SonarCloud](https://sonarcloud.io/images/project_badges/sonarcloud-white.svg)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+
+
 # Arvo
 
 ## What is Arvo
@@ -86,3 +90,18 @@ This package is available under the MIT License. For more details, refer to the 
 ## Change Logs
 
 For a detailed list of changes and updates, please refer to the [document](CHANGELOG.md) file.
+
+### SonarCloud Metrics
+
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=bugs)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=coverage)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+[![Technical Debt](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=sqale_index)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
+
