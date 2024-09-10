@@ -48,3 +48,7 @@
 
 - Added OpenTelemetry attributes for Arvo and OpenInference
 
+## [1.0.28] - 2024-09-10
+
+- Added SonarCloud integration for code scanning
+

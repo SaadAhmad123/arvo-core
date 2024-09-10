@@ -12,3 +12,4 @@ coverage
 docs
 node_modules
 generate-changelog.sh
+.sonarcloud.properties
