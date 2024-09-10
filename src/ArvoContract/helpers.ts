@@ -17,7 +17,7 @@ export type InferArvoContract<T> =
  *
  * @template TContract - The type of the contract specification.
  *
- * @param contractSpec - The contract specification object.
+ * @param contract - The contract specification object.
  *   This should include the URI, accepts, and emits properties as defined in IArvoContract.
  *
  * @returns The created ArvoContract instance.

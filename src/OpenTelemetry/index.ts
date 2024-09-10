@@ -18,8 +18,6 @@ export const ArvoCoreTracer = trace.getTracer(pkg.name, pkg.version);
 /**
  * Logs a message to a span with additional parameters.
  * @param params - The parameters for the log message.
- * @param params.level - The log level of the message.
- * @param params.message - The main content of the log message.
  * @param span - The span to log the message to. If not provided, the active span is used.
  *               If no active span is available, the message is logged to the console.
  */
