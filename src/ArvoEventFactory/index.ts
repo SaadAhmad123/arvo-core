@@ -170,7 +170,7 @@ export default class ArvoEventFactory<
             data: {
               errorName: error.name,
               errorMessage: error.message,
-              errorStack: error.stack || null,
+              errorStack: error.stack ?? null,
             },
             datacontenttype: ArvoDataContentType,
             dataschema: this.contract.uri,

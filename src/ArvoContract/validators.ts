@@ -1,4 +1,4 @@
-import { record, z } from 'zod';
+import { z } from 'zod';
 import { cleanString, validateURI } from '../utils';
 
 export const ArvoContractValidators = {

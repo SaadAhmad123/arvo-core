@@ -1,5 +1,3 @@
-import { Span, Tracer } from '@opentelemetry/api';
-
 /**
  * Represents the available log levels for telemetry.
  * - DEBUG: Used for detailed information, typically of interest only when diagnosing problems.

@@ -69,15 +69,15 @@ export const createArvoEvent = <
 
       return new ArvoEvent<TData, TExtension, TType>(
         {
-          id: event.id || uuid4(),
+          id: event.id ?? uuid4(),
           type: event.type,
-          accesscontrol: event.accesscontrol || null,
-          executionunits: event.executionunits || null,
-          traceparent: event.traceparent || null,
-          tracestate: event.tracestate || null,
-          datacontenttype: event.datacontenttype || ArvoDataContentType,
-          specversion: event.specversion || '1.0',
-          time: event.time || createTimestamp(),
+          accesscontrol: event.accesscontrol ?? null,
+          executionunits: event.executionunits ?? null,
+          traceparent: event.traceparent ?? null,
+          tracestate: event.tracestate ?? null,
+          datacontenttype: event.datacontenttype ?? ArvoDataContentType,
+          specversion: event.specversion ?? '1.0',
+          time: event.time ?? createTimestamp(),
           source: encodeURI(event.source),
           subject: encodeURI(event.subject),
           to: event.to ? encodeURI(event.to) : null,

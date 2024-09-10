@@ -36,7 +36,7 @@ export default class ArvoContract<
     this._uri = ArvoContractValidators.contract.uri.parse(params.uri) as TUri;
     this._accepts = this._validateAccepts(params.accepts);
     this._emits = this._validateEmits(params.emits);
-    this.description = params.description || null;
+    this.description = params.description ?? null;
   }
 
   /**
@@ -147,7 +147,7 @@ export default class ArvoContract<
         type: this._accepts.type,
         schema: this._accepts.schema,
       },
-      emits: { ...this._emits } as TEmits,
+      emits: { ...this._emits },
     };
   }
 

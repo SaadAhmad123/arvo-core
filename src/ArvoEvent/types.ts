@@ -6,7 +6,6 @@ import {
   ArvoDataSchema,
   OpenTelemetryExtensionSchema,
 } from './schema';
-import ArvoEvent from '.';
 
 /**
  * Represents the core properties of a CloudEvent.

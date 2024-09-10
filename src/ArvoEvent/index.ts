@@ -146,12 +146,12 @@ export default class ArvoEvent<
       'cloudevents.event_type': this.type || OTelNull,
       'cloudevents.event_time': this.time || OTelNull,
       'cloudevents.event_datacontenttype': this.datacontenttype || OTelNull,
-      'cloudevents.event_dataschema': this.dataschema || OTelNull,
+      'cloudevents.event_dataschema': this.dataschema ?? OTelNull,
       'cloudevents.arvo.event_redirectto':
-        this.extensions.redirectto || OTelNull,
-      'cloudevents.arvo.event_to': this.extensions.to || OTelNull,
+        this.extensions.redirectto ?? OTelNull,
+      'cloudevents.arvo.event_to': this.extensions.to ?? OTelNull,
       'cloudevents.arvo.event_executionunits':
-        this.extensions.executionunits || OTelNull,
+        this.extensions.executionunits ?? OTelNull,
     };
   }
 
