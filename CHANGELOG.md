@@ -52,3 +52,7 @@
 
 - Added SonarCloud integration for code scanning
 
+## [1.1.0] - 2024-09-20
+
+- Added support for Arvo orchestration subject management
+

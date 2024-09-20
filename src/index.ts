@@ -45,6 +45,10 @@ import OpenInference from './OpenTelemetry/OpenInference';
 import ArvoExecution from './OpenTelemetry/ArvoExecution';
 import { ArvoExecutionSpanKind } from './OpenTelemetry/ArvoExecution/types';
 import { OpenInferenceSpanKind } from './OpenTelemetry/OpenInference/types';
+import ArvoOrchestrationSubject from './ArvoOrchestrationSubject';
+import { ArvoOrchestrationSubjectContentSchema, ArvoOchestratorVersionSchema } from './ArvoOrchestrationSubject/schema';
+import { ArvoOrchestrationSubjectContent, ArvoOchestratorVersion } from './ArvoOrchestrationSubject/type'; 
+
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -98,4 +102,9 @@ export {
   ArvoExecution,
   ArvoExecutionSpanKind,
   ArvoContractJSONSchema,
+  ArvoOrchestrationSubject,
+  ArvoOrchestrationSubjectContentSchema,
+  ArvoOchestratorVersionSchema,
+  ArvoOrchestrationSubjectContent,
+  ArvoOchestratorVersion,
 };

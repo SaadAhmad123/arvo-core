@@ -1,6 +1,6 @@
 {
   "name": "arvo-core",
-  "version": "1.0.30",
+  "version": "1.1.0",
   "description": "This core package contains all the core classes and components of the Arvo Event Driven System",
   "main": "dist/index.js",
   "scripts": {
@@ -41,13 +41,14 @@
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typedoc": "^0.26.6",
+    "typedoc-github-theme": "^0.1.2",
     "typedoc-plugin-zod": "^1.2.1",
-    "typescript": "^5.5.4",
-    "typedoc-github-theme": "^0.1.2"
+    "typescript": "^5.5.4"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
     "uuid": "^10.0.0",
+    "zlib": "^1.0.5",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.2"
   }
