@@ -47,9 +47,11 @@ export default class ArvoEventFactory<
     },
     extensions?: TExtension,
   ) {
-    const span = ArvoCoreTracer.startSpan(`ArvoEventFactory<${this.contract.uri}>.accepts<${this.contract.accepts.type}>.create`)
+    const span = ArvoCoreTracer.startSpan(
+      `ArvoEventFactory<${this.contract.uri}>.accepts<${this.contract.accepts.type}>.create`,
+    );
     return context.with(trace.setSpan(context.active(), span), () => {
-      span.setStatus({ code: SpanStatusCode.OK })
+      span.setStatus({ code: SpanStatusCode.OK });
       try {
         const validationResult = this.contract.validateAccepts(
           this.contract.accepts.type,
@@ -70,19 +72,17 @@ export default class ArvoEventFactory<
           },
           extensions,
         );
-      }
-      catch (error) {
-        exceptionToSpan(error as Error)
+      } catch (error) {
+        exceptionToSpan(error as Error);
         span.setStatus({
           code: SpanStatusCode.ERROR,
           message: (error as Error).message,
         });
         throw error;
+      } finally {
+        span.end();
       }
-      finally {
-        span.end()
-      }
-    })
+    });
   }
 
   /**
@@ -102,9 +102,11 @@ export default class ArvoEventFactory<
     event: CreateArvoEvent<z.infer<TEmits[U]>, U> & { to: string },
     extensions?: TExtension,
   ) {
-    const span = ArvoCoreTracer.startSpan(`ArvoEventFactory<${this.contract.uri}>.emits<${event.type}>.create`)
+    const span = ArvoCoreTracer.startSpan(
+      `ArvoEventFactory<${this.contract.uri}>.emits<${event.type}>.create`,
+    );
     return context.with(trace.setSpan(context.active(), span), () => {
-      span.setStatus({ code: SpanStatusCode.OK })
+      span.setStatus({ code: SpanStatusCode.OK });
       try {
         const validationResult = this.contract.validateEmits(
           event.type,
@@ -124,19 +126,17 @@ export default class ArvoEventFactory<
           },
           extensions,
         );
-      }
-      catch (error) {
-        exceptionToSpan(error as Error)
+      } catch (error) {
+        exceptionToSpan(error as Error);
         span.setStatus({
           code: SpanStatusCode.ERROR,
           message: (error as Error).message,
         });
         throw error;
+      } finally {
+        span.end();
       }
-      finally {
-        span.end()
-      }
-    })
+    });
   }
 
   /**
@@ -154,9 +154,11 @@ export default class ArvoEventFactory<
     },
     extensions?: TExtension,
   ) {
-    const span = ArvoCoreTracer.startSpan(`ArvoEventFactory<${this.contract.uri}>.systemError<sys.${this.contract.accepts.type}.error>.create`)
+    const span = ArvoCoreTracer.startSpan(
+      `ArvoEventFactory<${this.contract.uri}>.systemError<sys.${this.contract.accepts.type}.error>.create`,
+    );
     return context.with(trace.setSpan(context.active(), span), () => {
-      span.setStatus({ code: SpanStatusCode.OK })
+      span.setStatus({ code: SpanStatusCode.OK });
       try {
         const { error, ..._events } = event;
         return createArvoEvent<
@@ -177,18 +179,16 @@ export default class ArvoEventFactory<
           },
           extensions,
         );
-      }
-      catch (error) {
-        exceptionToSpan(error as Error)
+      } catch (error) {
+        exceptionToSpan(error as Error);
         span.setStatus({
           code: SpanStatusCode.ERROR,
           message: (error as Error).message,
         });
         throw error;
+      } finally {
+        span.end();
       }
-      finally {
-        span.end()
-      }
-    })
+    });
   }
 }

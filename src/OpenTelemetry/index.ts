@@ -1,9 +1,4 @@
-import {
-  trace,
-  context,
-  Span,
-  TextMapSetter,
-} from '@opentelemetry/api';
+import { trace, context, Span, TextMapSetter } from '@opentelemetry/api';
 import { TelemetryLogLevel, OpenTelemetryHeaders } from './types';
 import { getPackageInfo } from './utils';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
@@ -35,13 +30,12 @@ export const logToSpan = (
   const toLog = {
     ...params,
     timestamp: performance.now(),
-  }
+  };
   if (span) {
     span.addEvent('log_message', toLog);
   } else {
-    console.log(JSON.stringify(toLog, null, 2))
+    console.log(JSON.stringify(toLog, null, 2));
   }
-  
 };
 
 /**
@@ -61,7 +55,7 @@ export const exceptionToSpan = (
     });
     span.recordException(error);
   } else {
-    console.error(error)
+    console.error(error);
   }
 };
 
@@ -78,7 +72,7 @@ export function currentOpenTelemetryHeaders(): OpenTelemetryHeaders {
   const propagator = new W3CTraceContextPropagator();
   const carrier: OpenTelemetryHeaders = {
     traceparent: null,
-    tracestate: null
+    tracestate: null,
   };
 
   const setter: TextMapSetter = {
@@ -93,6 +87,6 @@ export function currentOpenTelemetryHeaders(): OpenTelemetryHeaders {
 
   return {
     traceparent: carrier.traceparent,
-    tracestate: carrier.tracestate
+    tracestate: carrier.tracestate,
   };
 }

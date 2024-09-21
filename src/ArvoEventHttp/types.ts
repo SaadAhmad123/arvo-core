@@ -3,7 +3,7 @@
  */
 export type ArvoEventHttpConfig = {
   /** HTTP headers */
-  headers: Record<string, string | number | boolean | null>,
+  headers: Record<string, string | number | boolean | null>;
   /** Event data */
-  data: Record<string, any>,
-}
+  data: Record<string, any>;
+};

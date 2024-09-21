@@ -21,10 +21,7 @@
       "CHANGELOG.md",
       "LICENSE.md"
     ],
-    "plugin": [
-      "typedoc-plugin-zod",
-      "typedoc-github-theme",
-    ],
+    "plugin": ["typedoc-plugin-zod", "typedoc-github-theme"],
     "out": "docs"
   }
 }

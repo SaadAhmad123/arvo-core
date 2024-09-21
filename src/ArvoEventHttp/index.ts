@@ -1,14 +1,13 @@
-import ArvoEvent from "../ArvoEvent";
-import { ArvoDataContentType } from "../ArvoEvent/schema";
-import { createTimestamp } from "../utils";
-import { ArvoEventHttpConfig } from "./types";
+import ArvoEvent from '../ArvoEvent';
+import { ArvoDataContentType } from '../ArvoEvent/schema';
+import { createTimestamp } from '../utils';
+import { ArvoEventHttpConfig } from './types';
 import { v4 as uuid4 } from 'uuid';
 
 /**
  * A utility class for converting ArvoEvents to and from HTTP configurations.
  */
 export default class ArvoEventHttp {
-  
   /**
    * Exports an ArvoEvent to a cloudevent binary-mode HTTP configuration.
    * @param event - The ArvoEvent to export.
@@ -17,20 +16,19 @@ export default class ArvoEventHttp {
   static exportToBinary(event: ArvoEvent): ArvoEventHttpConfig {
     const headers = Object.assign(
       {},
-      ...Object
-        .entries(event.toJSON())
+      ...Object.entries(event.toJSON())
         .filter(([key]) => key !== 'data')
         .map(([key, value]) => ({
-          [`ce-${key}`]: value
-        }))
-    )
+          [`ce-${key}`]: value,
+        })),
+    );
     return {
       headers: {
         ...headers,
-        'content-type': 'application/json'
+        'content-type': 'application/json',
       },
-      data: {...event.data}
-    }
+      data: { ...event.data },
+    };
   }
 
   /**
@@ -43,8 +41,8 @@ export default class ArvoEventHttp {
       headers: {
         'content-type': event.datacontenttype,
       },
-      data: event.toJSON()
-    }
+      data: event.toJSON(),
+    };
   }
 
   /**
@@ -55,30 +53,31 @@ export default class ArvoEventHttp {
    */
   static importFromBinary(config: ArvoEventHttpConfig): ArvoEvent {
     try {
-
       if (config.headers['content-type'] !== 'application/json') {
-        throw new Error(`Invalid content-type: ${config.headers['content-type']}. Expected: application/json`);
+        throw new Error(
+          `Invalid content-type: ${config.headers['content-type']}. Expected: application/json`,
+        );
       }
 
       const eventFields = [
-        "id",
-        "type",
-        "accesscontrol",
-        "executionunits",
-        "traceparent",
-        "tracestate",
-        "datacontenttype",
-        "specversion",
-        "time",
-        "source",
-        "subject",
-        "to",
-        "redirectto",
-        "dataschema",
+        'id',
+        'type',
+        'accesscontrol',
+        'executionunits',
+        'traceparent',
+        'tracestate',
+        'datacontenttype',
+        'specversion',
+        'time',
+        'source',
+        'subject',
+        'to',
+        'redirectto',
+        'dataschema',
       ];
 
       const event: Record<string, any> = {};
-      
+
       // Extract event fields from headers
       for (const field of eventFields) {
         const headerKey = `ce-${field}`;
@@ -89,17 +88,25 @@ export default class ArvoEventHttp {
 
       // Validate required fields
       if (!event.type || !event.source || !event.subject) {
-        throw new Error("Missing required header fields: ce-type, ce-source, or ce-subject");
+        throw new Error(
+          'Missing required header fields: ce-type, ce-source, or ce-subject',
+        );
       }
 
       // Extract extensions
-      const prefixedEventFields = eventFields.map(item => `ce-${item}`);
+      const prefixedEventFields = eventFields.map((item) => `ce-${item}`);
       const extensions = Object.entries(config.headers)
-        .filter(([key]) => key.startsWith('ce-') && !prefixedEventFields.includes(key))
-        .reduce((acc, [key, value]) => {
-          acc[key.slice(3)] = value;
-          return acc;
-        }, {} as Record<string, any>);
+        .filter(
+          ([key]) =>
+            key.startsWith('ce-') && !prefixedEventFields.includes(key),
+        )
+        .reduce(
+          (acc, [key, value]) => {
+            acc[key.slice(3)] = value;
+            return acc;
+          },
+          {} as Record<string, any>,
+        );
 
       // Create and return ArvoEvent
       return new ArvoEvent(
@@ -107,7 +114,9 @@ export default class ArvoEventHttp {
           id: event.id ?? uuid4(),
           type: event.type,
           accesscontrol: event.accesscontrol ?? null,
-          executionunits: event.executionunits ? Number(event.executionunits) : null,
+          executionunits: event.executionunits
+            ? Number(event.executionunits)
+            : null,
           traceparent: event.traceparent ?? null,
           tracestate: event.tracestate ?? null,
           datacontenttype: event.datacontenttype ?? ArvoDataContentType,
@@ -123,7 +132,9 @@ export default class ArvoEventHttp {
         extensions,
       );
     } catch (error) {
-      throw new Error(`Failed to import ArvoEvent from binary: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to import ArvoEvent from binary: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -136,13 +147,15 @@ export default class ArvoEventHttp {
   static importFromStructured(config: ArvoEventHttpConfig): ArvoEvent {
     try {
       if (config.headers['content-type'] !== ArvoDataContentType) {
-        throw new Error(`Invalid content-type: ${config.headers['content-type']}. Expected: ${ArvoDataContentType}`);
+        throw new Error(
+          `Invalid content-type: ${config.headers['content-type']}. Expected: ${ArvoDataContentType}`,
+        );
       }
 
       const eventData = config.data;
 
       if (!eventData.type || !eventData.source || !eventData.subject) {
-        throw new Error("Missing required fields: type, source, or subject");
+        throw new Error('Missing required fields: type, source, or subject');
       }
 
       const {
@@ -182,11 +195,12 @@ export default class ArvoEventHttp {
           tracestate: tracestate ?? null,
         },
         data ?? {},
-        extensions
+        extensions,
       );
     } catch (error) {
-      throw new Error(`Failed to import ArvoEvent from structured: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to import ArvoEvent from structured: ${(error as Error).message}`,
+      );
     }
   }
-
 }

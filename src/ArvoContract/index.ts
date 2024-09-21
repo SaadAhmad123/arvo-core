@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { ArvoContractJSONSchema, ArvoContractRecord, IArvoContract } from './types';
+import {
+  ArvoContractJSONSchema,
+  ArvoContractRecord,
+  IArvoContract,
+} from './types';
 import { ArvoContractValidators } from './validators';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { ArvoErrorSchema } from '../schema';

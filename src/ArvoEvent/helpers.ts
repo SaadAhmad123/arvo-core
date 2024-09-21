@@ -50,7 +50,7 @@ export const createArvoEvent = <
 ): ArvoEvent<TData, TExtension, TType> => {
   const span = ArvoCoreTracer.startSpan(`createArvoEvent<${event.type}>`, {});
   return context.with(trace.setSpan(context.active(), span), () => {
-    span.setStatus({ code: SpanStatusCode.OK })
+    span.setStatus({ code: SpanStatusCode.OK });
     try {
       if (
         event.datacontenttype &&
@@ -88,7 +88,7 @@ export const createArvoEvent = <
         extensions,
       );
     } catch (error) {
-      exceptionToSpan(error as Error)
+      exceptionToSpan(error as Error);
       span.setStatus({
         code: SpanStatusCode.ERROR,
         message: (error as Error).message,
@@ -97,5 +97,5 @@ export const createArvoEvent = <
     } finally {
       span.end();
     }
-  })
+  });
 };

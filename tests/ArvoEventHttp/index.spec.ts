@@ -22,9 +22,9 @@ describe('ArvoEventHttp', () => {
       executionunits: 100,
       traceparent: 'traceparent-value',
       tracestate: 'tracestate-value',
-      dataschema: 'test'
+      dataschema: 'test',
     },
-    { key: 'value' }
+    { key: 'value' },
   );
 
   describe('exportToBinary', () => {
@@ -102,13 +102,13 @@ describe('ArvoEventHttp', () => {
           'ce-id': 'test-id',
           'ce-source': 'https://example.com/source',
           'ce-subject': 'https://example.com/subject',
-          'content-type': 'application/json+1'
+          'content-type': 'application/json+1',
         },
         data: {},
       };
 
       expect(() => ArvoEventHttp.importFromBinary(invalidConfig)).toThrow(
-        'Failed to import ArvoEvent from binary: Invalid content-type: application/json+1. Expected: application/json'
+        'Failed to import ArvoEvent from binary: Invalid content-type: application/json+1. Expected: application/json',
       );
     });
 
@@ -118,13 +118,13 @@ describe('ArvoEventHttp', () => {
           'ce-id': 'test-id',
           'ce-source': 'https://example.com/source',
           'ce-subject': 'https://example.com/subject',
-          'content-type': 'application/json'
+          'content-type': 'application/json',
         },
         data: {},
       };
 
       expect(() => ArvoEventHttp.importFromBinary(invalidConfig)).toThrow(
-        'Failed to import ArvoEvent from binary: Missing required header fields: ce-type, ce-source, or ce-subject'
+        'Failed to import ArvoEvent from binary: Missing required header fields: ce-type, ce-source, or ce-subject',
       );
     });
   });
@@ -153,7 +153,7 @@ describe('ArvoEventHttp', () => {
       };
 
       expect(() => ArvoEventHttp.importFromStructured(invalidConfig)).toThrow(
-        `Invalid content-type: application/json. Expected: ${ArvoDataContentType}`
+        `Invalid content-type: application/json. Expected: ${ArvoDataContentType}`,
       );
     });
 
@@ -169,7 +169,7 @@ describe('ArvoEventHttp', () => {
       };
 
       expect(() => ArvoEventHttp.importFromStructured(invalidConfig)).toThrow(
-        'Missing required fields: type, source, or subject'
+        'Missing required fields: type, source, or subject',
       );
     });
   });

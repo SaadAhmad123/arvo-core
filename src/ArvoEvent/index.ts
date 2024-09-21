@@ -35,7 +35,9 @@ export default class ArvoEvent<
   readonly dataschema: string | null;
   readonly data: TData;
   readonly time: string;
-  private readonly _extensions: TExtension & ArvoExtension & OpenTelemetryExtension;
+  private readonly _extensions: TExtension &
+    ArvoExtension &
+    OpenTelemetryExtension;
 
   /**
    * Creates an instance of ArvoEvent.
@@ -106,7 +108,7 @@ export default class ArvoEvent<
         time: this.time,
       },
       extensions: {
-        ...this._extensions
+        ...this._extensions,
       },
     };
   }
@@ -115,13 +117,13 @@ export default class ArvoEvent<
    * Converts the ArvoEvent to a JSON-serializable object.
    * It bundles the extensions and the cloudevent fields into
    * one object.
-   * 
+   *
    * @remarks
    * This method combines the default CloudEvent fields and all extensions
    * (including Arvo and OpenTelemetry extensions) into a single object.
    * If you need to access the CloudEvent fields and extensions separately,
    * use the `cloudevent` getter instead.
-   * 
+   *
    * @returns A plain object representation of the ArvoEvent, including all fields and extensions.
    */
   toJSON() {
@@ -222,14 +224,14 @@ export default class ArvoEvent<
 
   /**
    * Gets the custom extensions of the ArvoEvent.
-   * 
+   *
    * @remarks
    * This getter returns only the custom extensions (TExtension) added to the ArvoEvent,
    * excluding the standard Arvo and OpenTelemetry extensions.
    * For accessing all extensions including Arvo and OpenTelemetry,
    * use `<ArvoEvent>.cloudevent.extensions`.
    * For accessing the basic CloudEvent fields, use `<ArvoEvent>.cloudevent.default`.
-   * 
+   *
    * @returns An object containing only the custom extensions (TExtension) of the ArvoEvent.
    */
   get extensions() {
@@ -241,8 +243,7 @@ export default class ArvoEvent<
       accesscontrol,
       executionunits,
       ...rest
-    } = this._extensions as Record<string, any>
-    return rest as TExtension
+    } = this._extensions as Record<string, any>;
+    return rest as TExtension;
   }
-
 }
