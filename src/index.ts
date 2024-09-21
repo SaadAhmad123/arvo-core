@@ -47,8 +47,9 @@ import { ArvoExecutionSpanKind } from './OpenTelemetry/ArvoExecution/types';
 import { OpenInferenceSpanKind } from './OpenTelemetry/OpenInference/types';
 import ArvoOrchestrationSubject from './ArvoOrchestrationSubject';
 import { ArvoOrchestrationSubjectContentSchema, ArvoOchestratorVersionSchema } from './ArvoOrchestrationSubject/schema';
-import { ArvoOrchestrationSubjectContent, ArvoOchestratorVersion } from './ArvoOrchestrationSubject/type'; 
-
+import { ArvoOrchestrationSubjectContent, ArvoOchestratorVersion } from './ArvoOrchestrationSubject/type';
+import ArvoEventHttp from './ArvoEventHttp';
+import { ArvoEventHttpConfig } from './ArvoEventHttp/types'
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -67,6 +68,8 @@ const ArvoEventSchemas = {
 };
 
 export {
+  ArvoEventHttpConfig,
+  ArvoEventHttp,
   ArvoEvent,
   createArvoEvent,
   ArvoDataContentType,

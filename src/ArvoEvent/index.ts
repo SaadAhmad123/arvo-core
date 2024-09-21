@@ -35,7 +35,7 @@ export default class ArvoEvent<
   readonly dataschema: string | null;
   readonly data: TData;
   readonly time: string;
-  readonly extensions: TExtension & ArvoExtension & OpenTelemetryExtension;
+  private readonly _extensions: TExtension & ArvoExtension & OpenTelemetryExtension;
 
   /**
    * Creates an instance of ArvoEvent.
@@ -62,7 +62,7 @@ export default class ArvoEvent<
     const arvoExtension = ArvoExtensionSchema.parse(context);
     const otelExtension = OpenTelemetryExtensionSchema.parse(context);
 
-    this.extensions = {
+    this._extensions = {
       ...((extensions
         ? CloudEventExtensionSchema.parse(extensions)
         : {}) as TExtension),
@@ -75,12 +75,12 @@ export default class ArvoEvent<
     };
 
     if (this.datacontenttype === ArvoDataContentType) {
-      if (!this.extensions.to) {
+      if (!this._extensions.to) {
         throw new Error(`The ArvoEvent must have a non-empty 'to' field`);
       }
     }
     Object.freeze(this);
-    Object.freeze(this.extensions);
+    Object.freeze(this._extensions);
   }
 
   /**
@@ -105,18 +105,29 @@ export default class ArvoEvent<
         data: this.data,
         time: this.time,
       },
-      extensions: this.extensions,
+      extensions: {
+        ...this._extensions
+      },
     };
   }
 
   /**
    * Converts the ArvoEvent to a JSON-serializable object.
-   * @returns A plain object representation of the ArvoEvent.
+   * It bundles the extensions and the cloudevent fields into
+   * one object.
+   * 
+   * @remarks
+   * This method combines the default CloudEvent fields and all extensions
+   * (including Arvo and OpenTelemetry extensions) into a single object.
+   * If you need to access the CloudEvent fields and extensions separately,
+   * use the `cloudevent` getter instead.
+   * 
+   * @returns A plain object representation of the ArvoEvent, including all fields and extensions.
    */
   toJSON() {
     return {
       ...this.cloudevent.default,
-      ...this.extensions,
+      ...this._extensions,
     } as Record<string, any>;
   }
 
@@ -148,10 +159,10 @@ export default class ArvoEvent<
       'cloudevents.event_datacontenttype': this.datacontenttype || OTelNull,
       'cloudevents.event_dataschema': this.dataschema ?? OTelNull,
       'cloudevents.arvo.event_redirectto':
-        this.extensions.redirectto ?? OTelNull,
-      'cloudevents.arvo.event_to': this.extensions.to ?? OTelNull,
+        this._extensions.redirectto ?? OTelNull,
+      'cloudevents.arvo.event_to': this._extensions.to ?? OTelNull,
       'cloudevents.arvo.event_executionunits':
-        this.extensions.executionunits ?? OTelNull,
+        this._extensions.executionunits ?? OTelNull,
     };
   }
 
@@ -159,83 +170,79 @@ export default class ArvoEvent<
    * Gets the 'to' field from the ArvoExtension.
    * This field represents the intended recipient or destination of the event.
    * @returns The value of the 'to' field.
-   *
-   * @remarks
-   * This is a convenience getter for the data in `this.extensions.to` as this
-   * is an ArvoEvent object which natively defines this extension on the CloudEvent
-   * spec.
    */
   get to() {
-    return this.extensions.to;
+    return this._extensions.to;
   }
 
   /**
    * Gets the 'accesscontrol' field from the ArvoExtension.
    * This field contains access control information for the event.
    * @returns The value of the 'accesscontrol' field.
-   *
-   * @remarks
-   * This is a convenience getter for the data in `this.extensions.accesscontrol` as this
-   * is an ArvoEvent object which natively defines this extension on the CloudEvent
-   * spec.
    */
   get accesscontrol() {
-    return this.extensions.accesscontrol;
+    return this._extensions.accesscontrol;
   }
 
   /**
    * Gets the 'redirectto' field from the ArvoExtension.
    * This field indicate an alternative destination for the event.
    * @returns The value of the 'redirectto' field.
-   *
-   * @remarks
-   * This is a convenience getter for the data in `this.extensions.redirectto` as this
-   * is an ArvoEvent object which natively defines this extension on the CloudEvent
-   * spec.
    */
   get redirectto() {
-    return this.extensions.redirectto;
+    return this._extensions.redirectto;
   }
 
   /**
    * Gets the 'executionunits' field from the ArvoExtension.
    * This field contains information about the execution units associated with the event.
    * @returns The value of the 'executionunits' field.
-   *
-   * @remarks
-   * This is a convenience getter for the data in `this.extensions.executionunits` as this
-   * is an ArvoEvent object which natively defines this extension on the CloudEvent
-   * spec.
    */
   get executionunits() {
-    return this.extensions.executionunits;
+    return this._extensions.executionunits;
   }
 
   /**
    * Gets the 'traceparent' field from the OpenTelemetryExtension.
    * This field contains the W3C Trace Context traceparent header.
    * @returns The value of the 'traceparent' field.
-   *
-   * @remarks
-   * This is a convenience getter for the data in `this.extensions.traceparent` as this
-   * is an ArvoEvent object which natively defines this extension on the CloudEvent
-   * spec.
    */
   get traceparent() {
-    return this.extensions.traceparent;
+    return this._extensions.traceparent;
   }
 
   /**
    * Gets the 'tracestate' field from the OpenTelemetryExtension.
    * This field contains the W3C Trace Context tracestate header.
    * @returns The value of the 'tracestate' field, or undefined if not set.
-   *
-   * @remarks
-   * This is a convenience getter for the data in `this.extensions.tracestate` as this
-   * is an ArvoEvent object which natively defines this extension on the CloudEvent
-   * spec.
    */
   get tracestate() {
-    return this.extensions.tracestate;
+    return this._extensions.tracestate;
   }
+
+  /**
+   * Gets the custom extensions of the ArvoEvent.
+   * 
+   * @remarks
+   * This getter returns only the custom extensions (TExtension) added to the ArvoEvent,
+   * excluding the standard Arvo and OpenTelemetry extensions.
+   * For accessing all extensions including Arvo and OpenTelemetry,
+   * use `<ArvoEvent>.cloudevent.extensions`.
+   * For accessing the basic CloudEvent fields, use `<ArvoEvent>.cloudevent.default`.
+   * 
+   * @returns An object containing only the custom extensions (TExtension) of the ArvoEvent.
+   */
+  get extensions() {
+    const {
+      traceparent,
+      tracestate,
+      to,
+      redirectto,
+      accesscontrol,
+      executionunits,
+      ...rest
+    } = this._extensions as Record<string, any>
+    return rest as TExtension
+  }
+
 }

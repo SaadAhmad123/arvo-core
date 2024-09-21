@@ -102,10 +102,10 @@ describe(`
 
     const event = createArvoEvent(eventWithArvoExtensions);
 
-    expect(event.extensions.to).toBe('recipient');
-    expect(event.extensions.accesscontrol).toBe('public');
-    expect(event.extensions.redirectto).toBe('redirect-url');
-    expect(event.extensions.executionunits).toBe(5);
+    expect(event.to).toBe('recipient');
+    expect(event.accesscontrol).toBe('public');
+    expect(event.redirectto).toBe('redirect-url');
+    expect(event.executionunits).toBe(5);
   });
 
   it('should handle OpenTelemetry extensions', () => {
@@ -117,8 +117,8 @@ describe(`
 
     const event = createArvoEvent(eventWithOTelExtensions);
 
-    expect(event.extensions.traceparent).toBe('traceparent-value');
-    expect(event.extensions.tracestate).toBe('tracestate-value');
+    expect(event.traceparent).toBe('traceparent-value');
+    expect(event.tracestate).toBe('tracestate-value');
   });
 
   it('should return errors when invalid data is provided', () => {
@@ -163,6 +163,5 @@ describe(`
     expect(event.executionunits).toBe(100);
 
     expect(event.cloudevent.extensions.executionunits).toBe(100);
-    expect(event.extensions.executionunits).toBe(100);
   });
 });

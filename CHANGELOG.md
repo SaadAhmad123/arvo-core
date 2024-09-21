@@ -56,3 +56,7 @@
 
 - Added support for Arvo orchestration subject management
 
+## [1.1.1] - 2024-09-21
+
+- Added support for ArvoEvent http formats and made ArvoEvent extensions more specific
+
