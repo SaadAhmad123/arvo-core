@@ -28,6 +28,7 @@ import { v4 as uuid4 } from 'uuid';
  * - If no `datacontenttype` is provided, it defaults to `application/cloudevents+json;charset=UTF-8;profile=arvo`.
  * - If a non-compatible `datacontenttype` is provided, a warning will be logged to the span.
  * - The `source`, `subject`, `to`, `redirectto`, and `dataschema` fields are URI-encoded.
+ * - If no `to` (null, undefined or empty string) is provided, then the `type` value is used by default
  *
  * @example
  * const event = createArvoEvent(
@@ -37,7 +38,7 @@ import { v4 as uuid4 } from 'uuid';
  *     subject: 'example-subject',
  *     data: { key: 'value' }
  *   },
- *   { customExtension: 'value' },
+ *   { customextension: 'value' },
  * );
  */
 export const createArvoEvent = <
@@ -80,7 +81,7 @@ export const createArvoEvent = <
           time: event.time ?? createTimestamp(),
           source: encodeURI(event.source),
           subject: encodeURI(event.subject),
-          to: event.to ? encodeURI(event.to) : null,
+          to: event.to ? encodeURI(event.to) : encodeURI(event.type),
           redirectto: event.redirectto ? encodeURI(event.redirectto) : null,
           dataschema: event.dataschema ? encodeURI(event.dataschema) : null,
         },
