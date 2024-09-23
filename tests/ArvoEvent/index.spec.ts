@@ -1,11 +1,7 @@
 import { createArvoEvent, ArvoEvent, ArvoDataContentType } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
-describe(`
-  An ArvoEvent extends CloudEvent, enhancing scalability for event-driven systems. It supports both choreography 
-  and command-driven orchestration models while maintaining seamless integration with the CloudEvent standard, 
-  ensuring portability across environments and vendors.    
-`, () => {
+describe(`ArvoEvent`, () => {
   beforeAll(() => {
     telemetrySdkStart();
   });
@@ -22,22 +18,16 @@ describe(`
     to: 'worker',
   };
 
-  it('should throw an error when to is not provided for an Arvo event', () => {
-    let error: Error | undefined;
-    let event: ArvoEvent | undefined;
-    try {
-      event = createArvoEvent({
-        source: 'test.producer',
-        type: 'cmd.saad.test',
-        subject: 'test.json',
-        data: { message: 'Hello, World!' },
-      });
-    } catch (e) {
-      error = e as Error;
-    }
+  it('Should use the "type" field in case "to" is not provided', () => {
+    
+    const event = createArvoEvent({
+      source: 'test.producer',
+      type: 'cmd.saad.test',
+      subject: 'test.json',
+      data: { message: 'Hello, World!' },
+    });
 
-    expect(event).toBeFalsy();
-    expect(error).toBeTruthy();
+    expect(event.to).toBe(event.type);
   });
 
   it('should output a warning when non Arvo datacontenttype is used', () => {
