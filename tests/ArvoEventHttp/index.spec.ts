@@ -108,7 +108,7 @@ describe('ArvoEventHttp', () => {
       };
 
       expect(() => ArvoEventHttp.importFromBinary(invalidConfig)).toThrow(
-        'Failed to import ArvoEvent from binary: Invalid content-type: application/json+1. Expected: application/json',
+        'Invalid content-type: application/json+1. Expected: application/json',
       );
     });
 
@@ -124,7 +124,7 @@ describe('ArvoEventHttp', () => {
       };
 
       expect(() => ArvoEventHttp.importFromBinary(invalidConfig)).toThrow(
-        'Failed to import ArvoEvent from binary: Missing required header fields: ce-type, ce-source, or ce-subject',
+        'Missing required header field(s): ce-type',
       );
     });
   });
@@ -169,7 +169,7 @@ describe('ArvoEventHttp', () => {
       };
 
       expect(() => ArvoEventHttp.importFromStructured(invalidConfig)).toThrow(
-        'Missing required fields: type, source, or subject',
+        'Missing required field(s): type',
       );
     });
   });

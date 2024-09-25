@@ -4,6 +4,7 @@ import { createTimestamp } from '../utils';
 import { ArvoEventHttpConfig } from './types';
 import { v4 as uuid4 } from 'uuid';
 
+
 /**
  * A utility class for converting ArvoEvents to and from HTTP configurations.
  */
@@ -52,71 +53,74 @@ export default class ArvoEventHttp {
    * @throws {Error} If required fields are missing or if there's an error parsing the input.
    */
   static importFromBinary(config: ArvoEventHttpConfig): ArvoEvent {
+    this.validateContentType(config.headers['content-type']?.toString() ?? "", 'application/json');
+    const event = this.extractEventFieldsFromHeaders(config.headers);
+    this.validateRequiredFields(event);
+    const extensions = this.extractExtensions(config.headers);
+    return this.createArvoEvent(event, config.data, extensions);
+  }
 
-    if (config.headers['content-type'] !== 'application/json') {
-      throw new Error(
-        `Invalid content-type: ${config.headers['content-type']}. Expected: application/json`,
-      );
+  /**
+   * Imports an ArvoEvent from a structured-mode HTTP representation.
+   * @param config - The ArvoEventHttpConfig object to import from.
+   * @returns A new ArvoEvent instance.
+   * @throws {Error} If required fields are missing or if there's an error parsing the input.
+   */
+  static importFromStructured(config: ArvoEventHttpConfig): ArvoEvent {
+    this.validateContentType(config.headers['content-type']?.toString() ?? "", ArvoDataContentType);
+    const eventData = config.data;
+    this.validateRequiredFields(eventData, false);
+    return this.createArvoEventFromStructured(eventData);
+  }
+
+  private static validateContentType(actual: string, expected: string): void {
+    if (actual !== expected) {
+      throw new Error(`Invalid content-type: ${actual}. Expected: ${expected}`);
     }
+  }
 
-    const eventFields = [
-      'id',
-      'type',
-      'accesscontrol',
-      'executionunits',
-      'traceparent',
-      'tracestate',
-      'datacontenttype',
-      'specversion',
-      'time',
-      'source',
-      'subject',
-      'to',
-      'redirectto',
-      'dataschema',
-    ];
+  private static extractEventFieldsFromHeaders(headers: Record<string, any>): Record<string, any> {
+    const eventFields = ['id', 'type', 'accesscontrol', 'executionunits', 'traceparent', 'tracestate', 'datacontenttype', 'specversion', 'time', 'source', 'subject', 'to', 'redirectto', 'dataschema'];
+    return Object.fromEntries(
+      eventFields
+        .map(field => [`ce-${field}`, headers[`ce-${field}`]])
+        .filter(([, value]) => value !== undefined)
+        .map(([key, value]) => [key.slice(3), value])
+    );
+  }
 
-    const event: Record<string, any> = {};
+  private static createErrorMessageForMissingField(type: string, isHeader: boolean = true){
+    if (isHeader) {
+      return `Missing required header field(s): ${type}`
+    }
+    return `Missing required field(s): ${type}`
+    
+  }
 
-    // Extract event fields from headers
-    for (const field of eventFields) {
-      const headerKey = `ce-${field}`;
-      if (headerKey in config.headers) {
-        event[field] = config.headers[headerKey];
+  private static validateRequiredFields(event: Record<string, any>, isHeader: boolean = true): void {
+    ['type', 'source', 'subject'].forEach(field => {
+      if (!event[field]) {
+        throw new Error(ArvoEventHttp.createErrorMessageForMissingField(isHeader ? `ce-${field}`: field, isHeader));
       }
-    }
+    });
+  }
 
-    const createErrorMesssage = (type: string) => `Missing required header field(s): ${type}`
-    for (const typeString of ['type', 'source', 'subject']) {
-      if (!event[typeString]) {
-        throw new Error(createErrorMesssage(`ce-${typeString}`))
-      }
-    }
+  private static extractExtensions(headers: Record<string, any>): Record<string, any> {
+    const eventFields = ['id', 'type', 'accesscontrol', 'executionunits', 'traceparent', 'tracestate', 'datacontenttype', 'specversion', 'time', 'source', 'subject', 'to', 'redirectto', 'dataschema'];
+    return Object.fromEntries(
+      Object.entries(headers)
+        .filter(([key]) => key.startsWith('ce-') && !eventFields.includes(key.slice(3)))
+        .map(([key, value]) => [key.slice(3), value])
+    );
+  }
 
-    // Extract extensions
-    const prefixedEventFields = eventFields.map((item) => `ce-${item}`);
-    const extensions = Object.entries(config.headers)
-      .filter(
-        ([key]) =>
-          key.startsWith('ce-') && !prefixedEventFields.includes(key),
-      )
-      .reduce(
-        (acc, [key, value]) => {
-          acc[key.slice(3)] = value;
-          return acc;
-        },
-        {} as Record<string, any>,
-      );
-
-    // Create and return ArvoEvent
+  private static createArvoEvent(event: Record<string, any>, data: any, extensions: Record<string, any>): ArvoEvent {
     return new ArvoEvent(
       {
         id: event.id ?? uuid4(),
         type: event.type,
         accesscontrol: event.accesscontrol ?? null,
-        executionunits: event.executionunits
-          ? Number(event.executionunits)
-          : null,
+        executionunits: event.executionunits ? Number(event.executionunits) : null,
         traceparent: event.traceparent ?? null,
         tracestate: event.tracestate ?? null,
         datacontenttype: event.datacontenttype ?? ArvoDataContentType,
@@ -128,75 +132,51 @@ export default class ArvoEventHttp {
         redirectto: event.redirectto ?? null,
         dataschema: event.dataschema ?? null,
       },
-      config.data,
-      extensions,
+      data,
+      extensions
     );
-
   }
 
-  /**
-   * Imports an ArvoEvent from a structured-mode HTTP representation.
-   * @param config - The ArvoEventHttpConfig object to import from.
-   * @returns A new ArvoEvent instance.
-   * @throws {Error} If required fields are missing or if there's an error parsing the input.
-   */
-  static importFromStructured(config: ArvoEventHttpConfig): ArvoEvent {
-    try {
-      if (config.headers['content-type'] !== ArvoDataContentType) {
-        throw new Error(
-          `Invalid content-type: ${config.headers['content-type']}. Expected: ${ArvoDataContentType}`,
-        );
-      }
+  private static createArvoEventFromStructured(eventData: Record<string, any>): ArvoEvent {
+    const {
+      id,
+      type,
+      source,
+      subject,
+      time,
+      datacontenttype,
+      specversion,
+      dataschema,
+      data,
+      to,
+      accesscontrol,
+      redirectto,
+      executionunits,
+      traceparent,
+      tracestate,
+      ...extensions
+    } = eventData;
 
-      const eventData = config.data;
-
-      if (!eventData.type || !eventData.source || !eventData.subject) {
-        throw new Error('Missing required fields: type, source, or subject');
-      }
-
-      const {
-        id,
+    return new ArvoEvent(
+      {
+        id: id ?? uuid4(),
         type,
         source,
         subject,
-        time,
-        datacontenttype,
-        specversion,
-        dataschema,
-        data,
-        to,
-        accesscontrol,
-        redirectto,
-        executionunits,
-        traceparent,
-        tracestate,
-        ...extensions
-      } = eventData;
-
-      return new ArvoEvent(
-        {
-          id: id ?? uuid4(),
-          type,
-          source,
-          subject,
-          time: time ?? createTimestamp(),
-          datacontenttype: datacontenttype ?? ArvoDataContentType,
-          specversion: specversion ?? '1.0',
-          dataschema: dataschema ?? null,
-          to: to ?? null,
-          accesscontrol: accesscontrol ?? null,
-          redirectto: redirectto ?? null,
-          executionunits: executionunits ? Number(executionunits) : null,
-          traceparent: traceparent ?? null,
-          tracestate: tracestate ?? null,
-        },
-        data ?? {},
-        extensions,
-      );
-    } catch (error) {
-      throw new Error(
-        `Failed to import ArvoEvent from structured: ${(error as Error).message}`,
-      );
-    }
+        time: time ?? createTimestamp(),
+        datacontenttype: datacontenttype ?? ArvoDataContentType,
+        specversion: specversion ?? '1.0',
+        dataschema: dataschema ?? null,
+        to: to ?? null,
+        accesscontrol: accesscontrol ?? null,
+        redirectto: redirectto ?? null,
+        executionunits: executionunits ? Number(executionunits) : null,
+        traceparent: traceparent ?? null,
+        tracestate: tracestate ?? null,
+      },
+      data ?? {},
+      extensions
+    );
   }
 }
+
