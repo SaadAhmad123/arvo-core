@@ -42,9 +42,10 @@ export default class ArvoEventFactory<
    * @throws If the event data fails validation against the contract.
    */
   accepts<TExtension extends Record<string, any>>(
-    event: Omit<CreateArvoEvent<z.infer<TAcceptSchema>, TType>, 'type'> & {
-      to: string;
-    },
+    event: Omit<
+      CreateArvoEvent<z.infer<TAcceptSchema>, TType>,
+      'type' | 'datacontenttype' | 'dataschema'
+    >,
     extensions?: TExtension,
   ) {
     const span = ArvoCoreTracer.startSpan(
@@ -99,7 +100,10 @@ export default class ArvoEventFactory<
     U extends keyof TEmits & string,
     TExtension extends Record<string, any>,
   >(
-    event: CreateArvoEvent<z.infer<TEmits[U]>, U> & { to: string },
+    event: Omit<
+      CreateArvoEvent<z.infer<TEmits[U]>, U>,
+      'datacontenttype' | 'dataschema'
+    >,
     extensions?: TExtension,
   ) {
     const span = ArvoCoreTracer.startSpan(
@@ -148,9 +152,11 @@ export default class ArvoEventFactory<
    * @returns The created system error ArvoEvent.
    */
   systemError<TExtension extends Record<string, any>>(
-    event: Omit<CreateArvoEvent<any, any>, 'data' | 'type'> & {
+    event: Omit<
+      CreateArvoEvent<any, any>,
+      'data' | 'type' | 'datacontenttype' | 'dataschema'
+    > & {
       error: Error;
-      to: string;
     },
     extensions?: TExtension,
   ) {
@@ -160,14 +166,14 @@ export default class ArvoEventFactory<
     return context.with(trace.setSpan(context.active(), span), () => {
       span.setStatus({ code: SpanStatusCode.OK });
       try {
-        const { error, ..._events } = event;
+        const { error, ..._event } = event;
         return createArvoEvent<
           z.infer<typeof ArvoErrorSchema>,
           TExtension,
           `sys.${TType}.error`
         >(
           {
-            ...event,
+            ..._event,
             type: `sys.${this.contract.accepts.type}.error`,
             data: {
               errorName: error.name,
