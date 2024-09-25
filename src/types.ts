@@ -92,6 +92,7 @@ export type InferArvoContract<
           [K in keyof TEmits]: InferArvoEvent<
             ArvoEvent<InferZodSchema<TEmits[K]>, {}, K & string>
           >;
-        };
+        } & {[K in `sys.${TType}.error`]: InferArvoEvent<ArvoEvent<InferZodSchema<T['systemError']['schema']>, {}, T['systemError']['type']>>};
+        systemError: InferArvoEvent<ArvoEvent<InferZodSchema<T['systemError']['schema']>, {}, T['systemError']['type']>>
       }
     : never;
