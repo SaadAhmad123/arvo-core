@@ -55,7 +55,7 @@ export default class ArvoEventHttp {
   static importFromBinary(config: ArvoEventHttpConfig): ArvoEvent {
     this.validateContentType(config.headers['content-type']?.toString() ?? "", 'application/json');
     const event = this.extractEventFieldsFromHeaders(config.headers);
-    this.validateRequiredFields(event);
+    this.validateRequiredFields(event, true);
     const extensions = this.extractExtensions(config.headers);
     return this.createArvoEvent(event, config.data, extensions);
   }
@@ -73,12 +73,23 @@ export default class ArvoEventHttp {
     return this.createArvoEventFromStructured(eventData);
   }
 
+  /**
+   * Validates the content type of the HTTP request.
+   * @param actual - The actual content type from the request.
+   * @param expected - The expected content type.
+   * @throws {Error} If the actual content type doesn't match the expected one.
+   */
   private static validateContentType(actual: string, expected: string): void {
     if (actual !== expected) {
       throw new Error(`Invalid content-type: ${actual}. Expected: ${expected}`);
     }
   }
 
+  /**
+   * Extracts event fields from the HTTP headers.
+   * @param headers - The HTTP headers containing event information.
+   * @returns An object with extracted event fields.
+   */
   private static extractEventFieldsFromHeaders(headers: Record<string, any>): Record<string, any> {
     const eventFields = ['id', 'type', 'accesscontrol', 'executionunits', 'traceparent', 'tracestate', 'datacontenttype', 'specversion', 'time', 'source', 'subject', 'to', 'redirectto', 'dataschema'];
     return Object.fromEntries(
@@ -89,7 +100,13 @@ export default class ArvoEventHttp {
     );
   }
 
-  private static createErrorMessageForMissingField(type: string, isHeader: boolean = true){
+  /**
+   * Creates an error message for a missing required field.
+   * @param type - The type of the missing field.
+   * @param isHeader - A flag to distinguish between headers and structured payload
+   * @returns A formatted error message string.
+   */
+  private static createErrorMessageForMissingField(type: string, isHeader: boolean){
     if (isHeader) {
       return `Missing required header field(s): ${type}`
     }
@@ -97,7 +114,13 @@ export default class ArvoEventHttp {
     
   }
 
-  private static validateRequiredFields(event: Record<string, any>, isHeader: boolean = true): void {
+  /**
+   * Validates that all required fields are present in the event data.
+   * @param event - The event data to validate.
+   * @param isHeader - A flag to distinguish between headers and structured payload
+   * @throws {Error} If any required field is missing.
+   */
+  private static validateRequiredFields(event: Record<string, any>, isHeader: boolean): void {
     ['type', 'source', 'subject'].forEach(field => {
       if (!event[field]) {
         throw new Error(ArvoEventHttp.createErrorMessageForMissingField(isHeader ? `ce-${field}`: field, isHeader));
@@ -105,6 +128,11 @@ export default class ArvoEventHttp {
     });
   }
 
+  /**
+   * Extracts extension fields from the HTTP headers.
+   * @param headers - The HTTP headers containing event information.
+   * @returns An object with extracted extension fields.
+   */
   private static extractExtensions(headers: Record<string, any>): Record<string, any> {
     const eventFields = ['id', 'type', 'accesscontrol', 'executionunits', 'traceparent', 'tracestate', 'datacontenttype', 'specversion', 'time', 'source', 'subject', 'to', 'redirectto', 'dataschema'];
     return Object.fromEntries(
@@ -114,6 +142,13 @@ export default class ArvoEventHttp {
     );
   }
 
+  /**
+   * Creates an ArvoEvent instance from extracted event data, payload, and extensions.
+   * @param event - The extracted event data.
+   * @param data - The event payload.
+   * @param extensions - The extracted extension fields.
+   * @returns A new ArvoEvent instance.
+   */
   private static createArvoEvent(event: Record<string, any>, data: any, extensions: Record<string, any>): ArvoEvent {
     return new ArvoEvent(
       {
@@ -137,6 +172,11 @@ export default class ArvoEventHttp {
     );
   }
 
+  /**
+   * Creates an ArvoEvent instance from structured event data.
+   * @param eventData - The structured event data.
+   * @returns A new ArvoEvent instance.
+   */
   private static createArvoEventFromStructured(eventData: Record<string, any>): ArvoEvent {
     const {
       id,
@@ -157,7 +197,7 @@ export default class ArvoEventHttp {
       ...extensions
     } = eventData;
 
-    return new ArvoEvent(
+    return ArvoEventHttp.createArvoEvent(
       {
         id: id ?? uuid4(),
         type,
@@ -175,8 +215,8 @@ export default class ArvoEventHttp {
         tracestate: tracestate ?? null,
       },
       data ?? {},
-      extensions
-    );
+      extensions 
+    )
   }
 }
 
