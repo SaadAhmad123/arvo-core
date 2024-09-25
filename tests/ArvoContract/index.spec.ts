@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ArvoContract, createArvoContract } from '../../src';
+import { ArvoContract, createArvoContract, InferArvoContract } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
 describe('ArvoContract', () => {
@@ -24,7 +24,16 @@ describe('ArvoContract', () => {
 
   describe('createArvoContract', () => {
     it('should create a valid ArvoContract instance', () => {
-      const contract = createArvoContract(validContractSpec);
+      const contract = createArvoContract({
+        uri: '#/contracts/myContract',
+        accepts: {
+          type: 'com.example.input',
+          schema: z.object({ name: z.string() }),
+        },
+        emits: {
+          'com.example.output': z.object({ result: z.number() }),
+        },
+      });
       expect(contract).toBeInstanceOf(ArvoContract);
       expect(contract.uri).toBe(validContractSpec.uri);
     });

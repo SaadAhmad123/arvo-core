@@ -25,7 +25,10 @@ import {
 import { OpenTelemetryHeaders, TelemetryLogLevel } from './OpenTelemetry/types';
 import { validateURI, cleanString } from './utils';
 import ArvoContract from './ArvoContract';
-import { createArvoContract, InferArvoContract } from './ArvoContract/helpers';
+import {
+  createArvoContract,
+  InferArvoContract as InferArvoContractType,
+} from './ArvoContract/helpers';
 import { ArvoContractValidators } from './ArvoContract/validators';
 import {
   ArvoContractRecord,
@@ -53,6 +56,7 @@ import {
 } from './ArvoOrchestrationSubject/type';
 import ArvoEventHttp from './ArvoEventHttp';
 import { ArvoEventHttpConfig } from './ArvoEventHttp/types';
+import { InferArvoContract, InferArvoEvent } from './types';
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -94,7 +98,6 @@ export {
   createArvoContract,
   ArvoContractValidators,
   ArvoContractRecord,
-  InferArvoContract,
   IArvoContract,
   ResolveArvoContractRecord,
   ArvoContractLibrary,
@@ -113,4 +116,7 @@ export {
   ArvoOchestratorVersionSchema,
   ArvoOrchestrationSubjectContent,
   ArvoOchestratorVersion,
+  InferArvoEvent,
+  InferArvoContract,
+  InferArvoContractType,
 };

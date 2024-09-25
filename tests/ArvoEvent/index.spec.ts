@@ -19,7 +19,6 @@ describe(`ArvoEvent`, () => {
   };
 
   it('Should use the "type" field in case "to" is not provided', () => {
-    
     const event = createArvoEvent({
       source: 'test.producer',
       type: 'cmd.saad.test',
