@@ -52,90 +52,86 @@ export default class ArvoEventHttp {
    * @throws {Error} If required fields are missing or if there's an error parsing the input.
    */
   static importFromBinary(config: ArvoEventHttpConfig): ArvoEvent {
-    try {
-      if (config.headers['content-type'] !== 'application/json') {
-        throw new Error(
-          `Invalid content-type: ${config.headers['content-type']}. Expected: application/json`,
-        );
-      }
 
-      const eventFields = [
-        'id',
-        'type',
-        'accesscontrol',
-        'executionunits',
-        'traceparent',
-        'tracestate',
-        'datacontenttype',
-        'specversion',
-        'time',
-        'source',
-        'subject',
-        'to',
-        'redirectto',
-        'dataschema',
-      ];
-
-      const event: Record<string, any> = {};
-
-      // Extract event fields from headers
-      for (const field of eventFields) {
-        const headerKey = `ce-${field}`;
-        if (headerKey in config.headers) {
-          event[field] = config.headers[headerKey];
-        }
-      }
-
-      // Validate required fields
-      if (!event.type || !event.source || !event.subject) {
-        throw new Error(
-          'Missing required header fields: ce-type, ce-source, or ce-subject',
-        );
-      }
-
-      // Extract extensions
-      const prefixedEventFields = eventFields.map((item) => `ce-${item}`);
-      const extensions = Object.entries(config.headers)
-        .filter(
-          ([key]) =>
-            key.startsWith('ce-') && !prefixedEventFields.includes(key),
-        )
-        .reduce(
-          (acc, [key, value]) => {
-            acc[key.slice(3)] = value;
-            return acc;
-          },
-          {} as Record<string, any>,
-        );
-
-      // Create and return ArvoEvent
-      return new ArvoEvent(
-        {
-          id: event.id ?? uuid4(),
-          type: event.type,
-          accesscontrol: event.accesscontrol ?? null,
-          executionunits: event.executionunits
-            ? Number(event.executionunits)
-            : null,
-          traceparent: event.traceparent ?? null,
-          tracestate: event.tracestate ?? null,
-          datacontenttype: event.datacontenttype ?? ArvoDataContentType,
-          specversion: event.specversion ?? '1.0',
-          time: event.time ?? createTimestamp(),
-          source: event.source,
-          subject: event.subject,
-          to: event.to ?? null,
-          redirectto: event.redirectto ?? null,
-          dataschema: event.dataschema ?? null,
-        },
-        config.data,
-        extensions,
-      );
-    } catch (error) {
+    if (config.headers['content-type'] !== 'application/json') {
       throw new Error(
-        `Failed to import ArvoEvent from binary: ${(error as Error).message}`,
+        `Invalid content-type: ${config.headers['content-type']}. Expected: application/json`,
       );
     }
+
+    const eventFields = [
+      'id',
+      'type',
+      'accesscontrol',
+      'executionunits',
+      'traceparent',
+      'tracestate',
+      'datacontenttype',
+      'specversion',
+      'time',
+      'source',
+      'subject',
+      'to',
+      'redirectto',
+      'dataschema',
+    ];
+
+    const event: Record<string, any> = {};
+
+    // Extract event fields from headers
+    for (const field of eventFields) {
+      const headerKey = `ce-${field}`;
+      if (headerKey in config.headers) {
+        event[field] = config.headers[headerKey];
+      }
+    }
+
+    const createErrorMesssage = (type: string) => `Missing required header field(s): ${type}`
+    for (const typeString of ['type', 'source', 'subject']) {
+      if (!event[typeString]) {
+        throw new Error(createErrorMesssage(`ce-${typeString}`))
+      }
+    }
+
+    // Extract extensions
+    const prefixedEventFields = eventFields.map((item) => `ce-${item}`);
+    const extensions = Object.entries(config.headers)
+      .filter(
+        ([key]) =>
+          key.startsWith('ce-') && !prefixedEventFields.includes(key),
+      )
+      .reduce(
+        (acc, [key, value]) => {
+          acc[key.slice(3)] = value;
+          return acc;
+        },
+        {} as Record<string, any>,
+      );
+
+    // Create and return ArvoEvent
+    return new ArvoEvent(
+      {
+        id: event.id ?? uuid4(),
+        type: event.type,
+        accesscontrol: event.accesscontrol ?? null,
+        executionunits: event.executionunits
+          ? Number(event.executionunits)
+          : null,
+        traceparent: event.traceparent ?? null,
+        tracestate: event.tracestate ?? null,
+        datacontenttype: event.datacontenttype ?? ArvoDataContentType,
+        specversion: event.specversion ?? '1.0',
+        time: event.time ?? createTimestamp(),
+        source: event.source,
+        subject: event.subject,
+        to: event.to ?? null,
+        redirectto: event.redirectto ?? null,
+        dataschema: event.dataschema ?? null,
+      },
+      config.data,
+      extensions,
+    );
+
   }
 
   /**
