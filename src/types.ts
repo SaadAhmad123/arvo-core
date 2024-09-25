@@ -84,15 +84,39 @@ export type InferArvoContract<
     infer TEmits
   >
     ? {
+        /** The URI of the contract */
         uri: TUri;
+        /** The event type that this contract accepts */
         accepts: InferArvoEvent<
           ArvoEvent<InferZodSchema<TAcceptSchema>, {}, TType>
         >;
+        /** The event types that this contract can emit */
         emits: {
           [K in keyof TEmits]: InferArvoEvent<
             ArvoEvent<InferZodSchema<TEmits[K]>, {}, K & string>
           >;
-        } & {[K in `sys.${TType}.error`]: InferArvoEvent<ArvoEvent<InferZodSchema<T['systemError']['schema']>, {}, T['systemError']['type']>>};
-        systemError: InferArvoEvent<ArvoEvent<InferZodSchema<T['systemError']['schema']>, {}, T['systemError']['type']>>
+        };
+        /** The system error event type for this contract */
+        systemError: InferArvoEvent<
+          ArvoEvent<
+            InferZodSchema<T['systemError']['schema']>,
+            {},
+            T['systemError']['type']
+          >
+        >;
+        /** Union type of all emittable events, including regular events and system error */
+        emittableEvents: ({
+          [K in keyof TEmits]: InferArvoEvent<
+            ArvoEvent<InferZodSchema<TEmits[K]>, {}, K & string>
+          >;
+        } & {
+          [K in `sys.${TType}.error`]: InferArvoEvent<
+            ArvoEvent<
+              InferZodSchema<T['systemError']['schema']>,
+              {},
+              T['systemError']['type']
+            >
+          >;
+        })[keyof TEmits | `sys.${TType}.error`];
       }
     : never;
