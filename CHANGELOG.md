@@ -60,3 +60,7 @@
 
 - Added support for ArvoEvent http formats and made ArvoEvent extensions more specific
 
+## [1.1.8] - 2024-09-26
+
+- Added Arvo Orchestrator Contract primitive
+

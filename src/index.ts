@@ -56,7 +56,11 @@ import {
 } from './ArvoOrchestrationSubject/type';
 import ArvoEventHttp from './ArvoEventHttp';
 import { ArvoEventHttpConfig } from './ArvoEventHttp/types';
-import { InferArvoContract, InferArvoEvent } from './types';
+import { InferArvoContract, InferArvoEvent, InferArvoOrchestratorContract } from './types';
+import { createArvoOrchestratorContract } from './ArvoOrchestratorContract/helpers';
+import ArvoOrchestratorContract from './ArvoOrchestratorContract'
+import { ICreateArvoOrchestratorContract, IArvoOrchestratorContract } from './ArvoOrchestratorContract/types';
+import { ArvoOrchestratorEventTypeGen } from './ArvoOrchestratorContract/typegen'
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -119,4 +123,10 @@ export {
   InferArvoEvent,
   InferArvoContract,
   InferArvoContractType,
+  createArvoOrchestratorContract,
+  ArvoOrchestratorContract,
+  ICreateArvoOrchestratorContract,
+  IArvoOrchestratorContract,
+  InferArvoOrchestratorContract,
+  ArvoOrchestratorEventTypeGen
 };
