@@ -14,6 +14,7 @@ import {
   OpenTelemetryExtensionSchema,
 } from './schema';
 import { OTelNull } from '../OpenTelemetry';
+import { InferArvoEvent } from '../types';
 
 /**
  * Represents an ArvoEvent, which extends the CloudEvent specification.
@@ -130,7 +131,7 @@ export default class ArvoEvent<
     return {
       ...this.cloudevent.default,
       ...this._extensions,
-    } as Record<string, any>;
+    } as InferArvoEvent<typeof this>;
   }
 
   /**
