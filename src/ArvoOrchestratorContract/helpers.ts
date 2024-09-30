@@ -56,7 +56,7 @@ export const createArvoOrchestratorContract = <
 >(param: ICreateArvoOrchestratorContract<TUri, TName, TInit, TComplete>) => {
 
   if (!isLowerAlphanumeric(param.name)) {
-    throw new Error(`Invalid 'name' = '${param.name}'. The 'name' must only contain alphanumeric characters.`)
+    throw new Error(`Invalid 'name' = '${param.name}'. The 'name' must only contain alphanumeric characters. e.g. test.orchestrator`)
   }
 
   return new ArvoOrchestratorContract<
