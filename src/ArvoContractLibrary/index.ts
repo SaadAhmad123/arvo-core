@@ -60,6 +60,15 @@ export default class ArvoContractLibrary<T extends ArvoContract> {
   }
 
   /**
+   * Get an object where keys are contract URIs and values are readonly contract instances.
+   */
+  public get contracts(): {[K in ExtractContractUri<T>]: Extract<T, {uri: K}>} {
+    return Object.freeze(
+      Object.assign({}, ...this._contracts.map(item => ({[item.uri]: Object.freeze(item)})))
+    );
+  }
+
+  /**
    * Checks if the library contains a contract with the given URI.
    * @param {string} uri - The URI to check for.
    * @returns {boolean} True if a contract with the given URI exists in the library, false otherwise.
