@@ -1,5 +1,5 @@
 import {
-  ArvoOchestratorVersion,
+  ArvoOrchestratorVersion,
   ArvoOrchestrationSubjectContent,
 } from './type';
 import { ArvoOrchestrationSubjectContentSchema } from './schema';
@@ -22,7 +22,7 @@ export default class ArvoOrchestrationSubject {
    */
   static new(param: {
     orchestator: string;
-    version: ArvoOchestratorVersion;
+    version: ArvoOrchestratorVersion;
     initiator: string;
   }): string {
     return ArvoOrchestrationSubject.create({

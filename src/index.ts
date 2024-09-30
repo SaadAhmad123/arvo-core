@@ -48,11 +48,11 @@ import { OpenInferenceSpanKind } from './OpenTelemetry/OpenInference/types';
 import ArvoOrchestrationSubject from './ArvoOrchestrationSubject';
 import {
   ArvoOrchestrationSubjectContentSchema,
-  ArvoOchestratorVersionSchema,
+  ArvoOrchestratorVersionSchema,
 } from './ArvoOrchestrationSubject/schema';
 import {
   ArvoOrchestrationSubjectContent,
-  ArvoOchestratorVersion,
+  ArvoOrchestratorVersion,
 } from './ArvoOrchestrationSubject/type';
 import ArvoEventHttp from './ArvoEventHttp';
 import { ArvoEventHttpConfig } from './ArvoEventHttp/types';
@@ -117,9 +117,9 @@ export {
   ArvoContractJSONSchema,
   ArvoOrchestrationSubject,
   ArvoOrchestrationSubjectContentSchema,
-  ArvoOchestratorVersionSchema,
+  ArvoOrchestratorVersionSchema,
   ArvoOrchestrationSubjectContent,
-  ArvoOchestratorVersion,
+  ArvoOrchestratorVersion,
   InferArvoEvent,
   InferArvoContract,
   InferArvoContractType,

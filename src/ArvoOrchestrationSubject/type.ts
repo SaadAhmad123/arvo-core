@@ -8,7 +8,7 @@
  * @example
  * "1.0.0", "2.3.1", "0.5.2"
  */
-export type ArvoOchestratorVersion = `${number}.${number}.${number}`;
+export type ArvoOrchestratorVersion = `${number}.${number}.${number}`;
 
 /**
  * Represents the content for Arvo orchestration subject.
@@ -34,7 +34,7 @@ export type ArvoOrchestrationSubjectContent = {
     /**
      * The version of the orchestrator.
      */
-    version: ArvoOchestratorVersion;
+    version: ArvoOrchestratorVersion;
   };
 
   /**

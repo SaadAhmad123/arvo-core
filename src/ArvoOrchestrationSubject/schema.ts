@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Zod schema for ArvoOchestratorVersion
-export const ArvoOchestratorVersionSchema = z
+export const ArvoOrchestratorVersionSchema = z
   .string()
   .regex(/^\d+\.\d+\.\d+$/, 'Invalid version format')
   .refine((value) => !value.includes(';'), 'Version must not contain semicolon')
@@ -23,7 +23,7 @@ export const ArvoOrchestrationSubjectContentSchema = z
             'Orchestrator name must not contain semicolon',
           )
           .describe('Name of the orchestrator'),
-        version: ArvoOchestratorVersionSchema,
+        version: ArvoOrchestratorVersionSchema,
       })
       .describe('Information about the orchestrator'),
     execution: z
