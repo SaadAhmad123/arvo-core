@@ -2,7 +2,7 @@ import {
   ArvoOrchestrationSubject,
   ArvoOrchestrationSubjectContent,
 } from '../../src';
-import * as zlib from 'zlib';
+import * as zlib from 'node:zlib'
 
 describe('ArvoOrchestrationSubject', () => {
   const validContent: ArvoOrchestrationSubjectContent = {

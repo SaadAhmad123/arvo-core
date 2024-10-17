@@ -3,7 +3,7 @@ import {
   ArvoOrchestrationSubjectContent,
 } from './type';
 import { ArvoOrchestrationSubjectContentSchema } from './schema';
-import * as zlib from 'zlib';
+import * as zlib from 'node:zlib';
 import { cleanString } from '../utils';
 import { v4 as uuid4 } from 'uuid';
 
