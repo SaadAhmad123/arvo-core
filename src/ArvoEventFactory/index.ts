@@ -43,7 +43,7 @@ export default class ArvoEventFactory<
    */
   accepts<TExtension extends Record<string, any>>(
     event: Omit<
-      CreateArvoEvent<z.infer<TAcceptSchema>, TType>,
+      CreateArvoEvent<z.input<TAcceptSchema>, TType>,
       'type' | 'datacontenttype' | 'dataschema'
     >,
     extensions?: TExtension,
@@ -101,7 +101,7 @@ export default class ArvoEventFactory<
     TExtension extends Record<string, any>,
   >(
     event: Omit<
-      CreateArvoEvent<z.infer<TEmits[U]>, U>,
+      CreateArvoEvent<z.input<TEmits[U]>, U>,
       'datacontenttype' | 'dataschema'
     >,
     extensions?: TExtension,
