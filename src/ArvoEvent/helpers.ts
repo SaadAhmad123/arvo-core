@@ -1,6 +1,6 @@
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import ArvoEvent from '.';
-import { ArvoCoreTracer, exceptionToSpan, logToSpan } from '../OpenTelemetry';
+import { ArvoCoreTracer, currentOpenTelemetryHeaders, exceptionToSpan, logToSpan } from '../OpenTelemetry';
 import { cleanString, createTimestamp } from '../utils';
 import { ArvoDataContentType } from './schema';
 import { ArvoEventData, CloudEventExtension, CreateArvoEvent } from './types';
@@ -52,6 +52,7 @@ export const createArvoEvent = <
   const span = ArvoCoreTracer.startSpan(`createArvoEvent<${event.type}>`, {});
   return context.with(trace.setSpan(context.active(), span), () => {
     span.setStatus({ code: SpanStatusCode.OK });
+    const otelHeaders = currentOpenTelemetryHeaders()
     try {
       if (
         event.datacontenttype &&
@@ -74,8 +75,8 @@ export const createArvoEvent = <
           type: event.type,
           accesscontrol: event.accesscontrol ?? null,
           executionunits: event.executionunits ?? null,
-          traceparent: event.traceparent ?? null,
-          tracestate: event.tracestate ?? null,
+          traceparent: event.traceparent ?? otelHeaders.traceparent ?? null,
+          tracestate: event.tracestate ?? otelHeaders.tracestate ?? null,
           datacontenttype: event.datacontenttype ?? ArvoDataContentType,
           specversion: event.specversion ?? '1.0',
           time: event.time ?? createTimestamp(),
