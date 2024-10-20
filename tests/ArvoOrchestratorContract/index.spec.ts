@@ -3,7 +3,9 @@ import {
   ArvoOrchestratorContract,
   createArvoOrchestratorContract,
   ArvoOrchestratorEventTypeGen,
+  ArvoEventSchemas,
 } from '../../src';
+import zodToJsonSchema from 'zod-to-json-schema';
 
 describe('ArvoOrchestratorContract', () => {
   const testUri = 'test://example';
@@ -78,7 +80,16 @@ describe('createArvoOrchestratorContract', () => {
     expect(contract.init.type).toBe(
       `${ArvoOrchestratorEventTypeGen.__prefix}.${testName}`,
     );
-    expect(contract.init.schema).toBe(testInitSchema);
+    expect(JSON.stringify(zodToJsonSchema(contract.init.schema))).toBe(
+      JSON.stringify(
+        zodToJsonSchema(
+          z.intersection(
+            ArvoEventSchemas.OrchestrationInitEventBaseSchema,
+            testInitSchema,
+          ),
+        ),
+      ),
+    );
     expect(contract.complete.type).toBe(
       `${ArvoOrchestratorEventTypeGen.__prefix}.${testName}.done`,
     );
