@@ -35,5 +35,4 @@ export const OrchestrationInitEventBaseSchema = z
     Note: Ensure this value is a valid URI as per ArvoEvent specifications.
   `),
       ),
-  })
-  .strict();
+  });

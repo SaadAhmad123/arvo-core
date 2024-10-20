@@ -4,6 +4,7 @@ import {
   createArvoOrchestratorContract,
   ArvoOrchestratorEventTypeGen,
   ArvoEventSchemas,
+  createArvoEventFactory,
 } from '../../src';
 import zodToJsonSchema from 'zod-to-json-schema';
 
@@ -94,6 +95,30 @@ describe('createArvoOrchestratorContract', () => {
       `${ArvoOrchestratorEventTypeGen.__prefix}.${testName}.done`,
     );
     expect(contract.complete.schema).toBe(testCompleteSchema);
+
+    let event = createArvoEventFactory(contract).accepts({
+      subject: 'test',
+      source: 'test',
+      data: {
+        parentSubject$$: null,
+        foo: 'saad'
+      },
+    });
+
+    expect(event.data.parentSubject$$).toBe(null);
+    expect(event.data.foo).toBe('saad');
+
+    event = createArvoEventFactory(contract).accepts({
+      subject: 'test',
+      source: 'test',
+      data: {
+        parentSubject$$: 'child',
+        foo: 'saad',
+      },
+    });
+
+    expect(event.data.parentSubject$$).toBe('child');
+    expect(event.data.foo).toBe('saad');
   });
 
   it('should throw an error for non-alphanumeric name', () => {

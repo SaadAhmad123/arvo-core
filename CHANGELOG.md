@@ -64,3 +64,7 @@
 
 - Added Arvo Orchestrator Contract primitive
 
+## [1.1.16] - 2024-10-21
+
+- Added mandatory parent chaining in orchestration events so the process chaining and orchestration chaining can be traced
+
