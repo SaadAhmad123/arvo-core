@@ -1,18 +1,18 @@
-import { z } from "zod"
-import { ICreateArvoOrchestratorContract } from "./types"
-import ArvoOrchestratorContract from "."
-import { ArvoOrchestratorEventTypeGen } from './typegen'
+import { z } from 'zod';
+import { ICreateArvoOrchestratorContract } from './types';
+import ArvoOrchestratorContract from '.';
+import { ArvoOrchestratorEventTypeGen } from './typegen';
 
 /**
  * Validates if a string contains only uppercase or lowercase alphanumeric characters.
- * 
+ *
  * This function checks if the input string consists solely of:
  * - Lowercase letters (a-z)
  * - Numbers (0-9)
  * - Dot (.)
- * 
+ *
  * It does not allow any special characters, spaces, or other non-alphanumeric characters.
- * 
+ *
  * @param input - The string to be validated.
  * @returns True if the string contains only alphanumeric characters, false otherwise.
  */
@@ -23,7 +23,7 @@ function isLowerAlphanumeric(input: string): boolean {
 
 /**
  * Creates an ArvoOrchestratorContract with specified parameters.
- * 
+ *
  * The ArvoOrchestratorContract is a specialized contract class designed to manage the lifecycle
  * of orchestration processes within the Arvo framework. It extends the base ArvoContract class
  * to provide specific functionality for orchestration scenarios.
@@ -36,16 +36,16 @@ function isLowerAlphanumeric(input: string): boolean {
  *
  * This contract serves as a crucial component in maintaining consistency and type safety
  * throughout the orchestration process, from initiation to completion.
- * 
+ *
  * @param param - The configuration object for creating the contract.
  * @param param.uri - The URI for the contract.
  * @param param.name - The name of the contract (must be alphanumeric).
  * @param param.schema - The schema object containing init and complete Zod schemas.
  * @param param.schema.init - The Zod schema for initialization.
  * @param param.schema.complete - The Zod schema for completion.
- * 
+ *
  * @throws {Error} Throws an error if the name is not alphanumeric.
- * 
+ *
  * @returns Returns a new ArvoOrchestratorContract instance with the specified parameters.
  */
 export const createArvoOrchestratorContract = <
@@ -53,10 +53,13 @@ export const createArvoOrchestratorContract = <
   TName extends string,
   TInit extends z.ZodTypeAny,
   TComplete extends z.ZodTypeAny,
->(param: ICreateArvoOrchestratorContract<TUri, TName, TInit, TComplete>) => {
-
+>(
+  param: ICreateArvoOrchestratorContract<TUri, TName, TInit, TComplete>,
+) => {
   if (!isLowerAlphanumeric(param.name)) {
-    throw new Error(`Invalid 'name' = '${param.name}'. The 'name' must only contain alphanumeric characters. e.g. test.orchestrator`)
+    throw new Error(
+      `Invalid 'name' = '${param.name}'. The 'name' must only contain alphanumeric characters. e.g. test.orchestrator`,
+    );
   }
 
   return new ArvoOrchestratorContract<
@@ -74,6 +77,6 @@ export const createArvoOrchestratorContract = <
     complete: {
       type: ArvoOrchestratorEventTypeGen.complete(param.name),
       schema: param.schema.complete,
-    }
-  })
-}
+    },
+  });
+};

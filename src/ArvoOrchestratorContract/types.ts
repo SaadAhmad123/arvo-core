@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Represents the configuration interface for an Arvo Orchestrator Contract.
- * 
+ *
  * This interface defines the structure of the configuration object used to initialize
  * an ArvoOrchestratorContract. It specifies the types and schemas for both the
  * initialization event and the completion event of the orchestration process.
@@ -58,7 +58,7 @@ export interface IArvoOrchestratorContract<
 
 /**
  * Interface for creating an Arvo Orchestrator Contract.
- * 
+ *
  * This interface defines the structure of the configuration object used to create
  * an ArvoOrchestratorContract. It specifies the URI, name, and schemas for both
  * the initialization and completion events of the orchestration process.
@@ -101,5 +101,5 @@ export interface ICreateArvoOrchestratorContract<
      * This schema defines the structure and types of the data emitted when the orchestration process completes.
      */
     complete: TComplete;
-  }
+  };
 }

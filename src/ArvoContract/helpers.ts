@@ -40,23 +40,25 @@ export type InferArvoContract<T> =
 export const createArvoContract = <const TContract extends IArvoContract>(
   contract: TContract,
 ): InferArvoContract<TContract> => {
-  const createErrorMessage = (source: 'accepts' | 'emits', type: string) => cleanString(`
+  const createErrorMessage = (source: 'accepts' | 'emits', type: string) =>
+    cleanString(`
     In contract (uri=${contract.uri}), the '${source}' event (type=${type}) must not start 
     with '${ArvoOrchestratorEventTypeGen.__prefix}' becuase this a reserved pattern 
     for Arvo orchestrators.
-  `)
+  `);
 
-  const validator = (value: string) => value.startsWith(ArvoOrchestratorEventTypeGen.__prefix)
+  const validator = (value: string) =>
+    value.startsWith(ArvoOrchestratorEventTypeGen.__prefix);
 
   if (validator(contract.accepts.type)) {
-    throw new Error(createErrorMessage('accepts', contract.accepts.type))
+    throw new Error(createErrorMessage('accepts', contract.accepts.type));
   }
 
   for (const item of Object.keys(contract.emits)) {
     if (validator(item)) {
-      throw new Error(createErrorMessage('emits', item))
+      throw new Error(createErrorMessage('emits', item));
     }
   }
-  
+
   return new ArvoContract(contract) as InferArvoContract<TContract>;
-}
+};

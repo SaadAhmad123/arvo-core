@@ -4,7 +4,11 @@ import { createArvoEvent } from '../ArvoEvent/helpers';
 import { CreateArvoEvent } from '../ArvoEvent/types';
 import { ArvoDataContentType } from '../ArvoEvent/schema';
 import { ArvoErrorSchema } from '../schema';
-import { ArvoCoreTracer, currentOpenTelemetryHeaders, exceptionToSpan } from '../OpenTelemetry';
+import {
+  ArvoCoreTracer,
+  currentOpenTelemetryHeaders,
+  exceptionToSpan,
+} from '../OpenTelemetry';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 
 /**
@@ -53,7 +57,7 @@ export default class ArvoEventFactory<
     );
     return context.with(trace.setSpan(context.active(), span), () => {
       span.setStatus({ code: SpanStatusCode.OK });
-      const otelHeaders = currentOpenTelemetryHeaders()
+      const otelHeaders = currentOpenTelemetryHeaders();
       try {
         const validationResult = this.contract.validateAccepts(
           this.contract.accepts.type,
@@ -67,7 +71,8 @@ export default class ArvoEventFactory<
         return createArvoEvent<z.infer<TAcceptSchema>, TExtension, TType>(
           {
             ...event,
-            traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
+            traceparent:
+              event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             type: this.contract.accepts.type,
             datacontenttype: ArvoDataContentType,
@@ -114,7 +119,7 @@ export default class ArvoEventFactory<
     );
     return context.with(trace.setSpan(context.active(), span), () => {
       span.setStatus({ code: SpanStatusCode.OK });
-      const otelHeaders = currentOpenTelemetryHeaders()
+      const otelHeaders = currentOpenTelemetryHeaders();
       try {
         const validationResult = this.contract.validateEmits(
           event.type,
@@ -128,7 +133,8 @@ export default class ArvoEventFactory<
         return createArvoEvent<z.infer<TEmits[U]>, TExtension, U>(
           {
             ...event,
-            traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
+            traceparent:
+              event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             datacontenttype: ArvoDataContentType,
             dataschema: this.contract.uri,
@@ -171,7 +177,7 @@ export default class ArvoEventFactory<
     );
     return context.with(trace.setSpan(context.active(), span), () => {
       span.setStatus({ code: SpanStatusCode.OK });
-      const otelHeaders = currentOpenTelemetryHeaders()
+      const otelHeaders = currentOpenTelemetryHeaders();
       try {
         const { error, ..._event } = event;
         return createArvoEvent<
@@ -181,7 +187,8 @@ export default class ArvoEventFactory<
         >(
           {
             ..._event,
-            traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
+            traceparent:
+              event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             type: `sys.${this.contract.accepts.type}.error`,
             data: {

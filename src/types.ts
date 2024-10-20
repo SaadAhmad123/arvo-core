@@ -122,16 +122,15 @@ export type InferArvoContract<
       }
     : never;
 
-
 /**
  * A type utility that infers the structure of an ArvoOrchestratorContract.
- * 
+ *
  * @template T - The type to infer from, expected to be an ArvoOrchestratorContract.
- * 
+ *
  * @returns An object type that includes the URI, accepted event type (init),
  * emitted event type (complete), system error event type, and other properties
  * of the orchestrator contract.
- * 
+ *
  * @example
  * const myOrchestratorContract = new ArvoOrchestratorContract({
  *   uri: 'my-orchestrator',
@@ -148,7 +147,7 @@ export type InferArvoOrchestratorContract<
     z.ZodTypeAny,
     string,
     z.ZodTypeAny
-  >
+  >,
 > =
   T extends ArvoOrchestratorContract<
     infer TUri,
@@ -182,7 +181,7 @@ export type InferArvoOrchestratorContract<
           >
         >;
 
-        /** 
+        /**
          * Union type of all emittable events, including the completion event and system error.
          * This can be used to represent all possible outcomes of the orchestration process.
          */

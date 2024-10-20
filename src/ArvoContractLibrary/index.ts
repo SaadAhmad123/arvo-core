@@ -62,9 +62,14 @@ export default class ArvoContractLibrary<T extends ArvoContract> {
   /**
    * Get an object where keys are contract URIs and values are readonly contract instances.
    */
-  public get contracts(): {[K in ExtractContractUri<T>]: Extract<T, {uri: K}>} {
+  public get contracts(): {
+    [K in ExtractContractUri<T>]: Extract<T, { uri: K }>;
+  } {
     return Object.freeze(
-      Object.assign({}, ...this._contracts.map(item => ({[item.uri]: Object.freeze(item)})))
+      Object.assign(
+        {},
+        ...this._contracts.map((item) => ({ [item.uri]: Object.freeze(item) })),
+      ),
     );
   }
 

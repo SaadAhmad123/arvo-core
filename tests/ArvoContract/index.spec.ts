@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { ArvoContract, cleanString, createArvoContract, InferArvoContract } from '../../src';
+import {
+  ArvoContract,
+  cleanString,
+  createArvoContract,
+  InferArvoContract,
+} from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
 describe('ArvoContract', () => {
@@ -73,11 +78,13 @@ describe('ArvoContract', () => {
           'arvo.orc.test': z.object({}),
         },
       };
-      expect(() => createArvoContract(invalidSpec)).toThrow(cleanString(`
+      expect(() => createArvoContract(invalidSpec)).toThrow(
+        cleanString(`
         In contract (uri=#/contracts/myContract), the 'emits' event (type=arvo.orc.test) must not start
         with 'arvo.orc' becuase this a reserved pattern
         for Arvo orchestrators.  
-      `));
+      `),
+      );
     });
 
     it('should throw an error for invalid accept type using orchestrator pattern', () => {
@@ -86,13 +93,15 @@ describe('ArvoContract', () => {
         accepts: {
           type: 'arvo.orc.test',
           schema: z.object({ name: z.string() }),
-        }
+        },
       };
-      expect(() => createArvoContract(invalidSpec)).toThrow(cleanString(`
+      expect(() => createArvoContract(invalidSpec)).toThrow(
+        cleanString(`
         In contract (uri=#/contracts/myContract), the 'accepts' event (type=arvo.orc.test) must not start
         with 'arvo.orc' becuase this a reserved pattern
         for Arvo orchestrators.  
-      `));
+      `),
+      );
     });
 
     it('should create a contract with multiple emits', () => {

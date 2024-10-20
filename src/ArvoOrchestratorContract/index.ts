@@ -17,12 +17,12 @@ import { IArvoOrchestratorContract } from './types';
  *
  * This contract serves as a crucial component in maintaining consistency and type safety
  * throughout the orchestration process, from initiation to completion.
- * 
+ *
  * @example
  * ```typescript
  * import { createArvoOrchestratorContract } from 'arvo-core'
  * import { z } from 'zod'
- * 
+ *
  * const contract = createArvoOrchestratorContract({
  *  uri: '#/example/contract',
  *  name: 'rag',
@@ -49,7 +49,7 @@ export default class ArvoOrchestratorContract<
   TUri,
   TInitType,
   TInit,
-  {[K in TCompleteType]: TComplete}
+  { [K in TCompleteType]: TComplete }
 > {
   /**
    * Constructs a new ArvoOrchestratorContract instance.

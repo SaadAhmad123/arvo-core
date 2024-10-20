@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { ArvoOrchestratorContract, createArvoOrchestratorContract, ArvoOrchestratorEventTypeGen } from '../../src'
+import {
+  ArvoOrchestratorContract,
+  createArvoOrchestratorContract,
+  ArvoOrchestratorEventTypeGen,
+} from '../../src';
 
 describe('ArvoOrchestratorContract', () => {
   const testUri = 'test://example';
@@ -71,9 +75,13 @@ describe('createArvoOrchestratorContract', () => {
 
     expect(contract).toBeInstanceOf(ArvoOrchestratorContract);
     expect(contract.uri).toBe(testUri);
-    expect(contract.init.type).toBe(`${ArvoOrchestratorEventTypeGen.__prefix}.${testName}`);
+    expect(contract.init.type).toBe(
+      `${ArvoOrchestratorEventTypeGen.__prefix}.${testName}`,
+    );
     expect(contract.init.schema).toBe(testInitSchema);
-    expect(contract.complete.type).toBe(`${ArvoOrchestratorEventTypeGen.__prefix}.${testName}.done`);
+    expect(contract.complete.type).toBe(
+      `${ArvoOrchestratorEventTypeGen.__prefix}.${testName}.done`,
+    );
     expect(contract.complete.schema).toBe(testCompleteSchema);
   });
 
@@ -87,7 +95,8 @@ describe('createArvoOrchestratorContract', () => {
           complete: testCompleteSchema,
         },
       });
-    }).toThrow("Invalid 'name' = 'invalid name'. The 'name' must only contain alphanumeric characters.");
+    }).toThrow(
+      "Invalid 'name' = 'invalid name'. The 'name' must only contain alphanumeric characters.",
+    );
   });
-
-})
+});
