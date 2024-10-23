@@ -10,6 +10,7 @@ import { cleanString, createTimestamp } from '../utils';
 import { ArvoDataContentType } from './schema';
 import { ArvoEventData, CloudEventExtension, CreateArvoEvent } from './types';
 import { v4 as uuid4 } from 'uuid';
+import { ExecutionOpenTelemetryConfiguration } from '../types';
 
 /**
  * Creates an ArvoEvent with the provided data and extensions.
@@ -53,8 +54,14 @@ export const createArvoEvent = <
 >(
   event: CreateArvoEvent<TData, TType>,
   extensions?: TExtension,
+  opentelemetry: ExecutionOpenTelemetryConfiguration = {
+    tracer: ArvoCoreTracer,
+  },
 ): ArvoEvent<TData, TExtension, TType> => {
-  const span = ArvoCoreTracer.startSpan(`createArvoEvent<${event.type}>`, {});
+  const span = opentelemetry.tracer.startSpan(
+    `createArvoEvent<${event.type}>`,
+    {},
+  );
   return context.with(trace.setSpan(context.active(), span), () => {
     span.setStatus({ code: SpanStatusCode.OK });
     const otelHeaders = currentOpenTelemetryHeaders();

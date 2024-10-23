@@ -3,6 +3,21 @@ import ArvoContract from './ArvoContract';
 import ArvoEvent from './ArvoEvent';
 import { ArvoExtension, OpenTelemetryExtension } from './ArvoEvent/types';
 import ArvoOrchestratorContract from './ArvoOrchestratorContract';
+import { Tracer } from '@opentelemetry/api';
+
+/**
+ * Configuration options for OpenTelemetry integration in execution context.
+ *
+ * This type defines how tracing should be configured and inherited within
+ * the execution pipeline.
+ */
+export type ExecutionOpenTelemetryConfiguration = {
+  /**
+   * Optional OpenTelemetry tracer instance to use for creating spans.
+   * If not provided, a default tracer may be used depending on the implementation.
+   */
+  tracer: Tracer;
+};
 
 /**
  * A type utility that infers the structure of an ArvoEvent.

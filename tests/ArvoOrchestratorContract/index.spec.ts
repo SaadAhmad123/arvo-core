@@ -101,7 +101,7 @@ describe('createArvoOrchestratorContract', () => {
       source: 'test',
       data: {
         parentSubject$$: null,
-        foo: 'saad'
+        foo: 'saad',
       },
     });
 
