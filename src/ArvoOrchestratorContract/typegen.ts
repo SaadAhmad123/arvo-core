@@ -16,7 +16,7 @@ export class ArvoOrchestratorEventTypeGen {
    * The standard prefix used for all Arvo orchestrator events.
    * This prefix helps identify events that belong to the Arvo orchestrator system.
    */
-  public static readonly prefix: 'arvo.orc' = 'arvo.orc'
+  public static readonly prefix: 'arvo.orc' = 'arvo.orc' as const
 
   /**
    * Generates an initialization event type string for a given event name.
