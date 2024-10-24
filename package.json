@@ -1,6 +1,6 @@
 {
   "name": "arvo-core",
-  "version": "1.1.19",
+  "version": "1.1.20",
   "description": "This core package contains all the core classes and components of the Arvo Event Driven System",
   "main": "dist/index.js",
   "scripts": {
@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/core": "^1.27.0",
     "uuid": "^10.0.0",
     "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.2"
