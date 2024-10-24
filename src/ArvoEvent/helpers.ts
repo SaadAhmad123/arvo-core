@@ -1,7 +1,7 @@
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import ArvoEvent from '.';
 import {
-  ArvoCoreTracer,
+  fetchOpenTelemetryTracer,
   currentOpenTelemetryHeaders,
   exceptionToSpan,
   logToSpan,
@@ -55,7 +55,7 @@ export const createArvoEvent = <
   event: CreateArvoEvent<TData, TType>,
   extensions?: TExtension,
   opentelemetry: ExecutionOpenTelemetryConfiguration = {
-    tracer: ArvoCoreTracer,
+    tracer: fetchOpenTelemetryTracer(),
   },
 ): ArvoEvent<TData, TExtension, TType> => {
   const span = opentelemetry.tracer.startSpan(

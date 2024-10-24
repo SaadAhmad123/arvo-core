@@ -5,7 +5,7 @@ import { CreateArvoEvent } from '../ArvoEvent/types';
 import { ArvoDataContentType } from '../ArvoEvent/schema';
 import { ArvoErrorSchema } from '../schema';
 import {
-  ArvoCoreTracer,
+  fetchOpenTelemetryTracer,
   currentOpenTelemetryHeaders,
   exceptionToSpan,
 } from '../OpenTelemetry';
@@ -26,7 +26,7 @@ export default class ArvoEventFactory<
   TAcceptSchema extends z.ZodTypeAny = z.ZodTypeAny,
   TEmits extends Record<string, z.ZodTypeAny> = Record<string, z.ZodTypeAny>,
 > {
-  private contract: ArvoContract<TUri, TType, TAcceptSchema, TEmits>;
+  private readonly contract: ArvoContract<TUri, TType, TAcceptSchema, TEmits>;
 
   /**
    * Creates an instance of ArvoEventFactory.
@@ -53,7 +53,7 @@ export default class ArvoEventFactory<
     >,
     extensions?: TExtension,
     opentelemetry: ExecutionOpenTelemetryConfiguration = {
-      tracer: ArvoCoreTracer,
+      tracer: fetchOpenTelemetryTracer(),
     },
   ) {
     const span = opentelemetry.tracer.startSpan(
@@ -119,7 +119,7 @@ export default class ArvoEventFactory<
     >,
     extensions?: TExtension,
     opentelemetry: ExecutionOpenTelemetryConfiguration = {
-      tracer: ArvoCoreTracer,
+      tracer: fetchOpenTelemetryTracer(),
     },
   ) {
     const span = opentelemetry.tracer.startSpan(
@@ -181,7 +181,7 @@ export default class ArvoEventFactory<
     },
     extensions?: TExtension,
     opentelemetry: ExecutionOpenTelemetryConfiguration = {
-      tracer: ArvoCoreTracer,
+      tracer: fetchOpenTelemetryTracer(),
     },
   ) {
     const span = opentelemetry.tracer.startSpan(

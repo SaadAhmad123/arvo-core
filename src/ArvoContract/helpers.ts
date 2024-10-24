@@ -43,12 +43,12 @@ export const createArvoContract = <const TContract extends IArvoContract>(
   const createErrorMessage = (source: 'accepts' | 'emits', type: string) =>
     cleanString(`
     In contract (uri=${contract.uri}), the '${source}' event (type=${type}) must not start 
-    with '${ArvoOrchestratorEventTypeGen.__prefix}' becuase this a reserved pattern 
+    with '${ArvoOrchestratorEventTypeGen.prefix}' becuase this a reserved pattern 
     for Arvo orchestrators.
   `);
 
   const validator = (value: string) =>
-    value.startsWith(ArvoOrchestratorEventTypeGen.__prefix);
+    value.startsWith(ArvoOrchestratorEventTypeGen.prefix);
 
   if (validator(contract.accepts.type)) {
     throw new Error(createErrorMessage('accepts', contract.accepts.type));

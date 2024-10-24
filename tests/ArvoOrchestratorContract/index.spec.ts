@@ -79,7 +79,7 @@ describe('createArvoOrchestratorContract', () => {
     expect(contract).toBeInstanceOf(ArvoOrchestratorContract);
     expect(contract.uri).toBe(testUri);
     expect(contract.init.type).toBe(
-      `${ArvoOrchestratorEventTypeGen.__prefix}.${testName}`,
+      `${ArvoOrchestratorEventTypeGen.prefix}.${testName}`,
     );
     expect(JSON.stringify(zodToJsonSchema(contract.init.schema))).toBe(
       JSON.stringify(
@@ -92,7 +92,7 @@ describe('createArvoOrchestratorContract', () => {
       ),
     );
     expect(contract.complete.type).toBe(
-      `${ArvoOrchestratorEventTypeGen.__prefix}.${testName}.done`,
+      `${ArvoOrchestratorEventTypeGen.prefix}.${testName}.done`,
     );
     expect(contract.complete.schema).toBe(testCompleteSchema);
 
