@@ -10,7 +10,7 @@ import {
   exceptionToSpan,
 } from '../OpenTelemetry';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
-import { ExecutionOpenTelemetryConfiguration } from '../types';
+import { ExecutionOpenTelemetryConfiguration } from '../OpenTelemetry/types';
 
 /**
  * A factory class for creating contractual ArvoEvents based on a given ArvoContract.
@@ -43,6 +43,7 @@ export default class ArvoEventFactory<
    * @template TExtension - The type of extensions to add to the event.
    * @param event - The event to create. The field 'type' is automatically infered
    * @param [extensions] - Optional extensions to add to the event.
+   * @param [opentelemetry] - Optional opentelemetry configuration object
    * @returns The created ArvoEvent as per the accept record of the contract.
    * @throws If the event data fails validation against the contract.
    */
@@ -52,10 +53,11 @@ export default class ArvoEventFactory<
       'type' | 'datacontenttype' | 'dataschema'
     >,
     extensions?: TExtension,
-    opentelemetry: ExecutionOpenTelemetryConfiguration = {
-      tracer: fetchOpenTelemetryTracer(),
-    },
+    opentelemetry?: ExecutionOpenTelemetryConfiguration,
   ) {
+    opentelemetry = opentelemetry ?? {
+      tracer: fetchOpenTelemetryTracer(),
+    }
     const span = opentelemetry.tracer.startSpan(
       `ArvoEventFactory<${this.contract.uri}>.accepts<${this.contract.accepts.type}>.create`,
     );
@@ -106,6 +108,7 @@ export default class ArvoEventFactory<
    * @template TExtension - The type of extensions to add to the event.
    * @param event - The event to create.
    * @param [extensions] - Optional extensions to add to the event.
+   * @param [opentelemetry] - Optional opentelemetry configuration object
    * @returns The created ArvoEvent as per one of the emits records of the contract.
    * @throws If the event data fails validation against the contract.
    */
@@ -118,10 +121,11 @@ export default class ArvoEventFactory<
       'datacontenttype' | 'dataschema'
     >,
     extensions?: TExtension,
-    opentelemetry: ExecutionOpenTelemetryConfiguration = {
-      tracer: fetchOpenTelemetryTracer(),
-    },
+    opentelemetry?: ExecutionOpenTelemetryConfiguration,
   ) {
+    opentelemetry = opentelemetry ?? {
+      tracer: fetchOpenTelemetryTracer()
+    }
     const span = opentelemetry.tracer.startSpan(
       `ArvoEventFactory<${this.contract.uri}>.emits<${event.type}>.create`,
     );
@@ -170,6 +174,7 @@ export default class ArvoEventFactory<
    * @template TExtension - The type of extensions to add to the event.
    * @param event - The event to create, including the error.
    * @param [extensions] - Optional extensions to add to the event.
+   * @param [opentelemetry] - Optional opentelemtry configuration object
    * @returns The created system error ArvoEvent.
    */
   systemError<TExtension extends Record<string, any>>(
@@ -180,10 +185,11 @@ export default class ArvoEventFactory<
       error: Error;
     },
     extensions?: TExtension,
-    opentelemetry: ExecutionOpenTelemetryConfiguration = {
-      tracer: fetchOpenTelemetryTracer(),
-    },
+    opentelemetry?: ExecutionOpenTelemetryConfiguration,
   ) {
+    opentelemetry = opentelemetry ?? {
+      tracer: fetchOpenTelemetryTracer(),
+    }
     const span = opentelemetry.tracer.startSpan(
       `ArvoEventFactory<${this.contract.uri}>.systemError<sys.${this.contract.accepts.type}.error>.create`,
     );

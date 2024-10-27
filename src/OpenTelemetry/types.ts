@@ -1,3 +1,5 @@
+import {Tracer} from '@opentelemetry/api'
+
 /**
  * Represents the available log levels for telemetry.
  * - DEBUG: Used for detailed information, typically of interest only when diagnosing problems.
@@ -22,4 +24,19 @@ export type OpenTelemetryHeaders = {
   traceparent: string | null;
   /** The tracestate header value */
   tracestate: string | null;
+};
+
+
+/**
+ * Configuration options for OpenTelemetry integration in execution context.
+ *
+ * This type defines how tracing should be configured and inherited within
+ * the execution pipeline.
+ */
+export type ExecutionOpenTelemetryConfiguration = {
+  /**
+   * OpenTelemetry tracer instance to use for creating spans.
+   * If not provided, a default tracer may be used depending on the implementation.
+   */
+  tracer: Tracer;
 };

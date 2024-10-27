@@ -10,7 +10,7 @@ import { cleanString, createTimestamp } from '../utils';
 import { ArvoDataContentType } from './schema';
 import { ArvoEventData, CloudEventExtension, CreateArvoEvent } from './types';
 import { v4 as uuid4 } from 'uuid';
-import { ExecutionOpenTelemetryConfiguration } from '../types';
+import { ExecutionOpenTelemetryConfiguration } from '../OpenTelemetry/types';
 
 /**
  * Creates an ArvoEvent with the provided data and extensions.
@@ -23,6 +23,7 @@ import { ExecutionOpenTelemetryConfiguration } from '../types';
  *
  * @param {CreateArvoEvent<TData>} event - The event data and metadata to create the ArvoEvent.
  * @param {TExtension} [extensions] - Optional cloud event extensions.
+ * @param {ExecutionOpenTelemetryConfiguration} [opentelemetry] - Optional opentelemetry configuration object
  *
  * @returns {ArvoEvent<TData, TExtension>} The created ArvoEvent instance.
  *
@@ -54,10 +55,11 @@ export const createArvoEvent = <
 >(
   event: CreateArvoEvent<TData, TType>,
   extensions?: TExtension,
-  opentelemetry: ExecutionOpenTelemetryConfiguration = {
-    tracer: fetchOpenTelemetryTracer(),
-  },
+  opentelemetry?: ExecutionOpenTelemetryConfiguration,
 ): ArvoEvent<TData, TExtension, TType> => {
+  opentelemetry = opentelemetry ?? {
+    tracer: fetchOpenTelemetryTracer(),
+  }
   const span = opentelemetry.tracer.startSpan(
     `createArvoEvent<${event.type}>`,
     {},
