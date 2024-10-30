@@ -69,7 +69,7 @@ import {
 } from './ArvoOrchestratorContract/types';
 import { ArvoOrchestratorEventTypeGen } from './ArvoOrchestratorContract/typegen';
 import { OrchestrationInitEventBaseSchema } from './ArvoOrchestratorContract/schema';
-
+import { ExecutionOpenTelemetryConfiguration } from './OpenTelemetry/types';
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
  * @property {z.ZodObject} CloudEventContextSchema - Schema for core CloudEvent properties.
@@ -139,4 +139,5 @@ export {
   IArvoOrchestratorContract,
   InferArvoOrchestratorContract,
   ArvoOrchestratorEventTypeGen,
+  ExecutionOpenTelemetryConfiguration,
 };

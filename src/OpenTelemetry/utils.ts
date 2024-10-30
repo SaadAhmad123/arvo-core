@@ -7,7 +7,7 @@ interface PackageJson {
   [key: string]: any;
 }
 
-export function getPackageInfo(): { name: string; version: string } {
+export function getPackageInfo(defaultName: string): { name: string; version: string } {
   try {
     // Read the package.json file
     const packageJsonPath = path.resolve(__dirname, '../../package.json');
@@ -22,6 +22,6 @@ export function getPackageInfo(): { name: string; version: string } {
     return { name, version };
   } catch (error) {
     console.error('Error reading package.json:', error);
-    return { name: 'Unknown', version: 'Unknown' };
+    return { name: defaultName, version: 'Unknown' };
   }
 }

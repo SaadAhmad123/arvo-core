@@ -3,6 +3,7 @@ import ArvoContract from './ArvoContract';
 import ArvoEvent from './ArvoEvent';
 import { ArvoExtension, OpenTelemetryExtension } from './ArvoEvent/types';
 import ArvoOrchestratorContract from './ArvoOrchestratorContract';
+import { Tracer } from '@opentelemetry/api';
 
 /**
  * A type utility that infers the structure of an ArvoEvent.

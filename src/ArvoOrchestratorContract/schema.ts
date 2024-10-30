@@ -6,14 +6,13 @@ import { cleanString } from '../utils';
  * This schema is used to validate and type-check the minimal required fields
  * for an orchestrator to accept a task or event.
  */
-export const OrchestrationInitEventBaseSchema = z
-  .object({
-    parentSubject$$: z
-      .string()
-      .min(1, 'The parent subject must not be an empty string')
-      .nullable()
-      .describe(
-        cleanString(`
+export const OrchestrationInitEventBaseSchema = z.object({
+  parentSubject$$: z
+    .string()
+    .min(1, 'The parent subject must not be an empty string')
+    .nullable()
+    .describe(
+      cleanString(`
     Identifies the subject of the parent process or event in the ArvoEvent system.
     
     Purpose:
@@ -34,5 +33,5 @@ export const OrchestrationInitEventBaseSchema = z
     
     Note: Ensure this value is a valid URI as per ArvoEvent specifications.
   `),
-      ),
-  });
+    ),
+});

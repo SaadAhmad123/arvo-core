@@ -3,12 +3,15 @@ import { TelemetryLogLevel, OpenTelemetryHeaders } from './types';
 import { getPackageInfo } from './utils';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 
-const pkg = getPackageInfo();
+
 
 /**
  * A tracer instance for the ArvoCore package.
  */
-export const ArvoCoreTracer = trace.getTracer(pkg.name, pkg.version);
+export const fetchOpenTelemetryTracer = () => {
+  const pkg = getPackageInfo('arvo-core');
+  return trace.getTracer(pkg.name, pkg.version)
+}
 
 /**
  * Logs a message to a span with additional parameters.
