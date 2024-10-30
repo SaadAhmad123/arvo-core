@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { cleanString } from '../utils';
 
 // Zod schema for ArvoOchestratorVersion
 export const ArvoOrchestratorVersionSchema = z
@@ -49,5 +50,12 @@ export const ArvoOrchestrationSubjectContentSchema = z
           .describe('Entity or process that initiated the execution'),
       })
       .describe('Details about the current execution'),
+    meta: z
+      .record(z.string(), z.string())
+      .describe(cleanString(`
+        Additional metadata for the orchestration process. Store essential key-value pairs 
+        that provide context or configuration details necessary for the orchestration. 
+        Use selectively to maintain clarity and avoid storing unnecessary information.  
+      `))
   })
   .describe('Context information for Arvo orchestration');

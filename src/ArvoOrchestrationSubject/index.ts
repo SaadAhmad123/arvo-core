@@ -25,6 +25,7 @@ export default class ArvoOrchestrationSubject {
    * @param param.orchestator - Name identifier of the orchestrator
    * @param param.version - Version of the orchestrator. If null, defaults to {@link WildCardMachineVersion}
    * @param param.initiator - Identifier of the entity initiating the orchestration
+   * @param param.meta - Optional metadata key-value pairs for additional orchestration context
    * @returns A base64 encoded string containing the compressed orchestration subject data
    * @throws Error if the provided parameters result in invalid subject content
    * 
@@ -35,12 +36,24 @@ export default class ArvoOrchestrationSubject {
    *   version: "1.0.0",
    *   initiator: "systemA"
    * });
+   * 
+   * // With metadata
+   * const subjectWithMeta = ArvoOrchestrationSubject.new({
+   *   orchestator: "com.company.mainProcess",
+   *   version: "1.0.0",
+   *   initiator: "com.company.systemA",
+   *   meta: {
+   *     priority: "high",
+   *     environment: "production"
+   *   }
+   * });
    * ```
    */
   static new(param: {
     orchestator: string;
     version: ArvoOrchestratorVersion | null;
     initiator: string;
+    meta?: Record<string, string>
   }): string {
     return ArvoOrchestrationSubject.create({
       orchestrator: {
@@ -51,6 +64,7 @@ export default class ArvoOrchestrationSubject {
         id: uuid4(),
         initiator: param.initiator,
       },
+      meta: param.meta ?? {}
     });
   }
 

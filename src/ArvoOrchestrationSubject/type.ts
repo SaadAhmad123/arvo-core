@@ -66,4 +66,11 @@ export type ArvoOrchestrationSubjectContent = {
      */
     initiator: string;
   };
+
+  /**
+   * Additional metadata for the orchestration process. Store essential key-value pairs 
+   * that provide context or configuration details necessary for the orchestration. 
+   * Use selectively to maintain clarity and avoid storing unnecessary information.  
+   */  
+  meta: Record<string, string>
 };

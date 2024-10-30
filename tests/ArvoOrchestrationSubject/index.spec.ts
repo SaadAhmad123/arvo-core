@@ -14,6 +14,7 @@ describe('ArvoOrchestrationSubject', () => {
       id: '123e4567-e89b-12d3-a456-426614174000',
       initiator: 'com.example.initiator',
     },
+    meta: {}
   };
 
   describe('new', () => {
@@ -22,6 +23,9 @@ describe('ArvoOrchestrationSubject', () => {
         orchestator: 'com.example.orchestrator',
         version: '1.0.0',
         initiator: 'com.example.initiator',
+        meta: {
+          sessionId: 'test-123-456'
+        }
       });
 
       expect(subject).toBeTruthy();
@@ -34,6 +38,7 @@ describe('ArvoOrchestrationSubject', () => {
       expect(parsed.execution.id).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
       ); // UUID v4 format
+      expect(parsed.meta.sessionId).toBe('test-123-456')
     });
 
     it('should throw an error for invalid input', () => {
