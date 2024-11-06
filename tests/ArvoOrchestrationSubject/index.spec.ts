@@ -96,4 +96,90 @@ describe('ArvoOrchestrationSubject', () => {
       }).toThrow();
     });
   });
+
+  describe('from', () => {
+    let parentSubject: string;
+
+    beforeEach(() => {
+      // Create a parent subject with metadata for testing
+      parentSubject = ArvoOrchestrationSubject.new({
+        orchestator: 'com.parent.process',
+        version: '1.0.0',
+        initiator: 'com.system.init',
+        meta: {
+          environment: 'test',
+          parentKey: 'parentValue'
+        }
+      });
+    });
+
+    it('should create a valid child subject from parent', () => {
+      const childSubject = ArvoOrchestrationSubject.from({
+        orchestator: 'com.child.process',
+        version: '2.0.0',
+        subject: parentSubject
+      });
+
+      const parsed = ArvoOrchestrationSubject.parse(childSubject);
+      expect(parsed.orchestrator.name).toBe('com.child.process');
+      expect(parsed.orchestrator.version).toBe('2.0.0');
+      expect(parsed.execution.initiator).toBe('com.parent.process');
+      expect(parsed.meta.environment).toBe('test');
+      expect(parsed.meta.parentKey).toBe('parentValue');
+      expect(parsed.execution.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
+    });
+
+    it('should merge metadata from parent and child', () => {
+      const childSubject = ArvoOrchestrationSubject.from({
+        orchestator: 'com.child.process',
+        version: '2.0.0',
+        subject: parentSubject,
+        meta: {
+          childKey: 'childValue',
+          environment: 'production'  // This should override parent's environment
+        }
+      });
+
+      const parsed = ArvoOrchestrationSubject.parse(childSubject);
+      expect(parsed.meta).toEqual({
+        childKey: 'childValue',
+        environment: 'production',
+        parentKey: 'parentValue'
+      });
+    });
+
+    it('should use WildCardMachineVersion when version is null', () => {
+      const childSubject = ArvoOrchestrationSubject.from({
+        orchestator: 'com.child.process',
+        version: null,
+        subject: parentSubject
+      });
+
+      const parsed = ArvoOrchestrationSubject.parse(childSubject);
+      expect(parsed.orchestrator.version).toBe(ArvoOrchestrationSubject.WildCardMachineVersion);
+    });
+
+    it('should throw error when parent subject is invalid', () => {
+      expect(() => {
+        ArvoOrchestrationSubject.from({
+          orchestator: 'com.child.process',
+          version: '2.0.0',
+          subject: 'invalid_parent_subject'
+        });
+      }).toThrow();
+    });
+
+    it('should throw error when new orchestrator name is invalid', () => {
+      expect(() => {
+        ArvoOrchestrationSubject.from({
+          orchestator: 'invalid name with spaces',
+          version: '2.0.0',
+          subject: parentSubject
+        });
+      }).toThrow();
+    });
+  });
+
 });

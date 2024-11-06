@@ -69,6 +69,57 @@ export default class ArvoOrchestrationSubject {
   }
 
   /**
+   * Creates a new orchestration subject string from an existing parent subject.
+   * This method parses the parent subject, merges its metadata with new metadata (if available),
+   * and creates a new subject with updated orchestrator information while maintaining
+   * the relationship to the parent context.
+   * 
+   * @param param - Configuration object for creating a new subject from a parent
+   * @param param.orchestator - Name identifier of the new orchestrator
+   * @param param.version - Version of the new orchestrator. If null, defaults to {@link WildCardMachineVersion}
+   * @param param.subject - Base64 encoded string of the parent orchestration subject
+   * @param param.meta - Optional additional metadata to merge with the parent's metadata
+   * @returns A new base64 encoded string containing the compressed orchestration subject data
+   * @throws Error if the parent subject is invalid or if the new parameters result in invalid subject content
+   * 
+   * @example
+   * ```typescript
+   * // Create a parent subject
+   * const parentSubject = ArvoOrchestrationSubject.new({
+   *   orchestator: "parentProcess",
+   *   version: "1.0.0",
+   *   initiator: "systemA",
+   *   meta: { environment: "production" }
+   * });
+   * 
+   * // Create a new subject from the parent
+   * const childSubject = ArvoOrchestrationSubject.from({
+   *   orchestator: "childProcess",
+   *   version: "2.0.0",
+   *   subject: parentSubject,
+   *   meta: { step: "processing" }  // Will be merged with parent's metadata
+   * });
+   * ```
+   */
+  static from(param: {
+    orchestator: string;
+    version: ArvoOrchestratorVersion | null;
+    subject: string;
+    meta?: Record<string, string>
+  }): string {
+    const parsedSubject = ArvoOrchestrationSubject.parse(param.subject)
+    return ArvoOrchestrationSubject.new({
+      initiator: parsedSubject.orchestrator.name,
+      version: param.version ?? ArvoOrchestrationSubject.WildCardMachineVersion,
+      orchestator: param.orchestator,
+      meta: {
+        ...(parsedSubject.meta ?? {}),
+        ...(param.meta ?? {}),
+      }
+    })
+  }
+
+  /**
    * Creates an Arvo orchestration subject from detailed content parameters.
    * The content is validated, compressed using zlib, and encoded in base64 format.
    * 
