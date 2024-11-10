@@ -84,10 +84,7 @@ describe('createArvoOrchestratorContract', () => {
     expect(JSON.stringify(zodToJsonSchema(contract.init.schema))).toBe(
       JSON.stringify(
         zodToJsonSchema(
-          z.intersection(
-            ArvoEventSchemas.OrchestrationInitEventBaseSchema,
-            testInitSchema,
-          ),
+          ArvoEventSchemas.OrchestrationInitEventBaseSchema.merge(testInitSchema)
         ),
       ),
     );

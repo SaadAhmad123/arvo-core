@@ -82,8 +82,8 @@ function isLowerAlphanumeric(input: string): boolean {
 export const createArvoOrchestratorContract = <
   TUri extends string,
   TName extends string,
-  TInit extends z.ZodTypeAny,
-  TComplete extends z.ZodTypeAny,
+  TInit extends z.AnyZodObject,
+  TComplete extends z.AnyZodObject,
 >(
   param: ICreateArvoOrchestratorContract<TUri, TName, TInit, TComplete>,
 ) => {
@@ -93,20 +93,19 @@ export const createArvoOrchestratorContract = <
     );
   }
 
+  const mergedSchema = OrchestrationInitEventBaseSchema.merge(param.schema.init)
+
   return new ArvoOrchestratorContract<
     TUri,
     ReturnType<typeof ArvoOrchestratorEventTypeGen.init<TName>>,
-    z.ZodIntersection<typeof OrchestrationInitEventBaseSchema, TInit>,
+    typeof mergedSchema,
     ReturnType<typeof ArvoOrchestratorEventTypeGen.complete<TName>>,
     TComplete
   >({
     uri: param.uri,
     init: {
       type: ArvoOrchestratorEventTypeGen.init(param.name),
-      schema: z.intersection(
-        OrchestrationInitEventBaseSchema,
-        param.schema.init,
-      ),
+      schema: mergedSchema,
     },
     complete: {
       type: ArvoOrchestratorEventTypeGen.complete(param.name),
