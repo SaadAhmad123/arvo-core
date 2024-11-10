@@ -83,7 +83,7 @@ export const createArvoOrchestratorContract = <
   TUri extends string,
   TName extends string,
   TInit extends z.AnyZodObject,
-  TComplete extends z.AnyZodObject,
+  TComplete extends z.ZodTypeAny,
 >(
   param: ICreateArvoOrchestratorContract<TUri, TName, TInit, TComplete>,
 ) => {
