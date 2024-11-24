@@ -1,14 +1,12 @@
 import { trace, context, Span, TextMapSetter } from '@opentelemetry/api';
 import { TelemetryLogLevel, OpenTelemetryHeaders } from './types';
-import { getPackageInfo } from './utils';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 
 /**
  * A tracer instance for the ArvoCore package.
  */
 export const fetchOpenTelemetryTracer = () => {
-  const pkg = getPackageInfo('arvo-core');
-  return trace.getTracer(pkg.name, pkg.version);
+  return trace.getTracer('arvo-instrumentation');
 };
 
 /**

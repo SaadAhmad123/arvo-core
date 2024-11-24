@@ -72,3 +72,7 @@
 
 - Added version support for contracts and simplified orchestrator contracts
 
+## [2.0.3] - 2024-11-24
+
+- Remove potential security bug of reading the file system
+
