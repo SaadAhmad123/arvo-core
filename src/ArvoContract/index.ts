@@ -51,6 +51,10 @@ export default class ArvoContract<
     this._type = params.type;
     this._versions = params.versions;
     this.description = params.description ?? null;
+
+    if (!Object.keys(this._versions).length) {
+      throw new Error(`A contract must have at least one version`);
+    }
   }
 
   /**
@@ -108,7 +112,7 @@ export default class ArvoContract<
   /**
    * Get the latest version of the contract
    */
-  public get latestVersion(): ArvoSemanticVersion | undefined {
+  public get latestVersion(): ArvoSemanticVersion {
     return (Object.keys(this._versions) as ArvoSemanticVersion[]).sort((a, b) =>
       compareSemanticVersions(b, a),
     )[0];

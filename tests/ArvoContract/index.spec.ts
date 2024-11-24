@@ -4,8 +4,6 @@ import {
   ArvoSemanticVersion,
   cleanString,
   createArvoContract,
-  InferVersionedArvoContract,
-  VersionedArvoContract,
 } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
@@ -28,6 +26,10 @@ describe('ArvoContract', () => {
           'com.example.output': z.object({ result: z.number() }),
         },
       },
+      '1.0.0': {
+        accepts: z.object({ name: z.string() }),
+        emits: {},
+      },
     },
   };
 
@@ -42,7 +44,7 @@ describe('ArvoContract', () => {
         'com.example.output',
       );
       expect(contract.systemError.type).toBe(`sys.${contract.type}.error`);
-      expect(contract.latestVersion).toBe('0.0.1');
+      expect(contract.latestVersion).toBe('1.0.0');
     });
 
     it('should throw an error for invalid URI', () => {
@@ -165,7 +167,7 @@ describe('ArvoContract', () => {
 
       it('should throw an error for an invalid version', () => {
         expect(() =>
-          contract.validateAccepts('1.0.0', 'com.example.input', {}),
+          contract.validateAccepts('2.0.0', 'com.example.input', {}),
         ).toThrow();
       });
 
