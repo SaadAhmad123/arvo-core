@@ -80,8 +80,8 @@ export default class ArvoContract<
   public get latestVersion(): ArvoSemanticVersion | undefined {
     return (Object.keys(this._versions) as ArvoSemanticVersion[]).sort((a, b) =>
       compareSemanticVersions(
-        b as ArvoSemanticVersion,
-        a as ArvoSemanticVersion,
+        b,
+        a,
       ),
     )[0];
   }

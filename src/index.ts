@@ -22,7 +22,7 @@ import {
   OTelNull,
   currentOpenTelemetryHeaders,
 } from './OpenTelemetry';
-import { OpenTelemetryHeaders, TelemetryLogLevel } from './OpenTelemetry/types';
+import { OpenTelemetryHeaders, TelemetryLogLevel, ExecutionOpenTelemetryConfiguration } from './OpenTelemetry/types';
 import {
   validateURI,
   cleanString,
@@ -46,14 +46,13 @@ import {
   createArvoEventFactory,
   parseEventDataSchema,
 } from './ArvoEventFactory/helpers';
-import { ArvoErrorSchema } from './schema';
+import { ArvoErrorSchema, ArvoSemanticVersionSchema } from './schema';
 import OpenInference from './OpenTelemetry/OpenInference';
 import ArvoExecution from './OpenTelemetry/ArvoExecution';
 import { ArvoExecutionSpanKind } from './OpenTelemetry/ArvoExecution/types';
 import { OpenInferenceSpanKind } from './OpenTelemetry/OpenInference/types';
 import ArvoOrchestrationSubject from './ArvoOrchestrationSubject';
 import { ArvoOrchestrationSubjectContentSchema } from './ArvoOrchestrationSubject/schema';
-import { ArvoSemanticVersionSchema } from './schema';
 import { ArvoOrchestrationSubjectContent } from './ArvoOrchestrationSubject/type';
 import ArvoEventHttp from './ArvoEventHttp';
 import { ArvoEventHttpConfig } from './ArvoEventHttp/types';
@@ -67,7 +66,7 @@ import { createArvoOrchestratorContract } from './ArvoOrchestratorContract';
 import { ICreateArvoOrchestratorContract } from './ArvoOrchestratorContract/types';
 import { ArvoOrchestratorEventTypeGen } from './ArvoOrchestratorContract/typegen';
 import { OrchestrationInitEventBaseSchema } from './ArvoOrchestratorContract/schema';
-import { ExecutionOpenTelemetryConfiguration } from './OpenTelemetry/types';
+
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
  * @property {z.ZodObject} CloudEventContextSchema - Schema for core CloudEvent properties.

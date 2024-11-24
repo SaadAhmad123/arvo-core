@@ -1,6 +1,5 @@
 import ArvoEventFactory from '.';
 import ArvoContract from '../ArvoContract';
-import { z } from 'zod';
 import { ArvoSemanticVersion } from '../types';
 import ArvoEvent from '../ArvoEvent';
 import { exceptionToSpan } from '../OpenTelemetry';
