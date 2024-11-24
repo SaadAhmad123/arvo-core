@@ -176,8 +176,9 @@ export default class ArvoEventFactory<
           event.data,
         );
         if (!validationResult?.success) {
+          const msg = validationResult?.error?.message ?? `No contract available for ${event.type}`
           throw new Error(
-            `Emit Event data validation failed: ${validationResult?.error?.message ?? `No contract available for ${event.type}`}`,
+            `Emit Event data validation failed: ${msg}`,
           );
         }
         return createArvoEvent<z.infer<TContract['emits'][U]>, TExtension, U>(
