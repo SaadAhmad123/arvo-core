@@ -22,7 +22,11 @@ import {
   OTelNull,
   currentOpenTelemetryHeaders,
 } from './OpenTelemetry';
-import { OpenTelemetryHeaders, TelemetryLogLevel, ExecutionOpenTelemetryConfiguration } from './OpenTelemetry/types';
+import {
+  OpenTelemetryHeaders,
+  TelemetryLogLevel,
+  ExecutionOpenTelemetryConfiguration,
+} from './OpenTelemetry/types';
 import {
   validateURI,
   cleanString,
@@ -61,11 +65,16 @@ import {
   InferArvoEvent,
   ArvoSemanticVersion,
   ArvoErrorType,
+  InferVersionedArvoContract,
 } from './types';
 import { createArvoOrchestratorContract } from './ArvoOrchestratorContract';
-import { ICreateArvoOrchestratorContract, ArvoOrchestratorContract } from './ArvoOrchestratorContract/types';
+import {
+  ICreateArvoOrchestratorContract,
+  ArvoOrchestratorContract,
+} from './ArvoOrchestratorContract/types';
 import { ArvoOrchestratorEventTypeGen } from './ArvoOrchestratorContract/typegen';
 import { OrchestrationInitEventBaseSchema } from './ArvoOrchestratorContract/schema';
+import { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -137,4 +146,6 @@ export {
   parseSemanticVersion,
   createSimpleArvoContract,
   ArvoOrchestratorContract,
+  VersionedArvoContract,
+  InferVersionedArvoContract,
 };

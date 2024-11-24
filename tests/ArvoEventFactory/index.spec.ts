@@ -90,7 +90,9 @@ describe('createArvoEventFactory', () => {
           data: {} as any,
           to: 'cmd.saad.test',
         }),
-      ).toThrow("Emit type \"unknown.type.0\" for version \"0.0.1\" not found in contract \"#/mock/contract\"");
+      ).toThrow(
+        'Emit type "unknown.type.0" for version "0.0.1" not found in contract "#/mock/contract"',
+      );
     });
   });
 

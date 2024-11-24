@@ -4,8 +4,8 @@ import {
   ArvoSemanticVersion,
   cleanString,
   createArvoContract,
-  createSimpleArvoContract,
-  InferArvoContract,
+  InferVersionedArvoContract,
+  VersionedArvoContract,
 } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
@@ -19,8 +19,8 @@ describe('ArvoContract', () => {
   });
 
   const validContractSpec = {
-    uri: '#/contracts/myContract',
-    type: 'com.example.input',
+    uri: '#/contracts/myContract' as const,
+    type: 'com.example.input' as const,
     versions: {
       '0.0.1': {
         accepts: z.object({ name: z.string() }),

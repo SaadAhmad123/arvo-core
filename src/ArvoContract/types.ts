@@ -81,6 +81,13 @@ export type ArvoContractJSONSchema = {
       /** JSON Schema representation of the input validation schema */
       schema: ReturnType<typeof zodToJsonSchema>;
     };
+    /** The system error event */
+    systemError: {
+      /** The type of the event */
+      type: string;
+      /** The schema of the error */
+      schema: ReturnType<typeof zodToJsonSchema>;
+    };
     /** Array of schemas for events that can be emitted in this version */
     emits: {
       /** The type identifier for the emitted event */

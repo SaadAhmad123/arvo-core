@@ -3,13 +3,14 @@ import ArvoContract from './ArvoContract';
 import ArvoEvent from './ArvoEvent';
 import { ArvoExtension, OpenTelemetryExtension } from './ArvoEvent/types';
 import { ArvoErrorSchema } from './schema';
+import { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
 
 /**
  * Represents the version of Arvo components following Semantic Versioning (SemVer).
  *
  * Format:
  * MAJOR.MINOR.PATCH where each component is a non-negative integer
- * 
+ *
  * Restrictions:
  * Must not contain semicolons (;)
  *
@@ -188,3 +189,26 @@ export type InferArvoContract<
     : never;
 
 export type ArvoErrorType = z.infer<typeof ArvoErrorSchema>;
+
+export type InferVersionedArvoContract<TVersion extends VersionedArvoContract<ArvoContract, ArvoSemanticVersion>> =
+  {
+    accepts: InferArvoEvent<
+      ArvoEvent<
+        InferZodSchema<TVersion['accepts']['schema']>,
+        {},
+        TVersion['accepts']['type']
+      >
+    >;
+    systemError: InferArvoEvent<
+      ArvoEvent<
+        InferZodSchema<TVersion['systemError']['schema']>,
+        {},
+        TVersion['systemError']['type']
+      >
+    >;
+    emits: {
+      [K in string & keyof TVersion['emits']]: InferArvoEvent<
+        ArvoEvent<InferZodSchema<TVersion['emits'][K]>, {}, K>
+      >;
+    };
+  };
