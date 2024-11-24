@@ -11,3 +11,9 @@ export const ArvoErrorSchema = z.object({
   errorMessage: z.string().describe('A descriptive message for the error.'),
   errorStack: z.string().nullable().describe('The stack trace of the error.'),
 });
+
+// Zod schema for ArvoSemanticVersion
+export const ArvoSemanticVersionSchema = z
+  .string()
+  .regex(/^\d+\.\d+\.\d+$/, 'Invalid version format of the semantic version')
+  .describe('Semantic version of the Arvo component in the format X.Y.Z');

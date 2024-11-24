@@ -1,105 +1,134 @@
 import { z } from 'zod';
-import ArvoContract from '../ArvoContract';
-import { IArvoOrchestratorContract } from './types';
+import {
+  ICreateArvoOrchestratorContract,
+  ArvoOrchestratorContract,
+} from './types';
+import { ArvoOrchestratorEventTypeGen } from './typegen';
+import { OrchestrationInitEventBaseSchema } from './schema';
+import { ArvoSemanticVersion } from '../types';
+import { createArvoContract } from '../ArvoContract/helpers';
 
 /**
- * Defines the contract for the Arvo Orchestrator, specifying accepted events and emitted events.
+ * Validates if a string contains only uppercase or lowercase alphanumeric characters.
  *
- * The ArvoOrchestratorContract is a specialized contract class designed to manage the lifecycle
- * of orchestration processes within the Arvo framework. It extends the base ArvoContract class
- * to provide specific functionality for orchestration scenarios.
+ * This function checks if the input string consists solely of:
+ * - Lowercase letters (a-z)
+ * - Numbers (0-9)
+ * - Dot (.)
+ *
+ * It does not allow any special characters, spaces, or other non-alphanumeric characters.
+ *
+ * @param input - The string to be validated.
+ * @returns True if the string contains only alphanumeric characters, false otherwise.
+ */
+function isLowerAlphanumeric(input: string): boolean {
+  const alphanumericRegex = /^[a-z0-9.]+$/;
+  return alphanumericRegex.test(input);
+}
+
+/**
+ * Creates an ArvoOrchestratorContract with specified parameters.
+ *
+ * The ArvoOrchestratorContract is a specialized contract designed to manage the lifecycle
+ * of orchestration processes within the Arvo framework. It creates a contract with an init event
+ * type and a corresponding complete event type.
  *
  * Key features:
- * 1. Initialization: Defines the structure and validation for the initial event that starts the orchestration.
- * 2. Completion: Specifies the event type and data emitted when the orchestration process concludes.
- * 3. Type Safety: Utilizes TypeScript generics to ensure type consistency across the contract definition.
- * 4. Runtime Validation: Employs Zod schemas for robust runtime type checking and data validation.
+ * 1. Type Validation: Ensures the type parameter follows lowercase alphanumeric with dots format
+ * 2. Event Type Generation: Automatically generates init and complete event types based on the provided type
+ * 3. Schema Merging: Merges provided init schemas with the OrchestrationInitEventBaseSchema
+ * 4. Version Support: Handles multiple versions of the contract with their respective schemas
  *
- * This contract serves as a crucial component in maintaining consistency and type safety
- * throughout the orchestration process, from initiation to completion.
+ * @template TUri - The URI type for the contract
+ * @template TType - The type identifier for the contract events
+ * @template TVersions - Record of versions with their corresponding init and complete schemas
+ *
+ * @param param - Configuration object for the orchestrator contract
+ * @param param.uri - The URI that uniquely identifies this contract
+ * @param param.type - The base type identifier (must be lowercase alphanumeric with dots)
+ * @param param.versions - Record of version configurations
+ * @param param.versions[version].init - Zod schema for initialization event (merged with OrchestrationInitEventBaseSchema)
+ * @param param.versions[version].complete - Zod schema for completion event
+ *
+ * @throws {Error} If the type parameter contains invalid characters (must be lowercase alphanumeric with dots)
+ *
+ * @returns An ArvoOrchestratorContract instance configured with the specified parameters
  *
  * @example
  * ```typescript
- * import { createArvoOrchestratorContract } from 'arvo-core'
- * import { z } from 'zod'
- *
  * const contract = createArvoOrchestratorContract({
- *  uri: '#/example/contract',
- *  name: 'rag',
- *  schema: {
- *    init: z.object({
- *      request: z.string()
- *      vectorStore: z.string(),
- *      llm: z.string()
- *    }),
- *    complete: z.object({
- *      response: z.string()
- *    })
- *  }
- * })
+ *   uri: '#/orchestrators/data/processor',
+ *   type: 'data.processor',
+ *   versions: {
+ *     '1.0.0': {
+ *       init: z.object({
+ *         data: z.string(),
+ *         options: z.object({
+ *           format: z.string()
+ *         })
+ *       }),
+ *       complete: z.object({
+ *         processedData: z.string(),
+ *         metadata: z.record(z.string())
+ *       })
+ *     },
+ *     '1.1.0': {
+ *       init: z.object({
+ *         data: z.string(),
+ *         options: z.object({
+ *           format: z.string(),
+ *           compression: z.boolean().optional()
+ *         })
+ *       }),
+ *       complete: z.object({
+ *         processedData: z.string(),
+ *         metadata: z.record(z.string()),
+ *         performance: z.object({
+ *           duration: z.number(),
+ *           bytesProcessed: z.number()
+ *         })
+ *       })
+ *     }
+ *   }
+ * });
  * ```
  */
-export default class ArvoOrchestratorContract<
-  TUri extends string = string,
-  TInitType extends string = string,
-  TInit extends z.ZodTypeAny = z.ZodTypeAny,
-  TCompleteType extends string = string,
-  TComplete extends z.ZodTypeAny = z.ZodTypeAny,
-> extends ArvoContract<
-  TUri,
-  TInitType,
-  TInit,
-  { [K in TCompleteType]: TComplete }
-> {
-  /**
-   * Constructs a new ArvoOrchestratorContract instance.
-   *
-   * @param param - The configuration object for the contract.
-   */
-  constructor(
-    param: IArvoOrchestratorContract<
-      TUri,
-      TInitType,
-      TInit,
-      TCompleteType,
-      TComplete
-    >,
-  ) {
-    super({
+export const createArvoOrchestratorContract = <
+  TUri extends string,
+  TType extends string,
+  TVersions extends Record<
+    ArvoSemanticVersion,
+    {
+      init: z.ZodObject<any, any, any>;
+      complete: z.ZodObject<any, any, any>;
+    }
+  >,
+>(
+  param: ICreateArvoOrchestratorContract<TUri, TType, TVersions>,
+) => {
+  if (!isLowerAlphanumeric(param.type)) {
+    throw new Error(
+      `Invalid 'type' = '${param.type}'. The 'type' must only contain alphanumeric characters. e.g. test.orchestrator`,
+    );
+  }
+
+  return createArvoContract(
+    {
       uri: param.uri,
-      accepts: param.init,
-      // @ts-ignore
-      emits: {
-        [param.complete.type]: param.complete.schema,
-      },
-    });
-  }
-
-  /**
-   * Gets the initialization event configuration.
-   *
-   * @returns An object containing the type and schema for the initialization event.
-   */
-  get init(): {
-    type: TInitType;
-    schema: TInit;
-  } {
-    return this.accepts;
-  }
-
-  /**
-   * Gets the completion event configuration.
-   *
-   * @returns An object containing the type and schema for the completion event.
-   */
-  get complete(): {
-    type: TCompleteType;
-    schema: TComplete;
-  } {
-    const [type, schema] = Object.entries(this.emits)[0];
-    return {
-      type: type as TCompleteType,
-      schema: schema as TComplete,
-    };
-  }
-}
+      type: ArvoOrchestratorEventTypeGen.init(param.type),
+      versions: Object.fromEntries(
+        Object.entries(param.versions).map(([version, contract]) => [
+          version,
+          {
+            accepts: OrchestrationInitEventBaseSchema.merge(contract.init),
+            emits: {
+              [ArvoOrchestratorEventTypeGen.complete(param.type)]:
+                contract.complete,
+            },
+          },
+        ]),
+      ),
+    },
+    true,
+  ) as ArvoOrchestratorContract<TUri, TType, TVersions>;
+};

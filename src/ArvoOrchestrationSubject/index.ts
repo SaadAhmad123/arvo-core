@@ -1,7 +1,5 @@
-import {
-  ArvoOrchestratorVersion,
-  ArvoOrchestrationSubjectContent,
-} from './type';
+import { ArvoOrchestrationSubjectContent } from './type';
+import { ArvoSemanticVersion } from '../types';
 import { ArvoOrchestrationSubjectContentSchema } from './schema';
 import * as zlib from 'node:zlib';
 import { cleanString } from '../utils';
@@ -15,12 +13,12 @@ export default class ArvoOrchestrationSubject {
    * Represents a wildcard version number used when version matching is not required.
    * Format follows semantic versioning pattern.
    */
-  public static readonly WildCardMachineVersion: ArvoOrchestratorVersion = '0.0.0'
+  public static readonly WildCardMachineVersion: ArvoSemanticVersion = '0.0.0';
 
   /**
    * Creates a new Arvo orchestration subject with basic required parameters.
    * This is a convenience method that wraps the more detailed {@link create} method.
-   * 
+   *
    * @param param - Configuration object for the orchestration subject
    * @param param.orchestator - Name identifier of the orchestrator
    * @param param.version - Version of the orchestrator. If null, defaults to {@link WildCardMachineVersion}
@@ -28,7 +26,7 @@ export default class ArvoOrchestrationSubject {
    * @param param.meta - Optional metadata key-value pairs for additional orchestration context
    * @returns A base64 encoded string containing the compressed orchestration subject data
    * @throws Error if the provided parameters result in invalid subject content
-   * 
+   *
    * @example
    * ```typescript
    * const subject = ArvoOrchestrationSubject.new({
@@ -36,7 +34,7 @@ export default class ArvoOrchestrationSubject {
    *   version: "1.0.0",
    *   initiator: "systemA"
    * });
-   * 
+   *
    * // With metadata
    * const subjectWithMeta = ArvoOrchestrationSubject.new({
    *   orchestator: "com.company.mainProcess",
@@ -51,20 +49,21 @@ export default class ArvoOrchestrationSubject {
    */
   static new(param: {
     orchestator: string;
-    version: ArvoOrchestratorVersion | null;
+    version: ArvoSemanticVersion | null;
     initiator: string;
-    meta?: Record<string, string>
+    meta?: Record<string, string>;
   }): string {
     return ArvoOrchestrationSubject.create({
       orchestrator: {
         name: param.orchestator,
-        version: param.version ?? ArvoOrchestrationSubject.WildCardMachineVersion,
+        version:
+          param.version ?? ArvoOrchestrationSubject.WildCardMachineVersion,
       },
       execution: {
         id: uuid4(),
         initiator: param.initiator,
       },
-      meta: param.meta ?? {}
+      meta: param.meta ?? {},
     });
   }
 
@@ -73,7 +72,7 @@ export default class ArvoOrchestrationSubject {
    * This method parses the parent subject, merges its metadata with new metadata (if available),
    * and creates a new subject with updated orchestrator information while maintaining
    * the relationship to the parent context.
-   * 
+   *
    * @param param - Configuration object for creating a new subject from a parent
    * @param param.orchestator - Name identifier of the new orchestrator
    * @param param.version - Version of the new orchestrator. If null, defaults to {@link WildCardMachineVersion}
@@ -81,7 +80,7 @@ export default class ArvoOrchestrationSubject {
    * @param param.meta - Optional additional metadata to merge with the parent's metadata
    * @returns A new base64 encoded string containing the compressed orchestration subject data
    * @throws Error if the parent subject is invalid or if the new parameters result in invalid subject content
-   * 
+   *
    * @example
    * ```typescript
    * // Create a parent subject
@@ -91,7 +90,7 @@ export default class ArvoOrchestrationSubject {
    *   initiator: "systemA",
    *   meta: { environment: "production" }
    * });
-   * 
+   *
    * // Create a new subject from the parent
    * const childSubject = ArvoOrchestrationSubject.from({
    *   orchestator: "childProcess",
@@ -103,11 +102,11 @@ export default class ArvoOrchestrationSubject {
    */
   static from(param: {
     orchestator: string;
-    version: ArvoOrchestratorVersion | null;
+    version: ArvoSemanticVersion | null;
     subject: string;
-    meta?: Record<string, string>
+    meta?: Record<string, string>;
   }): string {
-    const parsedSubject = ArvoOrchestrationSubject.parse(param.subject)
+    const parsedSubject = ArvoOrchestrationSubject.parse(param.subject);
     return ArvoOrchestrationSubject.new({
       initiator: parsedSubject.orchestrator.name,
       version: param.version ?? ArvoOrchestrationSubject.WildCardMachineVersion,
@@ -115,18 +114,18 @@ export default class ArvoOrchestrationSubject {
       meta: {
         ...(parsedSubject.meta ?? {}),
         ...(param.meta ?? {}),
-      }
-    })
+      },
+    });
   }
 
   /**
    * Creates an Arvo orchestration subject from detailed content parameters.
    * The content is validated, compressed using zlib, and encoded in base64 format.
-   * 
+   *
    * @param param - Detailed orchestration subject content following the {@link ArvoOrchestrationSubjectContent} structure
    * @returns A base64 encoded string containing the compressed orchestration subject data
    * @throws Error if validation fails or compression encounters an error
-   * 
+   *
    * @example
    * ```typescript
    * const subject = ArvoOrchestrationSubject.create({
@@ -167,11 +166,11 @@ export default class ArvoOrchestrationSubject {
   /**
    * Parses a base64 encoded orchestration subject string back into its structured content form.
    * Performs decompression, JSON parsing, and validation of the subject content.
-   * 
+   *
    * @param subject - Base64 encoded string representing the compressed orchestration subject
    * @returns The decoded and validated {@link ArvoOrchestrationSubjectContent}
    * @throws Error if decompression, parsing, or validation fails
-   * 
+   *
    * @example
    * ```typescript
    * const content = ArvoOrchestrationSubject.parse(encodedSubject);

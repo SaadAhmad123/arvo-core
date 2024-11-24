@@ -4,9 +4,10 @@ import {
   ArvoContractRecord,
   IArvoContract,
 } from './types';
-import { ArvoContractValidators } from './validators';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { ArvoErrorSchema } from '../schema';
+import { ArvoSemanticVersion } from '../types';
+import { compareSemanticVersions } from '../utils';
 
 /**
  * ArvoContract class represents a contract with defined input and output schemas.
@@ -16,30 +17,38 @@ import { ArvoErrorSchema } from '../schema';
  *
  * @template TUri - The URI of the contract
  * @template TType - The accept type, defaults to string.
- * @template TAcceptSchema - The of the data which the contract bound can accept
- * @template TEmits - The type of records the contract bound handler emits.
+ * @template TVersion - The contract versions
  */
 export default class ArvoContract<
   TUri extends string = string,
   TType extends string = string,
-  TAcceptSchema extends z.ZodTypeAny = z.ZodTypeAny,
-  TEmits extends Record<string, z.ZodTypeAny> = Record<string, z.ZodTypeAny>,
+  TVersions extends Record<
+    ArvoSemanticVersion,
+    {
+      accepts: z.ZodTypeAny;
+      emits: Record<string, z.ZodTypeAny>;
+    }
+  > = Record<
+    ArvoSemanticVersion,
+    {
+      accepts: z.ZodTypeAny;
+      emits: Record<string, z.ZodTypeAny>;
+    }
+  >,
 > {
   private readonly _uri: TUri;
-  private readonly _accepts: ArvoContractRecord<TType, TAcceptSchema>;
-  private readonly _emits: TEmits;
-
-  /** (Optional) The Contract description */
+  private readonly _type: TType;
+  private readonly _versions: TVersions;
   readonly description: string | null;
 
   /**
    * Creates an instance of ArvoContract.
    * @param params - The contract parameters.
    */
-  constructor(params: IArvoContract<TUri, TType, TAcceptSchema, TEmits>) {
-    this._uri = ArvoContractValidators.contract.uri.parse(params.uri) as TUri;
-    this._accepts = this._validateAccepts(params.accepts);
-    this._emits = this._validateEmits(params.emits);
+  constructor(params: IArvoContract<TUri, TType, TVersions>) {
+    this._uri = params.uri;
+    this._type = params.type;
+    this._versions = params.versions;
     this.description = params.description ?? null;
   }
 
@@ -51,19 +60,53 @@ export default class ArvoContract<
   }
 
   /**
+   * Get the type of the event the handler
+   * bound to the contract accepts
+   */
+  public get type(): TType {
+    return this._type;
+  }
+
+  /**
+   * Gets the version of the contract
+   */
+  public get versions(): TVersions {
+    return this._versions;
+  }
+
+  /**
+   * Get the latest version of the contract
+   */
+  public get latestVersion(): ArvoSemanticVersion | undefined {
+    return (Object.keys(this._versions) as ArvoSemanticVersion[]).sort((a, b) =>
+      compareSemanticVersions(
+        b as ArvoSemanticVersion,
+        a as ArvoSemanticVersion,
+      ),
+    )[0];
+  }
+
+  /**
    * Gets the type and schema of the event that the contact
    * bound handler listens to.
    */
-  public get accepts(): ArvoContractRecord<TType, TAcceptSchema> {
-    return this._accepts;
+  public accepts<V extends ArvoSemanticVersion & keyof TVersions>(
+    version: V,
+  ): ArvoContractRecord<TType, TVersions[V]['accepts']> {
+    return {
+      type: this._type,
+      schema: this._versions[version].accepts,
+    };
   }
 
   /**
    * Gets all event types and schemas that can be emitted by the
    * contract bound handler.
    */
-  public get emits(): TEmits {
-    return { ...this._emits };
+  public emits<V extends ArvoSemanticVersion & keyof TVersions>(
+    version: V,
+  ): TVersions[V]['emits'] {
+    return { ...this._versions[version].emits };
   }
 
   public get systemError(): ArvoContractRecord<
@@ -71,7 +114,7 @@ export default class ArvoContract<
     typeof ArvoErrorSchema
   > {
     return {
-      type: `sys.${this._accepts.type}.error`,
+      type: `sys.${this._type}.error`,
       schema: ArvoErrorSchema,
     };
   }
@@ -80,16 +123,24 @@ export default class ArvoContract<
    * Validates the contract bound handler's input/ accept event against the
    * contract's accept schema.
    * @template U - The type of the input to validate.
+   * @template V - The version to use
+   * @param version - The version to use
    * @param type - The type of the input event.
    * @param input - The input data to validate.
    * @returns The validation result.
    * @throws If the accept type is not found in the contract.
    */
-  public validateAccepts<U>(type: TType, input: U) {
-    if (type !== this._accepts.type) {
-      throw new Error(`Accept type "${type}" not found in contract`);
+  public validateAccepts<V extends ArvoSemanticVersion & keyof TVersions, U>(
+    version: V,
+    type: TType,
+    input: U,
+  ) {
+    if (type !== this._type) {
+      throw new Error(
+        `Accept type "${type}" for version "${version}" not found in contract "${this._uri}"`,
+      );
     }
-    return this._accepts.schema.safeParse(input);
+    return this._versions[version].accepts.safeParse(input);
   }
 
   /**
@@ -101,40 +152,19 @@ export default class ArvoContract<
    * @returns The validation result.
    * @throws If the emit type is not found in the contract.
    */
-  public validateEmits<U extends keyof TEmits>(type: U, output: unknown) {
-    const emit = this.emits[type];
+  public validateEmits<
+    V extends ArvoSemanticVersion & keyof TVersions,
+    E extends string & keyof TVersions[V]['emits'],
+    U,
+  >(version: V, type: E, output: U) {
+    const emit: z.ZodTypeAny | undefined =
+      this._versions?.[version]?.emits?.[type];
     if (!emit) {
-      throw new Error(`Emit type "${type.toString()}" not found in contract`);
+      throw new Error(
+        `Emit type "${type.toString()}" for version "${version}" not found in contract "${this._uri}"`,
+      );
     }
     return emit.safeParse(output);
-  }
-
-  /**
-   * Validates the accepts record.
-   * @param accepts - The accepts record to validate.
-   * @returns The validated accepts record.
-   * @private
-   */
-  private _validateAccepts(
-    accepts: ArvoContractRecord<TType, TAcceptSchema>,
-  ): ArvoContractRecord<TType, TAcceptSchema> {
-    return {
-      type: ArvoContractValidators.record.type.parse(accepts.type) as TType,
-      schema: accepts.schema,
-    };
-  }
-
-  /**
-   * Validates the emits records.
-   * @param emits - The emits records to validate.
-   * @returns The validated emits records.
-   * @private
-   */
-  private _validateEmits(emits: TEmits): TEmits {
-    Object.entries(emits).forEach(([key]) =>
-      ArvoContractValidators.record.type.parse(key),
-    );
-    return emits;
   }
 
   /**
@@ -143,15 +173,12 @@ export default class ArvoContract<
    *
    * @returns An object representing the contract, including its URI, accepts, and emits properties.
    */
-  public export(): IArvoContract<TUri, TType, TAcceptSchema, TEmits> {
+  public export(): IArvoContract<TUri, TType, TVersions> {
     return {
       uri: this._uri,
+      type: this._type,
       description: this.description,
-      accepts: {
-        type: this._accepts.type,
-        schema: this._accepts.schema,
-      },
-      emits: { ...this._emits },
+      versions: this._versions,
     };
   }
 
@@ -170,13 +197,16 @@ export default class ArvoContract<
     return {
       uri: this._uri,
       description: this.description,
-      accepts: {
-        type: this._accepts.type,
-        schema: zodToJsonSchema(this._accepts.schema),
-      },
-      emits: Object.entries(this._emits).map(([key, value]) => ({
-        type: key,
-        schema: zodToJsonSchema(value),
+      versions: Object.entries(this._versions).map(([version, contract]) => ({
+        version: version as ArvoSemanticVersion,
+        accepts: {
+          type: this._type,
+          schema: zodToJsonSchema(contract.accepts),
+        },
+        emits: Object.entries(contract.emits).map(([key, value]) => ({
+          type: key,
+          schema: zodToJsonSchema(value),
+        })),
       })),
     };
   }

@@ -59,7 +59,7 @@ export const createArvoEvent = <
 ): ArvoEvent<TData, TExtension, TType> => {
   opentelemetry = opentelemetry ?? {
     tracer: fetchOpenTelemetryTracer(),
-  }
+  };
   const span = opentelemetry.tracer.startSpan(
     `createArvoEvent<${event.type}>`,
     {},

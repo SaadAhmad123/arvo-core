@@ -1,4 +1,4 @@
-import {Tracer} from '@opentelemetry/api'
+import { Tracer } from '@opentelemetry/api';
 
 /**
  * Represents the available log levels for telemetry.
@@ -25,7 +25,6 @@ export type OpenTelemetryHeaders = {
   /** The tracestate header value */
   tracestate: string | null;
 };
-
 
 /**
  * Configuration options for OpenTelemetry integration in execution context.

@@ -1,14 +1,4 @@
-/**
- * Represents the version of the Arvo Orchestrator.
- *
- * @remark
- * The version follows the Semantic Versioning format: MAJOR.MINOR.PATCH
- * **Note**: The string must not contain ';'
- *
- * @example
- * "1.0.0", "2.3.1", "0.5.2"
- */
-export type ArvoOrchestratorVersion = `${number}.${number}.${number}`;
+import { ArvoSemanticVersion } from '../types';
 
 /**
  * Represents the content for Arvo orchestration subject.
@@ -34,7 +24,7 @@ export type ArvoOrchestrationSubjectContent = {
     /**
      * The version of the orchestrator.
      */
-    version: ArvoOrchestratorVersion;
+    version: ArvoSemanticVersion;
   };
 
   /**
@@ -68,9 +58,9 @@ export type ArvoOrchestrationSubjectContent = {
   };
 
   /**
-   * Additional metadata for the orchestration process. Store essential key-value pairs 
-   * that provide context or configuration details necessary for the orchestration. 
-   * Use selectively to maintain clarity and avoid storing unnecessary information.  
-   */  
-  meta: Record<string, string>
+   * Additional metadata for the orchestration process. Store essential key-value pairs
+   * that provide context or configuration details necessary for the orchestration.
+   * Use selectively to maintain clarity and avoid storing unnecessary information.
+   */
+  meta: Record<string, string>;
 };

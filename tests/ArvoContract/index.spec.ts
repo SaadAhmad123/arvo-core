@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import {
   ArvoContract,
+  ArvoSemanticVersion,
   cleanString,
   createArvoContract,
+  createSimpleArvoContract,
   InferArvoContract,
 } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
@@ -18,29 +20,29 @@ describe('ArvoContract', () => {
 
   const validContractSpec = {
     uri: '#/contracts/myContract',
-    accepts: {
-      type: 'com.example.input',
-      schema: z.object({ name: z.string() }),
-    },
-    emits: {
-      'com.example.output': z.object({ result: z.number() }),
+    type: 'com.example.input',
+    versions: {
+      '0.0.1': {
+        accepts: z.object({ name: z.string() }),
+        emits: {
+          'com.example.output': z.object({ result: z.number() }),
+        },
+      },
     },
   };
 
   describe('createArvoContract', () => {
     it('should create a valid ArvoContract instance', () => {
-      const contract = createArvoContract({
-        uri: '#/contracts/myContract',
-        accepts: {
-          type: 'com.example.input',
-          schema: z.object({ name: z.string() }),
-        },
-        emits: {
-          'com.example.output': z.object({ result: z.number() }),
-        },
-      });
+      const contract = createArvoContract(validContractSpec);
       expect(contract).toBeInstanceOf(ArvoContract);
       expect(contract.uri).toBe(validContractSpec.uri);
+      expect(contract.type).toBe(validContractSpec.type);
+      expect(contract.accepts('0.0.1').type).toBe(contract.type);
+      expect(Object.keys(contract.emits('0.0.1'))[0]).toBe(
+        'com.example.output',
+      );
+      expect(contract.systemError.type).toBe(`sys.${contract.type}.error`);
+      expect(contract.latestVersion).toBe('0.0.1');
     });
 
     it('should throw an error for invalid URI', () => {
@@ -51,132 +53,135 @@ describe('ArvoContract', () => {
       expect(() => createArvoContract(invalidSpec)).toThrow();
     });
 
-    it('should throw an error for invalid accept type', () => {
+    it('should throw an error for invalid version format', () => {
       const invalidSpec = {
         ...validContractSpec,
-        accepts: { ...validContractSpec.accepts, type: 'invalid-type' },
-      };
-      expect(() => createArvoContract(invalidSpec)).toThrow();
-    });
-
-    it('should throw an error for invalid emit type', () => {
-      const invalidSpec = {
-        ...validContractSpec,
-        emits: {
-          ...validContractSpec.emits,
-          'invalid-type': z.object({}),
+        versions: {
+          'invalid.version': {
+            accepts: z.object({ name: z.string() }),
+            emits: {
+              'com.example.output': z.object({ result: z.number() }),
+            },
+          },
         },
       };
       expect(() => createArvoContract(invalidSpec)).toThrow();
     });
 
-    it('should throw an error for invalid emit type using orchestrator pattern', () => {
+    it('should throw an error for event type using orchestrator pattern', () => {
       const invalidSpec = {
         ...validContractSpec,
-        emits: {
-          ...validContractSpec.emits,
-          'arvo.orc.test': z.object({}),
+        versions: {
+          '0.0.1': {
+            accepts: z.object({ name: z.string() }),
+            emits: {
+              'arvo.orc.test': z.object({}),
+            },
+          },
         },
       };
       expect(() => createArvoContract(invalidSpec)).toThrow(
         cleanString(`
-        In contract (uri=#/contracts/myContract), the 'emits' event (type=arvo.orc.test) must not start
-        with 'arvo.orc' becuase this a reserved pattern
-        for Arvo orchestrators.  
-      `),
-      );
-    });
-
-    it('should throw an error for invalid accept type using orchestrator pattern', () => {
-      const invalidSpec = {
-        ...validContractSpec,
-        accepts: {
-          type: 'arvo.orc.test',
-          schema: z.object({ name: z.string() }),
-        },
-      };
-      expect(() => createArvoContract(invalidSpec)).toThrow(
-        cleanString(`
-        In contract (uri=#/contracts/myContract), the 'accepts' event (type=arvo.orc.test) must not start
-        with 'arvo.orc' becuase this a reserved pattern
-        for Arvo orchestrators.  
+        In contract (uri=#/contracts/myContract, version=0.0.1), the 'emits' event (type=arvo.orc.test) must not start
+        with 'arvo.orc' because this is a reserved pattern
+        for Arvo orchestrators.
       `),
       );
     });
 
     it('should create a contract with multiple emits', () => {
-      const contract = createArvoContract({
+      const contractSpec = {
         ...validContractSpec,
-        emits: {
-          ...validContractSpec.emits,
-          'com.example.error': z.object({
-            message: z.string(),
-          }),
+        versions: {
+          '0.0.1': {
+            accepts: z.object({ name: z.string() }),
+            emits: {
+              'com.example.output': z.object({ result: z.number() }),
+              'com.example.error': z.object({ message: z.string() }),
+            },
+          },
         },
-      });
-      expect(Object.keys(contract.emits)).toHaveLength(2);
-      expect(contract.emits['com.example.output']).toBeTruthy();
-      expect(contract.emits['com.example.error']).toBeTruthy();
-      // @ts-ignore
-      expect(contract.emits['com.example.error.saad']).toBeFalsy();
+      };
+      const contract = createArvoContract(contractSpec);
+      expect(Object.keys(contract.versions['0.0.1'].emits)).toHaveLength(2);
+      expect(
+        contract.versions['0.0.1'].emits['com.example.output'],
+      ).toBeTruthy();
+      expect(
+        contract.versions['0.0.1'].emits['com.example.error'],
+      ).toBeTruthy();
     });
 
-    it('should throw an error for empty emits array', () => {
-      const invalidSpec = { ...validContractSpec, emits: {} };
-      expect(() => createArvoContract(invalidSpec)).not.toThrow();
+    it('should allow empty emits object for a version', () => {
+      const contractSpec = {
+        ...validContractSpec,
+        versions: {
+          '0.0.1': {
+            accepts: z.object({ name: z.string() }),
+            emits: {},
+          },
+        },
+      };
+      expect(() => createArvoContract(contractSpec)).not.toThrow();
     });
   });
 
   describe('ArvoContract instance', () => {
-    let contract = createArvoContract(validContractSpec);
+    let contract: ArvoContract<
+      string,
+      string,
+      Record<ArvoSemanticVersion, any>
+    >;
 
     beforeEach(() => {
       contract = createArvoContract(validContractSpec);
     });
 
-    it('should have a readonly uri property', () => {
+    it('should have readonly properties', () => {
       expect(contract.uri).toBe(validContractSpec.uri);
+      expect(contract.type).toBe(validContractSpec.type);
       expect(() => {
         (contract as any).uri = 'new-uri';
       }).toThrow();
-    });
-
-    it('should have a readonly accepts property', () => {
-      expect(contract.accepts).toEqual(validContractSpec.accepts);
       expect(() => {
-        (contract as any).accepts = {};
+        (contract as any).type = 'new-type';
       }).toThrow();
     });
 
     describe('validateAccepts', () => {
-      it('should validate a correct input', () => {
-        const result = contract.validateAccepts('com.example.input', {
+      it('should validate a correct input for a specific version', () => {
+        const result = contract.validateAccepts('0.0.1', 'com.example.input', {
           name: 'John',
         });
         expect(result.success).toBe(true);
       });
 
       it('should invalidate an incorrect input', () => {
-        const result = contract.validateAccepts('com.example.input', {
+        const result = contract.validateAccepts('0.0.1', 'com.example.input', {
           name: 123,
         });
         expect(result.success).toBe(false);
       });
 
-      it('should throw an error for an invalid input type', () => {
-        expect(() => contract.validateAccepts('invalid-type', {})).toThrow();
+      it('should throw an error for an invalid version', () => {
+        expect(() =>
+          contract.validateAccepts('1.0.0', 'com.example.input', {}),
+        ).toThrow();
       });
 
       it('should handle complex input schemas', () => {
         const complexContract = createArvoContract({
-          ...validContractSpec,
-          accepts: {
-            type: 'com.example.complex',
-            schema: z.object({
-              id: z.number(),
-              data: z.array(z.string()),
-              nested: z.object({ flag: z.boolean() }),
-            }),
+          uri: '#/contracts/complexContract',
+          type: 'com.example.complex',
+          versions: {
+            '0.0.1': {
+              accepts: z.object({
+                id: z.number(),
+                data: z.array(z.string()),
+                nested: z.object({ flag: z.boolean() }),
+              }),
+              emits: {},
+            },
           },
         });
 
@@ -188,83 +193,399 @@ describe('ArvoContract', () => {
         };
 
         expect(
-          complexContract.validateAccepts('com.example.complex', validInput)
-            .success,
+          complexContract.validateAccepts(
+            '0.0.1',
+            'com.example.complex',
+            validInput,
+          ).success,
         ).toBe(true);
         expect(
-          complexContract.validateAccepts('com.example.complex', invalidInput)
-            .success,
+          complexContract.validateAccepts(
+            '0.0.1',
+            'com.example.complex',
+            invalidInput,
+          ).success,
         ).toBe(false);
       });
     });
 
     describe('validateEmits', () => {
-      it('should validate a correct output', () => {
-        const result = contract.validateEmits('com.example.output', {
+      it('should validate a correct output for a specific version', () => {
+        const result = contract.validateEmits('0.0.1', 'com.example.output', {
           result: 42,
         });
         expect(result.success).toBe(true);
       });
 
       it('should invalidate an incorrect output', () => {
-        const result = contract.validateEmits('com.example.output', {
+        const result = contract.validateEmits('0.0.1', 'com.example.output', {
           result: 'not a number',
         });
         expect(result.success).toBe(false);
       });
 
-      it('should throw an error for an invalid output type', () => {
+      it('should throw an error for an invalid version', () => {
         expect(() =>
-          contract.validateEmits('invalid-type' as any, {}),
+          contract.validateEmits('1.0.0', 'com.example.output', {}),
         ).toThrow();
       });
 
-      it('should validate multiple emit types', () => {
-        const contract = createArvoContract({
-          ...validContractSpec,
-          emits: {
-            ...validContractSpec.emits,
-            'com.example.error': z.object({ message: z.string() }),
+      it('should validate multiple emit types in a version', () => {
+        const multiEmitContract = createArvoContract({
+          uri: '#/contracts/multiEmit',
+          type: 'com.example.input',
+          versions: {
+            '0.0.1': {
+              accepts: z.object({ name: z.string() }),
+              emits: {
+                'com.example.output': z.object({ result: z.number() }),
+                'com.example.error': z.object({ message: z.string() }),
+              },
+            },
           },
         });
-        const outputResult = contract.validateEmits('com.example.output', {
-          result: 42,
-        });
-        const errorResult = contract.validateEmits('com.example.error', {
-          message: 'Error occurred',
-        });
+
+        const outputResult = multiEmitContract.validateEmits(
+          '0.0.1',
+          'com.example.output',
+          { result: 42 },
+        );
+        const errorResult = multiEmitContract.validateEmits(
+          '0.0.1',
+          'com.example.error',
+          { message: 'Error occurred' },
+        );
 
         expect(outputResult.success).toBe(true);
         expect(errorResult.success).toBe(true);
       });
+    });
+  });
 
-      it('should handle complex output schemas', () => {
-        const complexContract = createArvoContract({
-          ...validContractSpec,
+  describe('ArvoContract validation', () => {
+    let contract: ArvoContract<
+      string,
+      string,
+      Record<ArvoSemanticVersion, any>
+    >;
+
+    const complexContractSpec = {
+      uri: '#/contracts/complexContract',
+      type: 'com.example.complex',
+      versions: {
+        '0.0.1': {
+          accepts: z.object({
+            id: z.number().positive(),
+            metadata: z.object({
+              tags: z.array(z.string()),
+              priority: z.enum(['low', 'medium', 'high']),
+              optional: z.string().optional(),
+            }),
+            timestamp: z.date(),
+          }),
           emits: {
-            'com.example.complex': z.object({
-              id: z.number(),
-              data: z.array(z.string()),
-              nested: z.object({ flag: z.boolean() }),
+            'com.example.success': z.object({
+              status: z.literal('success'),
+              data: z.object({
+                processedId: z.number(),
+                results: z.array(z.string()),
+              }),
+            }),
+            'com.example.partial': z.object({
+              status: z.literal('partial'),
+              processed: z.number(),
+              remaining: z.number(),
+            }),
+            'com.example.validation': z.object({
+              status: z.literal('error'),
+              errors: z.array(
+                z.object({
+                  field: z.string(),
+                  message: z.string(),
+                }),
+              ),
             }),
           },
-        });
+        },
+        '0.0.2': {
+          accepts: z.object({
+            id: z.number().positive(),
+            metadata: z.object({
+              tags: z.array(z.string()),
+              priority: z.enum(['low', 'medium', 'high', 'critical']), // Added critical
+              optional: z.string().optional(),
+              addedField: z.boolean(), // New field
+            }),
+            timestamp: z.date(),
+          }),
+          emits: {
+            'com.example.success': z.object({
+              status: z.literal('success'),
+              data: z.object({
+                processedId: z.number(),
+                results: z.array(z.string()),
+                processingTime: z.number(), // New field
+              }),
+            }),
+            'com.example.partial': z.object({
+              status: z.literal('partial'),
+              processed: z.number(),
+              remaining: z.number(),
+              estimatedCompletion: z.date(), // New field
+            }),
+          },
+        },
+      },
+    };
 
-        const validOutput = { id: 1, data: ['a', 'b'], nested: { flag: true } };
-        const invalidOutput = {
-          id: '1',
-          data: ['a', 2],
-          nested: { flag: 'true' },
+    beforeEach(() => {
+      contract = createArvoContract(complexContractSpec);
+    });
+
+    describe('validateAccepts', () => {
+      it('should validate input with all required fields', () => {
+        const validInput = {
+          id: 123,
+          metadata: {
+            tags: ['test', 'valid'],
+            priority: 'high',
+            optional: 'some value',
+          },
+          timestamp: new Date(),
         };
 
-        expect(
-          complexContract.validateEmits('com.example.complex', validOutput)
-            .success,
-        ).toBe(true);
-        expect(
-          complexContract.validateEmits('com.example.complex', invalidOutput)
-            .success,
-        ).toBe(false);
+        const result = contract.validateAccepts(
+          '0.0.1',
+          'com.example.complex',
+          validInput,
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it('should validate input without optional fields', () => {
+        const validInput = {
+          id: 123,
+          metadata: {
+            tags: ['test'],
+            priority: 'low',
+          },
+          timestamp: new Date(),
+        };
+
+        const result = contract.validateAccepts(
+          '0.0.1',
+          'com.example.complex',
+          validInput,
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it('should reject input with invalid field types', () => {
+        const invalidInput = {
+          id: '123', // Should be number
+          metadata: {
+            tags: ['test'],
+            priority: 'invalid-priority', // Invalid enum value
+          },
+          timestamp: new Date(),
+        };
+
+        const result = contract.validateAccepts(
+          '0.0.1',
+          'com.example.complex',
+          invalidInput,
+        );
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(result.error.issues.length).toBeGreaterThan(0);
+        }
+      });
+
+      it('should reject input with missing required fields', () => {
+        const invalidInput = {
+          id: 123,
+          // Missing metadata object
+          timestamp: new Date(),
+        };
+
+        const result = contract.validateAccepts(
+          '0.0.1',
+          'com.example.complex',
+          invalidInput,
+        );
+        expect(result.success).toBe(false);
+      });
+
+      it('should validate input against correct version schema', () => {
+        const validInputV1 = {
+          id: 123,
+          metadata: {
+            tags: ['test'],
+            priority: 'high',
+          },
+          timestamp: new Date(),
+        };
+
+        const validInputV2 = {
+          id: 123,
+          metadata: {
+            tags: ['test'],
+            priority: 'critical', // New enum value in v0.0.2
+            addedField: true, // New field in v0.0.2
+          },
+          timestamp: new Date(),
+        };
+
+        const resultV1 = contract.validateAccepts(
+          '0.0.1',
+          'com.example.complex',
+          validInputV1,
+        );
+        expect(resultV1.success).toBe(true);
+
+        const resultV2 = contract.validateAccepts(
+          '0.0.2',
+          'com.example.complex',
+          validInputV2,
+        );
+        expect(resultV2.success).toBe(true);
+      });
+
+      it('should throw error for non-existent version', () => {
+        expect(() =>
+          contract.validateAccepts('0.0.3', 'com.example.complex', {}),
+        ).toThrow();
+      });
+    });
+
+    describe('validateEmits', () => {
+      it('should validate success emission with all fields', () => {
+        const successEmit = {
+          status: 'success',
+          data: {
+            processedId: 123,
+            results: ['result1', 'result2'],
+          },
+        };
+
+        const result = contract.validateEmits(
+          '0.0.1',
+          'com.example.success',
+          successEmit,
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it('should validate partial emission', () => {
+        const partialEmit = {
+          status: 'partial',
+          processed: 50,
+          remaining: 100,
+        };
+
+        const result = contract.validateEmits(
+          '0.0.1',
+          'com.example.partial',
+          partialEmit,
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it('should validate validation error emission', () => {
+        const validationEmit = {
+          status: 'error',
+          errors: [
+            { field: 'id', message: 'Must be positive' },
+            { field: 'metadata.tags', message: 'Required' },
+          ],
+        };
+
+        const result = contract.validateEmits(
+          '0.0.1',
+          'com.example.validation',
+          validationEmit,
+        );
+        expect(result.success).toBe(true);
+      });
+
+      it('should reject emissions with missing fields', () => {
+        const invalidEmit = {
+          status: 'success',
+          data: {
+            // Missing processedId
+            results: ['result1'],
+          },
+        };
+
+        const result = contract.validateEmits(
+          '0.0.1',
+          'com.example.success',
+          invalidEmit,
+        );
+        expect(result.success).toBe(false);
+      });
+
+      it('should reject emissions with invalid field types', () => {
+        const invalidEmit = {
+          status: 'partial',
+          processed: '50', // Should be number
+          remaining: 100,
+        };
+
+        const result = contract.validateEmits(
+          '0.0.1',
+          'com.example.partial',
+          invalidEmit,
+        );
+        expect(result.success).toBe(false);
+      });
+
+      it('should validate against correct version schema', () => {
+        const successEmitV2 = {
+          status: 'success',
+          data: {
+            processedId: 123,
+            results: ['result1'],
+            processingTime: 1500, // New field in v0.0.2
+          },
+        };
+
+        const resultV2 = contract.validateEmits(
+          '0.0.2',
+          'com.example.success',
+          successEmitV2,
+        );
+        expect(resultV2.success).toBe(true);
+      });
+
+      it('should throw error for non-existent emit type', () => {
+        expect(() =>
+          contract.validateEmits('0.0.1', 'com.example.nonexistent', {}),
+        ).toThrow();
+      });
+
+      it('should handle version-specific emit types', () => {
+        const validationEmit = {
+          status: 'error',
+          errors: [{ field: 'id', message: 'Invalid' }],
+        };
+
+        // This should work in v0.0.1
+        const resultV1 = contract.validateEmits(
+          '0.0.1',
+          'com.example.validation',
+          validationEmit,
+        );
+        expect(resultV1.success).toBe(true);
+
+        // This should throw in v0.0.2 as the validation emit type was removed
+        expect(() =>
+          contract.validateEmits(
+            '0.0.2',
+            'com.example.validation',
+            validationEmit,
+          ),
+        ).toThrow();
       });
     });
   });

@@ -23,11 +23,16 @@ import {
   currentOpenTelemetryHeaders,
 } from './OpenTelemetry';
 import { OpenTelemetryHeaders, TelemetryLogLevel } from './OpenTelemetry/types';
-import { validateURI, cleanString } from './utils';
+import {
+  validateURI,
+  cleanString,
+  compareSemanticVersions,
+  parseSemanticVersion,
+} from './utils';
 import ArvoContract from './ArvoContract';
 import {
   createArvoContract,
-  InferArvoContract as InferArvoContractType,
+  createSimpleArvoContract,
 } from './ArvoContract/helpers';
 import { ArvoContractValidators } from './ArvoContract/validators';
 import {
@@ -36,37 +41,30 @@ import {
   ResolveArvoContractRecord,
   ArvoContractJSONSchema,
 } from './ArvoContract/types';
-import ArvoContractLibrary from './ArvoContractLibrary';
-import { createArvoContractLibrary } from './ArvoContractLibrary/helpers';
 import ArvoEventFactory from './ArvoEventFactory';
-import { createArvoEventFactory } from './ArvoEventFactory/helpers';
+import {
+  createArvoEventFactory,
+  parseEventDataSchema,
+} from './ArvoEventFactory/helpers';
 import { ArvoErrorSchema } from './schema';
 import OpenInference from './OpenTelemetry/OpenInference';
 import ArvoExecution from './OpenTelemetry/ArvoExecution';
 import { ArvoExecutionSpanKind } from './OpenTelemetry/ArvoExecution/types';
 import { OpenInferenceSpanKind } from './OpenTelemetry/OpenInference/types';
 import ArvoOrchestrationSubject from './ArvoOrchestrationSubject';
-import {
-  ArvoOrchestrationSubjectContentSchema,
-  ArvoOrchestratorVersionSchema,
-} from './ArvoOrchestrationSubject/schema';
-import {
-  ArvoOrchestrationSubjectContent,
-  ArvoOrchestratorVersion,
-} from './ArvoOrchestrationSubject/type';
+import { ArvoOrchestrationSubjectContentSchema } from './ArvoOrchestrationSubject/schema';
+import { ArvoSemanticVersionSchema } from './schema';
+import { ArvoOrchestrationSubjectContent } from './ArvoOrchestrationSubject/type';
 import ArvoEventHttp from './ArvoEventHttp';
 import { ArvoEventHttpConfig } from './ArvoEventHttp/types';
 import {
   InferArvoContract,
   InferArvoEvent,
-  InferArvoOrchestratorContract,
+  ArvoSemanticVersion,
+  ArvoErrorType,
 } from './types';
-import { createArvoOrchestratorContract } from './ArvoOrchestratorContract/helpers';
-import ArvoOrchestratorContract from './ArvoOrchestratorContract';
-import {
-  ICreateArvoOrchestratorContract,
-  IArvoOrchestratorContract,
-} from './ArvoOrchestratorContract/types';
+import { createArvoOrchestratorContract } from './ArvoOrchestratorContract';
+import { ICreateArvoOrchestratorContract } from './ArvoOrchestratorContract/types';
 import { ArvoOrchestratorEventTypeGen } from './ArvoOrchestratorContract/typegen';
 import { OrchestrationInitEventBaseSchema } from './ArvoOrchestratorContract/schema';
 import { ExecutionOpenTelemetryConfiguration } from './OpenTelemetry/types';
@@ -79,7 +77,7 @@ import { ExecutionOpenTelemetryConfiguration } from './OpenTelemetry/types';
  * @property {z.ZodObject} OpenTelemetryExtensionSchema - Schema for OpenTelemetry extensions.
  * @property {z.ZodObject} OrchestrationInitEventBaseSchema - The base schema for the orchestrator init events.
  */
-const ArvoEventSchemas = {
+const ArvoEventSchema = {
   CloudEventContextSchema,
   CloudEventExtensionSchema,
   ArvoDataSchema,
@@ -96,7 +94,7 @@ export {
   ArvoDataContentType,
   ArvoEventData,
   CloudEventExtension,
-  ArvoEventSchemas,
+  ArvoEventSchema,
   CloudEventContext,
   ArvoExtension,
   OpenTelemetryExtension,
@@ -114,11 +112,8 @@ export {
   ArvoContractRecord,
   IArvoContract,
   ResolveArvoContractRecord,
-  ArvoContractLibrary,
-  createArvoContractLibrary,
   ArvoEventFactory,
   createArvoEventFactory,
-  ArvoErrorSchema,
   currentOpenTelemetryHeaders,
   OpenInference,
   OpenInferenceSpanKind,
@@ -126,18 +121,20 @@ export {
   ArvoExecutionSpanKind,
   ArvoContractJSONSchema,
   ArvoOrchestrationSubject,
-  ArvoOrchestrationSubjectContentSchema,
-  ArvoOrchestratorVersionSchema,
   ArvoOrchestrationSubjectContent,
-  ArvoOrchestratorVersion,
+  ArvoSemanticVersion,
   InferArvoEvent,
   InferArvoContract,
-  InferArvoContractType,
   createArvoOrchestratorContract,
-  ArvoOrchestratorContract,
   ICreateArvoOrchestratorContract,
-  IArvoOrchestratorContract,
-  InferArvoOrchestratorContract,
   ArvoOrchestratorEventTypeGen,
   ExecutionOpenTelemetryConfiguration,
+  parseEventDataSchema,
+  ArvoOrchestrationSubjectContentSchema,
+  ArvoSemanticVersionSchema,
+  ArvoErrorSchema,
+  ArvoErrorType,
+  compareSemanticVersions,
+  parseSemanticVersion,
+  createSimpleArvoContract,
 };

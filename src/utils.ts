@@ -1,3 +1,5 @@
+import { ArvoSemanticVersion } from './types';
+
 /**
  * Cleans a string by removing leading/trailing whitespace from each line,
  * removing empty lines, and joining the remaining lines with newline characters.
@@ -74,3 +76,52 @@ export const createTimestamp = (offsetHours: number = 0): string => {
         : `-${String(Math.abs(offsetHours)).padStart(2, '0')}:00`,
     );
 };
+
+/**
+ * Parse semantic version string into its numeric components
+ * @param version Semantic version string (e.g. "1.2.3")
+ * @returns Object containing major, minor, and patch numbers
+ */
+interface VersionComponents {
+  major: number;
+  minor: number;
+  patch: number;
+}
+
+export function parseSemanticVersion(
+  version: ArvoSemanticVersion,
+): VersionComponents {
+  const [major, minor, patch] = version.split('.').map((part) => {
+    const num = parseInt(part, 10);
+    if (isNaN(num)) {
+      throw new Error(`Invalid version number in ${version}`);
+    }
+    return num;
+  });
+  if (major === undefined || minor === undefined || patch === undefined) {
+    throw new Error(`Invalid semantic version format: ${version}`);
+  }
+  return { major, minor, patch };
+}
+
+/**
+ * Compares two semantic versions according to semver rules
+ * Returns:
+ * - Positive number if version1 > version2
+ * - Negative number if version1 < version2
+ * - 0 if version1 === version2
+ */
+export function compareSemanticVersions(
+  version1: ArvoSemanticVersion,
+  version2: ArvoSemanticVersion,
+): number {
+  const v1 = parseSemanticVersion(version1);
+  const v2 = parseSemanticVersion(version2);
+  if (v1.major !== v2.major) {
+    return v1.major - v2.major;
+  }
+  if (v1.minor !== v2.minor) {
+    return v1.minor - v2.minor;
+  }
+  return v1.patch - v2.patch;
+}

@@ -68,3 +68,7 @@
 
 - Added mandatory parent chaining in orchestration events so the process chaining and orchestration chaining can be traced
 
+## [2.0.0] - 2024-11-24
+
+- Added version support for contracts and simplified orchestrator contracts
+

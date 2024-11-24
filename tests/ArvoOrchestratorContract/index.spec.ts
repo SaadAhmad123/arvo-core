@@ -1,135 +1,124 @@
 import { z } from 'zod';
 import {
-  ArvoOrchestratorContract,
   createArvoOrchestratorContract,
   ArvoOrchestratorEventTypeGen,
-  ArvoEventSchemas,
-  createArvoEventFactory,
+  ArvoEventSchema,
 } from '../../src';
-import zodToJsonSchema from 'zod-to-json-schema';
 
 describe('ArvoOrchestratorContract', () => {
   const testUri = 'test://example';
-  const testInitType = 'arvo.init.test';
-  const testCompleteType = 'arvo.done.test';
+  const orchestratorType = 'test.contract';
+  const testInitType = ArvoOrchestratorEventTypeGen.init(orchestratorType);
+  const testCompleteType =
+    ArvoOrchestratorEventTypeGen.complete(orchestratorType);
   const testInitSchema = z.object({ foo: z.string() });
   const testCompleteSchema = z.object({ bar: z.number() });
 
   it('should create an instance with correct properties', () => {
-    const contract = new ArvoOrchestratorContract({
-      uri: testUri,
-      init: {
-        type: testInitType,
-        schema: testInitSchema,
-      },
-      complete: {
-        type: testCompleteType,
-        schema: testCompleteSchema,
-      },
-    });
-
-    expect(contract.uri).toBe(testUri);
-    expect(contract.init.type).toBe(testInitType);
-    expect(contract.init.schema).toBe(testInitSchema);
-    expect(contract.complete.type).toBe(testCompleteType);
-    expect(contract.complete.schema).toBe(testCompleteSchema);
-  });
-
-  it('should correctly get init and complete properties', () => {
-    const contract = new ArvoOrchestratorContract({
-      uri: testUri,
-      init: {
-        type: testInitType,
-        schema: testInitSchema,
-      },
-      complete: {
-        type: testCompleteType,
-        schema: testCompleteSchema,
-      },
-    });
-
-    expect(contract.init).toEqual({
-      type: testInitType,
-      schema: testInitSchema,
-    });
-
-    expect(contract.complete).toEqual({
-      type: testCompleteType,
-      schema: testCompleteSchema,
-    });
-  });
-});
-
-describe('createArvoOrchestratorContract', () => {
-  const testUri = 'test://example';
-  const testName = 'test.contract';
-  const testInitSchema = z.object({ foo: z.string() });
-  const testCompleteSchema = z.object({ bar: z.number() });
-
-  it('should create a valid ArvoOrchestratorContract', () => {
     const contract = createArvoOrchestratorContract({
       uri: testUri,
-      name: testName,
-      schema: {
-        init: testInitSchema,
-        complete: testCompleteSchema,
-      },
-    });
-
-    expect(contract).toBeInstanceOf(ArvoOrchestratorContract);
-    expect(contract.uri).toBe(testUri);
-    expect(contract.init.type).toBe(
-      `${ArvoOrchestratorEventTypeGen.prefix}.${testName}`,
-    );
-    expect(JSON.stringify(zodToJsonSchema(contract.init.schema))).toBe(
-      JSON.stringify(
-        zodToJsonSchema(
-          ArvoEventSchemas.OrchestrationInitEventBaseSchema.merge(testInitSchema)
-        ),
-      ),
-    );
-    expect(contract.complete.type).toBe(
-      `${ArvoOrchestratorEventTypeGen.prefix}.${testName}.done`,
-    );
-    expect(contract.complete.schema).toBe(testCompleteSchema);
-
-    let event = createArvoEventFactory(contract).accepts({
-      subject: 'test',
-      source: 'test',
-      data: {
-        parentSubject$$: null,
-        foo: 'saad',
-      },
-    });
-
-    expect(event.data.parentSubject$$).toBe(null);
-    expect(event.data.foo).toBe('saad');
-
-    event = createArvoEventFactory(contract).accepts({
-      subject: 'test',
-      source: 'test',
-      data: {
-        parentSubject$$: 'child',
-        foo: 'saad',
-      },
-    });
-
-    expect(event.data.parentSubject$$).toBe('child');
-    expect(event.data.foo).toBe('saad');
-  });
-
-  it('should throw an error for non-alphanumeric name', () => {
-    expect(() => {
-      createArvoOrchestratorContract({
-        uri: testUri,
-        name: 'invalid name',
-        schema: {
+      type: orchestratorType,
+      versions: {
+        '0.0.1': {
           init: testInitSchema,
           complete: testCompleteSchema,
         },
+      },
+    });
+
+    expect(contract.uri).toBe(testUri);
+    expect(contract.type).toBe(testInitType);
+
+    const acceptsSchema = contract.versions['0.0.1'].accepts;
+    expect(acceptsSchema).toBeDefined();
+    const merged =
+      ArvoEventSchema.OrchestrationInitEventBaseSchema.merge(testInitSchema);
+    expect(JSON.stringify(acceptsSchema)).toBe(JSON.stringify(merged));
+
+    const emitsSchemas = contract.versions['0.0.1'].emits;
+    expect(emitsSchemas[testCompleteType]).toBeDefined();
+    expect(JSON.stringify(emitsSchemas[testCompleteType])).toBe(
+      JSON.stringify(testCompleteSchema),
+    );
+
+    expect(Object.keys(contract.versions)[0]).toBe('0.0.1');
+  });
+
+  it('should throw an error for invalid type format', () => {
+    expect(() => {
+      createArvoOrchestratorContract({
+        uri: testUri,
+        type: 'Invalid Type',
+        versions: {
+          '0.0.1': {
+            init: testInitSchema,
+            complete: testCompleteSchema,
+          },
+        },
       });
     }).toThrow(
-      "Invalid 'name' = 'invalid name'. The 'name' must only contain alphanumeric characters.",
+      "Invalid 'type' = 'Invalid Type'. The 'type' must only contain alphanumeric characters. e.g. test.orchestrator",
     );
+  });
+
+  it('should properly merge OrchestrationInitEventBaseSchema with init schema', () => {
+    const contract = createArvoOrchestratorContract({
+      uri: testUri,
+      type: orchestratorType,
+      versions: {
+        '0.0.1': {
+          init: testInitSchema,
+          complete: testCompleteSchema,
+        },
+      },
+    });
+
+    const acceptsSchema = contract.versions['0.0.1'].accepts;
+    const validData = {
+      parentSubject$$: 'parent-123',
+      foo: 'test',
+    };
+    expect(() => acceptsSchema.parse(validData)).not.toThrow();
+
+    const invalidData = {
+      foo: 'test',
+    };
+    expect(() => acceptsSchema.parse(invalidData)).toThrow();
+
+    const emptyParentData = {
+      parentSubject$$: '',
+      foo: 'test',
+    };
+    expect(() => acceptsSchema.parse(emptyParentData)).toThrow();
+  });
+
+  it('should support multiple versions', () => {
+    const v2InitSchema = z.object({ foo: z.string(), additional: z.number() });
+    const v2CompleteSchema = z.object({ bar: z.number(), status: z.string() });
+
+    const contract = createArvoOrchestratorContract({
+      uri: testUri,
+      type: orchestratorType,
+      versions: {
+        '1.0.0': {
+          init: testInitSchema,
+          complete: testCompleteSchema,
+        },
+        '2.0.0': {
+          init: v2InitSchema,
+          complete: v2CompleteSchema,
+        },
+      },
+    });
+
+    expect(Object.keys(contract.versions)).toHaveLength(2);
+    expect(contract.versions['1.0.0']).toBeDefined();
+    expect(contract.versions['2.0.0']).toBeDefined();
+
+    const v2Accepts = contract.versions['2.0.0'].accepts;
+    const v2Emits = contract.versions['2.0.0'].emits;
+
+    expect(v2Accepts).toBeDefined();
+    expect(v2Emits[testCompleteType]).toBeDefined();
   });
 });

@@ -1,12 +1,6 @@
 import { z } from 'zod';
 import { cleanString } from '../utils';
-
-// Zod schema for ArvoOchestratorVersion
-export const ArvoOrchestratorVersionSchema = z
-  .string()
-  .regex(/^\d+\.\d+\.\d+$/, 'Invalid version format')
-  .refine((value) => !value.includes(';'), 'Version must not contain semicolon')
-  .describe('Semantic version of the Arvo Orchestrator in the format X.Y.Z');
+import { ArvoSemanticVersionSchema } from '../schema';
 
 // Zod schema for ArvoOrchestrationSubjectContent
 export const ArvoOrchestrationSubjectContentSchema = z
@@ -24,7 +18,7 @@ export const ArvoOrchestrationSubjectContentSchema = z
             'Orchestrator name must not contain semicolon',
           )
           .describe('Name of the orchestrator'),
-        version: ArvoOrchestratorVersionSchema,
+        version: ArvoSemanticVersionSchema,
       })
       .describe('Information about the orchestrator'),
     execution: z
@@ -50,12 +44,12 @@ export const ArvoOrchestrationSubjectContentSchema = z
           .describe('Entity or process that initiated the execution'),
       })
       .describe('Details about the current execution'),
-    meta: z
-      .record(z.string(), z.string())
-      .describe(cleanString(`
+    meta: z.record(z.string(), z.string()).describe(
+      cleanString(`
         Additional metadata for the orchestration process. Store essential key-value pairs 
         that provide context or configuration details necessary for the orchestration. 
         Use selectively to maintain clarity and avoid storing unnecessary information.  
-      `))
+      `),
+    ),
   })
   .describe('Context information for Arvo orchestration');

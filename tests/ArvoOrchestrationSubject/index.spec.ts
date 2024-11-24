@@ -14,7 +14,7 @@ describe('ArvoOrchestrationSubject', () => {
       id: '123e4567-e89b-12d3-a456-426614174000',
       initiator: 'com.example.initiator',
     },
-    meta: {}
+    meta: {},
   };
 
   describe('new', () => {
@@ -24,8 +24,8 @@ describe('ArvoOrchestrationSubject', () => {
         version: '1.0.0',
         initiator: 'com.example.initiator',
         meta: {
-          sessionId: 'test-123-456'
-        }
+          sessionId: 'test-123-456',
+        },
       });
 
       expect(subject).toBeTruthy();
@@ -38,7 +38,7 @@ describe('ArvoOrchestrationSubject', () => {
       expect(parsed.execution.id).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
       ); // UUID v4 format
-      expect(parsed.meta.sessionId).toBe('test-123-456')
+      expect(parsed.meta.sessionId).toBe('test-123-456');
     });
 
     it('should throw an error for invalid input', () => {
@@ -108,8 +108,8 @@ describe('ArvoOrchestrationSubject', () => {
         initiator: 'com.system.init',
         meta: {
           environment: 'test',
-          parentKey: 'parentValue'
-        }
+          parentKey: 'parentValue',
+        },
       });
     });
 
@@ -117,7 +117,7 @@ describe('ArvoOrchestrationSubject', () => {
       const childSubject = ArvoOrchestrationSubject.from({
         orchestator: 'com.child.process',
         version: '2.0.0',
-        subject: parentSubject
+        subject: parentSubject,
       });
 
       const parsed = ArvoOrchestrationSubject.parse(childSubject);
@@ -127,7 +127,7 @@ describe('ArvoOrchestrationSubject', () => {
       expect(parsed.meta.environment).toBe('test');
       expect(parsed.meta.parentKey).toBe('parentValue');
       expect(parsed.execution.id).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
       );
     });
 
@@ -138,15 +138,15 @@ describe('ArvoOrchestrationSubject', () => {
         subject: parentSubject,
         meta: {
           childKey: 'childValue',
-          environment: 'production'  // This should override parent's environment
-        }
+          environment: 'production', // This should override parent's environment
+        },
       });
 
       const parsed = ArvoOrchestrationSubject.parse(childSubject);
       expect(parsed.meta).toEqual({
         childKey: 'childValue',
         environment: 'production',
-        parentKey: 'parentValue'
+        parentKey: 'parentValue',
       });
     });
 
@@ -154,11 +154,13 @@ describe('ArvoOrchestrationSubject', () => {
       const childSubject = ArvoOrchestrationSubject.from({
         orchestator: 'com.child.process',
         version: null,
-        subject: parentSubject
+        subject: parentSubject,
       });
 
       const parsed = ArvoOrchestrationSubject.parse(childSubject);
-      expect(parsed.orchestrator.version).toBe(ArvoOrchestrationSubject.WildCardMachineVersion);
+      expect(parsed.orchestrator.version).toBe(
+        ArvoOrchestrationSubject.WildCardMachineVersion,
+      );
     });
 
     it('should throw error when parent subject is invalid', () => {
@@ -166,7 +168,7 @@ describe('ArvoOrchestrationSubject', () => {
         ArvoOrchestrationSubject.from({
           orchestator: 'com.child.process',
           version: '2.0.0',
-          subject: 'invalid_parent_subject'
+          subject: 'invalid_parent_subject',
         });
       }).toThrow();
     });
@@ -176,10 +178,9 @@ describe('ArvoOrchestrationSubject', () => {
         ArvoOrchestrationSubject.from({
           orchestator: 'invalid name with spaces',
           version: '2.0.0',
-          subject: parentSubject
+          subject: parentSubject,
         });
       }).toThrow();
     });
   });
-
 });

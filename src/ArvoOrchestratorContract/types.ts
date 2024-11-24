@@ -1,105 +1,110 @@
 import { z } from 'zod';
+import { ArvoSemanticVersion } from '../types';
+import ArvoContract from '../ArvoContract';
+import { ArvoOrchestratorEventTypeGen } from './typegen';
+import { OrchestrationInitEventBaseSchema } from './schema';
 
 /**
- * Represents the configuration interface for an Arvo Orchestrator Contract.
+ * Represents an Arvo Orchestrator Contract type that extends the base ArvoContract.
+ * This type specifically handles orchestration flows with initialization and completion events.
  *
- * This interface defines the structure of the configuration object used to initialize
- * an ArvoOrchestratorContract. It specifies the types and schemas for both the
- * initialization event and the completion event of the orchestration process.
+ * @template TUri - The URI type that uniquely identifies the contract
+ * @template TType - The base event type for the orchestrator
+ * @template TVersions - Record of versioned schemas for init and complete events
  *
- * @template TUri - The type for the URI string that uniquely identifies the contract.
- * @template TInitType - The literal type for the initialization event type.
- * @template TInit - The Zod schema type for validating the initialization event data.
- * @template TCompleteType - The literal type for the completion event type.
- * @template TComplete - The Zod schema type for validating the completion event data.
+ * @example
+ * ```typescript
+ * type MyOrchestrator = ArvoOrchestratorContract<
+ *   '/orchestrators/payment-flow',
+ *   'payment.process',
+ *   {
+ *     '1.0.0': {
+ *       init: z.object({ amount: z.number() }),
+ *       complete: z.object({ transactionId: z.string() })
+ *     }
+ *   }
+ * >;
+ * ```
+ *
+ * @remarks
+ * - The contract automatically generates appropriate event types for init and complete events
+ * - Each version must specify both init and complete schemas
+ * - Event types are generated using the ArvoOrchestratorEventTypeGen utility
  */
-export interface IArvoOrchestratorContract<
-  TUri extends string,
-  TInitType extends string,
-  TInit extends z.ZodTypeAny,
-  TCompleteType extends string,
-  TComplete extends z.ZodTypeAny,
-> {
-  /**
-   * The unique identifier for the contract.
-   */
-  uri: TUri;
-
-  /**
-   * Configuration for the initialization event.
-   */
-  init: {
-    /**
-     * The type identifier for the initialization event.
-     */
-    type: TInitType;
-
-    /**
-     * The Zod schema used to validate the initialization event data.
-     */
-    schema: TInit;
-  };
-
-  /**
-   * Configuration for the completion event.
-   */
-  complete: {
-    /**
-     * The type identifier for the completion event.
-     */
-    type: TCompleteType;
-
-    /**
-     * The Zod schema used to validate the completion event data.
-     */
-    schema: TComplete;
-  };
-}
+export type ArvoOrchestratorContract<
+  TUri extends string = string,
+  TType extends string = string,
+  TVersions extends Record<
+    ArvoSemanticVersion,
+    {
+      init: z.ZodObject<any, any, any>;
+      complete: z.ZodObject<any, any, any>;
+    }
+  > = Record<
+    ArvoSemanticVersion,
+    {
+      init: z.ZodObject<any, any, any>;
+      complete: z.ZodObject<any, any, any>;
+    }
+  >,
+> = ArvoContract<
+  TUri,
+  ReturnType<typeof ArvoOrchestratorEventTypeGen.init<TType>>,
+  {
+    [V in ArvoSemanticVersion & keyof TVersions]: {
+      accepts: ReturnType<
+        typeof OrchestrationInitEventBaseSchema.merge<
+          TVersions[V]['init'],
+          TVersions[V]['init']['shape']
+        >
+      >;
+      emits: {
+        [K in ReturnType<
+          typeof ArvoOrchestratorEventTypeGen.complete<TType>
+        >]: TVersions[V]['complete'];
+      };
+    };
+  }
+>;
 
 /**
- * Interface for creating an Arvo Orchestrator Contract.
+ * Interface defining the configuration structure for creating an Arvo Orchestrator Contract.
+ * This interface specifies the required properties for initializing a new orchestrator contract.
  *
- * This interface defines the structure of the configuration object used to create
- * an ArvoOrchestratorContract. It specifies the URI, name, and schemas for both
- * the initialization and completion events of the orchestration process.
+ * @template TUri - The URI type that uniquely identifies the contract
+ * @template TType - The base event type for the orchestrator
+ * @template TVersions - Record of versioned schemas for init and complete events
  *
- * @template TUri - The type for the URI string that uniquely identifies the contract.
- * @template TName - The type for the name of the contract.
- * @template TInit - The Zod schema type for validating the initialization event data.
- * @template TComplete - The Zod schema type for validating the completion event data.
+ * @property uri - The unique identifier URI for the contract
+ * @property type - The base event type that will be used to generate init/complete event types
+ * @property versions - A record of version-specific schemas for initialization and completion events
+ *
+ * @remarks
+ * - The URI should be unique within your system
+ * - The type will be used to generate appropriate event type strings
+ * - Each version must conform to {@link ArvoSemanticVersion} format
+ * - Init and complete schemas should use Zod for validation
  */
 export interface ICreateArvoOrchestratorContract<
   TUri extends string,
-  TName extends string,
-  TInit extends z.ZodTypeAny,
-  TComplete extends z.ZodTypeAny,
+  TType extends string,
+  TVersions extends Record<
+    ArvoSemanticVersion,
+    {
+      init: z.ZodTypeAny;
+      complete: z.ZodTypeAny;
+    }
+  >,
 > {
-  /**
-   * The unique identifier for the contract.
-   * This URI should be used to reference the contract within the system.
-   */
+  /** Unique identifier URI for the contract */
   uri: TUri;
 
-  /**
-   * The name of the contract.
-   * This can be used for display purposes or for easier identification of the contract.
-   */
-  name: TName;
+  /** Base event type used for generating init/complete event types */
+  type: TType;
 
   /**
-   * The schema definitions for the contract events.
+   * Version-specific schemas for initialization and completion events
+   * @remarks Each version must provide both init and complete schemas
    */
-  schema: {
-    /**
-     * The Zod schema used to validate the initialization event data.
-     * This schema defines the structure and types of the data required to start the orchestration process.
-     */
-    init: TInit;
-
-    /**
-     * The Zod schema used to validate the completion event data.
-     * This schema defines the structure and types of the data emitted when the orchestration process completes.
-     */
-    complete: TComplete;
-  };
+  versions: TVersions;
 }
