@@ -13,53 +13,66 @@ import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { ExecutionOpenTelemetryConfiguration } from '../OpenTelemetry/types';
 import { ArvoSemanticVersion } from '../types';
 import ArvoOrchestrationSubject from '../ArvoOrchestrationSubject';
+import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
 
 /**
- * Factory class for creating contractual ArvoEvents based on a given ArvoContract.
- * This class handles the creation and validation of events according to contract specifications.
+ * Factory class for creating and validating events based on a versioned Arvo contract.
+ * Handles event creation, validation, and OpenTelemetry integration for a specific
+ * contract version.
  *
- * @template TContract - The type of ArvoContract this factory is bound to
+ * @template TContract - The versioned contract type this factory is bound to
+ *
+ * @example
+ * ```typescript
+ * const contract = createArvoContract({
+ *   uri: 'example/api',
+ *   type: 'user.create',
+ *   versions: { '1.0.0': { ... } }
+ * });
+ *
+ * const factory = createArvoEventFactory(contract.version('1.0.0'));
+ * ```
  */
-export default class ArvoEventFactory<TContract extends ArvoContract> {
+export default class ArvoEventFactory<
+  TContract extends VersionedArvoContract<ArvoContract, ArvoSemanticVersion>,
+> {
   private readonly contract: TContract;
 
   /**
-   * Creates an instance of ArvoEventFactory.
+   * Creates an ArvoEventFactory instance for a specific version of a contract.
    *
-   * @param contract - The ArvoContract to base the events on.
+   * @param contract - The versioned contract to use for event creation and validation
    */
   constructor(contract: TContract) {
     this.contract = contract;
   }
 
   /**
-   * Creates a validated ArvoEvent that matches the contract's accept specifications.
-   * This method ensures the created event conforms to the contract's input schema.
+   * Creates and validates an event matching the contract's accept specification.
    *
-   * @template V - The semantic version of the contract to use
-   * @template TExtension - Additional custom properties to include in the event
+   * @template TExtension - Additional properties to include in the event
    *
    * @param event - The event configuration object
-   * @param event.version - The semantic version of the contract to use
-   * @param event.data - The event payload that must conform to the contract's accept schema
-   * @param [extensions] - Optional additional properties to include in the event
-   * @param [opentelemetry] - Optional OpenTelemetry configuration for tracing
+   * @param [extensions] - Optional additional properties for the event
+   * @param [opentelemetry] - Optional OpenTelemetry configuration
    *
-   * @returns A validated ArvoEvent instance conforming to the contract's accept specifications
+   * @returns A validated ArvoEvent matching the contract's accept specification
    *
-   * @throws {Error} If event data validation fails against the contract schema
-   * @throws {Error} If OpenTelemetry operations fail
+   * @throws {Error} If validation fails or OpenTelemetry operations fail
+   *
+   * @example
+   * ```typescript
+   * const event = factory.accepts({
+   *   source: 'api/users',
+   *   data: { name: 'John', email: 'john@example.com' }
+   * });
+   * ```
    */
-  accepts<
-    V extends ArvoSemanticVersion & keyof TContract['versions'],
-    TExtension extends Record<string, any>,
-  >(
-    event: {
-      version: V;
-    } & Omit<
+  accepts<TExtension extends Record<string, any>>(
+    event: Omit<
       CreateArvoEvent<
-        z.input<TContract['versions'][V]['accepts']>,
-        TContract['type']
+        z.input<TContract['accepts']['schema']>,
+        TContract['accepts']['type']
       >,
       'type' | 'datacontenttype' | 'dataschema'
     >,
@@ -70,15 +83,13 @@ export default class ArvoEventFactory<TContract extends ArvoContract> {
       tracer: fetchOpenTelemetryTracer(),
     };
     const span = opentelemetry.tracer.startSpan(
-      `ArvoEventFactory<${this.contract.uri}/${event.version}>.accepts`,
+      `ArvoEventFactory<${this.contract.uri}/${this.contract.version}>.accepts`,
     );
     return context.with(trace.setSpan(context.active(), span), () => {
       span.setStatus({ code: SpanStatusCode.OK });
       const otelHeaders = currentOpenTelemetryHeaders();
       try {
-        const validationResult = this.contract.validateAccepts(
-          event.version,
-          this.contract.type,
+        const validationResult = this.contract.accepts.schema.safeParse(
           event.data,
         );
         if (!validationResult.success) {
@@ -87,18 +98,18 @@ export default class ArvoEventFactory<TContract extends ArvoContract> {
           );
         }
         return createArvoEvent<
-          z.infer<TContract['versions'][V]['accepts']>,
+          z.infer<TContract['accepts']['schema']>,
           TExtension,
-          TContract['type']
+          TContract['accepts']['type']
         >(
           {
             ...event,
             traceparent:
               event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
-            type: this.contract.type,
+            type: this.contract.accepts.type,
             datacontenttype: ArvoDataContentType,
-            dataschema: `${this.contract.uri}/${event.version}`,
+            dataschema: `${this.contract.uri}/${this.contract.version}`,
             data: validationResult.data,
           },
           extensions,
@@ -118,35 +129,34 @@ export default class ArvoEventFactory<TContract extends ArvoContract> {
   }
 
   /**
-   * Creates a validated ArvoEvent that matches one of the contract's emit specifications.
-   * This method ensures the created event conforms to the contract's output schema.
+   * Creates and validates an event matching one of the contract's emit specifications.
    *
-   * @template V - The semantic version of the contract to use
    * @template U - The specific emit event type from the contract
-   * @template TExtension - Additional custom properties to include in the event
+   * @template TExtension - Additional properties to include in the event
    *
    * @param event - The event configuration object
-   * @param event.version - The semantic version of the contract to use
-   * @param event.type - The type of emit event to create
-   * @param event.data - The event payload that must conform to the contract's emit schema
-   * @param [extensions] - Optional additional properties to include in the event
-   * @param [opentelemetry] - Optional OpenTelemetry configuration for tracing
+   * @param [extensions] - Optional additional properties for the event
+   * @param [opentelemetry] - Optional OpenTelemetry configuration
    *
-   * @returns A validated ArvoEvent instance conforming to the contract's emit specifications
+   * @returns A validated ArvoEvent matching the specified emit type
    *
-   * @throws {Error} If event data validation fails against the contract schema
-   * @throws {Error} If the specified emit type doesn't exist in the contract
-   * @throws {Error} If OpenTelemetry operations fail
+   * @throws {Error} If validation fails, emit type doesn't exist, or OpenTelemetry operations fail
+   *
+   * @example
+   * ```typescript
+   * const event = factory.emits({
+   *   type: 'user.created',
+   *   source: 'api/users',
+   *   data: { id: '123', timestamp: new Date() }
+   * });
+   * ```
    */
   emits<
-    V extends ArvoSemanticVersion & keyof TContract['versions'],
-    U extends string & keyof TContract['versions'][V]['emits'],
+    U extends string & keyof TContract['emits'],
     TExtension extends Record<string, any>,
   >(
-    event: {
-      version: V;
-    } & Omit<
-      CreateArvoEvent<z.input<TContract['versions'][V]['emits'][U]>, U>,
+    event: Omit<
+      CreateArvoEvent<z.input<TContract['emits'][U]>, U>,
       'datacontenttype' | 'dataschema'
     >,
     extensions?: TExtension,
@@ -156,34 +166,28 @@ export default class ArvoEventFactory<TContract extends ArvoContract> {
       tracer: fetchOpenTelemetryTracer(),
     };
     const span = opentelemetry.tracer.startSpan(
-      `ArvoEventFactory<${this.contract.uri}/${event.version}>.emits<${event.type}>`,
+      `ArvoEventFactory<${this.contract.uri}/${this.contract.version}>.emits<${event.type}>`,
     );
     return context.with(trace.setSpan(context.active(), span), () => {
       span.setStatus({ code: SpanStatusCode.OK });
       const otelHeaders = currentOpenTelemetryHeaders();
       try {
-        const validationResult = this.contract.validateEmits(
-          event.version,
-          event.type,
+        const validationResult = this.contract.emits?.[event.type]?.safeParse(
           event.data,
         );
-        if (!validationResult.success) {
+        if (!validationResult?.success) {
           throw new Error(
-            `Emit Event data validation failed: ${validationResult.error.message}`,
+            `Emit Event data validation failed: ${validationResult?.error?.message ?? `No contract available for ${event.type}`}`,
           );
         }
-        return createArvoEvent<
-          z.infer<TContract['versions'][V]['emits'][U]>,
-          TExtension,
-          U
-        >(
+        return createArvoEvent<z.infer<TContract['emits'][U]>, TExtension, U>(
           {
             ...event,
             traceparent:
               event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             datacontenttype: ArvoDataContentType,
-            dataschema: `${this.contract.uri}/${event.version}`,
+            dataschema: `${this.contract.uri}/${this.contract.version}`,
             data: validationResult.data,
           },
           extensions,
@@ -203,19 +207,26 @@ export default class ArvoEventFactory<TContract extends ArvoContract> {
   }
 
   /**
-   * Creates a system error ArvoEvent for handling and reporting errors within the system.
+   * Creates a system error event for error reporting and handling.
    *
-   * @template TExtension - Additional custom properties to include in the error event
+   * @template TExtension - Additional properties to include in the error event
    *
-   * @param event - The error event configuration object
-   * @param event.error - The Error instance to be converted into an event
-   * @param [extensions] - Optional additional properties to include in the event
-   * @param [opentelemetry] - Optional OpenTelemetry configuration for tracing
+   * @param event - The error event configuration
+   * @param event.error - The Error instance to convert to an event
+   * @param [extensions] - Optional additional properties for the event
+   * @param [opentelemetry] - Optional OpenTelemetry configuration
    *
-   * @returns A system error ArvoEvent containing the error details
+   * @returns A system error ArvoEvent
    *
-   * @throws {Error} If event creation fails
-   * @throws {Error} If OpenTelemetry operations fail
+   * @throws {Error} If event creation or OpenTelemetry operations fail
+   *
+   * @example
+   * ```typescript
+   * const errorEvent = factory.systemError({
+   *   error: new Error('Validation failed'),
+   *   source: 'api/validation'
+   * });
+   * ```
    */
   systemError<TExtension extends Record<string, any>>(
     event: Omit<
@@ -241,14 +252,14 @@ export default class ArvoEventFactory<TContract extends ArvoContract> {
         return createArvoEvent<
           z.infer<typeof ArvoErrorSchema>,
           TExtension,
-          `sys.${TContract['type']}.error`
+          TContract['systemError']['type']
         >(
           {
             ..._event,
             traceparent:
               event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
-            type: `sys.${this.contract.type}.error`,
+            type: this.contract.systemError.type,
             data: {
               errorName: error.name,
               errorMessage: error.message,

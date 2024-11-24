@@ -36,22 +36,24 @@ describe('createArvoEventFactory', () => {
 
   describe('emits', () => {
     it('should create a valid event when data matches the schema', async () => {
-      const event = createArvoEventFactory(mockContract).emits({
-        version: '0.0.1',
-        type: 'test.output.0',
-        source: 'test-source',
-        subject: 'test-subject',
-        data: { output: 42 },
-        to: 'cmd.saad.test',
-      });
+      const event = createArvoEventFactory(mockContract.version('0.0.1')).emits(
+        {
+          type: 'test.output.0',
+          source: 'test-source',
+          subject: 'test-subject',
+          data: { output: 42 },
+          to: 'cmd.saad.test',
+        },
+      );
 
       expect(event).toBeDefined();
       expect(event.type).toBe('test.output.0');
       expect(event.data).toEqual({ output: 42 });
       expect(event.dataschema).toEqual('#/mock/contract/0.0.1');
 
-      const event1 = createArvoEventFactory(mockContract).emits({
-        version: '0.0.1',
+      const event1 = createArvoEventFactory(
+        mockContract.version('0.0.1'),
+      ).emits({
         type: 'test.output.1',
         source: 'test-source',
         subject: 'test-subject',
@@ -69,8 +71,7 @@ describe('createArvoEventFactory', () => {
 
     it('should throw an error when data does not match the schema', async () => {
       expect(() =>
-        createArvoEventFactory(mockContract).emits({
-          version: '0.0.1',
+        createArvoEventFactory(mockContract.version('0.0.1')).emits({
           type: 'test.output.0',
           source: 'test-source',
           subject: 'test-subject',
@@ -82,8 +83,7 @@ describe('createArvoEventFactory', () => {
 
     it('should throw an error for unknown event type', async () => {
       expect(() =>
-        createArvoEventFactory(mockContract).emits({
-          version: '0.0.1',
+        createArvoEventFactory(mockContract.version('0.0.1')).emits({
           type: 'unknown.type.0' as any,
           source: 'test-source',
           subject: 'test-subject',
@@ -91,15 +91,16 @@ describe('createArvoEventFactory', () => {
           to: 'cmd.saad.test',
         }),
       ).toThrow(
-        'Emit type "unknown.type.0" for version "0.0.1" not found in contract "#/mock/contract"',
+        'Emit Event data validation failed: No contract available for unknown.type.0',
       );
     });
   });
 
   describe('accepts', () => {
     it('should create a valid event when data matches the schema', async () => {
-      const event = createArvoEventFactory(mockContract).accepts({
-        version: '0.0.1',
+      const event = createArvoEventFactory(
+        mockContract.version('0.0.1'),
+      ).accepts({
         source: 'test-source',
         subject: 'test-subject',
         data: { input: 'test' },
@@ -113,8 +114,7 @@ describe('createArvoEventFactory', () => {
 
     it('should throw an error when data does not match the schema', async () => {
       expect(() =>
-        createArvoEventFactory(mockContract).accepts({
-          version: '0.0.1',
+        createArvoEventFactory(mockContract.version('0.0.1')).accepts({
           source: 'test-source',
           subject: 'test-subject',
           data: { input: 42 as any },
@@ -126,7 +126,9 @@ describe('createArvoEventFactory', () => {
 
   describe('systemError', () => {
     it('should create system error message as per the contract', () => {
-      const eventFactory = createArvoEventFactory(mockContract);
+      const eventFactory = createArvoEventFactory(
+        mockContract.version('0.0.1'),
+      );
       const event = eventFactory.systemError({
         source: 'test',
         subject: 'test',

@@ -4,23 +4,26 @@ import { ArvoSemanticVersion } from '../types';
 import ArvoEvent from '../ArvoEvent';
 import { exceptionToSpan } from '../OpenTelemetry';
 import { ArvoSemanticVersionSchema } from '../schema';
+import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
 
 /**
- * Creates an ArvoEventFactory instance for a given contract.
- * This is the recommended way to instantiate an ArvoEventFactory.
+ * Creates an ArvoEventFactory for a specific version of a contract.
  *
- * @template TContract - The type of ArvoContract to create a factory for
+ * @template TContract - The versioned contract type
  *
- * @param contract - The ArvoContract instance to base the factory on
- * @returns A new ArvoEventFactory instance bound to the provided contract
+ * @param contract - The versioned contract to create a factory for
+ * @returns An ArvoEventFactory instance for the specified contract version
  *
  * @example
  * ```typescript
  * const contract = createArvoContract({...});
- * const factory = createArvoEventFactory(contract);
+ * const v1Contract = contract.version('1.0.0');
+ * const factory = createArvoEventFactory(v1Contract);
  * ```
  */
-export const createArvoEventFactory = <TContract extends ArvoContract>(
+export const createArvoEventFactory = <
+  TContract extends VersionedArvoContract<ArvoContract, ArvoSemanticVersion>,
+>(
   contract: TContract,
 ) => new ArvoEventFactory(contract);
 

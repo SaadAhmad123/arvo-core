@@ -63,15 +63,15 @@ export default class ArvoContract<
   /**
    * Creates a version-specific view of the contract, providing easy access to all
    * schemas and specifications for a particular semantic version.
-   * 
+   *
    * @template V - The semantic version to create a view for, must be a valid version in the contract
-   * 
+   *
    * @param ver - The semantic version string (e.g., "1.0.0")
    * @returns A VersionedArvoContract instance containing all specifications for the requested version
-   * 
+   *
    * The returned object provides a simpler, flatter structure compared to
    * accessing version-specific information through the main contract methods.
-   * 
+   *
    * @see {@link VersionedArvoContract} for the structure of the returned object
    */
   public version<V extends ArvoSemanticVersion & keyof TVersions>(
@@ -141,18 +141,18 @@ export default class ArvoContract<
    * Gets the system error event specification for this contract.
    * System errors follow a standardized format to handle exceptional conditions
    * and failures in a consistent way across all contracts.
-   * 
+   *
    * The error schema includes:
    *   - errorName: The name/type of the error
    *   - errorMessage: A descriptive message about what went wrong
    *   - errorStack: Optional stack trace information (null if not available)
-   * 
+   *
    * System errors are special events that:
    * - Are automatically prefixed with 'sys.' and suffixed with '.error'
    * - Use a standardized schema across all contracts
    * - Can capture error details, messages, and stack traces
    * - Are version-independent (work the same across all contract versions)
-   * 
+   *
    * @see {@link ArvoErrorSchema} for the detailed error schema definition
    * @see {@link ArvoContractRecord} for the structure of the returned record
    */
@@ -248,7 +248,7 @@ export default class ArvoContract<
         },
         systemError: {
           type: this.systemError.type,
-          schema: zodToJsonSchema(this.systemError.schema)
+          schema: zodToJsonSchema(this.systemError.schema),
         },
         emits: Object.entries(contract.emits).map(([key, value]) => ({
           type: key,

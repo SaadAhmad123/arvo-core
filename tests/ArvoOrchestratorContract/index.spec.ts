@@ -3,6 +3,7 @@ import {
   createArvoOrchestratorContract,
   ArvoOrchestratorEventTypeGen,
   ArvoEventSchema,
+  createArvoEventFactory,
 } from '../../src';
 
 describe('ArvoOrchestratorContract', () => {

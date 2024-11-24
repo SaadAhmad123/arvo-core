@@ -188,27 +188,76 @@ export type InferArvoContract<
       }
     : never;
 
+/**
+ * Represents the structure of an Arvo system error.
+ * This type is inferred from the ArvoErrorSchema and provides
+ * the standard error format used across all Arvo contracts.
+ *
+ * @property errorName - The classification or type of the error
+ * @property errorMessage - A human-readable description of what went wrong
+ * @property errorStack - Optional stack trace for debugging (null if not available)
+ *
+ * @example
+ * ```typescript
+ * const error: ArvoErrorType = {
+ *   errorName: 'ValidationError',
+ *   errorMessage: 'Invalid input format',
+ *   errorStack: 'Error: Invalid input format\n    at validate (/app.js:10)'
+ * };
+ * ```
+ *
+ * @see {@link ArvoErrorSchema} for the underlying Zod schema definition
+ */
 export type ArvoErrorType = z.infer<typeof ArvoErrorSchema>;
 
-export type InferVersionedArvoContract<TVersion extends VersionedArvoContract<ArvoContract, ArvoSemanticVersion>> =
-  {
-    accepts: InferArvoEvent<
-      ArvoEvent<
-        InferZodSchema<TVersion['accepts']['schema']>,
-        {},
-        TVersion['accepts']['type']
-      >
+/**
+ * A type utility that infers the complete event structure from a versioned Arvo contract.
+ * This type extracts and transforms all event types, schemas, and error definitions
+ * from a specific version of a contract into their fully resolved event forms.
+ *
+ * @template TVersion - The versioned contract to infer from, must extend VersionedArvoContract
+ *
+ * @property accepts - The fully resolved accept event type for this version
+ * @property systemError - The fully resolved system error event type
+ * @property emits - Record of all fully resolved emit event types
+ *
+ * This type utility:
+ * - Transforms Zod schemas into their inferred TypeScript types
+ * - Wraps all event types in the full ArvoEvent structure
+ * - Preserves all event type relationships and constraints
+ * - Includes OpenTelemetry and Arvo extensions
+ * - Maintains type safety across all transformations
+ *
+ * Common use cases:
+ * - Type-safe event handling in version-specific contexts
+ * - Generating TypeScript interfaces for API documentation
+ * - Validating event payload types at compile time
+ * - Creating type-safe event factories
+ *
+ * @see {@link VersionedArvoContract} for the input contract structure
+ * @see {@link InferArvoEvent} for the event inference utility
+ * @see {@link ArvoEvent} for the base event structure
+ */
+export type InferVersionedArvoContract<
+  TVersion extends VersionedArvoContract<ArvoContract, ArvoSemanticVersion>,
+> = {
+  accepts: InferArvoEvent<
+    ArvoEvent<
+      InferZodSchema<TVersion['accepts']['schema']>,
+      {},
+      TVersion['accepts']['type']
+    >
+  >;
+  systemError: InferArvoEvent<
+    ArvoEvent<
+      InferZodSchema<TVersion['systemError']['schema']>,
+      {},
+      TVersion['systemError']['type']
+    >
+  >;
+  emits: {
+    [K in string & keyof TVersion['emits']]: InferArvoEvent<
+      ArvoEvent<InferZodSchema<TVersion['emits'][K]>, {}, K>
     >;
-    systemError: InferArvoEvent<
-      ArvoEvent<
-        InferZodSchema<TVersion['systemError']['schema']>,
-        {},
-        TVersion['systemError']['type']
-      >
-    >;
-    emits: {
-      [K in string & keyof TVersion['emits']]: InferArvoEvent<
-        ArvoEvent<InferZodSchema<TVersion['emits'][K]>, {}, K>
-      >;
-    };
   };
+};
