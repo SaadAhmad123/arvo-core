@@ -63,7 +63,7 @@ import {
   ArvoErrorType,
 } from './types';
 import { createArvoOrchestratorContract } from './ArvoOrchestratorContract';
-import { ICreateArvoOrchestratorContract } from './ArvoOrchestratorContract/types';
+import { ICreateArvoOrchestratorContract, ArvoOrchestratorContract } from './ArvoOrchestratorContract/types';
 import { ArvoOrchestratorEventTypeGen } from './ArvoOrchestratorContract/typegen';
 import { OrchestrationInitEventBaseSchema } from './ArvoOrchestratorContract/schema';
 
@@ -136,4 +136,5 @@ export {
   compareSemanticVersions,
   parseSemanticVersion,
   createSimpleArvoContract,
+  ArvoOrchestratorContract,
 };

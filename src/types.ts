@@ -7,8 +7,11 @@ import { ArvoErrorSchema } from './schema';
 /**
  * Represents the version of Arvo components following Semantic Versioning (SemVer).
  *
- * @format MAJOR.MINOR.PATCH where each component is a non-negative integer
- * @restriction Must not contain semicolons (;)
+ * Format:
+ * MAJOR.MINOR.PATCH where each component is a non-negative integer
+ * 
+ * Restrictions:
+ * Must not contain semicolons (;)
  *
  * @example
  * ```typescript

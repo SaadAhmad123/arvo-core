@@ -12,7 +12,6 @@ export type ArvoOrchestrationSubjectContent = {
     /**
      * The name of the orchestrator.
      *
-     * @remark
      * Should be prefixed with a reverse-DNS name.
      * **Note**: The string must not contain ';'
      *
@@ -34,7 +33,6 @@ export type ArvoOrchestrationSubjectContent = {
     /**
      * A unique identifier for the execution.
      *
-     * @remark
      * Should be a non-empty string. The recomendation
      * is to use uuid v4 to generate these ids.
      * **Note**: The string must not contain ';'
@@ -47,7 +45,6 @@ export type ArvoOrchestrationSubjectContent = {
     /**
      * The entity or process that initiated the execution.
      *
-     * @remark
      * Should be prefixed with a reverse-DNS name.
      * **Note**: The string must not contain ';'
      *
