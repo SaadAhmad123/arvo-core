@@ -138,12 +138,6 @@ type InferZodSchema<T> = T extends z.ZodTypeAny ? z.infer<T> : never;
  * //   systemError: { ... inferred system error event type ... };
  * // }
  * ```
- *
- * @remarks
- * - All version keys must be valid {@link ArvoSemanticVersion} strings
- * - The contract must define at least one version
- * - Each version must specify both accepted and emitted event schemas
- * - System error handling is automatically included for all contracts
  */
 export type InferArvoContract<
   T extends ArvoContract<
@@ -220,19 +214,6 @@ export type ArvoErrorType = z.infer<typeof ArvoErrorSchema>;
  * @property accepts - The fully resolved accept event type for this version
  * @property systemError - The fully resolved system error event type
  * @property emits - Record of all fully resolved emit event types
- *
- * This type utility:
- * - Transforms Zod schemas into their inferred TypeScript types
- * - Wraps all event types in the full ArvoEvent structure
- * - Preserves all event type relationships and constraints
- * - Includes OpenTelemetry and Arvo extensions
- * - Maintains type safety across all transformations
- *
- * Common use cases:
- * - Type-safe event handling in version-specific contexts
- * - Generating TypeScript interfaces for API documentation
- * - Validating event payload types at compile time
- * - Creating type-safe event factories
  *
  * @see {@link VersionedArvoContract} for the input contract structure
  * @see {@link InferArvoEvent} for the event inference utility

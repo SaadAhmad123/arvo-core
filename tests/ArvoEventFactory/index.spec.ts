@@ -31,6 +31,18 @@ describe('createArvoEventFactory', () => {
           }),
         },
       },
+      '0.0.8': {
+        accepts: z.object({ input: z.string() }),
+        emits: {
+          'test.output.0': z.object({
+            output: z.number(),
+            saad: z.string(),
+          }),
+          'test.output.1': z.object({
+            message: z.string(),
+          }),
+        },
+      },
     },
   });
 

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { TypeOf, z } from 'zod';
 import {
   ArvoContractJSONSchema,
   ArvoContractRecord,
@@ -11,14 +11,29 @@ import { compareSemanticVersions } from '../utils';
 import { VersionedArvoContract } from './VersionedArvoContract';
 
 /**
- * ArvoContract class represents a contract with defined input and output schemas.
- * It provides methods for validating inputs and outputs based on the contract's specifications.
- * An event handler can be bound to it so the this contract may impose the types
- * on inputs and outputs of it
+ * Represents a contract with defined input and output schemas for event-driven architectures.
+ * The ArvoContract class provides type-safe validation and versioning capabilities for event handling,
+ * ensuring consistency in message passing between different parts of the system.
  *
- * @template TUri - The URI of the contract
- * @template TType - The accept type, defaults to string.
- * @template TVersion - The contract versions
+ * @template TUri - The URI identifier for the contract, must be a string type
+ * @template TType - The accept type for the contract, must be a string type
+ * @template TVersions - Record of versioned schemas defining contract structure per version
+ *
+ * @example
+ * ```typescript
+ * const contract = createArvoContract({
+ *   uri: '#/my/service/data',
+ *   type: 'com.process.data',
+ *   versions: {
+ *     '1.0.0': {
+ *       accepts: z.object({ data: z.string() }),
+ *       emits: {
+ *         'data.processed': z.object({ result: z.string() })
+ *       }
+ *     }
+ *   }
+ * });
+ * ```
  */
 export default class ArvoContract<
   TUri extends string = string,
@@ -42,10 +57,6 @@ export default class ArvoContract<
   private readonly _versions: TVersions;
   readonly description: string | null;
 
-  /**
-   * Creates an instance of ArvoContract.
-   * @param params - The contract parameters.
-   */
   constructor(params: IArvoContract<TUri, TType, TVersions>) {
     this._uri = params.uri;
     this._type = params.type;
@@ -53,7 +64,9 @@ export default class ArvoContract<
     this.description = params.description ?? null;
 
     if (!Object.keys(this._versions).length) {
-      throw new Error(`A contract must have at least one version`);
+      throw new Error(
+        `An ArvoContract (uri=${this._uri}) must have at least one version`,
+      );
     }
   }
 
@@ -62,36 +75,6 @@ export default class ArvoContract<
    */
   public get uri(): TUri {
     return this._uri;
-  }
-
-  /**
-   * Creates a version-specific view of the contract, providing easy access to all
-   * schemas and specifications for a particular semantic version.
-   *
-   * @template V - The semantic version to create a view for, must be a valid version in the contract
-   *
-   * @param ver - The semantic version string (e.g., "1.0.0")
-   * @returns A VersionedArvoContract instance containing all specifications for the requested version
-   *
-   * The returned object provides a simpler, flatter structure compared to
-   * accessing version-specific information through the main contract methods.
-   *
-   * @see {@link VersionedArvoContract} for the structure of the returned object
-   */
-  public version<V extends ArvoSemanticVersion & keyof TVersions>(
-    ver: V,
-  ): VersionedArvoContract<typeof this, V> {
-    return {
-      uri: this._uri,
-      description: this.description,
-      version: ver,
-      accepts: {
-        type: this._type,
-        schema: this._versions[ver].accepts,
-      },
-      systemError: this.systemError,
-      emits: this._versions[ver].emits,
-    };
   }
 
   /**
@@ -110,38 +93,6 @@ export default class ArvoContract<
   }
 
   /**
-   * Get the latest version of the contract
-   */
-  public get latestVersion(): ArvoSemanticVersion {
-    return (Object.keys(this._versions) as ArvoSemanticVersion[]).sort((a, b) =>
-      compareSemanticVersions(b, a),
-    )[0];
-  }
-
-  /**
-   * Gets the type and schema of the event that the contact
-   * bound handler listens to.
-   */
-  public accepts<V extends ArvoSemanticVersion & keyof TVersions>(
-    version: V,
-  ): ArvoContractRecord<TType, TVersions[V]['accepts']> {
-    return {
-      type: this._type,
-      schema: this._versions[version].accepts,
-    };
-  }
-
-  /**
-   * Gets all event types and schemas that can be emitted by the
-   * contract bound handler.
-   */
-  public emits<V extends ArvoSemanticVersion & keyof TVersions>(
-    version: V,
-  ): TVersions[V]['emits'] {
-    return { ...this._versions[version].emits };
-  }
-
-  /**
    * Gets the system error event specification for this contract.
    * System errors follow a standardized format to handle exceptional conditions
    * and failures in a consistent way across all contracts.
@@ -156,9 +107,6 @@ export default class ArvoContract<
    * - Use a standardized schema across all contracts
    * - Can capture error details, messages, and stack traces
    * - Are version-independent (work the same across all contract versions)
-   *
-   * @see {@link ArvoErrorSchema} for the detailed error schema definition
-   * @see {@link ArvoContractRecord} for the structure of the returned record
    */
   public get systemError(): ArvoContractRecord<
     `sys.${TType}.error`,
@@ -171,51 +119,72 @@ export default class ArvoContract<
   }
 
   /**
-   * Validates the contract bound handler's input/ accept event against the
-   * contract's accept schema.
-   * @template U - The type of the input to validate.
-   * @template V - The version to use
-   * @param version - The version to use
-   * @param type - The type of the input event.
-   * @param input - The input data to validate.
-   * @returns The validation result.
-   * @throws If the accept type is not found in the contract.
+   * Retrieves a specific version of the contract or resolves special version identifiers.
+   *
+   * @template V - Type parameter constrained to valid semantic versions in TVersions
+   * @template S - Type parameter for special version identifiers
+   *
+   * @param option - Version identifier or special version string
+   * - Specific version (e.g., "1.0.0")
+   * - "latest" or "any" for the most recent version
+   * - "oldest" for the first version
+   *
+   * @returns A versioned contract instance with type-safe schemas
+   *
+   * @throws {Error} When an invalid or non-existent version is requested
    */
-  public validateAccepts<V extends ArvoSemanticVersion & keyof TVersions, U>(
-    version: V,
-    type: TType,
-    input: U,
-  ) {
-    if (type !== this._type) {
+  public version<
+    V extends ArvoSemanticVersion & keyof TVersions,
+    S extends 'any' | 'latest' | 'oldest',
+  >(
+    option: V | S,
+  ): V extends ArvoSemanticVersion
+    ? VersionedArvoContract<typeof this, V>
+    : VersionedArvoContract<
+        typeof this,
+        ArvoSemanticVersion & keyof TVersions
+      > {
+    let resolvedVersion: ArvoSemanticVersion & keyof TVersions;
+
+    if (option === 'any' || option === 'latest') {
+      resolvedVersion = this.getSortedVersionNumbers('DESC')[0];
+    } else if (option === 'oldest') {
+      resolvedVersion = this.getSortedVersionNumbers('ASC')[0];
+    } else if (!this._versions[option as ArvoSemanticVersion]) {
       throw new Error(
-        `Accept type "${type}" for version "${version}" not found in contract "${this._uri}"`,
+        `The contract (uri=${this._uri}) does not have version=${option}`,
       );
+    } else {
+      resolvedVersion = option as V;
     }
-    return this._versions[version].accepts.safeParse(input);
+
+    return {
+      uri: this._uri,
+      description: this.description,
+      version: resolvedVersion,
+      accepts: {
+        type: this._type,
+        schema: this._versions[resolvedVersion].accepts,
+      },
+      systemError: this.systemError,
+      emits: this._versions[resolvedVersion].emits,
+    } as any; // needed due to TypeScript limitations with conditional types
   }
 
   /**
-   * Validates the contract bound handler's output/ emits against the
-   * contract's emit schema.
-   * @template U - The type of the output to validate.
-   * @param type - The type of the output event.
-   * @param output - The output data to validate.
-   * @returns The validation result.
-   * @throws If the emit type is not found in the contract.
+   * Retrieves version numbers in sorted order based on semantic versioning rules.
+   *
+   * @param ordering - Sort direction for versions
+   * - 'ASC' - Ascending order (oldest to newest)
+   * - 'DESC' - Descending order (newest to oldest)
+   *
+   * @returns Array of semantic versions sorted according to specified ordering
    */
-  public validateEmits<
-    V extends ArvoSemanticVersion & keyof TVersions,
-    E extends string & keyof TVersions[V]['emits'],
-    U,
-  >(version: V, type: E, output: U) {
-    const emit: z.ZodTypeAny | undefined =
-      this._versions?.[version]?.emits?.[type];
-    if (!emit) {
-      throw new Error(
-        `Emit type "${type.toString()}" for version "${version}" not found in contract "${this._uri}"`,
-      );
-    }
-    return emit.safeParse(output);
+  public getSortedVersionNumbers(ordering: 'ASC' | 'DESC') {
+    const sorted = (Object.keys(this._versions) as ArvoSemanticVersion[]).sort(
+      (a, b) => compareSemanticVersions(b, a),
+    );
+    return ordering === 'DESC' ? sorted : sorted.reverse();
   }
 
   /**
