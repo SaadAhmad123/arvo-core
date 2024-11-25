@@ -113,7 +113,7 @@ export default class ArvoEventFactory<
             data: validationResult.data,
           },
           extensions,
-          opentelemetry,
+          { disable: true },
         );
       } catch (error) {
         exceptionToSpan(error as Error);
@@ -192,7 +192,7 @@ export default class ArvoEventFactory<
             data: validationResult.data,
           },
           extensions,
-          opentelemetry,
+          { disable: true },
         );
       } catch (error) {
         exceptionToSpan(error as Error);
@@ -270,7 +270,7 @@ export default class ArvoEventFactory<
             dataschema: `${this.contract.uri}/${ArvoOrchestrationSubject.WildCardMachineVersion}`,
           },
           extensions,
-          opentelemetry,
+          { disable: true },
         );
       } catch (error) {
         exceptionToSpan(error as Error);
