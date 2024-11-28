@@ -161,7 +161,7 @@ export const createArvoEvent = <
     ExecutionOpenTelemetryConfiguration & { disable: boolean }
   >,
 ): ArvoEvent<TData, TExtension, TType> => {
-  if (!opentelemetry?.disable) {
+  if (opentelemetry?.disable) {
     return generator(event, extensions, {
       traceparent: null,
       tracestate: null,
