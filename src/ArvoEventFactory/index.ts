@@ -1,4 +1,3 @@
-import ArvoContract from '../ArvoContract';
 import { z } from 'zod';
 import { createArvoEvent } from '../ArvoEvent/helpers';
 import { CreateArvoEvent } from '../ArvoEvent/types';
@@ -11,7 +10,6 @@ import {
 } from '../OpenTelemetry';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { ExecutionOpenTelemetryConfiguration } from '../OpenTelemetry/types';
-import { ArvoSemanticVersion } from '../types';
 import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
 import { EventDataschemaUtil } from '../utils';
 

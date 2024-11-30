@@ -19,7 +19,7 @@ describe('ArvoOrchestratorContract', () => {
       uri: testUri,
       name: orchestratorType,
       metadata: {
-        name: 1 as const
+        name: 1 as const,
       },
       versions: {
         '0.0.1': {

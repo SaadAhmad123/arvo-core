@@ -19,7 +19,11 @@ import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
  * ```
  */
 export const createArvoEventFactory = <
-  TContract extends VersionedArvoContract<ArvoContract<any, any, any, any>, ArvoSemanticVersion, Record<string, any>>,
+  TContract extends VersionedArvoContract<
+    ArvoContract<any, any, any, any>,
+    ArvoSemanticVersion,
+    Record<string, any>
+  >,
 >(
   contract: TContract,
 ) => new ArvoEventFactory(contract);

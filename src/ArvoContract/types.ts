@@ -70,12 +70,8 @@ export interface IArvoContract<
  * and documentation purposes. This structure follows the JSON Schema specification.
  */
 export type ArvoContractJSONSchema = {
-  /** The unique URI identifier for the contract */
   uri: string;
-  /** The human-readable description of the contract */
   description: string | null;
-  /** The metadata of the contract */
   metadata: Record<string, any> | null;
-  /** Array of versioned schemas for this contract */
   versions: Omit<VersionedArvoContractJSONSchema, 'uri' | 'description'>[];
 };

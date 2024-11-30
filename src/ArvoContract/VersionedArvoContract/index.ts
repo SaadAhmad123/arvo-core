@@ -12,91 +12,93 @@ import { logToSpan } from '../../OpenTelemetry';
 /**
  * Implements a version-specific view of an ArvoContract with type-safe schema validation
  * and JSON Schema generation capabilities.
- *
- * @template TContract - Base ArvoContract type containing version information
- * @template TVersion - Specific semantic version being implemented
- * @template TMetadata - The contract metadata
  */
 export class VersionedArvoContract<
   TContract extends ArvoContract,
   TVersion extends ArvoSemanticVersion & keyof TContract['versions'],
   TMetaData extends Record<string, any> = Record<string, any>,
 > {
-  /** Unique identifier for this contract, inherited from the base contract */
-  public readonly uri: TContract['uri'];
-
-  /** Semantic version of this contract implementation */
-  public readonly version: TVersion;
-
-  /** Optional description explaining the contract's purpose */
-  public readonly description: string | null;
-
-  /** Specification of events this contract accepts */
-  public readonly accepts: ArvoContractRecord<
+  private readonly _uri: TContract['uri'];
+  private readonly _version: TVersion;
+  private readonly _description: string | null;
+  private readonly _accepts: ArvoContractRecord<
     TContract['type'],
     TContract['versions'][TVersion]['accepts']
   >;
-
-  /** Map of event types to their validation schemas */
-  public readonly emitMap: TContract['versions'][TVersion]['emits'];
-
-  /** Array form of emittable events with type/schema pairs */
-  public readonly emits: ReturnType<
+  private readonly _emitMap: TContract['versions'][TVersion]['emits'];
+  private readonly _emits: ReturnType<
     typeof transformEmitsToArray<TContract, TVersion>
   >;
+  private readonly _metadata: TMetaData;
+  private readonly _systemError: TContract['systemError'];
 
-  /** The metadate of the contract */
-  public readonly metadata: TMetaData;
-
-  /** The automatically generated system error of the contract */
-  public readonly systemError: TContract['systemError'];
+  public get uri() {
+    return this._uri;
+  }
+  public get version() {
+    return this._version;
+  }
+  public get description() {
+    return this._description;
+  }
+  public get accepts() {
+    return this._accepts;
+  }
+  public get emitMap() {
+    return this._emitMap;
+  }
+  public get metadata() {
+    return this._metadata;
+  }
+  public get systemError() {
+    return this._systemError;
+  }
+  public get emits() {
+    return this._emits;
+  }
 
   constructor(param: IVersionedArvoContract<TContract, TVersion, TMetaData>) {
-    this.uri = param.uri;
-    this.version = param.version;
-    this.description = param.description;
-    this.accepts = param.accepts;
-    this.emitMap = param.emits;
-    this.emits = transformEmitsToArray(this.emitMap);
-    this.metadata = param.metadata;
-    this.systemError = param.systemError;
+    this._uri = param.uri;
+    this._version = param.version;
+    this._description = param.description;
+    this._accepts = param.accepts;
+    this._emitMap = param.emits;
+    this._emits = transformEmitsToArray(this.emitMap);
+    this._metadata = param.metadata;
+    this._systemError = param.systemError;
   }
 
   /**
    * Converts the contract to JSON Schema format
-   * @param [includeMetadata] - Whether to include metadata. Default is false.
    * @returns Contract specification in JSON Schema format for documentation/serialization
    */
-  public toJsonSchema(
-    includeMetadata: boolean = false,
-  ): VersionedArvoContractJSONSchema {
+  public toJsonSchema(): VersionedArvoContractJSONSchema {
     try {
       return {
-        uri: this.uri,
-        description: this.description,
-        version: this.version,
-        metadata: includeMetadata ? this.metadata : null,
+        uri: this._uri,
+        description: this._description,
+        version: this._version,
+        metadata: this._metadata,
         accepts: {
-          type: this.accepts.type,
-          schema: zodToJsonSchema(this.accepts.schema),
+          type: this._accepts.type,
+          schema: zodToJsonSchema(this._accepts.schema),
         },
         systemError: {
-          type: this.systemError.type,
-          schema: zodToJsonSchema(this.systemError.schema),
+          type: this._systemError.type,
+          schema: zodToJsonSchema(this._systemError.schema),
         },
-        emits: Object.entries(this.emitMap).map(([key, value]) => ({
+        emits: Object.entries(this._emitMap).map(([key, value]) => ({
           type: key,
           schema: zodToJsonSchema(value),
         })),
       };
     } catch (e) {
+      const errorMessage = `VersionedArvoContract.toJsonSchema failed: ${(e as Error).message}`;
       logToSpan({
         level: 'ERROR',
-        message: `VersionedArvoContract.toJsonSchema failed: ${(e as Error).message}`,
+        message: errorMessage,
       });
-      throw new Error(
-        `VersionedArvoContract.toJsonSchema failed: ${(e as Error).message}`,
-      );
+      throw new Error(errorMessage);
     }
   }
 }

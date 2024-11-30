@@ -2,7 +2,7 @@ import {
   createArvoContract,
   createArvoEventFactory,
   EventDataschemaUtil,
-  WildCardArvoSemanticVersion
+  WildCardArvoSemanticVersion,
 } from '../../src';
 import { z } from 'zod';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';

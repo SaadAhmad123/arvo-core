@@ -13,15 +13,12 @@ import {
   isWildCardArvoSematicVersion,
   WildCardArvoSemanticVersion,
 } from './WildCardArvoSemanticVersion';
+import { logToSpan } from '../OpenTelemetry';
 
 /**
  * Represents a contract with defined input and output schemas for event-driven architectures.
  * The ArvoContract class provides type-safe validation and versioning capabilities for event handling,
  * ensuring consistency in message passing between different parts of the system.
- *
- * @template TUri - The URI identifier for the contract, must be a string type
- * @template TType - The accept type for the contract, must be a string type
- * @template TVersions - Record of versioned schemas defining contract structure per version
  *
  * @example
  * ```typescript
@@ -30,7 +27,7 @@ import {
  *   type: 'com.process.data',
  *   description: 'An example contract',
  *   metadata: {
- *     metadata1: "something"
+ *     visibility: "public"
  *   }
  *   versions: {
  *     '1.0.0': {
@@ -159,9 +156,6 @@ export default class ArvoContract<
   /**
    * Retrieves a specific version of the contract or resolves special version identifiers.
    *
-   * @template V - Type parameter constrained to valid semantic versions in TVersions
-   * @template S - Type parameter for special version identifiers
-   *
    * @param option - Version identifier or special version string
    * - Specific version (e.g., "1.0.0")
    * - "latest" or "any" for the most recent version
@@ -213,11 +207,6 @@ export default class ArvoContract<
 
   /**
    * Retrieves version numbers in sorted order based on semantic versioning rules.
-   *
-   * @param ordering - Sort direction for versions
-   * - 'ASC' - Ascending order (oldest to newest)
-   * - 'DESC' - Descending order (newest to oldest)
-   *
    * @returns Array of semantic versions sorted according to specified ordering
    */
   public getSortedVersionNumbers(ordering: 'ASC' | 'DESC') {
@@ -230,8 +219,6 @@ export default class ArvoContract<
   /**
    * Exports the ArvoContract instance as a plain object conforming to the IArvoContract interface.
    * This method can be used to serialize the contract or to create a new instance with the same parameters.
-   *
-   * @returns An object representing the contract, including its URI, accepts, and emits properties.
    */
   public export(): IArvoContract<TUri, TType, TVersions> {
     return {
@@ -247,28 +234,33 @@ export default class ArvoContract<
    * Converts the ArvoContract instance to a JSON Schema representation.
    * This method provides a way to represent the contract's structure and validation rules
    * in a format that conforms to the JSON Schema specification.
-   *
-   * @returns An object representing the contract in JSON Schema format:
    */
-  public toJsonSchema(
-    includeMetadata: boolean = false,
-  ): ArvoContractJSONSchema {
-    return {
-      uri: this._uri,
-      description: this._description,
-      metadata: includeMetadata ? this._metadata : null,
-      versions: Object.keys(this._versions).map((version) => {
-        const jsonSchema = this.version(
-          version as ArvoSemanticVersion,
-        ).toJsonSchema(false);
-        return {
-          version: jsonSchema.version,
-          accepts: jsonSchema.accepts,
-          systemError: jsonSchema.systemError,
-          emits: jsonSchema.emits,
-          metadata: jsonSchema.metadata,
-        };
-      }),
-    };
+  public toJsonSchema(): ArvoContractJSONSchema {
+    try {
+      return {
+        uri: this._uri,
+        description: this._description,
+        metadata: this._metadata,
+        versions: Object.keys(this._versions).map((version) => {
+          const jsonSchema = this.version(
+            version as ArvoSemanticVersion,
+          ).toJsonSchema();
+          return {
+            version: jsonSchema.version,
+            accepts: jsonSchema.accepts,
+            systemError: jsonSchema.systemError,
+            emits: jsonSchema.emits,
+            metadata: jsonSchema.metadata,
+          };
+        }),
+      };
+    } catch (e) {
+      const errorMessage = `ArvoContract.toJsonSchema failed: ${(e as Error).message}`;
+      logToSpan({
+        level: 'ERROR',
+        message: errorMessage,
+      });
+      throw new Error(errorMessage);
+    }
   }
 }

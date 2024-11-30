@@ -159,9 +159,7 @@ describe('ArvoOrchestrationSubject', () => {
       });
 
       const parsed = ArvoOrchestrationSubject.parse(childSubject);
-      expect(parsed.orchestrator.version).toBe(
-        WildCardArvoSemanticVersion
-      );
+      expect(parsed.orchestrator.version).toBe(WildCardArvoSemanticVersion);
     });
 
     it('should throw error when parent subject is invalid', () => {

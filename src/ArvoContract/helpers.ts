@@ -7,23 +7,10 @@ import { z } from 'zod';
 /**
  * Creates a validated ArvoContract instance with full control over event types and schemas.
  *
- * @template TUri - Contract URI type
- * @template TType - Event type identifier
- * @template TVersions - Record of versioned schemas
- * @template TMetaData - Optional metadata record type
- *
  * @param contract - Contract specification object
- * @param contract.uri - Unique contract identifier
- * @param contract.type - Event type identifier
- * @param contract.versions - Version-specific schema definitions
- * @param contract.metadata - Optional contract metadata
- * @param contract.description - Optional contract description
  *
- * @throws {Error} For invalid URI formats
- * @throws {Error} When using reserved orchestrator prefixes
- * @throws {Error} For invalid version formats
- * @throws {Error} When using wildcard machine versions
- * @throws {Error} For invalid emit type formats
+ * @throws {Error} If the event types contain reserved prefix ({@link ArvoOrchestratorEventTypeGen})
+ * @throws {Error} If any of the ArvoContract's internal validations fail. See {@link ArvoContract}
  *
  * @returns A fully typed and validated ArvoContract instance
  *
@@ -101,10 +88,7 @@ export const createArvoContract = <
 
 /**
  * Creates an ArvoContract with standardized naming conventions and a simplified event pattern.
- *
- * @template TUri - Contract URI type
- * @template TType - Base event type (without prefixes)
- * @template TVersions - Version-specific schema definitions
+ * Use this to create contracts with one emit type only.
  *
  * @param param - Contract configuration
  * @param param.uri - Contract identifier URI
@@ -114,6 +98,8 @@ export const createArvoContract = <
  * @param param.description - Optional contract description
  *
  * @returns ArvoContract with standardized type formatting and metadata
+ *
+ * @throws {Error} If any of the validations in {@link ArvoContract} or {@link createArvoContract} fail
  *
  * @example
  * ```typescript
@@ -134,14 +120,6 @@ export const createArvoContract = <
  *     }
  *   }
  * });
- *
- * // Generated contract structure:
- * // Accept type: "com.user.create"
- * // Emit type: "evt.user.create.success"
- * // Metadata: {
- * //   contractType: 'SimpleArvoContract',
- * //   rootType: 'user.create'
- * // }
  * ```
  *
  * @remarks
@@ -149,10 +127,6 @@ export const createArvoContract = <
  * - Automatically prefixes accept types with "com."
  * - Creates a single emit type with "evt." prefix and ".success" suffix
  * - Adds standard metadata identifying it as a SimpleArvoContract
- * - Maintains complete type safety and schema validation
- *
- * For contracts requiring custom event type patterns or multiple emit types,
- * use {@link createArvoContract} instead.
  */
 export const createSimpleArvoContract = <
   TUri extends string,
@@ -164,7 +138,7 @@ export const createSimpleArvoContract = <
       emits: z.ZodTypeAny;
     }
   >,
-  TMetaData extends Record<string, any> = Record<string, any>,
+  TMetaData extends Record<string, any>,
 >(param: {
   uri: TUri;
   type: TType;
