@@ -1,4 +1,3 @@
-import ArvoContract from '../ArvoContract';
 import { z } from 'zod';
 import { createArvoEvent } from '../ArvoEvent/helpers';
 import { CreateArvoEvent } from '../ArvoEvent/types';
@@ -11,16 +10,13 @@ import {
 } from '../OpenTelemetry';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { ExecutionOpenTelemetryConfiguration } from '../OpenTelemetry/types';
-import { ArvoSemanticVersion } from '../types';
-import ArvoOrchestrationSubject from '../ArvoOrchestrationSubject';
 import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
+import { EventDataschemaUtil } from '../utils';
 
 /**
  * Factory class for creating and validating events based on a versioned Arvo contract.
  * Handles event creation, validation, and OpenTelemetry integration for a specific
  * contract version.
- *
- * @template TContract - The versioned contract type this factory is bound to
  *
  * @example
  * ```typescript
@@ -34,7 +30,7 @@ import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
  * ```
  */
 export default class ArvoEventFactory<
-  TContract extends VersionedArvoContract<ArvoContract, ArvoSemanticVersion>,
+  TContract extends VersionedArvoContract<any, any, any>,
 > {
   private readonly contract: TContract;
 
@@ -49,8 +45,6 @@ export default class ArvoEventFactory<
 
   /**
    * Creates and validates an event matching the contract's accept specification.
-   *
-   * @template TExtension - Additional properties to include in the event
    *
    * @param event - The event configuration object
    * @param [extensions] - Optional additional properties for the event
@@ -109,7 +103,7 @@ export default class ArvoEventFactory<
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             type: this.contract.accepts.type,
             datacontenttype: ArvoDataContentType,
-            dataschema: `${this.contract.uri}/${this.contract.version}`,
+            dataschema: EventDataschemaUtil.create(this.contract),
             data: validationResult.data,
           },
           extensions,
@@ -131,9 +125,6 @@ export default class ArvoEventFactory<
   /**
    * Creates and validates an event matching one of the contract's emit specifications.
    *
-   * @template U - The specific emit event type from the contract
-   * @template TExtension - Additional properties to include in the event
-   *
    * @param event - The event configuration object
    * @param [extensions] - Optional additional properties for the event
    * @param [opentelemetry] - Optional OpenTelemetry configuration
@@ -152,11 +143,11 @@ export default class ArvoEventFactory<
    * ```
    */
   emits<
-    U extends string & keyof TContract['emits'],
+    U extends string & keyof TContract['emitMap'],
     TExtension extends Record<string, any>,
   >(
     event: Omit<
-      CreateArvoEvent<z.input<TContract['emits'][U]>, U>,
+      CreateArvoEvent<z.input<TContract['emitMap'][U]>, U>,
       'datacontenttype' | 'dataschema'
     >,
     extensions?: TExtension,
@@ -172,7 +163,7 @@ export default class ArvoEventFactory<
       span.setStatus({ code: SpanStatusCode.OK });
       const otelHeaders = currentOpenTelemetryHeaders();
       try {
-        const validationResult = this.contract.emits?.[event.type]?.safeParse(
+        const validationResult = this.contract.emitMap?.[event.type]?.safeParse(
           event.data,
         );
         if (!validationResult?.success) {
@@ -181,14 +172,14 @@ export default class ArvoEventFactory<
             `No contract available for ${event.type}`;
           throw new Error(`Emit Event data validation failed: ${msg}`);
         }
-        return createArvoEvent<z.infer<TContract['emits'][U]>, TExtension, U>(
+        return createArvoEvent<z.infer<TContract['emitMap'][U]>, TExtension, U>(
           {
             ...event,
             traceparent:
               event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             datacontenttype: ArvoDataContentType,
-            dataschema: `${this.contract.uri}/${this.contract.version}`,
+            dataschema: EventDataschemaUtil.create(this.contract),
             data: validationResult.data,
           },
           extensions,
@@ -209,8 +200,6 @@ export default class ArvoEventFactory<
 
   /**
    * Creates a system error event for error reporting and handling.
-   *
-   * @template TExtension - Additional properties to include in the error event
    *
    * @param event - The error event configuration
    * @param event.error - The Error instance to convert to an event
@@ -267,7 +256,9 @@ export default class ArvoEventFactory<
               errorStack: error.stack ?? null,
             },
             datacontenttype: ArvoDataContentType,
-            dataschema: `${this.contract.uri}/${ArvoOrchestrationSubject.WildCardMachineVersion}`,
+            dataschema: EventDataschemaUtil.createWithWildCardVersion(
+              this.contract,
+            ),
           },
           extensions,
           { disable: true },

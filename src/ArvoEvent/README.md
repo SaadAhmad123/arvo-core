@@ -28,28 +28,9 @@ ArvoEvent is a powerful and flexible class for creating and managing CloudEvents
 ```typescript
 import {
   createArvoEvent,
-  ArvoEventData,
-  CloudEventExtension,
-  TelemetryContext,
 } from 'arvo-core';
 
-// Define your event data type
-interface MyEventData extends ArvoEventData {
-  message: string;
-}
-
-// Define any custom extensions
-interface MyExtensions extends CloudEventExtension {
-  customfield: string;
-}
-
-// Optional: Create a telemetry context
-const telemetryContext: TelemetryContext = {
-  // ... your telemetry context
-};
-
-// Create the event
-const event = createArvoEvent<MyEventData, MyExtensions>(
+const event = createArvoEvent(
   {
     source: 'event.producer',
     type: 'com.example.event',

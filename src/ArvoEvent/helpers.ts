@@ -13,22 +13,7 @@ import { v4 as uuid4 } from 'uuid';
 import { ExecutionOpenTelemetryConfiguration } from '../OpenTelemetry/types';
 
 /**
- * Internal generator function for creating ArvoEvent instances.
- *
- * @template TData - Type of the event data
- * @template TExtension - Type of cloud event extensions
- * @param {CreateArvoEvent<any, any>} event - The event configuration and data
- * @param {any} extensions - Cloud event extensions
- * @param {ReturnType<typeof currentOpenTelemetryHeaders>} otelHeaders - OpenTelemetry headers
- * @returns {ArvoEvent<any, any, any>} A new ArvoEvent instance
- *
- * @remarks
- * This function handles the actual creation of the ArvoEvent instance, including:
- * - Generation of default values for optional fields
- * - URI encoding of relevant fields
- * - Validation of data content type
- * - Integration with OpenTelemetry headers
- * ```
+ * Internal generator function for creating  instances.
  */
 const generator = (
   event: CreateArvoEvent<any, any>,
@@ -72,17 +57,15 @@ const generator = (
 /**
  * Creates a strongly-typed ArvoEvent with configurable telemetry options.
  *
- * @template TData - Event data type extending ArvoEventData
- * @template TExtension - Cloud event extension type
- * @template TType - String literal type for event type
- *
  * @param event - Event configuration and data
  * @param [extensions] - Optional cloud event extensions
  * @param [opentelemetry] - OpenTelemetry configuration with options:
  *   - disable - Completely disables telemetry if true
  *   - tracer - Custom OpenTelemetry tracer instance
  *
- * @returns ArvoEvent instance
+ * @throw {Error} In case any validation in {@link ArvoEvent} fails.
+ *
+ * @returns ArvoEvent with type-safety
  *
  * @example
  * ```typescript
@@ -118,37 +101,6 @@ const generator = (
  *   { tracer: customTracer }
  * );
  * ```
- *
- * @remarks
- * This function provides several key features:
- *
- * 1. **Type Safety**:
- *    - Ensures event data matches specified type
- *    - Validates extension structure
- *    - Provides type-safe event type strings
- *
- * 2. **Default Handling**:
- *    - Generates UUID if no ID provided
- *    - Sets current timestamp if no time provided
- *    - Uses default ArvoDataContentType if none specified
- *
- * 3. **URI Handling**:
- *    - Automatically encodes URI components (source, subject, to, redirectto, dataschema)
- *    - Validates URI format
- *
- * 4. **OpenTelemetry Integration**:
- *    - Creates spans for event creation
- *    - Tracks errors and warnings
- *    - Propagates trace context
- *
- * 5. **Validation**:
- *    - Checks data content type compatibility
- *    - Validates required fields
- *    - Ensures URI format correctness
- *
- * @see {@link ArvoEvent} For the structure of the created event
- * @see {@link ArvoDataContentType} For supported content types
- * @see {@link CloudEventExtension} For extension structure
  */
 export const createArvoEvent = <
   TData extends ArvoEventData,

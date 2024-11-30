@@ -17,3 +17,7 @@ export const ArvoSemanticVersionSchema = z
   .string()
   .regex(/^\d+\.\d+\.\d+$/, 'Invalid version format of the semantic version')
   .describe('Semantic version of the Arvo component in the format X.Y.Z');
+
+// Check is the provided version is a valid arvo semantic version
+export const isValidArvoSemanticVersion = (version: string) =>
+  ArvoSemanticVersionSchema.safeParse(version).success;

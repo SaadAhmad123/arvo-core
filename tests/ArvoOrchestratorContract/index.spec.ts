@@ -3,6 +3,7 @@ import {
   createArvoOrchestratorContract,
   ArvoOrchestratorEventTypeGen,
   ArvoEventSchema,
+  InferVersionedArvoContract,
   createArvoEventFactory,
 } from '../../src';
 
@@ -18,9 +19,16 @@ describe('ArvoOrchestratorContract', () => {
   it('should create an instance with correct properties', () => {
     const contract = createArvoOrchestratorContract({
       uri: testUri,
-      type: orchestratorType,
+      name: orchestratorType,
+      metadata: {
+        name: 1 as const,
+      },
       versions: {
         '0.0.1': {
+          init: testInitSchema,
+          complete: testCompleteSchema,
+        },
+        '0.0.2': {
           init: testInitSchema,
           complete: testCompleteSchema,
         },
@@ -49,7 +57,7 @@ describe('ArvoOrchestratorContract', () => {
     expect(() => {
       createArvoOrchestratorContract({
         uri: testUri,
-        type: 'Invalid Type',
+        name: 'Invalid Type',
         versions: {
           '0.0.1': {
             init: testInitSchema,
@@ -58,14 +66,14 @@ describe('ArvoOrchestratorContract', () => {
         },
       });
     }).toThrow(
-      "Invalid 'type' = 'Invalid Type'. The 'type' must only contain alphanumeric characters. e.g. test.orchestrator",
+      "Invalid 'name' = 'Invalid Type'. The 'name' must only contain alphanumeric characters. e.g. test.orchestrator",
     );
   });
 
   it('should properly merge OrchestrationInitEventBaseSchema with init schema', () => {
     const contract = createArvoOrchestratorContract({
       uri: testUri,
-      type: orchestratorType,
+      name: orchestratorType,
       versions: {
         '0.0.1': {
           init: testInitSchema,
@@ -99,7 +107,7 @@ describe('ArvoOrchestratorContract', () => {
 
     const contract = createArvoOrchestratorContract({
       uri: testUri,
-      type: orchestratorType,
+      name: orchestratorType,
       versions: {
         '1.0.0': {
           init: testInitSchema,
