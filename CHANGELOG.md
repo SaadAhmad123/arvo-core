@@ -76,3 +76,7 @@
 
 - Remove potential security bug of reading the file system
 
+## [2.0.4] - 2024-12-01
+
+- Refactored code implementation architecture for better maintainability
+

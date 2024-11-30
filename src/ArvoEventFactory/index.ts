@@ -18,8 +18,6 @@ import { EventDataschemaUtil } from '../utils';
  * Handles event creation, validation, and OpenTelemetry integration for a specific
  * contract version.
  *
- * @template TContract - The versioned contract type this factory is bound to
- *
  * @example
  * ```typescript
  * const contract = createArvoContract({
@@ -47,8 +45,6 @@ export default class ArvoEventFactory<
 
   /**
    * Creates and validates an event matching the contract's accept specification.
-   *
-   * @template TExtension - Additional properties to include in the event
    *
    * @param event - The event configuration object
    * @param [extensions] - Optional additional properties for the event
@@ -129,9 +125,6 @@ export default class ArvoEventFactory<
   /**
    * Creates and validates an event matching one of the contract's emit specifications.
    *
-   * @template U - The specific emit event type from the contract
-   * @template TExtension - Additional properties to include in the event
-   *
    * @param event - The event configuration object
    * @param [extensions] - Optional additional properties for the event
    * @param [opentelemetry] - Optional OpenTelemetry configuration
@@ -207,8 +200,6 @@ export default class ArvoEventFactory<
 
   /**
    * Creates a system error event for error reporting and handling.
-   *
-   * @template TExtension - Additional properties to include in the error event
    *
    * @param event - The error event configuration
    * @param event.error - The Error instance to convert to an event

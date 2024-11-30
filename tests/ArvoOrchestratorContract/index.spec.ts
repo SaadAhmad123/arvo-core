@@ -3,6 +3,8 @@ import {
   createArvoOrchestratorContract,
   ArvoOrchestratorEventTypeGen,
   ArvoEventSchema,
+  InferVersionedArvoContract,
+  createArvoEventFactory,
 } from '../../src';
 
 describe('ArvoOrchestratorContract', () => {
@@ -23,6 +25,10 @@ describe('ArvoOrchestratorContract', () => {
       },
       versions: {
         '0.0.1': {
+          init: testInitSchema,
+          complete: testCompleteSchema,
+        },
+        '0.0.2': {
           init: testInitSchema,
           complete: testCompleteSchema,
         },
@@ -60,7 +66,7 @@ describe('ArvoOrchestratorContract', () => {
         },
       });
     }).toThrow(
-      "Invalid 'name' = 'Invalid Type'. The 'type' must only contain alphanumeric characters. e.g. test.orchestrator",
+      "Invalid 'name' = 'Invalid Type'. The 'name' must only contain alphanumeric characters. e.g. test.orchestrator",
     );
   });
 

@@ -4,6 +4,7 @@ import {
   ArvoSemanticVersion,
   cleanString,
   createArvoContract,
+  createSimpleArvoContract,
 } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
@@ -34,6 +35,45 @@ describe('ArvoContract', () => {
   };
 
   describe('createArvoContract', () => {
+
+    it('should create a valid simple contract, using createSimpleArvoContract', () => {
+      const contract = createSimpleArvoContract({
+        uri: `#/simple/test`,
+        type: 'simple.test',
+        description: 'A simple contract',
+        metadata: {
+          access: 'private'
+        },
+        versions: {
+          '0.0.1': {
+            accepts: z.object({ a: z.number() }),
+            emits: z.object({ b: z.string() }),
+          },
+          '1.0.1': {
+            accepts: z.object({ a: z.number() }),
+            emits: z.object({ b: z.string() }),
+          },
+        },
+      });
+
+      expect(contract).toBeInstanceOf(ArvoContract);
+      expect(contract.uri).toBe(`#/simple/test`);
+      expect(contract.type).toBe('com.simple.test');
+      expect(contract.version('0.0.1').accepts.type).toBe('com.simple.test');
+      expect(contract.version('0.0.1').emits[0].type).toBe(
+        'evt.simple.test.success',
+      );
+      expect(contract.systemError.type).toBe(`sys.com.simple.test.error`);
+      expect(contract.version('latest').version).toBe('1.0.1');
+      expect(contract.metadata.access).toBe('private')
+      expect(contract.metadata.contractType).toBe('SimpleArvoContract')
+      expect(contract.metadata.rootType).toBe('simple.test')
+
+      expect(contract.version('0.0.1').metadata.access).toBe('private')
+      expect(contract.version('0.0.1').metadata.contractType).toBe('SimpleArvoContract')
+      expect(contract.version('0.0.1').metadata.rootType).toBe('simple.test')
+    });
+
     it('should create a valid ArvoContract instance', () => {
       const contract = createArvoContract(validContractSpec);
       expect(contract).toBeInstanceOf(ArvoContract);
@@ -71,7 +111,7 @@ describe('ArvoContract', () => {
     });
 
     it('should throw an error for event type using orchestrator pattern', () => {
-      const invalidSpec = {
+      let invalidSpec = {
         ...validContractSpec,
         versions: {
           '0.0.1': {
@@ -89,6 +129,20 @@ describe('ArvoContract', () => {
         for Arvo orchestrators.
       `),
       );
+
+      invalidSpec = {
+        ...validContractSpec as any,
+        type: 'arvo.orc.test'
+      };
+      expect(() => createArvoContract(invalidSpec)).toThrow(
+        cleanString(`
+        In contract (uri=#/contracts/myContract), the 'accepts' event (type=arvo.orc.test) must not start
+        with 'arvo.orc' because this is a reserved pattern
+        for Arvo orchestrators.
+      `),
+      );
+
+
     });
 
     it('should create a contract with multiple emits', () => {

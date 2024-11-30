@@ -18,9 +18,6 @@ import { InferArvoEvent } from '../types';
 
 /**
  * Represents an ArvoEvent, which extends the CloudEvent specification.
- * @template TData - The type of the event data, extending ArvoEventData.
- * @template TExtension - The type of additional extensions, extending CloudEventExtension.
- * @template TType - The type name of the event
  */
 export default class ArvoEvent<
   TData extends ArvoEventData = ArvoEventData,
@@ -45,6 +42,9 @@ export default class ArvoEvent<
    * @param context - The CloudEvent context along with Arvo and OpenTelemetry extensions.
    * @param data - The event data.
    * @param extensions - Optional additional extensions.
+   *
+   * @throws {Error} If the datacontenttype is {@link ArvoDataContentType} but the `to` field
+   *                 is not defined
    */
   constructor(
     context: CloudEventContext & ArvoExtension & OpenTelemetryExtension,
@@ -124,8 +124,6 @@ export default class ArvoEvent<
    * (including Arvo and OpenTelemetry extensions) into a single object.
    * If you need to access the CloudEvent fields and extensions separately,
    * use the `cloudevent` getter instead.
-   *
-   * @returns A plain object representation of the ArvoEvent, including all fields and extensions.
    */
   toJSON() {
     return {
@@ -147,9 +145,9 @@ export default class ArvoEvent<
    * Gets OpenTelemetry attributes derived from the ArvoEvent.
    * @returns An object containing OpenTelemetry attributes.
    * The OpenTelemetry attributes for CloudEvents is as per
-   * the spec provided [here](https://opentelemetry.io/docs/specs/semconv/attributes-registry/cloudevents/)
+   * the spec provided [in the official documentation](https://opentelemetry.io/docs/specs/semconv/attributes-registry/cloudevents/).
    * Additionally, the Arvo extension attributed are also returned
-   * as `cloudevents.arvo.event_*` fields
+   * as `cloudevents.arvo.event_*` fields.
    */
   get otelAttributes() {
     return {
@@ -169,56 +167,26 @@ export default class ArvoEvent<
     };
   }
 
-  /**
-   * Gets the 'to' field from the ArvoExtension.
-   * This field represents the intended recipient or destination of the event.
-   * @returns The value of the 'to' field.
-   */
   get to() {
     return this._extensions.to;
   }
 
-  /**
-   * Gets the 'accesscontrol' field from the ArvoExtension.
-   * This field contains access control information for the event.
-   * @returns The value of the 'accesscontrol' field.
-   */
   get accesscontrol() {
     return this._extensions.accesscontrol;
   }
 
-  /**
-   * Gets the 'redirectto' field from the ArvoExtension.
-   * This field indicate an alternative destination for the event.
-   * @returns The value of the 'redirectto' field.
-   */
   get redirectto() {
     return this._extensions.redirectto;
   }
 
-  /**
-   * Gets the 'executionunits' field from the ArvoExtension.
-   * This field contains information about the execution units associated with the event.
-   * @returns The value of the 'executionunits' field.
-   */
   get executionunits() {
     return this._extensions.executionunits;
   }
 
-  /**
-   * Gets the 'traceparent' field from the OpenTelemetryExtension.
-   * This field contains the W3C Trace Context traceparent header.
-   * @returns The value of the 'traceparent' field.
-   */
   get traceparent() {
     return this._extensions.traceparent;
   }
 
-  /**
-   * Gets the 'tracestate' field from the OpenTelemetryExtension.
-   * This field contains the W3C Trace Context tracestate header.
-   * @returns The value of the 'tracestate' field, or undefined if not set.
-   */
   get tracestate() {
     return this._extensions.tracestate;
   }
@@ -232,8 +200,6 @@ export default class ArvoEvent<
    * For accessing all extensions including Arvo and OpenTelemetry,
    * use `<ArvoEvent>.cloudevent.extensions`.
    * For accessing the basic CloudEvent fields, use `<ArvoEvent>.cloudevent.default`.
-   *
-   * @returns An object containing only the custom extensions (TExtension) of the ArvoEvent.
    */
   get extensions() {
     const {

@@ -39,16 +39,7 @@ function isLowerAlphanumeric(input: string): boolean {
  * 3. Schema Merging: Merges provided init schemas with the OrchestrationInitEventBaseSchema
  * 4. Version Support: Handles multiple versions of the contract with their respective schemas
  *
- * @template TUri - The URI type for the contract
- * @template TName - The type identifier for the contract events
- * @template TVersions - Record of versions with their corresponding init and complete schemas
- *
- * @contract contract - Configuration object for the orchestrator contract
- * @param param.uri - The URI that uniquely identifies this contract
- * @param param.name - The base name of the orchestrator (must be lowercase alphanumeric with dots)
- * @param param.versions - Record of version configurations
- * @param param.versions[version].init - Zod schema for initialization event (merged with OrchestrationInitEventBaseSchema)
- * @param param.versions[version].complete - Zod schema for completion event
+ * @param contract - Configuration object for the orchestrator contract
  *
  * @throws {Error} If the type parameter contains invalid characters (must be lowercase alphanumeric with dots)
  *

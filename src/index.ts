@@ -35,10 +35,8 @@ import {
   EventDataschemaUtil,
 } from './utils';
 import ArvoContract from './ArvoContract';
-import {
-  createArvoContract,
-  createSimpleArvoContract,
-} from './ArvoContract/helpers';
+import { createArvoContract } from './ArvoContract/helpers';
+
 import { ArvoContractValidators } from './ArvoContract/validators';
 import {
   ArvoContractRecord,
@@ -80,6 +78,11 @@ import {
   isWildCardArvoSematicVersion,
   WildCardArvoSemanticVersion,
 } from './ArvoContract/WildCardArvoSemanticVersion';
+import { createSimpleArvoContract } from './ArvoContract/SimpleArvoContract';
+import { SimpleArvoContract } from './ArvoContract/SimpleArvoContract/types';
+
+type AnyArvoContract = ArvoContract<any, any, any, any>
+type AnyVersionedArvoContract = VersionedArvoContract<any, any>
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -155,4 +158,7 @@ export {
   isWildCardArvoSematicVersion,
   WildCardArvoSemanticVersion,
   isValidArvoSemanticVersion,
+  SimpleArvoContract,
+  AnyArvoContract,
+  AnyVersionedArvoContract,
 };

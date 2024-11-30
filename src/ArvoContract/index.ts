@@ -166,17 +166,16 @@ export default class ArvoContract<
    * @throws {Error} When an invalid or non-existent version is requested
    */
   public version<
-    V extends ArvoSemanticVersion & keyof TVersions,
-    S extends 'any' | 'latest' | 'oldest',
+    V extends
+      | (ArvoSemanticVersion & keyof TVersions)
+      | 'any'
+      | 'latest'
+      | 'oldest',
   >(
-    option: V | S,
-  ): V extends ArvoSemanticVersion
+    option: V,
+  ): V extends ArvoSemanticVersion & keyof TVersions
     ? VersionedArvoContract<typeof this, V, TMetaData>
-    : VersionedArvoContract<
-        typeof this,
-        ArvoSemanticVersion & keyof TVersions,
-        TMetaData
-      > {
+    : VersionedArvoContract<any, any, any> {
     let resolvedVersion: ArvoSemanticVersion & keyof TVersions;
 
     if (option === 'any' || option === 'latest') {
@@ -188,7 +187,7 @@ export default class ArvoContract<
         `The contract (uri=${this._uri}) does not have version=${option}`,
       );
     } else {
-      resolvedVersion = option as V;
+      resolvedVersion = option as ArvoSemanticVersion & keyof TVersions;
     }
 
     return new VersionedArvoContract({

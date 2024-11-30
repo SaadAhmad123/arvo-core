@@ -6,8 +6,6 @@ import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
 /**
  * Creates an ArvoEventFactory for a specific version of a contract.
  *
- * @template TContract - The versioned contract type
- *
  * @param contract - The versioned contract to create a factory for
  * @returns An ArvoEventFactory instance for the specified contract version
  *
