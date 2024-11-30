@@ -67,7 +67,7 @@ export const createSimpleArvoContract = <
   const mergedMetadata = {
     ...(param.metadata ?? {}),
     contractType: 'SimpleArvoContract' as const,
-    rootType: param.type as TType,
+    rootType: param.type,
   };
 
   return createArvoContract({
