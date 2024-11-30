@@ -1,6 +1,7 @@
 import {
   ArvoOrchestrationSubject,
   ArvoOrchestrationSubjectContent,
+  WildCardArvoSemanticVersion,
 } from '../../src';
 import * as zlib from 'node:zlib';
 
@@ -159,7 +160,7 @@ describe('ArvoOrchestrationSubject', () => {
 
       const parsed = ArvoOrchestrationSubject.parse(childSubject);
       expect(parsed.orchestrator.version).toBe(
-        ArvoOrchestrationSubject.WildCardMachineVersion,
+        WildCardArvoSemanticVersion
       );
     });
 

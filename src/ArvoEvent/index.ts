@@ -27,15 +27,15 @@ export default class ArvoEvent<
   TExtension extends CloudEventExtension = CloudEventExtension,
   TType extends string = string,
 > {
-  readonly id: string;
-  readonly source: string;
-  readonly specversion: string;
-  readonly type: TType;
-  readonly subject: string;
-  readonly datacontenttype: string;
-  readonly dataschema: string | null;
-  readonly data: TData;
-  readonly time: string;
+  public readonly id: string;
+  public readonly source: string;
+  public readonly specversion: string;
+  public readonly type: TType;
+  public readonly subject: string;
+  public readonly datacontenttype: string;
+  public readonly dataschema: string | null;
+  public readonly data: TData;
+  public readonly time: string;
   private readonly _extensions: TExtension &
     ArvoExtension &
     OpenTelemetryExtension;

@@ -4,24 +4,19 @@ import { ArvoOrchestrationSubjectContentSchema } from './schema';
 import * as zlib from 'node:zlib';
 import { cleanString } from '../utils';
 import { v4 as uuid4 } from 'uuid';
+import { WildCardArvoSemanticVersion } from '../ArvoContract/WildCardArvoSemanticVersion';
 
 /**
  * Handles the creation and parsing of Arvo orchestration subjects.
  */
 export default class ArvoOrchestrationSubject {
   /**
-   * Represents a wildcard version number used when version matching is not required.
-   * Format follows semantic versioning pattern.
-   */
-  public static readonly WildCardMachineVersion: ArvoSemanticVersion = '0.0.0';
-
-  /**
    * Creates a new Arvo orchestration subject with basic required parameters.
    * This is a convenience method that wraps the more detailed {@link create} method.
    *
    * @param param - Configuration object for the orchestration subject
    * @param param.orchestator - Name identifier of the orchestrator
-   * @param param.version - Version of the orchestrator. If null, defaults to {@link WildCardMachineVersion}
+   * @param param.version - Version of the orchestrator. If null, defaults to {@link WildCardArvoSemanticVersion}
    * @param param.initiator - Identifier of the entity initiating the orchestration
    * @param param.meta - Optional metadata key-value pairs for additional orchestration context
    * @returns A base64 encoded string containing the compressed orchestration subject data
@@ -56,8 +51,7 @@ export default class ArvoOrchestrationSubject {
     return ArvoOrchestrationSubject.create({
       orchestrator: {
         name: param.orchestator,
-        version:
-          param.version ?? ArvoOrchestrationSubject.WildCardMachineVersion,
+        version: param.version ?? WildCardArvoSemanticVersion,
       },
       execution: {
         id: uuid4(),
@@ -75,7 +69,7 @@ export default class ArvoOrchestrationSubject {
    *
    * @param param - Configuration object for creating a new subject from a parent
    * @param param.orchestator - Name identifier of the new orchestrator
-   * @param param.version - Version of the new orchestrator. If null, defaults to {@link WildCardMachineVersion}
+   * @param param.version - Version of the new orchestrator. If null, defaults to {@link WildCardArvoSemanticVersion}
    * @param param.subject - Base64 encoded string of the parent orchestration subject
    * @param param.meta - Optional additional metadata to merge with the parent's metadata
    * @returns A new base64 encoded string containing the compressed orchestration subject data
@@ -109,7 +103,7 @@ export default class ArvoOrchestrationSubject {
     const parsedSubject = ArvoOrchestrationSubject.parse(param.subject);
     return ArvoOrchestrationSubject.new({
       initiator: parsedSubject.orchestrator.name,
-      version: param.version ?? ArvoOrchestrationSubject.WildCardMachineVersion,
+      version: param.version ?? WildCardArvoSemanticVersion,
       orchestator: param.orchestator,
       meta: {
         ...(parsedSubject.meta ?? {}),

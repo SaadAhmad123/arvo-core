@@ -93,96 +93,6 @@ export type InferArvoEvent<T> =
 type InferZodSchema<T> = T extends z.ZodTypeAny ? z.infer<T> : never;
 
 /**
- * A comprehensive type utility that infers the complete structure of an ArvoContract,
- * including versioned event types, accepted events, and emitted events.
- *
- * @template T - The ArvoContract type to infer from
- *
- * @property uri - Unique identifier for the contract
- * @property type - The event type this contract handles
- * @property versions - Version-specific contract definitions
- * @property versions[version].accepts - Events this contract version can handle
- * @property versions[version].emits - Events this contract version can produce
- * @property systemError - System error event definition for this contract
- *
- * @example
- * ```typescript
- * const userContract = new ArvoContract(
- *   'user-service',
- *   'user.operation',
- *   {
- *     '1.0.0': {
- *       accepts: z.object({ userId: z.string() }),
- *       emits: {
- *         'user.created': z.object({ userId: z.string(), timestamp: z.string() }),
- *         'user.failed': z.object({ error: z.string() })
- *       }
- *     }
- *   }
- * );
- *
- * type UserContractType = InferArvoContract<typeof userContract>;
- * // Results in:
- * // {
- * //   uri: 'user-service';
- * //   type: 'user.operation';
- * //   versions: {
- * //     '1.0.0': {
- * //       accepts: { ... inferred input event type ... };
- * //       emits: {
- * //         'user.created': { ... inferred output event type ... };
- * //         'user.failed': { ... inferred error event type ... };
- * //       }
- * //     }
- * //   };
- * //   systemError: { ... inferred system error event type ... };
- * // }
- * ```
- */
-export type InferArvoContract<
-  T extends ArvoContract<
-    string,
-    string,
-    Record<
-      ArvoSemanticVersion,
-      {
-        accepts: z.ZodTypeAny;
-        emits: Record<string, z.ZodTypeAny>;
-      }
-    >
-  >,
-> =
-  T extends ArvoContract<infer TUri, infer TType, infer TVersion>
-    ? {
-        uri: TUri;
-        type: TType;
-        versions: {
-          [V in ArvoSemanticVersion & keyof TVersion]: {
-            accepts: InferArvoEvent<
-              ArvoEvent<InferZodSchema<TVersion[V]['accepts']>, {}, TType>
-            >;
-            emits: {
-              [K in keyof TVersion[V]['emits']]: InferArvoEvent<
-                ArvoEvent<
-                  InferZodSchema<TVersion[V]['emits'][K]>,
-                  {},
-                  K & string
-                >
-              >;
-            };
-          };
-        };
-        systemError: InferArvoEvent<
-          ArvoEvent<
-            InferZodSchema<T['systemError']['schema']>,
-            {},
-            T['systemError']['type']
-          >
-        >;
-      }
-    : never;
-
-/**
  * Represents the structure of an Arvo system error.
  * This type is inferred from the ArvoErrorSchema and provides
  * the standard error format used across all Arvo contracts.
@@ -220,7 +130,7 @@ export type ArvoErrorType = z.infer<typeof ArvoErrorSchema>;
  * @see {@link ArvoEvent} for the base event structure
  */
 export type InferVersionedArvoContract<
-  TVersion extends VersionedArvoContract<ArvoContract, ArvoSemanticVersion>,
+  TVersion extends VersionedArvoContract<any, any, any>,
 > = {
   accepts: InferArvoEvent<
     ArvoEvent<
@@ -236,9 +146,17 @@ export type InferVersionedArvoContract<
       TVersion['systemError']['type']
     >
   >;
-  emits: {
-    [K in string & keyof TVersion['emits']]: InferArvoEvent<
-      ArvoEvent<InferZodSchema<TVersion['emits'][K]>, {}, K>
+  emitMap: {
+    [K in string & keyof TVersion['emitMap']]: InferArvoEvent<
+      ArvoEvent<InferZodSchema<TVersion['emitMap'][K]>, {}, K>
     >;
   };
+  emits: Array<
+    {
+      [K in string & keyof TVersion['emitMap']]: InferArvoEvent<
+        ArvoEvent<InferZodSchema<TVersion['emitMap'][K]>, {}, K>
+      >;
+    }[string & keyof TVersion['emitMap']]
+  >;
+  metadata: TVersion['metadata'];
 };

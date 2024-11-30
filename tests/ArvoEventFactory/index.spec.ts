@@ -1,8 +1,8 @@
 import {
-  ArvoOrchestrationSubject,
   createArvoContract,
   createArvoEventFactory,
-  parseEventDataSchema,
+  EventDataschemaUtil,
+  WildCardArvoSemanticVersion
 } from '../../src';
 import { z } from 'zod';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
@@ -76,7 +76,7 @@ describe('createArvoEventFactory', () => {
       expect(event1).toBeDefined();
       expect(event1.type).toBe('test.output.1');
       expect(event1.data).toEqual({ message: 'saad' });
-      const dataschema = parseEventDataSchema(event1);
+      const dataschema = EventDataschemaUtil.parse(event1);
       expect(dataschema?.uri).toBe('#/mock/contract');
       expect(dataschema?.version).toBe('0.0.1');
     });
@@ -150,8 +150,8 @@ describe('createArvoEventFactory', () => {
       expect(event.data.errorName).toBe('Error');
       expect(event.data.errorMessage).toBe('Some error');
       expect(event.data.errorStack).toBeTruthy();
-      expect(parseEventDataSchema(event)?.version).toBe(
-        ArvoOrchestrationSubject.WildCardMachineVersion,
+      expect(EventDataschemaUtil.parse(event)?.version).toBe(
+        WildCardArvoSemanticVersion,
       );
     });
   });

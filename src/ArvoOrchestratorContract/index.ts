@@ -6,7 +6,7 @@ import {
 import { ArvoOrchestratorEventTypeGen } from './typegen';
 import { OrchestrationInitEventBaseSchema } from './schema';
 import { ArvoSemanticVersion } from '../types';
-import { createArvoContract } from '../ArvoContract/helpers';
+import ArvoContract from '../ArvoContract';
 
 /**
  * Validates if a string contains only uppercase or lowercase alphanumeric characters.
@@ -40,12 +40,12 @@ function isLowerAlphanumeric(input: string): boolean {
  * 4. Version Support: Handles multiple versions of the contract with their respective schemas
  *
  * @template TUri - The URI type for the contract
- * @template TType - The type identifier for the contract events
+ * @template TName - The type identifier for the contract events
  * @template TVersions - Record of versions with their corresponding init and complete schemas
  *
- * @param param - Configuration object for the orchestrator contract
+ * @contract contract - Configuration object for the orchestrator contract
  * @param param.uri - The URI that uniquely identifies this contract
- * @param param.type - The base type identifier (must be lowercase alphanumeric with dots)
+ * @param param.name - The base name of the orchestrator (must be lowercase alphanumeric with dots)
  * @param param.versions - Record of version configurations
  * @param param.versions[version].init - Zod schema for initialization event (merged with OrchestrationInitEventBaseSchema)
  * @param param.versions[version].complete - Zod schema for completion event
@@ -58,7 +58,7 @@ function isLowerAlphanumeric(input: string): boolean {
  * ```typescript
  * const contract = createArvoOrchestratorContract({
  *   uri: '#/orchestrators/data/processor',
- *   type: 'data.processor',
+ *   name: 'data.processor',
  *   versions: {
  *     '1.0.0': {
  *       init: z.object({
@@ -95,7 +95,7 @@ function isLowerAlphanumeric(input: string): boolean {
  */
 export const createArvoOrchestratorContract = <
   TUri extends string,
-  TType extends string,
+  TName extends string,
   TVersions extends Record<
     ArvoSemanticVersion,
     {
@@ -103,32 +103,40 @@ export const createArvoOrchestratorContract = <
       complete: z.ZodObject<any, any, any>;
     }
   >,
+  TMetaData extends Record<string, any>,
 >(
-  param: ICreateArvoOrchestratorContract<TUri, TType, TVersions>,
+  contract: ICreateArvoOrchestratorContract<TUri, TName, TVersions, TMetaData>,
 ) => {
-  if (!isLowerAlphanumeric(param.type)) {
+  if (!isLowerAlphanumeric(contract.name)) {
     throw new Error(
-      `Invalid 'type' = '${param.type}'. The 'type' must only contain alphanumeric characters. e.g. test.orchestrator`,
+      `Invalid 'name' = '${contract.name}'. The 'name' must only contain alphanumeric characters. e.g. test.orchestrator`,
     );
   }
 
-  return createArvoContract(
-    {
-      uri: param.uri,
-      type: ArvoOrchestratorEventTypeGen.init(param.type),
-      versions: Object.fromEntries(
-        Object.entries(param.versions).map(([version, contract]) => [
-          version,
-          {
-            accepts: OrchestrationInitEventBaseSchema.merge(contract.init),
-            emits: {
-              [ArvoOrchestratorEventTypeGen.complete(param.type)]:
-                contract.complete,
-            },
+  const mergedMetaData = {
+    ...(contract.metadata ?? {}),
+    contractType: 'ArvoOrchestratorContract' as const,
+    rootType: contract.name,
+    completeEventType: ArvoOrchestratorEventTypeGen.complete(contract.name),
+    initEventType: ArvoOrchestratorEventTypeGen.init(contract.name),
+  };
+
+  return new ArvoContract({
+    uri: contract.uri,
+    type: ArvoOrchestratorEventTypeGen.init(contract.name),
+    description: contract.description ?? null,
+    metadata: mergedMetaData,
+    versions: Object.fromEntries(
+      Object.entries(contract.versions).map(([version, versionContract]) => [
+        version,
+        {
+          accepts: OrchestrationInitEventBaseSchema.merge(versionContract.init),
+          emits: {
+            [ArvoOrchestratorEventTypeGen.complete(contract.name)]:
+              versionContract.complete,
           },
-        ]),
-      ),
-    },
-    true,
-  ) as ArvoOrchestratorContract<TUri, TType, TVersions>;
+        },
+      ]),
+    ),
+  }) as ArvoOrchestratorContract<TUri, TName, TVersions, TMetaData>;
 };

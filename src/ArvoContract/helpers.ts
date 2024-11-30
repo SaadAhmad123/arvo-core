@@ -1,39 +1,44 @@
-import { IArvoContract } from './types';
 import ArvoContract from '.';
 import { ArvoOrchestratorEventTypeGen } from '../ArvoOrchestratorContract/typegen';
 import { cleanString } from '../utils';
-import { ArvoContractValidators } from './validators';
-import { ArvoSemanticVersionSchema } from '../schema';
-import ArvoOrchestrationSubject from '../ArvoOrchestrationSubject';
 import { ArvoSemanticVersion } from '../types';
 import { z } from 'zod';
 
 /**
- * Infers the ArvoContract type from a given IArvoContract interface.
+ * Creates a validated ArvoContract instance with full control over event types and schemas.
  *
- * @template T - The IArvoContract interface to infer from
- */
-type InferArvoContract<T> =
-  T extends IArvoContract<infer Uri, infer Type, infer Versions>
-    ? ArvoContract<Uri, Type, Versions>
-    : never;
-
-/**
- * Creates and validates an ArvoContract instance from a contract specification.
+ * @template TUri - Contract URI type
+ * @template TType - Event type identifier
+ * @template TVersions - Record of versioned schemas
+ * @template TMetaData - Optional metadata record type
  *
- * @template TContract - The contract specification type, must extend IArvoContract
- * @param contract - The contract specification object containing URI, type, and versioned schemas
- * @throws {Error} If any event type uses the reserved orchestrator prefix
- * @throws {Error} If URI or event types fail validation
- * @returns A properly typed ArvoContract instance
+ * @param contract - Contract specification object
+ * @param contract.uri - Unique contract identifier
+ * @param contract.type - Event type identifier
+ * @param contract.versions - Version-specific schema definitions
+ * @param contract.metadata - Optional contract metadata
+ * @param contract.description - Optional contract description
+ *
+ * @throws {Error} For invalid URI formats
+ * @throws {Error} When using reserved orchestrator prefixes
+ * @throws {Error} For invalid version formats
+ * @throws {Error} When using wildcard machine versions
+ * @throws {Error} For invalid emit type formats
+ *
+ * @returns A fully typed and validated ArvoContract instance
  *
  * @example
  * ```typescript
  * const contract = createArvoContract({
  *   uri: 'com.example.contract',
  *   type: 'input.event',
+ *   description: "Some example contract",
+ *   metadata: {
+ *     owner: 'team-a',
+ *     priority: 'high'
+ *   },
  *   versions: {
- *     '0.0.1': {
+ *     '1.0.0': {
  *       accepts: z.object({ data: z.string() }),
  *       emits: {
  *         'output.event': z.object({ result: z.number() })
@@ -43,10 +48,24 @@ type InferArvoContract<T> =
  * });
  * ```
  */
-export const createArvoContract = <const TContract extends IArvoContract>(
-  contract: TContract,
-  isOrchestrationContract: boolean = false,
-): InferArvoContract<TContract> => {
+export const createArvoContract = <
+  TUri extends string,
+  TType extends string,
+  TVersions extends Record<
+    ArvoSemanticVersion,
+    {
+      accepts: z.ZodTypeAny;
+      emits: Record<string, z.ZodTypeAny>;
+    }
+  >,
+  TMetaData extends Record<string, any> = Record<string, any>,
+>(contract: {
+  uri: TUri;
+  type: TType;
+  versions: TVersions;
+  metadata?: TMetaData;
+  description?: string;
+}): ArvoContract<TUri, TType, TVersions, TMetaData> => {
   const createErrorMessage = (
     source: 'accepts' | 'emits',
     type: string,
@@ -60,115 +79,79 @@ export const createArvoContract = <const TContract extends IArvoContract>(
     `);
   };
 
-  const isReservedPrefix = (value: string): boolean =>
-    !isOrchestrationContract &&
-    value.startsWith(ArvoOrchestratorEventTypeGen.prefix);
-
-  if (isReservedPrefix(contract.type)) {
+  if (ArvoOrchestratorEventTypeGen.isOrchestratorEventType(contract.type)) {
     throw new Error(createErrorMessage('accepts', contract.type, null));
   }
 
-  ArvoContractValidators.contract.uri.parse(contract.uri);
-
   for (const [version, versionContract] of Object.entries(contract.versions)) {
-    ArvoSemanticVersionSchema.parse(version);
-    if (version === ArvoOrchestrationSubject.WildCardMachineVersion) {
-      throw new Error(
-        `The version cannot be ${ArvoOrchestrationSubject.WildCardMachineVersion}`,
-      );
-    }
-    for (const emitType of Object.keys(versionContract.emits)) {
-      ArvoContractValidators.record.type.parse(emitType);
-      if (isReservedPrefix(emitType)) {
+    for (const emitType of Object.keys(versionContract['emits']))
+      if (ArvoOrchestratorEventTypeGen.isOrchestratorEventType(emitType)) {
         throw new Error(createErrorMessage('emits', emitType, version));
       }
-    }
   }
-  return new ArvoContract(contract) as InferArvoContract<TContract>;
+
+  return new ArvoContract({
+    uri: contract.uri,
+    type: contract.type,
+    description: contract.description ?? null,
+    metadata: contract.metadata ?? ({} as TMetaData),
+    versions: contract.versions,
+  });
 };
 
 /**
- * Creates a simplified ArvoContract with standardized type prefixes and emit patterns.
- * This is a convenience function that automatically formats event types according to conventions:
- * - Accept types are prefixed with "com."
- * - Emit types are prefixed with "evt." and suffixed with ".success"
+ * Creates an ArvoContract with standardized naming conventions and a simplified event pattern.
  *
- * @template TUri - The URI type for the contract
- * @template TType - The base type name (without prefixes) for the contract
- * @template TVersions - Record of versions containing accept and emit schemas
+ * @template TUri - Contract URI type
+ * @template TType - Base event type (without prefixes)
+ * @template TVersions - Version-specific schema definitions
  *
- * @param param - The configuration object for creating the contract
- * @param param.uri - The URI identifying the contract
- * @param param.type - The base type name (will be prefixed with "com.")
+ * @param param - Contract configuration
+ * @param param.uri - Contract identifier URI
+ * @param param.type - Base event type (will be prefixed with "com.")
  * @param param.versions - Version-specific schema definitions
- * @param param.versions[version].accepts - Zod schema for validating incoming events
- * @param param.versions[version].emits - Zod schema for validating outgoing events
+ * @param param.metadata - Optional metadata for the contract
+ * @param param.description - Optional contract description
  *
- * @returns An ArvoContract instance with standardized type formatting:
- *          - Accept type will be "com.[type]"
- *          - Emit type will be "evt.[type].success"
+ * @returns ArvoContract with standardized type formatting and metadata
  *
  * @example
  * ```typescript
- * const contract = createSimpleArvoContract({
- *   uri: 'example.com/contracts/processor',
- *   type: 'document.process',
- *   versions: {
- *     '1.0.0': {
- *       accepts: z.object({
- *         documentId: z.string(),
- *         options: z.object({ format: z.string() })
- *       }),
- *       emits: z.object({
- *         processedDocument: z.string(),
- *         metadata: z.object({ size: z.number() })
- *       })
- *     }
- *   }
- * });
- *
- * // Results in a contract where:
- * // - Accept type is "com.document.process"
- * // - Emit type is "evt.document.process.success"
- * ```
- *
- * @example
- * ```typescript
- * // Multiple versions example
  * const contract = createSimpleArvoContract({
  *   uri: 'api.example/contracts/user',
  *   type: 'user.create',
+ *   description: 'User creation contract',
  *   versions: {
  *     '1.0.0': {
- *       accepts: z.object({ name: z.string() }),
- *       emits: z.object({ id: z.string() })
- *     },
- *     '2.0.0': {
  *       accepts: z.object({
  *         name: z.string(),
  *         email: z.string().email()
  *       }),
  *       emits: z.object({
- *         id: z.string(),
- *         created: z.date()
+ *         userId: z.string(),
+ *         timestamp: z.date()
  *       })
  *     }
  *   }
  * });
+ *
+ * // Generated contract structure:
+ * // Accept type: "com.user.create"
+ * // Emit type: "evt.user.create.success"
+ * // Metadata: {
+ * //   contractType: 'SimpleArvoContract',
+ * //   rootType: 'user.create'
+ * // }
  * ```
  *
  * @remarks
- * This function simplifies contract creation by:
- * 1. Automatically prefixing accept types with "com."
- * 2. Creating a single emit type prefixed with "evt." and suffixed with ".success"
- * 3. Maintaining type safety and schema validation
+ * Provides a simplified contract creation pattern with standardized conventions:
+ * - Automatically prefixes accept types with "com."
+ * - Creates a single emit type with "evt." prefix and ".success" suffix
+ * - Adds standard metadata identifying it as a SimpleArvoContract
+ * - Maintains complete type safety and schema validation
  *
- * Use this when you have a simple contract pattern with:
- * - A single accept type
- * - A single success emit type
- * - Standard type naming conventions
- *
- * For more complex contracts with multiple emit types or custom type naming,
+ * For contracts requiring custom event type patterns or multiple emit types,
  * use {@link createArvoContract} instead.
  */
 export const createSimpleArvoContract = <
@@ -181,14 +164,25 @@ export const createSimpleArvoContract = <
       emits: z.ZodTypeAny;
     }
   >,
+  TMetaData extends Record<string, any> = Record<string, any>,
 >(param: {
   uri: TUri;
   type: TType;
   versions: TVersions;
+  metadata?: TMetaData;
+  description?: string;
 }) => {
+  const mergedMetadata = {
+    ...(param.metadata ?? {}),
+    contractType: 'SimpleArvoContract',
+    rootType: param.type as TType,
+  };
+
   return createArvoContract({
     uri: param.uri,
     type: `com.${param.type}`,
+    description: param.description,
+    metadata: mergedMetadata,
     versions: Object.fromEntries(
       Object.entries(param.versions).map(([version, contract]) => [
         version,
@@ -210,6 +204,7 @@ export const createSimpleArvoContract = <
           [K in `evt.${TType}.succes`]: TVersions[V]['emits'];
         };
       };
-    }
+    },
+    typeof mergedMetadata
   >;
 };

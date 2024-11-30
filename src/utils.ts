@@ -1,3 +1,9 @@
+import ArvoContract from './ArvoContract';
+import { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
+import { WildCardArvoSemanticVersion } from './ArvoContract/WildCardArvoSemanticVersion';
+import ArvoEvent from './ArvoEvent';
+import { logToSpan } from './OpenTelemetry';
+import { ArvoSemanticVersionSchema } from './schema';
 import { ArvoSemanticVersion } from './types';
 
 /**
@@ -124,4 +130,77 @@ export function compareSemanticVersions(
     return v1.minor - v2.minor;
   }
   return v1.patch - v2.patch;
+}
+
+/**
+ * Manages event dataschema strings for versioned contracts.
+ * Handles creation and parsing of dataschema identifiers.
+ */
+export class EventDataschemaUtil {
+  /**
+   * Creates a dataschema string from a versioned contract.
+   * Format: `{contract.uri}/{contract.version}`
+   *
+   * @param contract - Versioned contract instance
+   * @returns Formatted dataschema string
+   *
+   * @example
+   * ```typescript
+   * const schema = EventDataschema.create(versionedContract);
+   * // Returns: "my-contract/1.0.0"
+   * ```
+   */
+  static create(
+    contract: VersionedArvoContract<ArvoContract, ArvoSemanticVersion>,
+  ): string {
+    return `${contract.uri}/${contract.version}`;
+  }
+
+  /**
+   * Creates dataschema string with wildcard version.
+   * @param contract Versioned contract
+   * @returns `{contract.uri}/{WildCardArvoSemanticVersion}`
+   */
+  static createWithWildCardVersion(
+    contract: VersionedArvoContract<ArvoContract, ArvoSemanticVersion>,
+  ): string {
+    return `${contract.uri}/${WildCardArvoSemanticVersion}`;
+  }
+
+  /**
+   * Extracts URI and version from dataschema string.
+   *
+   * @param data - Event object or dataschema string
+   * @returns Parsed URI and version, or null if invalid
+   *
+   * @example
+   * ```typescript
+   * const result = EventDataschema.parse("my-contract/1.0.0");
+   * // Returns: { uri: "my-contract", version: "1.0.0" }
+   *
+   * const invalid = EventDataschema.parse("invalid-schema");
+   * // Returns: null
+   * ```
+   */
+  static parse(data: ArvoEvent | string): {
+    uri: string;
+    version: ArvoSemanticVersion;
+  } | null {
+    try {
+      const dataschema: string =
+        typeof data === 'string' ? data : (data.dataschema ?? '');
+      const items: string[] = dataschema.split('/');
+      const version: ArvoSemanticVersion = ArvoSemanticVersionSchema.parse(
+        items.pop(),
+      ) as ArvoSemanticVersion;
+      const uri: string = items.join('/');
+      return { uri, version };
+    } catch (e) {
+      logToSpan({
+        level: 'ERROR',
+        message: `Unable to parse the event dataschema: ${(e as Error).message}`,
+      });
+      return null;
+    }
+  }
 }

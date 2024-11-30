@@ -19,6 +19,17 @@ export class ArvoOrchestratorEventTypeGen {
   public static readonly prefix: 'arvo.orc' = 'arvo.orc' as const;
 
   /**
+   * Checks if an event type belongs to the Arvo orchestrator.
+   *
+   * @param eventType - Event type string to check
+   * @returns True if the event is an orchestrator event, false otherwise
+   * ```
+   */
+  public static isOrchestratorEventType(eventType: string) {
+    return eventType.startsWith(ArvoOrchestratorEventTypeGen.prefix);
+  }
+
+  /**
    * Generates an initialization event type string for a given event name.
    *
    * @param name - The base name of the event

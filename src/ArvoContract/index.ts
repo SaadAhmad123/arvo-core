@@ -1,14 +1,18 @@
-import { TypeOf, z } from 'zod';
+import { z } from 'zod';
 import {
   ArvoContractJSONSchema,
   ArvoContractRecord,
   IArvoContract,
 } from './types';
-import { zodToJsonSchema } from 'zod-to-json-schema';
-import { ArvoErrorSchema } from '../schema';
+import { ArvoErrorSchema, ArvoSemanticVersionSchema } from '../schema';
 import { ArvoSemanticVersion } from '../types';
 import { compareSemanticVersions } from '../utils';
 import { VersionedArvoContract } from './VersionedArvoContract';
+import { ArvoContractValidators } from './validators';
+import {
+  isWildCardArvoSematicVersion,
+  WildCardArvoSemanticVersion,
+} from './WildCardArvoSemanticVersion';
 
 /**
  * Represents a contract with defined input and output schemas for event-driven architectures.
@@ -24,11 +28,21 @@ import { VersionedArvoContract } from './VersionedArvoContract';
  * const contract = createArvoContract({
  *   uri: '#/my/service/data',
  *   type: 'com.process.data',
+ *   description: 'An example contract',
+ *   metadata: {
+ *     metadata1: "something"
+ *   }
  *   versions: {
  *     '1.0.0': {
  *       accepts: z.object({ data: z.string() }),
  *       emits: {
  *         'data.processed': z.object({ result: z.string() })
+ *       }
+ *     },
+ *     '2.0.0': {
+ *       accepts: z.object({ data: z.number() }),
+ *       emits: {
+ *         'data.processed': z.object({ result: z.number() })
  *       }
  *     }
  *   }
@@ -51,45 +65,69 @@ export default class ArvoContract<
       emits: Record<string, z.ZodTypeAny>;
     }
   >,
+  TMetaData extends Record<string, any> = Record<string, any>,
 > {
   private readonly _uri: TUri;
   private readonly _type: TType;
   private readonly _versions: TVersions;
-  readonly description: string | null;
+  private readonly _description: string | null;
+  private readonly _metadata: TMetaData;
 
-  constructor(params: IArvoContract<TUri, TType, TVersions>) {
+  public get uri() {
+    return this._uri;
+  }
+  public get type() {
+    return this._type;
+  }
+  public get versions() {
+    return this._versions;
+  }
+  public get description() {
+    return this._description;
+  }
+  public get metadata() {
+    return this._metadata;
+  }
+
+  /**
+   * Creates a new ArvoContract instance with validated parameters.
+   *
+   * @param params - Contract configuration parameters
+   *
+   * @throws {Error} When URI format is invalid
+   * @throws {Error} When event type format is invalid
+   * @throws {Error} When version string is not valid semantic version
+   * @throws {Error} When version is a reserved wildcard version
+   * @throws {Error} When emit type format is invalid
+   * @throws {Error} When no versions are provided
+   */
+  constructor(params: IArvoContract<TUri, TType, TVersions, TMetaData>) {
     this._uri = params.uri;
     this._type = params.type;
     this._versions = params.versions;
-    this.description = params.description ?? null;
+    this._description = params.description ?? null;
+    this._metadata = params.metadata;
+
+    ArvoContractValidators.contract.uri.parse(params.uri);
+    ArvoContractValidators.record.type.parse(params.type);
+
+    for (const [version, versionContract] of Object.entries(params.versions)) {
+      ArvoSemanticVersionSchema.parse(version);
+      if (isWildCardArvoSematicVersion(version as ArvoSemanticVersion)) {
+        throw new Error(
+          `For contract (uri=${params.uri}), the version cannot be '${WildCardArvoSemanticVersion}'. It is a reserved version type.`,
+        );
+      }
+      for (const emitType of Object.keys(versionContract.emits)) {
+        ArvoContractValidators.record.type.parse(emitType);
+      }
+    }
 
     if (!Object.keys(this._versions).length) {
       throw new Error(
         `An ArvoContract (uri=${this._uri}) must have at least one version`,
       );
     }
-  }
-
-  /**
-   * Gets the URI of the contract.
-   */
-  public get uri(): TUri {
-    return this._uri;
-  }
-
-  /**
-   * Get the type of the event the handler
-   * bound to the contract accepts
-   */
-  public get type(): TType {
-    return this._type;
-  }
-
-  /**
-   * Gets the version of the contract
-   */
-  public get versions(): TVersions {
-    return this._versions;
   }
 
   /**
@@ -139,10 +177,11 @@ export default class ArvoContract<
   >(
     option: V | S,
   ): V extends ArvoSemanticVersion
-    ? VersionedArvoContract<typeof this, V>
+    ? VersionedArvoContract<typeof this, V, TMetaData>
     : VersionedArvoContract<
         typeof this,
-        ArvoSemanticVersion & keyof TVersions
+        ArvoSemanticVersion & keyof TVersions,
+        TMetaData
       > {
     let resolvedVersion: ArvoSemanticVersion & keyof TVersions;
 
@@ -158,9 +197,9 @@ export default class ArvoContract<
       resolvedVersion = option as V;
     }
 
-    return {
+    return new VersionedArvoContract({
       uri: this._uri,
-      description: this.description,
+      description: this._description,
       version: resolvedVersion,
       accepts: {
         type: this._type,
@@ -168,7 +207,8 @@ export default class ArvoContract<
       },
       systemError: this.systemError,
       emits: this._versions[resolvedVersion].emits,
-    } as any; // needed due to TypeScript limitations with conditional types
+      metadata: this._metadata,
+    }) as any; // needed due to TypeScript limitations with conditional types
   }
 
   /**
@@ -197,8 +237,9 @@ export default class ArvoContract<
     return {
       uri: this._uri,
       type: this._type,
-      description: this.description,
+      description: this._description,
       versions: this._versions,
+      metadata: this._metadata,
     };
   }
 
@@ -209,25 +250,25 @@ export default class ArvoContract<
    *
    * @returns An object representing the contract in JSON Schema format:
    */
-  public toJsonSchema(): ArvoContractJSONSchema {
+  public toJsonSchema(
+    includeMetadata: boolean = false,
+  ): ArvoContractJSONSchema {
     return {
       uri: this._uri,
-      description: this.description,
-      versions: Object.entries(this._versions).map(([version, contract]) => ({
-        version: version as ArvoSemanticVersion,
-        accepts: {
-          type: this._type,
-          schema: zodToJsonSchema(contract.accepts),
-        },
-        systemError: {
-          type: this.systemError.type,
-          schema: zodToJsonSchema(this.systemError.schema),
-        },
-        emits: Object.entries(contract.emits).map(([key, value]) => ({
-          type: key,
-          schema: zodToJsonSchema(value),
-        })),
-      })),
+      description: this._description,
+      metadata: includeMetadata ? this._metadata : null,
+      versions: Object.keys(this._versions).map((version) => {
+        const jsonSchema = this.version(
+          version as ArvoSemanticVersion,
+        ).toJsonSchema(false);
+        return {
+          version: jsonSchema.version,
+          accepts: jsonSchema.accepts,
+          systemError: jsonSchema.systemError,
+          emits: jsonSchema.emits,
+          metadata: jsonSchema.metadata,
+        };
+      }),
     };
   }
 }

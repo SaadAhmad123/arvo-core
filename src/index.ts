@@ -32,6 +32,7 @@ import {
   cleanString,
   compareSemanticVersions,
   parseSemanticVersion,
+  EventDataschemaUtil,
 } from './utils';
 import ArvoContract from './ArvoContract';
 import {
@@ -46,11 +47,12 @@ import {
   ArvoContractJSONSchema,
 } from './ArvoContract/types';
 import ArvoEventFactory from './ArvoEventFactory';
+import { createArvoEventFactory } from './ArvoEventFactory/helpers';
 import {
-  createArvoEventFactory,
-  parseEventDataSchema,
-} from './ArvoEventFactory/helpers';
-import { ArvoErrorSchema, ArvoSemanticVersionSchema } from './schema';
+  ArvoErrorSchema,
+  ArvoSemanticVersionSchema,
+  isValidArvoSemanticVersion,
+} from './schema';
 import OpenInference from './OpenTelemetry/OpenInference';
 import ArvoExecution from './OpenTelemetry/ArvoExecution';
 import { ArvoExecutionSpanKind } from './OpenTelemetry/ArvoExecution/types';
@@ -61,7 +63,6 @@ import { ArvoOrchestrationSubjectContent } from './ArvoOrchestrationSubject/type
 import ArvoEventHttp from './ArvoEventHttp';
 import { ArvoEventHttpConfig } from './ArvoEventHttp/types';
 import {
-  InferArvoContract,
   InferArvoEvent,
   ArvoSemanticVersion,
   ArvoErrorType,
@@ -75,6 +76,10 @@ import {
 import { ArvoOrchestratorEventTypeGen } from './ArvoOrchestratorContract/typegen';
 import { OrchestrationInitEventBaseSchema } from './ArvoOrchestratorContract/schema';
 import { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
+import {
+  isWildCardArvoSematicVersion,
+  WildCardArvoSemanticVersion,
+} from './ArvoContract/WildCardArvoSemanticVersion';
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -132,12 +137,11 @@ export {
   ArvoOrchestrationSubjectContent,
   ArvoSemanticVersion,
   InferArvoEvent,
-  InferArvoContract,
   createArvoOrchestratorContract,
   ICreateArvoOrchestratorContract,
   ArvoOrchestratorEventTypeGen,
   ExecutionOpenTelemetryConfiguration,
-  parseEventDataSchema,
+  EventDataschemaUtil,
   ArvoOrchestrationSubjectContentSchema,
   ArvoSemanticVersionSchema,
   ArvoErrorSchema,
@@ -148,4 +152,7 @@ export {
   ArvoOrchestratorContract,
   VersionedArvoContract,
   InferVersionedArvoContract,
+  isWildCardArvoSematicVersion,
+  WildCardArvoSemanticVersion,
+  isValidArvoSemanticVersion,
 };
