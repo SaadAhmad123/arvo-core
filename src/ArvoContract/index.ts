@@ -64,11 +64,11 @@ export default class ArvoContract<
   >,
   TMetaData extends Record<string, any> = Record<string, any>,
 > {
-  private readonly _uri: TUri;
-  private readonly _type: TType;
-  private readonly _versions: TVersions;
-  private readonly _description: string | null;
-  private readonly _metadata: TMetaData;
+  protected readonly _uri: TUri;
+  protected readonly _type: TType;
+  protected readonly _versions: TVersions;
+  protected readonly _description: string | null;
+  protected readonly _metadata: TMetaData;
 
   public get uri() {
     return this._uri;
@@ -174,8 +174,8 @@ export default class ArvoContract<
   >(
     option: V,
   ): V extends ArvoSemanticVersion & keyof TVersions
-    ? VersionedArvoContract<typeof this, V, TMetaData>
-    : VersionedArvoContract<any, any, any> {
+    ? VersionedArvoContract<typeof this, V>
+    : VersionedArvoContract<any, any> {
     let resolvedVersion: ArvoSemanticVersion & keyof TVersions;
 
     if (option === 'any' || option === 'latest') {
@@ -191,16 +191,8 @@ export default class ArvoContract<
     }
 
     return new VersionedArvoContract({
-      uri: this._uri,
-      description: this._description,
+      contract: this,
       version: resolvedVersion,
-      accepts: {
-        type: this._type,
-        schema: this._versions[resolvedVersion].accepts,
-      },
-      systemError: this.systemError,
-      emits: this._versions[resolvedVersion].emits,
-      metadata: this._metadata,
     }) as any; // needed due to TypeScript limitations with conditional types
   }
 

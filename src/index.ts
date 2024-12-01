@@ -45,7 +45,10 @@ import {
   ArvoContractJSONSchema,
 } from './ArvoContract/types';
 import ArvoEventFactory from './ArvoEventFactory';
-import { createArvoEventFactory } from './ArvoEventFactory/helpers';
+import {
+  createArvoEventFactory,
+  createArvoOrchestratorEventFactory,
+} from './ArvoEventFactory/helpers';
 import {
   ArvoErrorSchema,
   ArvoSemanticVersionSchema,
@@ -80,9 +83,7 @@ import {
 } from './ArvoContract/WildCardArvoSemanticVersion';
 import { createSimpleArvoContract } from './ArvoContract/SimpleArvoContract';
 import { SimpleArvoContract } from './ArvoContract/SimpleArvoContract/types';
-
-type AnyArvoContract = ArvoContract<any, any, any, any>
-type AnyVersionedArvoContract = VersionedArvoContract<any, any>
+import { ArvoOrchestratorEventFactory } from './ArvoEventFactory/Orchestrator';
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -159,6 +160,6 @@ export {
   WildCardArvoSemanticVersion,
   isValidArvoSemanticVersion,
   SimpleArvoContract,
-  AnyArvoContract,
-  AnyVersionedArvoContract,
+  ArvoOrchestratorEventFactory,
+  createArvoOrchestratorEventFactory,
 };

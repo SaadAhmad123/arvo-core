@@ -11,19 +11,9 @@ import { ArvoContractRecord } from '../types';
 export interface IVersionedArvoContract<
   TContract extends ArvoContract,
   TVersion extends ArvoSemanticVersion & keyof TContract['versions'],
-  TMetaData extends Record<string, any> = Record<string, any>,
 > {
-  uri: TContract['uri'];
+  contract: TContract;
   version: TVersion;
-  description: string | null;
-
-  accepts: ArvoContractRecord<
-    TContract['type'],
-    TContract['versions'][TVersion]['accepts']
-  >;
-  systemError: TContract['systemError'];
-  emits: TContract['versions'][TVersion]['emits'];
-  metadata: TMetaData;
 }
 
 /**

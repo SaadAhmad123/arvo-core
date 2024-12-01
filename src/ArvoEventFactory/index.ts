@@ -30,9 +30,10 @@ import { EventDataschemaUtil } from '../utils';
  * ```
  */
 export default class ArvoEventFactory<
-  TContract extends VersionedArvoContract<any, any, any>,
+  TContract extends VersionedArvoContract<any, any>,
 > {
-  private readonly contract: TContract;
+  protected readonly _name: string = 'ArvoEventFactory';
+  protected readonly contract: TContract;
 
   /**
    * Creates an ArvoEventFactory instance for a specific version of a contract.
@@ -77,7 +78,7 @@ export default class ArvoEventFactory<
       tracer: fetchOpenTelemetryTracer(),
     };
     const span = opentelemetry.tracer.startSpan(
-      `ArvoEventFactory<${this.contract.uri}/${this.contract.version}>.accepts`,
+      `${this._name}<${this.contract.uri}/${this.contract.version}>.accepts`,
     );
     return context.with(trace.setSpan(context.active(), span), () => {
       span.setStatus({ code: SpanStatusCode.OK });
@@ -143,11 +144,11 @@ export default class ArvoEventFactory<
    * ```
    */
   emits<
-    U extends string & keyof TContract['emitMap'],
+    U extends string & keyof TContract['emits'],
     TExtension extends Record<string, any>,
   >(
     event: Omit<
-      CreateArvoEvent<z.input<TContract['emitMap'][U]>, U>,
+      CreateArvoEvent<z.input<TContract['emits'][U]>, U>,
       'datacontenttype' | 'dataschema'
     >,
     extensions?: TExtension,
@@ -157,13 +158,13 @@ export default class ArvoEventFactory<
       tracer: fetchOpenTelemetryTracer(),
     };
     const span = opentelemetry.tracer.startSpan(
-      `ArvoEventFactory<${this.contract.uri}/${this.contract.version}>.emits<${event.type}>`,
+      `${this._name}<${this.contract.uri}/${this.contract.version}>.emits<${event.type}>`,
     );
     return context.with(trace.setSpan(context.active(), span), () => {
       span.setStatus({ code: SpanStatusCode.OK });
       const otelHeaders = currentOpenTelemetryHeaders();
       try {
-        const validationResult = this.contract.emitMap?.[event.type]?.safeParse(
+        const validationResult = this.contract.emits?.[event.type]?.safeParse(
           event.data,
         );
         if (!validationResult?.success) {
@@ -172,7 +173,7 @@ export default class ArvoEventFactory<
             `No contract available for ${event.type}`;
           throw new Error(`Emit Event data validation failed: ${msg}`);
         }
-        return createArvoEvent<z.infer<TContract['emitMap'][U]>, TExtension, U>(
+        return createArvoEvent<z.infer<TContract['emits'][U]>, TExtension, U>(
           {
             ...event,
             traceparent:
@@ -232,7 +233,7 @@ export default class ArvoEventFactory<
       tracer: fetchOpenTelemetryTracer(),
     };
     const span = opentelemetry.tracer.startSpan(
-      `ArvoEventFactory<${this.contract.uri}>.systemError`,
+      `${this._name}<${this.contract.uri}>.systemError`,
     );
     return context.with(trace.setSpan(context.active(), span), () => {
       span.setStatus({ code: SpanStatusCode.OK });

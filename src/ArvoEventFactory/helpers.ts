@@ -1,7 +1,7 @@
 import ArvoEventFactory from '.';
-import ArvoContract from '../ArvoContract';
-import { ArvoSemanticVersion } from '../types';
 import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
+import { ArvoOrchestratorContract } from '../ArvoOrchestratorContract/types';
+import { ArvoOrchestratorEventFactory } from './Orchestrator';
 
 /**
  * Creates an ArvoEventFactory for a specific version of a contract.
@@ -17,11 +17,30 @@ import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
  * ```
  */
 export const createArvoEventFactory = <
-  TContract extends VersionedArvoContract<
-    ArvoContract<any, any, any, any>,
-    ArvoSemanticVersion,
-    Record<string, any>
-  >,
+  TContract extends VersionedArvoContract<any, any>,
 >(
   contract: TContract,
 ) => new ArvoEventFactory(contract);
+
+/**
+ * Creates an ArvoOrchestratorEventFactory instance for handling orchestration events.
+ * Provides type-safe event creation with parent-child subject relationship handling.
+ *
+ * @param contract - The versioned contract for orchestration events
+ * @returns An ArvoOrchestratorEventFactory for creating orchestration events
+ *
+ * @example
+ * ```typescript
+ * const contract = createArvoOrchestratorContract({ ... });
+ * const factory = createArvoOrchestratorEventFactory(contract.version('1.0.0'));
+ * const event = factory.init({
+ *   source: 'system',
+ *   data: { parentSubject$$: null, data: 'value' }
+ * });
+ * ```
+ */
+export const createArvoOrchestratorEventFactory = <
+  TContract extends VersionedArvoContract<any, any>,
+>(
+  contract: TContract,
+) => new ArvoOrchestratorEventFactory(contract);

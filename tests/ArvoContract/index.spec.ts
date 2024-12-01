@@ -5,6 +5,7 @@ import {
   cleanString,
   createArvoContract,
   createSimpleArvoContract,
+  InferVersionedArvoContract,
 } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
@@ -35,14 +36,13 @@ describe('ArvoContract', () => {
   };
 
   describe('createArvoContract', () => {
-
     it('should create a valid simple contract, using createSimpleArvoContract', () => {
       const contract = createSimpleArvoContract({
         uri: `#/simple/test`,
         type: 'simple.test',
         description: 'A simple contract',
         metadata: {
-          access: 'private'
+          access: 'private',
         },
         versions: {
           '0.0.1': {
@@ -56,22 +56,26 @@ describe('ArvoContract', () => {
         },
       });
 
+      const V = contract.version('0.0.1');
+
       expect(contract).toBeInstanceOf(ArvoContract);
       expect(contract.uri).toBe(`#/simple/test`);
       expect(contract.type).toBe('com.simple.test');
       expect(contract.version('0.0.1').accepts.type).toBe('com.simple.test');
-      expect(contract.version('0.0.1').emits[0].type).toBe(
+      expect(contract.version('0.0.1').emitList[0].type).toBe(
         'evt.simple.test.success',
       );
       expect(contract.systemError.type).toBe(`sys.com.simple.test.error`);
       expect(contract.version('latest').version).toBe('1.0.1');
-      expect(contract.metadata.access).toBe('private')
-      expect(contract.metadata.contractType).toBe('SimpleArvoContract')
-      expect(contract.metadata.rootType).toBe('simple.test')
+      expect(contract.metadata.access).toBe('private');
+      expect(contract.metadata.contractType).toBe('SimpleArvoContract');
+      expect(contract.metadata.rootType).toBe('simple.test');
 
-      expect(contract.version('0.0.1').metadata.access).toBe('private')
-      expect(contract.version('0.0.1').metadata.contractType).toBe('SimpleArvoContract')
-      expect(contract.version('0.0.1').metadata.rootType).toBe('simple.test')
+      expect(contract.version('0.0.1').metadata.access).toBe('private');
+      expect(contract.version('0.0.1').metadata.contractType).toBe(
+        'SimpleArvoContract',
+      );
+      expect(contract.version('0.0.1').metadata.rootType).toBe('simple.test');
     });
 
     it('should create a valid ArvoContract instance', () => {
@@ -80,7 +84,7 @@ describe('ArvoContract', () => {
       expect(contract.uri).toBe(validContractSpec.uri);
       expect(contract.type).toBe(validContractSpec.type);
       expect(contract.version('0.0.1').accepts.type).toBe(contract.type);
-      expect(contract.version('0.0.1').emits[0].type).toBe(
+      expect(contract.version('0.0.1').emitList[0].type).toBe(
         'com.example.output',
       );
       expect(contract.systemError.type).toBe(`sys.${contract.type}.error`);
@@ -131,8 +135,8 @@ describe('ArvoContract', () => {
       );
 
       invalidSpec = {
-        ...validContractSpec as any,
-        type: 'arvo.orc.test'
+        ...(validContractSpec as any),
+        type: 'arvo.orc.test',
       };
       expect(() => createArvoContract(invalidSpec)).toThrow(
         cleanString(`
@@ -141,8 +145,6 @@ describe('ArvoContract', () => {
         for Arvo orchestrators.
       `),
       );
-
-
     });
 
     it('should create a contract with multiple emits', () => {
@@ -400,7 +402,7 @@ describe('ArvoContract', () => {
         expect(
           contract
             .version('0.0.1')
-            .emitMap['com.example.success'].safeParse(successEmit).success,
+            .emits['com.example.success'].safeParse(successEmit).success,
         ).toBe(true);
       });
 
@@ -414,7 +416,7 @@ describe('ArvoContract', () => {
         expect(
           contract
             .version('0.0.1')
-            .emitMap['com.example.partial'].safeParse(partialEmit).success,
+            .emits['com.example.partial'].safeParse(partialEmit).success,
         ).toBe(true);
       });
 
@@ -430,8 +432,7 @@ describe('ArvoContract', () => {
         expect(
           contract
             .version('0.0.1')
-            .emitMap['com.example.validation'].safeParse(validationEmit)
-            .success,
+            .emits['com.example.validation'].safeParse(validationEmit).success,
         ).toBe(true);
       });
 
@@ -447,7 +448,7 @@ describe('ArvoContract', () => {
         expect(
           contract
             .version('0.0.1')
-            .emitMap['com.example.success'].safeParse(invalidEmit).success,
+            .emits['com.example.success'].safeParse(invalidEmit).success,
         ).toBe(false);
       });
 
@@ -461,7 +462,7 @@ describe('ArvoContract', () => {
         expect(
           contract
             .version('0.0.1')
-            .emitMap['com.example.partial'].safeParse(invalidEmit).success,
+            .emits['com.example.partial'].safeParse(invalidEmit).success,
         ).toBe(false);
       });
 
@@ -478,7 +479,7 @@ describe('ArvoContract', () => {
         expect(
           contract
             .version('0.0.2')
-            .emitMap['com.example.success'].safeParse(successEmitV2).success,
+            .emits['com.example.success'].safeParse(successEmitV2).success,
         ).toBe(true);
       });
 
@@ -491,8 +492,7 @@ describe('ArvoContract', () => {
         expect(
           contract
             .version('0.0.1')
-            .emitMap['com.example.validation'].safeParse(validationEmit)
-            .success,
+            .emits['com.example.validation'].safeParse(validationEmit).success,
         ).toBe(true);
       });
     });

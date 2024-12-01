@@ -16,56 +16,54 @@ import { logToSpan } from '../../OpenTelemetry';
 export class VersionedArvoContract<
   TContract extends ArvoContract,
   TVersion extends ArvoSemanticVersion & keyof TContract['versions'],
-  TMetaData extends Record<string, any> = Record<string, any>,
 > {
-  private readonly _uri: TContract['uri'];
-  private readonly _version: TVersion;
-  private readonly _description: string | null;
-  private readonly _accepts: ArvoContractRecord<
+  protected readonly _contract: TContract;
+  protected readonly _version: TVersion;
+  protected readonly _accepts: ArvoContractRecord<
     TContract['type'],
     TContract['versions'][TVersion]['accepts']
   >;
-  private readonly _emitMap: TContract['versions'][TVersion]['emits'];
-  private readonly _emits: ReturnType<
+  protected readonly _emits: TContract['versions'][TVersion]['emits'];
+  protected readonly _emitList: ReturnType<
     typeof transformEmitsToArray<TContract, TVersion>
   >;
-  private readonly _metadata: TMetaData;
-  private readonly _systemError: TContract['systemError'];
 
-  public get uri() {
-    return this._uri;
+  public get uri(): TContract['uri'] {
+    return this._contract.uri;
   }
-  public get version() {
+  public get version(): TVersion {
     return this._version;
   }
-  public get description() {
-    return this._description;
+  public get description(): TContract['description'] {
+    return this._contract.description;
   }
+  public get metadata(): TContract['metadata'] {
+    return this._contract.metadata;
+  }
+  public get systemError(): TContract['systemError'] {
+    return this._contract.systemError;
+  }
+
   public get accepts() {
     return this._accepts;
-  }
-  public get emitMap() {
-    return this._emitMap;
-  }
-  public get metadata() {
-    return this._metadata;
-  }
-  public get systemError() {
-    return this._systemError;
   }
   public get emits() {
     return this._emits;
   }
 
-  constructor(param: IVersionedArvoContract<TContract, TVersion, TMetaData>) {
-    this._uri = param.uri;
+  public get emitList() {
+    return this._emitList;
+  }
+
+  constructor(param: IVersionedArvoContract<TContract, TVersion>) {
     this._version = param.version;
-    this._description = param.description;
-    this._accepts = param.accepts;
-    this._emitMap = param.emits;
-    this._emits = transformEmitsToArray(this.emitMap);
-    this._metadata = param.metadata;
-    this._systemError = param.systemError;
+    this._contract = param.contract;
+    this._accepts = {
+      type: param.contract.type,
+      schema: param.contract.versions[param.version].accepts,
+    };
+    this._emits = param.contract.versions[param.version].emits;
+    this._emitList = transformEmitsToArray(this.emits);
   }
 
   /**
@@ -75,19 +73,19 @@ export class VersionedArvoContract<
   public toJsonSchema(): VersionedArvoContractJSONSchema {
     try {
       return {
-        uri: this._uri,
-        description: this._description,
-        version: this._version,
-        metadata: this._metadata,
+        uri: this.uri,
+        description: this.description,
+        version: this.version,
+        metadata: this.metadata,
         accepts: {
           type: this._accepts.type,
           schema: zodToJsonSchema(this._accepts.schema),
         },
         systemError: {
-          type: this._systemError.type,
-          schema: zodToJsonSchema(this._systemError.schema),
+          type: this.systemError.type,
+          schema: zodToJsonSchema(this.systemError.schema),
         },
-        emits: Object.entries(this._emitMap).map(([key, value]) => ({
+        emits: Object.entries(this._emits).map(([key, value]) => ({
           type: key,
           schema: zodToJsonSchema(value),
         })),
