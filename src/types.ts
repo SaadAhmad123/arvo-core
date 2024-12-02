@@ -49,16 +49,9 @@ type InferZodSchema<T extends z.ZodTypeAny> = z.infer<T>;
 export type ArvoErrorType = z.infer<typeof ArvoErrorSchema>;
 
 /**
- * Infers the complete contract structure from a versioned Arvo contract.
- * This provides type-safe access to all events, schemas, and metadata defined in a contract.
- *
- * @remarks
- * The inferred contract includes:
- * - `accepts`: Events the contract can receive
- * - `systemError`: Standard error events
- * - `emitMap`: Dictionary of all possible emit events
- * - `emits`: Array type containing all possible emit events
- * - `metadata`: Contract metadata
+ * Infers that complete ArvoEvent structure for all the events
+ * that can be accepted and emitted by the handler bound to the 
+ * provided versioned ArvoContract.
  *
  * @see {@link VersionedArvoContract} for the input contract structure
  * @see {@link InferArvoEvent} for the event inference utility
@@ -67,13 +60,10 @@ export type ArvoErrorType = z.infer<typeof ArvoErrorSchema>;
 export type InferVersionedArvoContract<
   TVersion extends VersionedArvoContract<any, any>,
 > = {
-  accepts: InferArvoEvent<
-    ArvoEvent<
-      InferZodSchema<TVersion['accepts']['schema']>,
-      {},
-      TVersion['accepts']['type']
-    >
-  >;
+  uri: TVersion['uri'];
+  version: TVersion['version'];
+  description: TVersion['description'];
+  metadata: TVersion['metadata'];
   systemError: InferArvoEvent<
     ArvoEvent<
       InferZodSchema<TVersion['systemError']['schema']>,
@@ -81,17 +71,24 @@ export type InferVersionedArvoContract<
       TVersion['systemError']['type']
     >
   >;
-  emitMap: {
+  accepts: InferArvoEvent<
+    ArvoEvent<
+      InferZodSchema<TVersion['accepts']['schema']>,
+      {},
+      TVersion['accepts']['type']
+    >
+  >;
+  emits: {
     [K in string & keyof TVersion['emits']]: InferArvoEvent<
-      ArvoEvent<InferZodSchema<TVersion['emits'][K]>, {}, K>
+      ArvoEvent<InferZodSchema<TVersion['emits'][K]>, Record<string, any>, K>
     >;
   };
-  emits: Array<
+  emitList: Array<
     {
       [K in string & keyof TVersion['emits']]: InferArvoEvent<
-        ArvoEvent<InferZodSchema<TVersion['emits'][K]>, {}, K>
+        ArvoEvent<InferZodSchema<TVersion['emits'][K]>, Record<string, any>, K>
       >;
     }[string & keyof TVersion['emits']]
   >;
-  metadata: TVersion['metadata'];
+  
 };

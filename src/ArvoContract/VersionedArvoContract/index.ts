@@ -43,14 +43,12 @@ export class VersionedArvoContract<
   public get systemError(): TContract['systemError'] {
     return this._contract.systemError;
   }
-
   public get accepts() {
     return this._accepts;
   }
   public get emits() {
     return this._emits;
   }
-
   public get emitList() {
     return this._emitList;
   }
