@@ -50,7 +50,7 @@ export type ArvoErrorType = z.infer<typeof ArvoErrorSchema>;
 
 /**
  * Infers that complete ArvoEvent structure for all the events
- * that can be accepted and emitted by the handler bound to the 
+ * that can be accepted and emitted by the handler bound to the
  * provided versioned ArvoContract.
  *
  * @see {@link VersionedArvoContract} for the input contract structure
@@ -90,5 +90,4 @@ export type InferVersionedArvoContract<
       >;
     }[string & keyof TVersion['emits']]
   >;
-  
 };
