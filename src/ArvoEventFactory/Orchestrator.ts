@@ -5,12 +5,9 @@ import { createArvoEvent } from '../ArvoEvent/helpers';
 import { CreateArvoEvent } from '../ArvoEvent/types';
 import { ArvoDataContentType } from '../ArvoEvent/schema';
 import {
-  fetchOpenTelemetryTracer,
+  ArvoOpenTelemetry,
   currentOpenTelemetryHeaders,
-  exceptionToSpan,
 } from '../OpenTelemetry';
-import { context, SpanStatusCode, trace } from '@opentelemetry/api';
-import { ExecutionOpenTelemetryConfiguration } from '../OpenTelemetry/types';
 import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
 import { EventDataschemaUtil } from '../utils';
 import ArvoOrchestrationSubject from '../ArvoOrchestrationSubject';
@@ -50,7 +47,6 @@ export class ArvoOrchestratorEventFactory<
    *
    * @param event - Event configuration without type/schema/subject
    * @param [extensions] - Optional additional properties
-   * @param [opentelemetry] - Optional telemetry configuration
    * @returns Validated orchestration event with proper subject hierarchy
    *
    * @throws Error if event validation fails
@@ -64,18 +60,11 @@ export class ArvoOrchestratorEventFactory<
       'type' | 'datacontenttype' | 'dataschema' | 'subject'
     >,
     extensions?: TExtension,
-    opentelemetry?: ExecutionOpenTelemetryConfiguration,
   ) {
-    opentelemetry = opentelemetry ?? {
-      tracer: fetchOpenTelemetryTracer(),
-    };
-    const span = opentelemetry.tracer.startSpan(
-      `${this._name}<${this.contract.uri}/${this.contract.version}>.init`,
-    );
-    return context.with(trace.setSpan(context.active(), span), () => {
-      span.setStatus({ code: SpanStatusCode.OK });
-      const otelHeaders = currentOpenTelemetryHeaders();
-      try {
+    return ArvoOpenTelemetry.getInstance().startActiveSpan({
+      name: `${this._name}<${EventDataschemaUtil.create(this.contract)}>.init`,
+      fn: (span) => {
+        const otelHeaders = currentOpenTelemetryHeaders();
         const validationResult = this.contract.accepts.schema.safeParse(
           event.data,
         );
@@ -98,7 +87,7 @@ export class ArvoOrchestratorEventFactory<
               version: this.contract.version,
             });
 
-        return createArvoEvent<
+        const generatedEvent = createArvoEvent<
           z.infer<TContract['accepts']['schema']>,
           TExtension,
           TContract['accepts']['type']
@@ -117,16 +106,9 @@ export class ArvoOrchestratorEventFactory<
           extensions,
           { disable: true },
         );
-      } catch (error) {
-        exceptionToSpan(error as Error);
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: (error as Error).message,
-        });
-        throw error;
-      } finally {
-        span.end();
-      }
+        span.setAttributes(generatedEvent.otelAttributes);
+        return generatedEvent;
+      },
     });
   }
 
@@ -136,7 +118,6 @@ export class ArvoOrchestratorEventFactory<
    *
    * @param event - Completion event configuration
    * @param [extensions] - Optional additional properties
-   * @param [opentelemetry] - Optional telemetry configuration
    * @returns Validated completion event
    *
    * @throws Error if event validation fails or complete event type not configured
@@ -150,18 +131,11 @@ export class ArvoOrchestratorEventFactory<
       'datacontenttype' | 'dataschema' | 'type'
     >,
     extensions?: TExtension,
-    opentelemetry?: ExecutionOpenTelemetryConfiguration,
   ) {
-    opentelemetry = opentelemetry ?? {
-      tracer: fetchOpenTelemetryTracer(),
-    };
-    const span = opentelemetry.tracer.startSpan(
-      `${this._name}<${this.contract.uri}/${this.contract.version}>.complete`,
-    );
-    return context.with(trace.setSpan(context.active(), span), () => {
-      span.setStatus({ code: SpanStatusCode.OK });
-      const otelHeaders = currentOpenTelemetryHeaders();
-      try {
+    return ArvoOpenTelemetry.getInstance().startActiveSpan({
+      name: `${this._name}<${EventDataschemaUtil.create(this.contract)}>.complete`,
+      fn: (span) => {
+        const otelHeaders = currentOpenTelemetryHeaders();
         const validationResult = this.contract.emits?.[
           this.contract.metadata.completeEventType
         ]?.safeParse(event.data);
@@ -171,7 +145,7 @@ export class ArvoOrchestratorEventFactory<
             `No contract available for ${this.contract.metadata.completeEventType}`;
           throw new Error(`Emit Event data validation failed: ${msg}`);
         }
-        return createArvoEvent<
+        const generatedEvent = createArvoEvent<
           z.infer<
             TContract['emits'][TContract['metadata']['completeEventType']]
           >,
@@ -191,16 +165,9 @@ export class ArvoOrchestratorEventFactory<
           extensions,
           { disable: true },
         );
-      } catch (error) {
-        exceptionToSpan(error as Error);
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: (error as Error).message,
-        });
-        throw error;
-      } finally {
-        span.end();
-      }
+        span.setAttributes(generatedEvent.otelAttributes);
+        return generatedEvent;
+      },
     });
   }
 }

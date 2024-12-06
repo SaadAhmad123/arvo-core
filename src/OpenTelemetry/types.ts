@@ -20,22 +20,6 @@ export type TelemetryLogLevel =
  * See reference standard documentation [here](https://www.w3.org/TR/trace-context/#design-overview)
  */
 export type OpenTelemetryHeaders = {
-  /** The traceparent header value */
   traceparent: string | null;
-  /** The tracestate header value */
   tracestate: string | null;
-};
-
-/**
- * Configuration options for OpenTelemetry integration in execution context.
- *
- * This type defines how tracing should be configured and inherited within
- * the execution pipeline.
- */
-export type ExecutionOpenTelemetryConfiguration = {
-  /**
-   * OpenTelemetry tracer instance to use for creating spans.
-   * If not provided, a default tracer may be used depending on the implementation.
-   */
-  tracer: Tracer;
 };

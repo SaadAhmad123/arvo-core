@@ -1,16 +1,13 @@
-import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import ArvoEvent from '.';
 import {
-  fetchOpenTelemetryTracer,
+  ArvoOpenTelemetry,
   currentOpenTelemetryHeaders,
-  exceptionToSpan,
   logToSpan,
 } from '../OpenTelemetry';
 import { cleanString, createTimestamp } from '../utils';
 import { ArvoDataContentType } from './schema';
 import { ArvoEventData, CloudEventExtension, CreateArvoEvent } from './types';
 import { v4 as uuid4 } from 'uuid';
-import { ExecutionOpenTelemetryConfiguration } from '../OpenTelemetry/types';
 
 /**
  * Internal generator function for creating  instances.
@@ -61,7 +58,6 @@ const generator = (
  * @param [extensions] - Optional cloud event extensions
  * @param [opentelemetry] - OpenTelemetry configuration with options:
  *   - disable - Completely disables telemetry if true
- *   - tracer - Custom OpenTelemetry tracer instance
  *
  * @throw {Error} In case any validation in {@link ArvoEvent} fails.
  *
@@ -88,18 +84,6 @@ const generator = (
  *   undefined,
  *   { disable: true }
  * );
- *
- * // With custom tracer
- * const event = createArvoEvent(
- *   {
- *     type: 'order.created',
- *     source: '/orders',
- *     subject: 'order-123',
- *     data: orderData
- *   },
- *   undefined,
- *   { tracer: customTracer }
- * );
  * ```
  */
 export const createArvoEvent = <
@@ -109,9 +93,9 @@ export const createArvoEvent = <
 >(
   event: CreateArvoEvent<TData, TType>,
   extensions?: TExtension,
-  opentelemetry?: Partial<
-    ExecutionOpenTelemetryConfiguration & { disable: boolean }
-  >,
+  opentelemetry?: {
+    disable?: boolean;
+  },
 ): ArvoEvent<TData, TExtension, TType> => {
   if (opentelemetry?.disable) {
     return generator(event, extensions, {
@@ -120,21 +104,16 @@ export const createArvoEvent = <
     });
   }
 
-  const tracer = opentelemetry?.tracer ?? fetchOpenTelemetryTracer();
-  const span = tracer.startSpan(`createArvoEvent<${event.type}>`, {});
-  return context.with(trace.setSpan(context.active(), span), () => {
-    span.setStatus({ code: SpanStatusCode.OK });
-    try {
-      return generator(event, extensions, currentOpenTelemetryHeaders());
-    } catch (error) {
-      exceptionToSpan(error as Error);
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: (error as Error).message,
-      });
-      throw error;
-    } finally {
-      span.end();
-    }
+  return ArvoOpenTelemetry.getInstance().startActiveSpan({
+    name: `createArvoEvent<${event.type}>`,
+    fn: (span) => {
+      const generatedEvent = generator(
+        event,
+        extensions,
+        currentOpenTelemetryHeaders(),
+      );
+      span.setAttributes(generatedEvent.otelAttributes);
+      return generatedEvent;
+    },
   });
 };

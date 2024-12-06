@@ -1,13 +1,120 @@
-import { trace, context, Span, TextMapSetter } from '@opentelemetry/api';
+import {
+  trace,
+  context,
+  Span,
+  TextMapSetter,
+  Tracer,
+  Context,
+  SpanOptions,
+  propagation,
+  SpanStatusCode,
+} from '@opentelemetry/api';
 import { TelemetryLogLevel, OpenTelemetryHeaders } from './types';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
+import ArvoExecution from './ArvoExecution';
+import { ArvoExecutionSpanKind } from './ArvoExecution/types';
 
 /**
- * A tracer instance for the ArvoCore package.
+ * Singleton class for managing OpenTelemetry instrumentation across libraries
  */
-export const fetchOpenTelemetryTracer = () => {
-  return trace.getTracer('arvo-instrumentation');
-};
+export class ArvoOpenTelemetry {
+  /** OpenTelemetry tracer instance for creating spans */
+  public readonly tracer: Tracer;
+
+  private static instance: ArvoOpenTelemetry | null = null;
+
+  private constructor() {
+    this.tracer = trace.getTracer('arvo-instrumentation', '1.0.0');
+  }
+
+  /**
+   * Gets the instance of ArvoOpenTelemetry
+   * @returns {ArvoOpenTelemetry} The singleton instance
+   */
+  public static getInstance(): ArvoOpenTelemetry {
+    if (ArvoOpenTelemetry.instance === null) {
+      ArvoOpenTelemetry.instance = new ArvoOpenTelemetry();
+    }
+    return ArvoOpenTelemetry.instance;
+  }
+
+  /**
+   * Creates and manages an active span for a given operation. This function provides two modes of operation:
+   * 1. Automatic span management (default): Handles span lifecycle, status, and error recording
+   * 2. Manual span management: Gives full control to the user when disableSpanManagement is true
+   *
+   * @template F - Function type that accepts a Span parameter and returns a value
+   * @param {Object} param - Configuration object for the span
+   * @param {string} param.name - Name of the span to be created
+   * @param {F} param.fn - Function to execute within the span context. Receives the span as a parameter
+   * @param {SpanOptions} [param.spanOptions] - Optional configuration for the span creation
+   * @param {boolean} [param.disableSpanManagement] - When true, disables automatic span lifecycle management
+   * @param {Object} [param.context] - Optional context configuration for span inheritance
+   * @param {string} param.context.inheritFrom - Specifies the type of context inheritance ('TRACE_HEADERS' | 'CONTEXT')
+   * @param {OpenTelemetryHeaders} param.context.traceHeaders - Required when inheritFrom is 'TRACE_HEADERS'
+   * @param {Context} param.context.context - Required when inheritFrom is 'CONTEXT'
+   * @returns {ReturnType<F>} The return value of the executed function
+   */
+  public startActiveSpan<F extends (span: Span) => unknown>(param: {
+    name: string;
+    fn: F;
+    spanOptions?: SpanOptions;
+    context?:
+      | {
+          inheritFrom: 'TRACE_HEADERS';
+          traceHeaders: OpenTelemetryHeaders;
+        }
+      | {
+          inheritFrom: 'CONTEXT';
+          context: Context;
+        };
+    disableSpanManagement?: boolean;
+  }): ReturnType<F> {
+    let parentContext: Context | undefined;
+    if (param.context) {
+      if (
+        param.context.inheritFrom === 'TRACE_HEADERS' &&
+        param.context.traceHeaders.traceparent
+      ) {
+        parentContext = makeOpenTelemetryContextContext(
+          param.context.traceHeaders.traceparent,
+          param.context.traceHeaders.tracestate,
+        );
+      } else if (param.context.inheritFrom === 'CONTEXT') {
+        parentContext = param.context.context;
+      }
+    }
+    const span = this.tracer.startSpan(
+      param.name,
+      {
+        ...(param.spanOptions ?? {}),
+        attributes: {
+          [ArvoExecution.ATTR_SPAN_KIND]: ArvoExecutionSpanKind.INTERNAL,
+          ...(param.spanOptions?.attributes ?? {}),
+        },
+      },
+      parentContext,
+    );
+    return context.with(trace.setSpan(context.active(), span), () => {
+      if (param.disableSpanManagement) {
+        return param.fn(span) as ReturnType<F>;
+      }
+      span.setStatus({ code: SpanStatusCode.OK });
+      try {
+        return param.fn(span) as ReturnType<F>;
+      } catch (e) {
+        exceptionToSpan(e as Error);
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: (e as Error).message,
+        });
+        throw e;
+      } finally {
+        span.end();
+      }
+    });
+  }
+}
 
 /**
  * Logs a message to a span with additional parameters.
@@ -17,11 +124,8 @@ export const fetchOpenTelemetryTracer = () => {
  */
 export const logToSpan = (
   params: {
-    /** The log level */
     level: TelemetryLogLevel;
-    /** The log message */
     message: string;
-    /** Other log parameters */
     [key: string]: string;
   },
   span: Span | undefined = trace.getActiveSpan(),
@@ -89,3 +193,15 @@ export function currentOpenTelemetryHeaders(): OpenTelemetryHeaders {
     tracestate: carrier.tracestate,
   };
 }
+
+// Helper function to extract context from traceparent and tracestate
+export const makeOpenTelemetryContextContext = (
+  traceparent: string,
+  tracestate: string | null,
+): Context => {
+  const extractedContext = propagation.extract(context.active(), {
+    traceparent,
+    tracestate: tracestate ?? undefined,
+  });
+  return extractedContext;
+};

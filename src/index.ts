@@ -21,12 +21,9 @@ import {
   logToSpan,
   OTelNull,
   currentOpenTelemetryHeaders,
+  ArvoOpenTelemetry,
 } from './OpenTelemetry';
-import {
-  OpenTelemetryHeaders,
-  TelemetryLogLevel,
-  ExecutionOpenTelemetryConfiguration,
-} from './OpenTelemetry/types';
+import { OpenTelemetryHeaders, TelemetryLogLevel } from './OpenTelemetry/types';
 import {
   validateURI,
   cleanString,
@@ -61,8 +58,6 @@ import { OpenInferenceSpanKind } from './OpenTelemetry/OpenInference/types';
 import ArvoOrchestrationSubject from './ArvoOrchestrationSubject';
 import { ArvoOrchestrationSubjectContentSchema } from './ArvoOrchestrationSubject/schema';
 import { ArvoOrchestrationSubjectContent } from './ArvoOrchestrationSubject/type';
-import ArvoEventHttp from './ArvoEventHttp';
-import { ArvoEventHttpConfig } from './ArvoEventHttp/types';
 import {
   InferArvoEvent,
   ArvoSemanticVersion,
@@ -104,8 +99,6 @@ const ArvoEventSchema = {
 };
 
 export {
-  ArvoEventHttpConfig,
-  ArvoEventHttp,
   ArvoEvent,
   createArvoEvent,
   ArvoDataContentType,
@@ -144,7 +137,6 @@ export {
   createArvoOrchestratorContract,
   ICreateArvoOrchestratorContract,
   ArvoOrchestratorEventTypeGen,
-  ExecutionOpenTelemetryConfiguration,
   EventDataschemaUtil,
   ArvoOrchestrationSubjectContentSchema,
   ArvoSemanticVersionSchema,
@@ -162,4 +154,5 @@ export {
   SimpleArvoContract,
   ArvoOrchestratorEventFactory,
   createArvoOrchestratorEventFactory,
+  ArvoOpenTelemetry,
 };
