@@ -150,7 +150,7 @@ export class EventDataschemaUtil {
    * // Returns: "my-contract/1.0.0"
    * ```
    */
-  static create(contract: VersionedArvoContract<any, any>): string {
+  static create<T extends VersionedArvoContract<any, any>>(contract: T): `${T['uri']}/${T['version']}` {
     return `${contract.uri}/${contract.version}`;
   }
 
@@ -159,9 +159,9 @@ export class EventDataschemaUtil {
    * @param contract Versioned contract
    * @returns `{contract.uri}/{WildCardArvoSemanticVersion}`
    */
-  static createWithWildCardVersion(
-    contract: VersionedArvoContract<any, any>,
-  ): string {
+  static createWithWildCardVersion<T extends VersionedArvoContract<any, any>>(
+    contract: T,
+  ): `${T['uri']}/${typeof WildCardArvoSemanticVersion}` {
     return `${contract.uri}/${WildCardArvoSemanticVersion}`;
   }
 
