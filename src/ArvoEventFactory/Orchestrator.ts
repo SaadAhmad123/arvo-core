@@ -11,6 +11,7 @@ import {
 import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
 import { EventDataschemaUtil } from '../utils';
 import ArvoOrchestrationSubject from '../ArvoOrchestrationSubject';
+import { createSpanOptions } from './utils';
 
 /**
  * Factory class for creating and validating orchestrator-specific events with managed subject hierarchies.
@@ -62,7 +63,8 @@ export class ArvoOrchestratorEventFactory<
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
-      name: `${this._name}<${EventDataschemaUtil.create(this.contract)}>.init`,
+      name: `${this._name}.init`,
+      spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();
         const validationResult = this.contract.accepts.schema.safeParse(
@@ -133,7 +135,8 @@ export class ArvoOrchestratorEventFactory<
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
-      name: `${this._name}<${EventDataschemaUtil.create(this.contract)}>.complete`,
+      name: `${this._name}.complete`,
+      spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();
         const validationResult = this.contract.emits?.[

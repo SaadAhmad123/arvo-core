@@ -9,6 +9,7 @@ import {
 } from '../OpenTelemetry';
 import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
 import { EventDataschemaUtil } from '../utils';
+import { createSpanOptions } from './utils';
 
 /**
  * Factory class for creating and validating events based on a versioned Arvo contract.
@@ -70,7 +71,8 @@ export default class ArvoEventFactory<
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
-      name: `${this._name}<${EventDataschemaUtil.create(this.contract)}>.accepts`,
+      name: `${this._name}.accepts`,
+      spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();
         const validationResult = this.contract.accepts.schema.safeParse(
@@ -135,7 +137,8 @@ export default class ArvoEventFactory<
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
-      name: `${this._name}<${EventDataschemaUtil.create(this.contract)}>.emits<${event.type}>`,
+      name: `${this._name}.emits<${event.type}>`,
+      spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();
         const validationResult = this.contract.emits?.[event.type]?.safeParse(
@@ -199,7 +202,8 @@ export default class ArvoEventFactory<
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
-      name: `${this._name}<${EventDataschemaUtil.createWithWildCardVersion(this.contract)}>.systemError`,
+      name: `${this._name}.systemError`,
+      spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();
         const { error, ..._event } = event;
