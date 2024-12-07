@@ -1,4 +1,3 @@
-import ArvoContract from './ArvoContract';
 import { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
 import { WildCardArvoSemanticVersion } from './ArvoContract/WildCardArvoSemanticVersion';
 import ArvoEvent from './ArvoEvent';

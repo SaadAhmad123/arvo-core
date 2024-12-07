@@ -1,7 +1,6 @@
 import zodToJsonSchema from 'zod-to-json-schema';
 import ArvoContract from '..';
 import { ArvoSemanticVersion } from '../../types';
-import { ArvoContractRecord } from '../types';
 
 /**
  * Represents a version-specific view of an ArvoContract, providing type-safe access

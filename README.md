@@ -3,30 +3,19 @@
 
 
 # Arvo
+In the landscape of event-driven systems, Arvo attempts to stand apart through its unique approach to complexity. Rather than prescribing rigid solutions, Arvo provides a thoughtful pattern language and methodology for building distributed systems. It achieves this by striking a careful balance between structure and freedom, offering strong conventions while remaining deliberately unopinionated about implementation details.
 
-## What is Arvo
+## Core Philosophy
+Arvo's fundamental principle is that distributed systems thrive on trust and clear contracts, yet must remain flexible in their technical implementation. While the framework ensures reliability and type safety across service boundaries through these contracts, it consciously avoids dictating how you should implement core functionalities like security, event brokerage, event handling, telemetry, or workflow orchestration. This approach enables seamless integration with your existing infrastructure and tools, whether you're using cloud providers like AWS and Azure or your own on-premise solutions.
+Understanding that teams shouldn't need to reinvent common patterns, Arvo provides thoughtfully designed tools to reduce implementation complexity. The Arvo suite includes libraries like arvo-xstate for workflow orchestration using state machines and arvo-event-handler for implementing contract-based event handlers. However, these tools remain entirely optional – they exist to accelerate development when they align with your needs, but Arvo fully supports teams who choose different approaches that better suit their specific requirements.
+This philosophy particularly benefits teams focusing on business logic who want to avoid rebuilding fundamental event-driven patterns. By providing essential building blocks for event creation, contract validation, state management, and telemetry, while maintaining cloud agnosticism and extensibility, Arvo reduces the complexity of distributed system development without constraining technical choices.
 
-Arvo is an opinionated approach to building event-driven systems. It's designed as a pattern and methodology rather than a rigid framework.
+## Design Goals
+Arvo addresses the inherent complexity of distributed systems by establishing clear patterns for event handling, state management, and service communication. Instead of enforcing a rigid framework, it provides a flexible foundation that helps teams reduce cognitive load while preserving their ability to innovate and adapt. This approach ensures that whether you're building a small microservice or orchestrating a large-scale distributed system, Arvo's lightweight core and extensible architecture can grow alongside your needs, allowing you to progressively adopt more sophisticated patterns as your system evolves.
 
-## Principal
 
-The core principle of Arvo is to provide a solid foundation with enough flexibility for customization, allowing you to impose your own technical posture, including security measures, event brokerage, and telemetry. While Arvo offers a structured approach, it encourages developers to implement their own solutions if they believe they can improve upon or diverge from Arvo's principles.
-
-If you're looking to focus on results without getting bogged down in the nitty-gritty of event creation, handling, system state management, and telemetry, while also avoiding vendor lock-in, Arvo provides an excellent starting point. I believe, it strikes a balance between opinionated design and customization, making it an ideal choice for developers who want a head start in building event-driven systems without sacrificing flexibility.
-
-Key features of Arvo include:
-
-- Lightweight and unopinionated core
-- Extensible architecture
-- Cloud-agnostic design
-- Built-in primitives for event-driven patterns
-- Easy integration with existing systems and tools
-
-Whether you're building a small microservice or a large-scale distributed system, my hope with Arvo is to offers you some of the tools and patterns to help you succeed in the world of event-driven architecture.
-
-## Arvo suite
-
-Arvo is a collection of libraries which allows you to build the event driven system in the Arvo pattern. However, if you feel you don't have to use them or you can use them as you see fit.
+## The Arvo Framework: Build at Your Own Pace
+The Arvo framework provides a cohesive set of libraries for building event-driven systems. While designed to work together seamlessly, each component remains independent - adopt what serves your needs and integrate at your own pace.
 
 | Scope       | NPM                                                                | Github                                                                | Documentation                                                                |
 | ------------ | ------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -34,64 +23,169 @@ Arvo is a collection of libraries which allows you to build the event driven sys
 | Core       | https://www.npmjs.com/package/arvo-core?activeTab=readme                | https://github.com/SaadAhmad123/arvo-core | https://saadahmad123.github.io/arvo-core/index.html |
 | Event Handling | https://www.npmjs.com/package/arvo-event-handler?activeTab=readme      | https://github.com/SaadAhmad123/arvo-event-handler | https://saadahmad123.github.io/arvo-event-handler/index.html |
 
+
 # Arvo - Core
 
-This core package defines primitive types and utility functions to help you quickly start building interesting and robust event-driven applications.
+Arvo Core provides the foundational building blocks for creating robust event-driven systems. It implements industry standards while adding enterprise-grade features, enabling developers to build reliable distributed systems without sacrificing flexibility or introducing vendor lock-in.
 
-## Documentation & Resources
+## Core Concepts
 
-| Source       | Link                                                     |
-| ------------ | -------------------------------------------------------- |
-| Package      | https://www.npmjs.com/package/arvo-core?activeTab=readme |
-| Github       | https://github.com/SaadAhmad123/arvo-core                |
-| Documenation | https://saadahmad123.github.io/arvo-core/index.html      |
+Understanding Arvo Core begins with its three fundamental components that work together to create a robust event-driven architecture:
+
+### 1. Events (ArvoEvent)
+
+ArvoEvent extends the CloudEvents specification to provide a standardized way to describe events in your system. Every event is an immutable, validated instance that includes:
+
+```typescript
+import { createArvoEvent } from 'arvo-core';
+
+const event = createArvoEvent({
+  source: 'user-service',
+  type: 'user.created',
+  subject: 'user/123',
+  data: {
+    userId: 'usr_123',
+    email: 'user@example.com'
+  }
+});
+```
+
+### 2. Contracts (ArvoContract)
+
+ArvoContract defines and enforces agreements between services, ensuring type safety and validation across your distributed system:
+
+```typescript
+import { createArvoContract, z } from 'arvo-core';
+
+const userContract = createArvoContract({
+  uri: '#/contracts/user',
+  type: 'user.created',
+  versions: {
+    '1.0.0': {
+      accepts: z.object({
+        userId: z.string(),
+        email: z.string().email()
+      }),
+      emits: {
+        'user.notification.sent': z.object({
+          userId: z.string(),
+          timestamp: z.date()
+        })
+      }
+    }
+  }
+});
+```
+
+### 3. Event Factory (ArvoEventFactory)
+
+ArvoEventFactory provides a type-safe way to create events that conform to your contracts. It handles validation, OpenTelemetry integration, and ensures events meet their contract specifications:
+
+```typescript
+import { createArvoEventFactory } from 'arvo-core';
+
+// Create a factory for a specific contract version
+const factory = createArvoEventFactory(userContract.version('1.0.0'));
+
+// Create an event that accepts input
+const inputEvent = factory.accepts({
+  source: 'api/users',
+  subject: 'user/creation',
+  data: {
+    userId: 'usr_123',
+    email: 'user@example.com'
+  }
+});
+
+// Create an event that emits output
+const outputEvent = factory.emits({
+  type: 'user.notification.sent',
+  source: 'notification-service',
+  subject: 'notification/sent',
+  data: {
+    userId: 'usr_123',
+    timestamp: new Date()
+  }
+});
+
+// Create a system error event
+const errorEvent = factory.systemError({
+  error: new Error('Validation failed'),
+  source: 'validation-service',
+  subject: 'validation/error'
+});
+```
 
 ## Installation
 
-You can install the core package via `npm` or `yarn`
-
 ```bash
+# Using npm
 npm install arvo-core
-```
 
-```bash
+# Using yarn
 yarn add arvo-core
 ```
 
-## Components
+## Advanced Usage
 
-At its core, Arvo has only three main data structures:
+### Working with Contract Versions
 
-- [ArvoEvent](src/ArvoEvent/README.md) aims to provide a extendible variant of the open-source CloudEvent spec-ed object to define all the event in the system.
-- [ArvoContract](src/ArvoContract/README.md) is a basic class to define and impose contracts between services, ensuring trust in decoupled systems during build and development.
-- `ArvoErrorSchema` is the recommeded zod schema for all the errors in the ArvoEvents
+The versioning system in ArvoContract allows you to evolve your APIs while maintaining compatibility:
 
-## Utilities
+```typescript
+const versionedContract = createArvoContract({
+  uri: '#/contracts/order',
+  type: 'order.process',
+  versions: {
+    '1.0.0': {
+      accepts: z.object({ orderId: z.string() }),
+      emits: { 
+        'order.processed': z.object({ status: z.string() }) 
+      }
+    },
+    '2.0.0': {
+      accepts: z.object({ 
+        orderId: z.string(),
+        metadata: z.record(z.string()) 
+      }),
+      emits: { 
+        'order.processed': z.object({ 
+          status: z.string(),
+          metrics: z.object({ duration: z.number() })
+        }) 
+      }
+    }
+  }
+});
 
-The package also includes utility functions for:
-
-- Creating ArvoEvents, ArvoContracts, and contract libraries
-- Integrating with OpenTelemetry
-- TypeScript types for core components
-
-## Getting Started
-
-To start using Arvo in your project:
-
-- Install the package as shown in the Installation section.
-- Import the necessary components:
-
-```javascript
-import {
-  createArvoEvent,
-  createArvoContract,
-  createArvoEventFactory,
-  createSimpleArvoContract,
-  createArvoOrchestratorContract,
-} from 'arvo-core';
+// Create version-specific factories
+const v1Factory = createArvoEventFactory(versionedContract.version('1.0.0'));
+const v2Factory = createArvoEventFactory(versionedContract.version('2.0.0'));
 ```
 
-- Begin defining your events and contracts using the provided classes.
+## Integration with Other Arvo Components
+
+Arvo Core works seamlessly with:
+- arvo-event-handler: For processing events
+- arvo-xstate: For orchestration and workflow management
+
+Each component builds upon these core primitives while maintaining the same principles of flexibility and reliability.
+
+## Best Practices
+
+1. Use factories for event creation to ensure contract compliance
+2. Implement proper error handling using the standard error schema
+3. Enable distributed tracing in production systems
+4. Share contracts as separate packages or monorepo internals
+5. Utilize version-specific factories for different API versions
+
+## Resources
+
+| Resource      | Link                                                       |
+|--------------|-------------------------------------------------------------|
+| Documentation | https://saadahmad123.github.io/arvo-core/index.html        |
+| GitHub        | https://github.com/SaadAhmad123/arvo-core                  |
+| NPM Package   | https://www.npmjs.com/package/arvo-core                    |
 
 ## License
 

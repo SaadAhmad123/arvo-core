@@ -182,7 +182,8 @@ export default class ArvoContract<
       resolvedVersion = this.getSortedVersionNumbers('DESC')[0];
     } else if (option === 'oldest') {
       resolvedVersion = this.getSortedVersionNumbers('ASC')[0];
-    } else if (!this._versions[option as ArvoSemanticVersion]) {
+      // @ts-ignore
+    } else if (!this._versions[option]) {
       throw new Error(
         `The contract (uri=${this._uri}) does not have version=${option}`,
       );
