@@ -186,3 +186,60 @@ By using ArvoContract as part of the Arvo framework, teams can build more reliab
 | Testing Support | Includes dedicated testing utilities for contract verification. Provides factories for generating valid test events. Enables type-safe mocking and verification of event handlers. Supports contract-based testing patterns. | Basic schema validation available for tests. Test data generation and verification patterns need manual implementation. No built-in support for contract testing. | Limited to type checking in tests. No runtime validation or test data generation capabilities. Contract testing patterns must be built from scratch. |
 | Documentation | Generates comprehensive documentation from contracts including JSON Schema export. Maintains single source of truth for interface specifications. Includes support for contract metadata and descriptions. | Documentation must be maintained separately from schemas. No built-in tools for generating interface specifications. Requires manual synchronization of docs and code. | Documentation completely separate from types. No automatic generation capabilities. Higher risk of documentation becoming outdated. |
 | Bundle Size | Larger bundle size due to included validation, versioning, and integration capabilities. However, provides significant value through built-in functionality and reduced need for custom code. | Moderate bundle size impact from validation library. Additional size from custom versioning and integration code if implemented. | No direct bundle size impact but may require additional custom code for missing functionality. |
+
+## Decision Matrix: Choosing Between Contract Approaches
+
+The following matrix uses these indicators:
+- ✓ : Supported out of the box
+- ⚡: Partially supported or requires custom implementation
+- ✗ : Not supported
+
+| Capability | ArvoContract | Plain Zod | TypeScript Types |
+|------------|--------------|-----------|------------------|
+| **Schema Validation** |
+| Runtime Type Checking | ✓ | ✓ | ✗ |
+| Validation Error Messages | ✓ | ✓ | ✗ |
+| Custom Validation Rules | ✓ | ✓ | ✗ |
+| **Type Safety** |
+| Compile-time Type Checking | ✓ | ✓ | ✓ |
+| Event Type Inference | ✓ | ⚡ | ⚡ |
+| Handler Type Safety | ✓ | ⚡ | ⚡ |
+| **Contract Management** |
+| Semantic Versioning | ✓ | ✗ | ✗ |
+| Version Compatibility Checking | ✓ | ✗ | ✗ |
+| Breaking Change Detection | ✓ | ✗ | ✗ |
+| **Error Handling** |
+| Standardized Error Events | ✓ | ✗ | ✗ |
+| Error Propagation | ✓ | ⚡ | ✗ |
+| Stack Trace Preservation | ✓ | ⚡ | ✗ |
+| **Development Experience** |
+| IDE Autocompletion | ✓ | ✓ | ✓ |
+| Contract Testing Tools | ✓ | ⚡ | ✗ |
+| Documentation Generation | ✓ | ⚡ | ⚡ |
+| **System Integration** |
+| OpenTelemetry Support | ✓ | ✗ | ✗ |
+| Event Handler Binding | ✓ | ⚡ | ⚡ |
+| **Maintenance** |
+| Setup Complexity | ⚡ | ✓ | ✓ |
+| Ongoing Maintenance Effort | ✓ | ⚡ | ✗ |
+| Cross-team Coordination | ✓ | ⚡ | ⚡ |
+
+### When to Choose Each Approach:
+
+Choose ArvoContract when:
+- Building distributed event-driven systems
+- Requiring strong contract guarantees between services
+- Managing complex service evolution over time
+- Needing standardized error handling and tracing
+
+Choose Plain Zod when:
+- Working on smaller applications with simple validation needs
+- Not requiring explicit versioning support
+- Having minimal cross-service communication
+- Wanting lower setup overhead
+
+Choose TypeScript Types when:
+- Building simple applications with basic type checking needs
+- Not requiring runtime validation
+- Working in a single codebase with no service boundaries
+- Prioritizing minimal bundle size over runtime safety

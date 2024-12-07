@@ -11,5 +11,5 @@ export enum OpenInferenceSpanKind {
   TOOL = 'TOOL',
   GUARDRAIL = 'GUARDRAIL',
   EVALUATOR = 'EVALUATOR',
-  INTERNAL = "INTERNAL"
+  INTERNAL = 'INTERNAL',
 }

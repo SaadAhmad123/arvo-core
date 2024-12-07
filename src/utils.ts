@@ -149,7 +149,9 @@ export class EventDataschemaUtil {
    * // Returns: "my-contract/1.0.0"
    * ```
    */
-  static create<T extends VersionedArvoContract<any, any>>(contract: T): `${T['uri']}/${T['version']}` {
+  static create<T extends VersionedArvoContract<any, any>>(
+    contract: T,
+  ): `${T['uri']}/${T['version']}` {
     return `${contract.uri}/${contract.version}`;
   }
 
