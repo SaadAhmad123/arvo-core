@@ -130,11 +130,12 @@ export const logToSpan = (
   },
   span: Span | undefined = trace.getActiveSpan(),
 ): void => {
+  const {level, message, ...restParams} = params
   const toLog = {
-    ...params,
-    'log.severity': params.level,
-    'log.message': params.message,
+    'log.severity': level,
+    'log.message': message,
     'log.timestamp': performance.now(),
+    ...restParams,
   };
   if (span) {
     span.addEvent('log', toLog);
