@@ -132,10 +132,12 @@ export const logToSpan = (
 ): void => {
   const toLog = {
     ...params,
-    timestamp: performance.now(),
+    'log.severity': params.level,
+    'log.message': params.message,
+    'log.timestamp': performance.now(),
   };
   if (span) {
-    span.addEvent('log_message', toLog);
+    span.addEvent('log', toLog);
   } else {
     console.log(JSON.stringify(toLog, null, 2));
   }
