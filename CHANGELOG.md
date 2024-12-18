@@ -80,7 +80,7 @@
 
 - Refactored code implementation architecture for better maintainability
 
-## [2.1.12] - 2024-12-19
+## [2.1.14] - 2024-12-19
 
 - Tested Snyk upgrade, added more test coverage and added support for redirectto in orchestrator subject generation in init factory function
 

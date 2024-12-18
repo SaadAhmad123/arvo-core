@@ -184,6 +184,20 @@ describe('ArvoOrchestratorContract', () => {
     ).toBe('com.test.test')
     expect(event.redirectto).toBe(null)
 
+    event = createArvoOrchestratorEventFactory(
+      contract.version('2.0.0')
+    ).init({
+      source: 'com.test.test',
+      data: {
+        foo: "saad",
+        additional: 2,
+        parentSubject$$: null
+      },
+    })
+    expect(
+      ArvoOrchestrationSubject.parse(event.subject).meta.redirectto
+    ).toBe(undefined)
+
 
 
     expect(() => {

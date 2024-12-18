@@ -82,9 +82,11 @@ export class ArvoOrchestratorEventFactory<
               orchestator: this.contract.accepts.type,
               subject: parentSubject,
               version: this.contract.version,
-              meta: {
-                redirectto: event.redirectto ?? ArvoOrchestrationSubject.parse(parentSubject).execution.initiator
-              }
+              meta: Object.fromEntries(
+                Object.entries({
+                  redirectto: event.redirectto ?? ArvoOrchestrationSubject.parse(parentSubject).execution.initiator
+                }).filter(item => Boolean(item[1]))
+              )
             })
           : ArvoOrchestrationSubject.new({
               orchestator: this.contract.accepts.type,
