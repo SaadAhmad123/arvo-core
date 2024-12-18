@@ -72,7 +72,7 @@ export class ArvoOrchestratorEventFactory<
         );
         if (!validationResult.success) {
           throw new Error(
-            `Accept Event data validation failed: ${validationResult.error.message}`,
+            `Init Event data validation failed: ${validationResult.error.message}`,
           );
         }
         const parentSubject: string | null =
@@ -87,8 +87,10 @@ export class ArvoOrchestratorEventFactory<
               orchestator: this.contract.accepts.type,
               initiator: event.source,
               version: this.contract.version,
+              meta: event.redirectto ? {
+                redirectto: event.redirectto
+              } : undefined
             });
-
         const generatedEvent = createArvoEvent<
           z.infer<TContract['accepts']['schema']>,
           TExtension,
@@ -145,7 +147,7 @@ export class ArvoOrchestratorEventFactory<
         if (!validationResult?.success) {
           const msg =
             validationResult?.error?.message ??
-            `No contract available for ${this.contract.metadata.completeEventType}`;
+            `No schema available for ${this.contract.metadata.completeEventType}`;
           throw new Error(`Emit Event data validation failed: ${msg}`);
         }
         const generatedEvent = createArvoEvent<

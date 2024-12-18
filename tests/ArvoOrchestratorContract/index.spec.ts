@@ -4,6 +4,9 @@ import {
   ArvoOrchestratorEventTypeGen,
   ArvoEventSchema,
   createArvoOrchestratorEventFactory,
+  ArvoOrchestrationSubject,
+  createSimpleArvoContract,
+  ArvoEvent,
 } from '../../src';
 
 describe('ArvoOrchestratorContract', () => {
@@ -128,5 +131,83 @@ describe('ArvoOrchestratorContract', () => {
 
     expect(v2Accepts).toBeDefined();
     expect(v2Emits[testCompleteType]).toBeDefined();
+
+    expect(() => {
+      createArvoOrchestratorEventFactory(
+        createSimpleArvoContract({
+          uri: `#/test`,
+          type: 'test.test',
+          versions: {
+            '0.0.1': {
+              accepts: z.object({}),
+              emits: z.object({})
+            }
+          }
+        }).version('0.0.1')
+      )
+    }).toThrow('This factory can only be used for ArvoOrchestratorContract')
+
+
+    let event: ArvoEvent = createArvoOrchestratorEventFactory(
+      contract.version('2.0.0')
+    ).init({
+      source: 'com.test.test',
+      data: {
+        foo: "saad",
+        additional: 2,
+        parentSubject$$: null
+      },
+      redirectto: 'com.redirect.to'
+    })
+
+
+    expect(event.to).toBe(contract.type)
+    expect(event.type).toBe(contract.type)
+    expect(event.redirectto).toBe('com.redirect.to')
+    expect(
+      ArvoOrchestrationSubject.parse(event.subject).meta.redirectto
+    ).toBe(event.redirectto)
+
+    expect(() => {
+      createArvoOrchestratorEventFactory(
+        contract.version('2.0.0')
+      ).init({
+        source: 'com.test.test',
+        data: {
+          foo: "saad",
+          additional: 'ass' as any,
+          parentSubject$$: null
+        },
+        redirectto: 'com.redirect.to'
+      })
+    }).toThrow('Init Event data validation failed: ')
+
+    event = createArvoOrchestratorEventFactory(
+      contract.version('1.0.0')
+    ).complete({
+      source: 'com.test.test',
+      subject: "test",
+      data: {
+        bar: 0
+      },
+      to: 'com.ret.test'
+    })
+
+    expect(event.type).toBe(contract.version('1.0.0').metadata.completeEventType)
+    expect(event.to).toBe('com.ret.test')
+
+    expect(() => {
+      createArvoOrchestratorEventFactory(
+        contract.version('1.0.0')
+      ).complete({
+        source: 'com.test.test',
+        subject: "test",
+        data: {
+          bar: '1' as any
+        },
+        to: 'com.ret.test'
+      })
+    }).toThrow('Emit Event data validation failed: ')
+
   });
 });
