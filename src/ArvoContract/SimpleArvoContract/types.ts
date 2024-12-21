@@ -2,6 +2,8 @@ import { z } from 'zod';
 import ArvoContract from '..';
 import { ArvoSemanticVersion } from '../../types';
 
+export type SimpleArvoContractEmitType<T extends string> =  `evt.${T}.success`
+
 export type SimpleArvoContract<
   TUri extends string = string,
   TType extends string = string,
@@ -26,7 +28,7 @@ export type SimpleArvoContract<
     [V in ArvoSemanticVersion & keyof TVersions]: {
       accepts: TVersions[V]['accepts'];
       emits: {
-        [K in `evt.${TType}.succes`]: TVersions[V]['emits'];
+        [K in SimpleArvoContractEmitType<TType>]: TVersions[V]['emits'];
       };
     };
   },

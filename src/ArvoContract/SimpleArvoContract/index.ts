@@ -2,7 +2,7 @@ import ArvoContract from '..';
 import { ArvoSemanticVersion } from '../../types';
 import { z } from 'zod';
 import { createArvoContract } from '../helpers';
-import { SimpleArvoContract } from './types';
+import { SimpleArvoContract, SimpleArvoContractEmitType } from './types';
 
 /**
  * Creates an ArvoContract with standardized naming conventions and a simplified event pattern.
@@ -70,6 +70,8 @@ export const createSimpleArvoContract = <
     rootType: param.type,
   };
 
+  const emitType: SimpleArvoContractEmitType<TType> = `evt.${param.type}.success`
+
   return createArvoContract({
     uri: param.uri,
     type: `com.${param.type}`,
@@ -81,7 +83,7 @@ export const createSimpleArvoContract = <
         {
           accepts: contract.accepts,
           emits: {
-            [`evt.${param.type}.success`]: contract.emits,
+            [emitType]: contract.emits,
           },
         },
       ]),
