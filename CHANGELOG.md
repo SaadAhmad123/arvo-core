@@ -84,3 +84,7 @@
 
 - Tested Snyk upgrade, added more test coverage and added support for redirectto in orchestrator subject generation in init factory function
 
+## [2.2.0] - 2024-12-25
+
+- Finalised the version 2 for Arvo core.
+
