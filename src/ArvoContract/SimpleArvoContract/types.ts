@@ -2,7 +2,7 @@ import { z } from 'zod';
 import ArvoContract from '..';
 import { ArvoSemanticVersion } from '../../types';
 
-export type SimpleArvoContractEmitType<T extends string> =  `evt.${T}.success`
+export type SimpleArvoContractEmitType<T extends string> = `evt.${T}.success`;
 
 export type SimpleArvoContract<
   TUri extends string = string,

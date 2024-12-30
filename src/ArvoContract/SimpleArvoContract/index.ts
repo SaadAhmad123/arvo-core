@@ -70,7 +70,7 @@ export const createSimpleArvoContract = <
     rootType: param.type,
   };
 
-  const emitType: SimpleArvoContractEmitType<TType> = `evt.${param.type}.success`
+  const emitType: SimpleArvoContractEmitType<TType> = `evt.${param.type}.success`;
 
   return createArvoContract({
     uri: param.uri,

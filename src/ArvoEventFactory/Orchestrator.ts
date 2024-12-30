@@ -84,17 +84,22 @@ export class ArvoOrchestratorEventFactory<
               version: this.contract.version,
               meta: Object.fromEntries(
                 Object.entries({
-                  redirectto: event.redirectto ?? ArvoOrchestrationSubject.parse(parentSubject).execution.initiator
-                }).filter(item => Boolean(item[1]))
-              )
+                  redirectto:
+                    event.redirectto ??
+                    ArvoOrchestrationSubject.parse(parentSubject).execution
+                      .initiator,
+                }).filter((item) => Boolean(item[1])),
+              ),
             })
           : ArvoOrchestrationSubject.new({
               orchestator: this.contract.accepts.type,
               initiator: event.source,
               version: this.contract.version,
-              meta: event.redirectto ? {
-                redirectto: event.redirectto
-              } : undefined
+              meta: event.redirectto
+                ? {
+                    redirectto: event.redirectto,
+                  }
+                : undefined,
             });
         const generatedEvent = createArvoEvent<
           z.infer<TContract['accepts']['schema']>,

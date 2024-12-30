@@ -1,68 +1,64 @@
-
 <!doctype html>
 <html lang="en">
-
-<head>
+  <head>
     <title>Code coverage report for src/OpenTelemetry/index.ts</title>
     <meta charset="utf-8" />
     <link rel="stylesheet" href="../../prettify.css" />
     <link rel="stylesheet" href="../../base.css" />
     <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style type='text/css'>
-        .coverage-summary .sorter {
-            background-image: url(../../sort-arrow-sprite.png);
-        }
+    <style type="text/css">
+      .coverage-summary .sorter {
+        background-image: url(../../sort-arrow-sprite.png);
+      }
     </style>
-</head>
-    
-<body>
-<div class='wrapper'>
-    <div class='pad1'>
-        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/OpenTelemetry</a> index.ts</h1>
-        <div class='clearfix'>
-            
-            <div class='fl pad1y space-right2'>
-                <span class="strong">86.44% </span>
-                <span class="quiet">Statements</span>
-                <span class='fraction'>51/59</span>
-            </div>
-        
-            
-            <div class='fl pad1y space-right2'>
-                <span class="strong">63.63% </span>
-                <span class="quiet">Branches</span>
-                <span class='fraction'>21/33</span>
-            </div>
-        
-            
-            <div class='fl pad1y space-right2'>
-                <span class="strong">90% </span>
-                <span class="quiet">Functions</span>
-                <span class='fraction'>9/10</span>
-            </div>
-        
-            
-            <div class='fl pad1y space-right2'>
-                <span class="strong">85.18% </span>
-                <span class="quiet">Lines</span>
-                <span class='fraction'>46/54</span>
-            </div>
-        
-            
+  </head>
+
+  <body>
+    <div class="wrapper">
+      <div class="pad1">
+        <h1>
+          <a href="../../index.html">All files</a> /
+          <a href="index.html">src/OpenTelemetry</a> index.ts
+        </h1>
+        <div class="clearfix">
+          <div class="fl pad1y space-right2">
+            <span class="strong">86.44% </span>
+            <span class="quiet">Statements</span>
+            <span class="fraction">51/59</span>
+          </div>
+
+          <div class="fl pad1y space-right2">
+            <span class="strong">70.73% </span>
+            <span class="quiet">Branches</span>
+            <span class="fraction">29/41</span>
+          </div>
+
+          <div class="fl pad1y space-right2">
+            <span class="strong">90% </span>
+            <span class="quiet">Functions</span>
+            <span class="fraction">9/10</span>
+          </div>
+
+          <div class="fl pad1y space-right2">
+            <span class="strong">85.18% </span>
+            <span class="quiet">Lines</span>
+            <span class="fraction">46/54</span>
+          </div>
         </div>
         <p class="quiet">
-            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+          Press <em>n</em> or <em>j</em> to go to the next uncovered block,
+          <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
         </p>
         <template id="filterTemplate">
-            <div class="quiet">
-                Filter:
-                <input type="search" id="fileSearch">
-            </div>
+          <div class="quiet">
+            Filter:
+            <input type="search" id="fileSearch" />
+          </div>
         </template>
-    </div>
-    <div class='status-line high'></div>
-    <pre><table class="coverage">
+      </div>
+      <div class="status-line high"></div>
+      <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
 <a name='L3'></a><a href='#L3'>3</a>
@@ -299,7 +295,7 @@
 <span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -307,10 +303,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">22x</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">25x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -504,21 +500,21 @@ import { ArvoExecutionSpanKind } from './ArvoExecution/types';
  */
 export class ArvoOpenTelemetry {
   /** OpenTelemetry tracer instance for creating spans */
-  public readonly tracer: Tracer;
+  public tracer: Tracer;
 &nbsp;
   private static instance: ArvoOpenTelemetry | null = null;
 &nbsp;
-  private constructor() {
-    this.tracer = trace.getTracer('arvo-instrumentation', '1.0.0');
+  private constructor(tracer?: Tracer) {
+    this.tracer = tracer ?? trace.getTracer('arvo-instrumentation', '1.0.0');
   }
 &nbsp;
   /**
    * Gets the instance of ArvoOpenTelemetry
    * @returns {ArvoOpenTelemetry} The singleton instance
    */
-  public static getInstance(): ArvoOpenTelemetry {
+  public static getInstance(config?: { tracer?: Tracer }): ArvoOpenTelemetry {
     if (ArvoOpenTelemetry.instance === null) {
-      ArvoOpenTelemetry.instance = new ArvoOpenTelemetry();
+        ArvoOpenTelemetry.instance = new ArvoOpenTelemetry(config?.tracer);
     }
     return ArvoOpenTelemetry.instance;
   }
@@ -695,21 +691,27 @@ export const makeOpenTelemetryContextContext = <span class="fstat-no" title="fun
 };
 &nbsp;</pre></td></tr></table></pre>
 
-                <div class='push'></div><!-- for sticky footer -->
-            </div><!-- /wrapper -->
-            <div class='footer quiet pad2 space-top1 center small'>
-                Code coverage generated by
-                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2024-12-24T04:25:04.984Z
-            </div>
-        <script src="../../prettify.js"></script>
-        <script>
-            window.onload = function () {
-                prettyPrint();
-            };
-        </script>
-        <script src="../../sorter.js"></script>
-        <script src="../../block-navigation.js"></script>
-    </body>
+      <div class="push"></div>
+      <!-- for sticky footer -->
+    </div>
+    <!-- /wrapper -->
+    <div class="footer quiet pad2 space-top1 center small">
+      Code coverage generated by
+      <a
+        href="https://istanbul.js.org/"
+        target="_blank"
+        rel="noopener noreferrer"
+        >istanbul</a
+      >
+      at 2024-12-30T02:49:20.006Z
+    </div>
+    <script src="../../prettify.js"></script>
+    <script>
+      window.onload = function () {
+        prettyPrint();
+      };
+    </script>
+    <script src="../../sorter.js"></script>
+    <script src="../../block-navigation.js"></script>
+  </body>
 </html>
-    

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1735014305019" clover="3.2.0">
-  <project timestamp="1735014305019" name="All files">
-    <metrics statements="619" coveredstatements="578" conditionals="373" coveredconditionals="298" methods="145" coveredmethods="116" elements="1137" coveredelements="992" complexity="0" loc="619" ncloc="619" packages="12" files="29" classes="29"/>
+<coverage generated="1735526960050" clover="3.2.0">
+  <project timestamp="1735526960050" name="All files">
+    <metrics statements="621" coveredstatements="580" conditionals="381" coveredconditionals="306" methods="145" coveredmethods="117" elements="1147" coveredelements="1003" complexity="0" loc="621" ncloc="621" packages="12" files="29" classes="29"/>
     <package name="src">
-      <metrics statements="114" coveredstatements="106" conditionals="16" coveredconditionals="10" methods="42" coveredmethods="24"/>
+      <metrics statements="114" coveredstatements="106" conditionals="16" coveredconditionals="10" methods="42" coveredmethods="25"/>
       <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/index.ts">
-        <metrics statements="61" coveredstatements="61" conditionals="0" coveredconditionals="0" methods="29" coveredmethods="11"/>
+        <metrics statements="61" coveredstatements="61" conditionals="0" coveredconditionals="0" methods="29" coveredmethods="12"/>
         <line num="1" count="5" type="stmt"/>
         <line num="2" count="5" type="stmt"/>
         <line num="10" count="5" type="stmt"/>
@@ -66,7 +66,7 @@
         <line num="153" count="5" type="stmt"/>
         <line num="155" count="5" type="stmt"/>
         <line num="156" count="12" type="stmt"/>
-        <line num="157" count="5" type="stmt"/>
+        <line num="157" count="8" type="stmt"/>
       </file>
       <file name="schema.ts" path="/Users/saadahmad/Projects/Arvo/core/src/schema.ts">
         <metrics statements="5" coveredstatements="5" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
@@ -566,20 +566,20 @@
       </file>
     </package>
     <package name="src.OpenTelemetry">
-      <metrics statements="54" coveredstatements="46" conditionals="33" coveredconditionals="21" methods="10" coveredmethods="9"/>
+      <metrics statements="54" coveredstatements="46" conditionals="41" coveredconditionals="29" methods="10" coveredmethods="9"/>
       <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/OpenTelemetry/index.ts">
-        <metrics statements="54" coveredstatements="46" conditionals="33" coveredconditionals="21" methods="10" coveredmethods="9"/>
+        <metrics statements="54" coveredstatements="46" conditionals="41" coveredconditionals="29" methods="10" coveredmethods="9"/>
         <line num="1" count="5" type="stmt"/>
         <line num="13" count="5" type="stmt"/>
         <line num="14" count="5" type="stmt"/>
         <line num="15" count="5" type="stmt"/>
         <line num="20" count="5" type="stmt"/>
         <line num="24" count="5" type="stmt"/>
-        <line num="27" count="3" type="stmt"/>
+        <line num="27" count="4" type="cond" truecount="4" falsecount="0"/>
         <line num="34" count="5" type="stmt"/>
-        <line num="35" count="22" type="cond" truecount="1" falsecount="0"/>
-        <line num="36" count="3" type="stmt"/>
-        <line num="38" count="22" type="stmt"/>
+        <line num="35" count="25" type="cond" truecount="1" falsecount="0"/>
+        <line num="36" count="4" type="cond" truecount="4" falsecount="0"/>
+        <line num="38" count="25" type="stmt"/>
         <line num="58" count="5" type="stmt"/>
         <line num="74" count="22" type="cond" truecount="0" falsecount="1"/>
         <line num="75" count="0" type="cond" truecount="0" falsecount="2"/>
@@ -718,9 +718,9 @@
       </file>
     </package>
     <package name="tests">
-      <metrics statements="21" coveredstatements="20" conditionals="2" coveredconditionals="2" methods="3" coveredmethods="3"/>
+      <metrics statements="23" coveredstatements="22" conditionals="2" coveredconditionals="2" methods="3" coveredmethods="3"/>
       <file name="utils.ts" path="/Users/saadahmad/Projects/Arvo/core/tests/utils.ts">
-        <metrics statements="21" coveredstatements="20" conditionals="2" coveredconditionals="2" methods="3" coveredmethods="3"/>
+        <metrics statements="23" coveredstatements="22" conditionals="2" coveredconditionals="2" methods="3" coveredmethods="3"/>
         <line num="1" count="3" type="stmt"/>
         <line num="2" count="3" type="stmt"/>
         <line num="3" count="3" type="stmt"/>
@@ -730,18 +730,20 @@
         <line num="7" count="3" type="stmt"/>
         <line num="8" count="3" type="stmt"/>
         <line num="9" count="3" type="stmt"/>
-        <line num="11" count="3" type="stmt"/>
+        <line num="10" count="3" type="stmt"/>
+        <line num="12" count="3" type="stmt"/>
         <line num="14" count="3" type="stmt"/>
-        <line num="15" count="3" type="stmt"/>
-        <line num="18" count="3" type="cond" truecount="1" falsecount="0"/>
-        <line num="19" count="3" type="stmt"/>
-        <line num="25" count="0" type="stmt"/>
-        <line num="33" count="3" type="stmt"/>
-        <line num="35" count="3" type="stmt"/>
-        <line num="36" count="3" type="cond" truecount="1" falsecount="0"/>
-        <line num="37" count="3" type="stmt"/>
-        <line num="41" count="3" type="stmt"/>
-        <line num="42" count="3" type="stmt"/>
+        <line num="17" count="3" type="stmt"/>
+        <line num="18" count="3" type="stmt"/>
+        <line num="21" count="3" type="cond" truecount="1" falsecount="0"/>
+        <line num="22" count="3" type="stmt"/>
+        <line num="28" count="0" type="stmt"/>
+        <line num="36" count="3" type="stmt"/>
+        <line num="38" count="3" type="stmt"/>
+        <line num="39" count="3" type="cond" truecount="1" falsecount="0"/>
+        <line num="40" count="3" type="stmt"/>
+        <line num="44" count="3" type="stmt"/>
+        <line num="45" count="3" type="stmt"/>
       </file>
     </package>
   </project>

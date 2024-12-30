@@ -19,21 +19,21 @@ import { ArvoExecutionSpanKind } from './ArvoExecution/types';
  */
 export class ArvoOpenTelemetry {
   /** OpenTelemetry tracer instance for creating spans */
-  public readonly tracer: Tracer;
+  public tracer: Tracer;
 
   private static instance: ArvoOpenTelemetry | null = null;
 
-  private constructor() {
-    this.tracer = trace.getTracer('arvo-instrumentation', '1.0.0');
+  private constructor(tracer?: Tracer) {
+    this.tracer = tracer ?? trace.getTracer('arvo-instrumentation', '1.0.0');
   }
 
   /**
    * Gets the instance of ArvoOpenTelemetry
    * @returns {ArvoOpenTelemetry} The singleton instance
    */
-  public static getInstance(): ArvoOpenTelemetry {
+  public static getInstance(config?: { tracer?: Tracer }): ArvoOpenTelemetry {
     if (ArvoOpenTelemetry.instance === null) {
-      ArvoOpenTelemetry.instance = new ArvoOpenTelemetry();
+      ArvoOpenTelemetry.instance = new ArvoOpenTelemetry(config?.tracer);
     }
     return ArvoOpenTelemetry.instance;
   }
@@ -130,7 +130,7 @@ export const logToSpan = (
   },
   span: Span | undefined = trace.getActiveSpan(),
 ): void => {
-  const {level, message, ...restParams} = params
+  const { level, message, ...restParams } = params;
   const toLog = {
     'log.severity': level,
     'log.message': message,
