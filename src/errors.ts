@@ -17,30 +17,10 @@ export type ViolationErrorParam<T extends string = string> = {
  * violation of service contracts or explict retry handling
  * 
  * Common violation scenarios include:
- * - Rate limit exceeded on external API calls
+ * - Execution error like rate limit exceeded on external API calls
  * - Contract violations (invalid input/output)
  * - Configuration errors
  * - Permission/authorization failures
- * 
- * @example
- * ```typescript
- * // Creating a rate limit violation
- * throw new ViolationError({
- *   type: 'RATE_LIMIT_EXCEEDED',
- *   message: 'API rate limit reached, retry after 60 seconds',
- *   metadata: { retryAfter: 60 }
- * });
- * 
- * // Handling violations
- * try {
- *   await apiCall();
- * } catch (error) {
- *   if (error instanceof ViolationError && error.type === 'RATE_LIMIT_EXCEEDED') {
- *     const retryAfter = error.metadata?.retryAfter;
- *     // Handle rate limiting...
- *   }
- * }
- * ```
  */
 export class ViolationError<T extends string = string> extends Error {
   /** The specific type/category of the violation */
