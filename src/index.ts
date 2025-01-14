@@ -79,7 +79,9 @@ import {
 import { createSimpleArvoContract } from './ArvoContract/SimpleArvoContract';
 import { SimpleArvoContract } from './ArvoContract/SimpleArvoContract/types';
 import { ArvoOrchestratorEventFactory } from './ArvoEventFactory/Orchestrator';
-import { ArvoContractViolationError } from './ArvoContract/errors';
+import { ViolationError, ViolationErrorParam } from './errors';
+
+
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
  * @property {z.ZodObject} CloudEventContextSchema - Schema for core CloudEvent properties.
@@ -117,7 +119,6 @@ export {
   validateURI,
   cleanString,
   ArvoContract,
-  ArvoContractViolationError,
   createArvoContract,
   ArvoContractValidators,
   ArvoContractRecord,
@@ -156,4 +157,6 @@ export {
   ArvoOrchestratorEventFactory,
   createArvoOrchestratorEventFactory,
   ArvoOpenTelemetry,
+  ViolationError,
+  ViolationErrorParam,
 };
