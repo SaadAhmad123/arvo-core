@@ -453,19 +453,22 @@ The resulting contracts maintain individual service boundaries while sharing com
 
 ### Orchestrator Contracts
 
-Orchestration in Arvo addresses a common challenge in distributed systems: coordinating multiple services to accomplish complex tasks. Think of an orchestrator as a conductor in an orchestra, coordinating different musicians (services) to create a harmonious performance (complete workflow).
-
-#### Understanding Orchestration in Arvo
-
 An orchestrator in Arvo is a special type of event handler that coordinates complex workflows across multiple services. Rather than performing tasks directly, it emits command events to other services and manages their responses. For example, in a document processing system, an orchestrator might coordinate between a text extraction service, a translation service, and a storage service.
 
 What makes orchestrators unique is their ability to maintain state and make decisions based on the responses they receive. They follow Arvo's event handler pattern (`ArvoEvent => Promise<ArvoEvent[]>`), but they're designed specifically for coordination rather than direct task execution.
 
-#### Parent-Child Relationships in Orchestration
+#### Parent Subject in Orchestration
 
-Arvo implements a hierarchical orchestration system inspired by distributed tracing concepts. Each orchestration event includes a `parentSubject$$` field that creates a clear chain of command. When this field is null, it indicates the start of a new workflow. When populated, it connects the event back to its parent orchestrator.
+Each orchestrator execution is uniquely identified by an event subject. When orchestrators need to coordinate, they use the `parentSubject$$` field to establish execution context relationships. The root orchestrator sets `parentSubject$$` to `null`, while child orchestrators receive the parent's subject as their `parentSubject$$`.
 
-This hierarchical structure enables complex nested workflows. For instance, a main orchestrator handling a user registration flow might delegate to sub-orchestrators for specific tasks like email verification and profile setup, while maintaining clear relationships between all parts of the process.
+> **Note**: An orchestrator defines a workflow, while an orchestration execution is a specific instance of that workflow. Each execution is identified by a unique subject string that's included in all related ArvoEvents. The orchestrator uses this subject to track execution state in storage (memory or database). When processing events, the orchestrator optimistically locks the execution state to handle parallel events or multiple service responses safely.
+
+#### Execution Context Flow
+
+When an orchestrator completes its execution, it determines its completion event's subject based on the `parentSubject$$` received during initialization. For root executions (`parentSubject$$ = null`), it uses its own subject. For child executions, it uses the `parentSubject$$` value, effectively returning control to the parent orchestrator.
+
+The `parentSubject$$` field is strictly for orchestrator coordination and should never be used in communication with regular services. This separation maintains clean boundaries between orchestration logic and service implementation.
+
 
 #### Creating Orchestrator Contracts
 
@@ -811,11 +814,14 @@ Let's explore how different components of `ArvoContract` evolve:
 - **Type**: Modifying the event `type` creates a breaking change requiring service updates.
 - **Accepts/Emits**: These fields drive most system evolution and require careful consideration during changes.
 
+> **Note**: When creating a new `ArvoContract`, begin by modeling your contracts after your existing working code, API endpoints, or the general idea of your service's inputs and outputs. Once you have this working foundation, you can gradually refine the contract to be more precise. Remember - a good contract evolves from practical use rather than perfect upfront design. You are required to follow the following evolution patterns only when your first version goes to production after all.
+
+
 ## Evolution of `accepts` data schema
 
 The evolution of `accepts` schemas must be managed carefully to maintain system reliability. Here's a comprehensive breakdown of different schema changes and their implications:
 
-| Change Type           | Breaking Change? | Version Update? | Explanation                                                             |
+| Change Type           | Breaking Change? | Least effort version update | Explanation                                                             |
 | --------------------- | ---------------- | --------------- | ----------------------------------------------------------------------- |
 | Adding Required Field | Yes              | New Version     | Makes contract more restrictive by requiring additional data            |
 | Adding Optional Field | No               | Same Version    | Maintains existing contract restrictions while allowing additional data |
@@ -827,16 +833,18 @@ The evolution of `accepts` schemas must be managed carefully to maintain system 
 
 The `emits` field in Arvo contracts defines the event schemas a service can produce. Each contract version can specify multiple emit event types, and their evolution follows specific patterns to maintain system reliability:
 
-| Change Type           | Example                                                        | Impact           | Version Update? | Reasoning                                                             |
-| --------------------- | -------------------------------------------------------------- | ---------------- | --------------- | --------------------------------------------------------------------- |
-| Adding New Event Type | Adding `evt.payment.refunded`                                  | Non-Breaking     | Same Version    | Enhances service capabilities without affecting existing consumers    |
-| Removing Event Type   | Removing `evt.payment.failed`                                  | Breaking         | New Version     | Consumers expecting this event type would break                       |
-| Adding Required Field | Adding `transaction_id: string`                                | Limited Breaking | Special Case    | Only affects producer implementation; consumers see it as enhancement |
-| Adding Optional Field | Adding `metadata?: object`                                     | Non-Breaking     | Same Version    | Maintains compatibility for all parties                               |
-| Expanding Union Type  | `status: 'success' \| 'fail'` → includes 'pending'             | Non-Breaking     | Same Version    | Previous event types remain valid                                     |
-| Changing Field Type   | `amount: number` → `amount: string`                            | Breaking         | New Version     | Invalidates existing event processing logic                           |
-| Removing Union Value  | `status: 'success' \| 'fail' \| 'pending'` → removes 'pending' | Breaking         | New Version     | Could break consumers handling 'pending'                              |
-| Removing Any Field    | Removing `timestamp`                                           | Breaking         | New Version     | Breaks consumers depending on the field                               |
+| Change Type | Example | Impact | Least effort version update | Rationale |
+|------------|----------|---------|----------------|-----------|
+| Adding New Event Type | Adding `evt.payment.refunded` | Non-Breaking | Same Version | The new event type doesn't affect existing event handlers since they'll ignore events they don't recognize. Consumers and producers can add support gradually. |
+| Adding New Event Type (High Throughput) | Adding `evt.payment.refunded` | Breaking (Tradeoff) | New Version | If a service might be used by an orchestrator, multiple event types in the same version will cause locking in that orchestrator, regardless of service statelessness. Only put high-throughput events (like your 100K/sec) in the same version if you're absolutely certain no orchestrator will ever use this service. Otherwise, create a new version to avoid orchestrator bottlenecks. While this duplicates code, it enables independent optimization. |
+| Removing Event Type | Removing `evt.payment.failed` | Breaking | New Version | Existing consumers rely on this event for their business logic. Removal breaks their functionality and requires rewrite. |
+| Adding Required Field | Adding `transaction_id: string` | Limited Breaking | Special Case | Only producer needs changes to provide new field. Consumers following tolerant reader pattern continue working. |
+| Adding Optional Field | Adding `metadata?: object` | Non-Breaking | Same Version | Optional fields don't break existing consumers since they can ignore unknown fields. Allows gradual adoption of new capabilities. |
+| Expanding Union Type | `status: 'success' \| 'fail'` → adds 'pending' | Non-Breaking | Same Version | Existing code handles known values and ignores new ones by design. Maintains backward compatibility. |
+| Changing Field Type | `amount: number` → `amount: string` | Breaking | New Version | Fundamental change in data representation. Existing parsing, validation, and business logic would fail. |
+| Removing Union Value | `status: 'success' \| 'fail' \| 'pending'` → removes 'pending' | Breaking | New Version | Consumers using 'pending' in business logic or state machines would break. Cannot safely remove without coordination. |
+| Removing Field | Removing `timestamp` | Breaking | New Version | Any consumer logic depending on this field would fail. Cannot assume field is unused without breaking consumer contract. |
+
 ## Anti-Patterns in Schema Design
 
 Creating robust contracts requires careful consideration of field requirements. Two common anti-patterns to avoid:
