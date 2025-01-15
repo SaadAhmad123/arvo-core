@@ -828,7 +828,7 @@ The evolution of `accepts` schemas must be managed carefully to maintain system 
 | Adding Union Type     | No               | Same Version    | Increases permissiveness while preserving existing functionality        |
 | Removing Union Type   | Yes              | New Version     | Makes contract more restrictive by limiting allowed types               |
 | Changing Field Type   | Yes              | New Version     | Changes nature of contract restrictions                                 |
-| Removing Any Field    | Yes              | New Version     | Alters contract structure, breaking existing implementations            |
+| Removing Any Field    | Limited Breaking   | Same Version     | Following the tolerant reader pattern, removing fields from 'accepts' schema is not a breaking change. Clients can continue sending removed fields, while handlers simply ignore them. TypeScript's type safety ensures handlers don't accidentally reference removed fields during compilation.            |
 ## Evolution of `emits` data schema
 
 The `emits` field in Arvo contracts defines the event schemas a service can produce. Each contract version can specify multiple emit event types, and their evolution follows specific patterns to maintain system reliability:
