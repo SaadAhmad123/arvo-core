@@ -30,24 +30,24 @@ export class ArvoOpenTelemetry {
   /**
    * Gets or creates the singleton instance of ArvoOpenTelemetry.
    * This method ensures only one instance of ArvoOpenTelemetry exists throughout the application.
-   * 
+   *
    * @param {Object} [config] - Optional configuration object for initializing the instance
-   * @param {Tracer} [config.tracer] - Optional custom OpenTelemetry tracer instance. 
+   * @param {Tracer} [config.tracer] - Optional custom OpenTelemetry tracer instance.
    *                                   If not provided, defaults to a tracer with name 'arvo-instrumentation'
-   * 
+   *
    * @returns {ArvoOpenTelemetry} The singleton instance of ArvoOpenTelemetry
-   * 
+   *
    * @example
    * // Get instance with default tracer
    * const telemetry = ArvoOpenTelemetry.getInstance();
-   * 
+   *
    * @example
    * // Get instance with custom tracer
    * const customTracer = trace.getTracer('custom-tracer', '2.0.0');
    * const telemetry = ArvoOpenTelemetry.getInstance({ tracer: customTracer });
-   * 
+   *
    * @remarks
-   * The tracer configuration is only applied when creating a new instance. 
+   * The tracer configuration is only applied when creating a new instance.
    * Subsequent calls with different tracer configurations will not modify the existing instance.
    */
   public static getInstance(config?: { tracer?: Tracer }): ArvoOpenTelemetry {
@@ -60,36 +60,38 @@ export class ArvoOpenTelemetry {
   /**
    * Forces a reinitialization of the ArvoOpenTelemetry instance.
    * Use this method with caution as it will affect all existing traces and spans.
-   * 
+   *
    * @param {Object} config - Configuration object for reinitializing the instance
    * @param {Tracer} [config.tracer] - Optional custom OpenTelemetry tracer instance
    * @param {boolean} [config.force=false] - If true, skips active span checks
-   * 
+   *
    * @throws {Error} If there are active spans and force is not set to true
    * @throws {Error} If called before instance initialization
-   * 
+   *
    * @example
    * // Safe reinitialization
    * const customTracer = trace.getTracer('new-tracer', '2.0.0');
    * ArvoOpenTelemetry.reinitialize({ tracer: customTracer });
    */
-  public static reinitialize(config: { 
-    tracer?: Tracer; 
+  public static reinitialize(config: {
+    tracer?: Tracer;
     force?: boolean;
   }): void {
     if (!ArvoOpenTelemetry.instance) {
-        throw new Error('Cannot reinitialize before initialization. Call getInstance first.');
+      throw new Error(
+        'Cannot reinitialize before initialization. Call getInstance first.',
+      );
     }
 
     // Check for active spans unless force is true
     if (!config.force) {
-        const activeSpan = trace.getActiveSpan();
-        if (activeSpan) {
-            throw new Error(
-                'Cannot reinitialize while spans are active. ' +
-                'Either end all spans or use force: true (not recommended)'
-            );
-        }
+      const activeSpan = trace.getActiveSpan();
+      if (activeSpan) {
+        throw new Error(
+          'Cannot reinitialize while spans are active. ' +
+            'Either end all spans or use force: true (not recommended)',
+        );
+      }
     }
 
     // Create new instance

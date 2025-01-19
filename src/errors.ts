@@ -13,9 +13,9 @@ export type ViolationErrorParam<T extends string = string> = {
 /**
  * ViolationError represents errors that require explicit handling in the system.
  * These are distinct from recoverable errors that can be automatically handled
- * by workflow logic. The explicit handling may be required for severe 
+ * by workflow logic. The explicit handling may be required for severe
  * violation of service contracts or explict retry handling
- * 
+ *
  * Common violation scenarios include:
  * - Execution error like rate limit exceeded on external API calls
  * - Contract violations (invalid input/output)
@@ -29,8 +29,8 @@ export class ViolationError<T extends string = string> extends Error {
   /** Additional structured data about the violation */
   readonly metadata: Record<string, any> | null;
 
-  /** 
-   * The error name, formatted as ViolationError<TYPE> 
+  /**
+   * The error name, formatted as ViolationError<TYPE>
    * This helps with error identification in logs and stack traces
    */
   readonly name: `ViolationError<${T}>`;

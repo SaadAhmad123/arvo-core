@@ -136,6 +136,13 @@ export function compareSemanticVersions(
  * Handles creation and parsing of dataschema identifiers.
  */
 export class EventDataschemaUtil {
+  static build<TUri extends string, TVersion extends ArvoSemanticVersion>(
+    uri: TUri,
+    version: TVersion,
+  ) {
+    return `${uri}/${version}` as const;
+  }
+
   /**
    * Creates a dataschema string from a versioned contract.
    * Format: `{contract.uri}/{contract.version}`
@@ -149,10 +156,11 @@ export class EventDataschemaUtil {
    * // Returns: "my-contract/1.0.0"
    * ```
    */
-  static create<T extends VersionedArvoContract<any, any>>(
-    contract: T,
-  ): `${T['uri']}/${T['version']}` {
-    return `${contract.uri}/${contract.version}`;
+  static create<T extends VersionedArvoContract<any, any>>(contract: T) {
+    return EventDataschemaUtil.build<T['uri'], T['version']>(
+      contract.uri,
+      contract.version,
+    );
   }
 
   /**
@@ -162,8 +170,11 @@ export class EventDataschemaUtil {
    */
   static createWithWildCardVersion<T extends VersionedArvoContract<any, any>>(
     contract: T,
-  ): `${T['uri']}/${typeof WildCardArvoSemanticVersion}` {
-    return `${contract.uri}/${WildCardArvoSemanticVersion}`;
+  ) {
+    return EventDataschemaUtil.build<
+      T['uri'],
+      typeof WildCardArvoSemanticVersion
+    >(contract.uri, WildCardArvoSemanticVersion);
   }
 
   /**

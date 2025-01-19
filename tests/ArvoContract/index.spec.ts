@@ -275,7 +275,7 @@ describe('ArvoContract', () => {
           },
         },
       },
-    };
+    } as const;
 
     const contract = createArvoContract(complexContractSpec);
 
@@ -481,6 +481,21 @@ describe('ArvoContract', () => {
             .version('0.0.2')
             .emits['com.example.success'].safeParse(successEmitV2).success,
         ).toBe(true);
+      });
+
+      it('should have correct dataschema', () => {
+        expect(contract.version('0.0.1').dataschema).toBe(
+          '#/contracts/complexContract/0.0.1',
+        );
+        expect(contract.version('0.0.1').systemError.dataschema).toBe(
+          '#/contracts/complexContract/0.0.0',
+        );
+        expect(contract.version('0.0.2').dataschema).toBe(
+          '#/contracts/complexContract/0.0.2',
+        );
+        expect(contract.version('0.0.2').systemError.dataschema).toBe(
+          '#/contracts/complexContract/0.0.0',
+        );
       });
 
       it('should handle version-specific emit types', () => {

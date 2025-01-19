@@ -8,6 +8,8 @@ import {
 } from './types';
 import { transformEmitsToArray } from './utils';
 import { logToSpan } from '../../OpenTelemetry';
+import { EventDataschemaUtil } from '../../utils';
+import { WildCardArvoSemanticVersion } from '../WildCardArvoSemanticVersion';
 
 /**
  * Implements a version-specific view of an ArvoContract with type-safe schema validation
@@ -40,8 +42,21 @@ export class VersionedArvoContract<
   public get metadata(): TContract['metadata'] {
     return this._contract.metadata;
   }
-  public get systemError(): TContract['systemError'] {
-    return this._contract.systemError;
+  public get systemError(): TContract['systemError'] & {
+    dataschema: ReturnType<
+      typeof EventDataschemaUtil.build<
+        TContract['uri'],
+        typeof WildCardArvoSemanticVersion
+      >
+    >;
+  } {
+    return {
+      ...this._contract.systemError,
+      dataschema: EventDataschemaUtil.build(
+        this.uri,
+        WildCardArvoSemanticVersion,
+      ),
+    };
   }
   public get accepts() {
     return this._accepts;
@@ -51,6 +66,12 @@ export class VersionedArvoContract<
   }
   public get emitList() {
     return this._emitList;
+  }
+  public get dataschema() {
+    return EventDataschemaUtil.build<TContract['uri'], TVersion>(
+      this.uri,
+      this.version,
+    );
   }
 
   constructor(param: IVersionedArvoContract<TContract, TVersion>) {
