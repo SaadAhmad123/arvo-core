@@ -1,7 +1,7 @@
 import { ArvoOrchestrationSubjectContent } from './type';
 import { ArvoSemanticVersion } from '../types';
 import { ArvoOrchestrationSubjectContentSchema } from './schema';
-import * as zlib from 'node:zlib';
+import pako from 'pako';
 import { cleanString } from '../utils';
 import { v4 as uuid4 } from 'uuid';
 import { WildCardArvoSemanticVersion } from '../ArvoContract/WildCardArvoSemanticVersion';
@@ -144,8 +144,8 @@ export default class ArvoOrchestrationSubject {
         );
       }
       const jsonString = JSON.stringify(param);
-      const compressed = zlib.deflateSync(jsonString);
-      return compressed.toString('base64');
+      const compressed = pako.deflate(new TextEncoder().encode(jsonString));
+      return Buffer.from(compressed).toString('base64');
     } catch (e) {
       throw new Error(
         cleanString(`
@@ -175,7 +175,8 @@ export default class ArvoOrchestrationSubject {
   static parse(subject: string): ArvoOrchestrationSubjectContent {
     try {
       const compressed = Buffer.from(subject, 'base64');
-      const jsonString = zlib.inflateSync(compressed).toString();
+      const decompressed = pako.inflate(compressed);
+      const jsonString = new TextDecoder().decode(decompressed);
       const parsed = JSON.parse(jsonString);
       const validationResult =
         ArvoOrchestrationSubjectContentSchema.safeParse(parsed);
@@ -193,6 +194,29 @@ export default class ArvoOrchestrationSubject {
         subject -> ${subject}
       `),
       );
+    }
+  }
+
+  /**
+   * Validates if a string represents a valid Arvo orchestration subject.
+   * A valid subject must:
+   * - Be base64 encoded
+   * - Contain zlib-compressed JSON data
+   * - Match the ArvoOrchestrationSubjectContent schema when decoded
+   * - Include valid orchestrator and execution details
+   * 
+   * Use this method for validating subjects before processing them in 
+   * orchestration workflows or when receiving subjects from external sources.
+   * 
+   * @param data - The string to validate as an orchestration subject
+   * @returns boolean - True if string is a valid orchestration subject, false otherwise
+  */
+  static isValid(data: string): boolean {
+    try {
+        ArvoOrchestrationSubject.parse(data)
+        return false
+    } catch {
+        return false 
     }
   }
 }

@@ -30,6 +30,7 @@ import {
   compareSemanticVersions,
   parseSemanticVersion,
   EventDataschemaUtil,
+  createArvoError,
 } from './utils';
 import ArvoContract from './ArvoContract';
 import { createArvoContract } from './ArvoContract/helpers';
@@ -158,4 +159,5 @@ export {
   ArvoOpenTelemetry,
   ViolationError,
   ViolationErrorParam,
+  createArvoError,
 };

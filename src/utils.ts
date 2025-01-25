@@ -3,7 +3,7 @@ import { WildCardArvoSemanticVersion } from './ArvoContract/WildCardArvoSemantic
 import ArvoEvent from './ArvoEvent';
 import { logToSpan } from './OpenTelemetry';
 import { ArvoSemanticVersionSchema } from './schema';
-import { ArvoSemanticVersion } from './types';
+import { ArvoErrorType, ArvoSemanticVersion } from './types';
 
 /**
  * Cleans a string by removing leading/trailing whitespace from each line,
@@ -213,4 +213,32 @@ export class EventDataschemaUtil {
       return null;
     }
   }
+
+  /**
+   * Validates if a given ArvoEvent or dataschema string represents a valid dataschema.
+   * A valid dataschema must:
+   * - Follow the format {uri}/{version}
+   * - Have a valid semantic version component
+   * - Contain a non-empty URI
+   * 
+   * @param data - ArvoEvent object or dataschema string to validate
+   * @returns boolean - True if dataschema is valid, false otherwise
+   */
+  static isValid(data: ArvoEvent | string) : boolean {
+    return Boolean(EventDataschemaUtil.parse(data))
+  }
 }
+
+/**
+* Creates a standardized ArvoError payload from an Error object. This utility 
+* ensures consistent error reporting across the event system by extracting and 
+* structuring key error information.
+* 
+* @param error - The source Error object to convert
+* @returns ArvoErrorType - The standardized error payload
+*/
+export const createArvoError = (error: Error): ArvoErrorType => ({
+  errorName: error.name,
+  errorMessage: error.message,
+  errorStack: error.stack ?? null
+})

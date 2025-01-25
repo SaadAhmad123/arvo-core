@@ -8,7 +8,7 @@ import {
   currentOpenTelemetryHeaders,
 } from '../OpenTelemetry';
 import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
-import { EventDataschemaUtil } from '../utils';
+import { createArvoError, EventDataschemaUtil } from '../utils';
 import { createSpanOptions } from './utils';
 
 /**
@@ -218,11 +218,7 @@ export default class ArvoEventFactory<
               event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             type: this.contract.systemError.type,
-            data: {
-              errorName: error.name,
-              errorMessage: error.message,
-              errorStack: error.stack ?? null,
-            },
+            data: createArvoError(error),
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.createWithWildCardVersion(
               this.contract,
