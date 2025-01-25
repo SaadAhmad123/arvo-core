@@ -160,13 +160,8 @@
 <a name='L95'></a><a href='#L95'>95</a>
 <a name='L96'></a><a href='#L96'>96</a>
 <a name='L97'></a><a href='#L97'>97</a>
-<a name='L98'></a><a href='#L98'>98</a>
-<a name='L99'></a><a href='#L99'>99</a>
-<a name='L100'></a><a href='#L100'>100</a>
-<a name='L101'></a><a href='#L101'>101</a>
-<a name='L102'></a><a href='#L102'>102</a>
-<a name='L103'></a><a href='#L103'>103</a>
-<a name='L104'></a><a href='#L104'>104</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L98'></a><a href='#L98'>98</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -206,13 +201,9 @@
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
@@ -221,9 +212,7 @@
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -263,7 +252,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -274,6 +262,7 @@
  * These attribute names are defined as per the OpenInference specification:
  * @see https://github.com/Arize-ai/openinference/blob/main/spec/semantic_conventions.md
  */
+// biome-ignore lint/complexity/noStaticOnlyClass: This needs to be a static class to group methods together
 export default class OpenInference {
   static readonly ATTR_SPAN_KIND = 'openinference.span.kind';
 &nbsp;
@@ -308,14 +297,10 @@ export default class OpenInference {
   static readonly ATTR_LLM_INVOCATION_PARAMETERS = 'llm.invocation_parameters';
   static readonly ATTR_LLM_MODEL_NAME = 'llm.model_name';
   static readonly ATTR_LLM_OUTPUT_MESSAGES = 'llm.output_messages';
-  static readonly ATTR_LLM_PROMPT_TEMPLATE_TEMPLATE =
-    'llm.prompt_template.template';
-  static readonly ATTR_LLM_PROMPT_TEMPLATE_VARIABLES =
-    'llm.prompt_template.variables';
-  static readonly ATTR_LLM_PROMPT_TEMPLATE_VERSION =
-    'llm.prompt_template.version';
-  static readonly ATTR_LLM_TOKEN_COUNT_COMPLETION =
-    'llm.token_count.completion';
+  static readonly ATTR_LLM_PROMPT_TEMPLATE_TEMPLATE = 'llm.prompt_template.template';
+  static readonly ATTR_LLM_PROMPT_TEMPLATE_VARIABLES = 'llm.prompt_template.variables';
+  static readonly ATTR_LLM_PROMPT_TEMPLATE_VERSION = 'llm.prompt_template.version';
+  static readonly ATTR_LLM_TOKEN_COUNT_COMPLETION = 'llm.token_count.completion';
   static readonly ATTR_LLM_TOKEN_COUNT_PROMPT = 'llm.token_count.prompt';
   static readonly ATTR_LLM_TOKEN_COUNT_TOTAL = 'llm.token_count.total';
   static readonly ATTR_LLM_TOOLS = 'llm.tools';
@@ -323,10 +308,8 @@ export default class OpenInference {
   // Message attributes
   static readonly ATTR_MESSAGE_CONTENT = 'message.content';
   static readonly ATTR_MESSAGE_CONTENTS = 'message.contents';
-  static readonly ATTR_MESSAGE_FUNCTION_CALL_ARGUMENTS_JSON =
-    'message.function_call_arguments_json';
-  static readonly ATTR_MESSAGE_FUNCTION_CALL_NAME =
-    'message.function_call_name';
+  static readonly ATTR_MESSAGE_FUNCTION_CALL_ARGUMENTS_JSON = 'message.function_call_arguments_json';
+  static readonly ATTR_MESSAGE_FUNCTION_CALL_NAME = 'message.function_call_name';
   static readonly ATTR_MESSAGE_ROLE = 'message.role';
   static readonly ATTR_MESSAGE_TOOL_CALLS = 'message.tool_calls';
 &nbsp;
@@ -365,8 +348,7 @@ export default class OpenInference {
   static readonly ATTR_TOOL_PARAMETERS = 'tool.parameters';
 &nbsp;
   // Tool call attributes
-  static readonly ATTR_TOOL_CALL_FUNCTION_ARGUMENTS =
-    'tool_call.function.arguments';
+  static readonly ATTR_TOOL_CALL_FUNCTION_ARGUMENTS = 'tool_call.function.arguments';
   static readonly ATTR_TOOL_CALL_FUNCTION_NAME = 'tool_call.function.name';
 &nbsp;
   // User attribute
@@ -379,7 +361,7 @@ export default class OpenInference {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-01-25T06:49:56.247Z
+                at 2025-01-25T07:03:22.304Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

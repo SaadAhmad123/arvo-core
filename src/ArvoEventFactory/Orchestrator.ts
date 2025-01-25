@@ -1,16 +1,13 @@
+import type { z } from 'zod';
 import ArvoEventFactory from '.';
-import { ArvoOrchestratorContract } from '../ArvoOrchestratorContract/types';
-import { z } from 'zod';
+import type { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
 import { createArvoEvent } from '../ArvoEvent/helpers';
-import { CreateArvoEvent } from '../ArvoEvent/types';
 import { ArvoDataContentType } from '../ArvoEvent/schema';
-import {
-  ArvoOpenTelemetry,
-  currentOpenTelemetryHeaders,
-} from '../OpenTelemetry';
-import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
-import { EventDataschemaUtil } from '../utils';
+import type { CreateArvoEvent } from '../ArvoEvent/types';
 import ArvoOrchestrationSubject from '../ArvoOrchestrationSubject';
+import type { ArvoOrchestratorContract } from '../ArvoOrchestratorContract/types';
+import { ArvoOpenTelemetry, currentOpenTelemetryHeaders } from '../OpenTelemetry';
+import { EventDataschemaUtil } from '../utils';
 import { createSpanOptions } from './utils';
 
 /**
@@ -30,13 +27,8 @@ export class ArvoOrchestratorEventFactory<
   protected readonly _name: string = 'ArvoOrchestratorEventFactory';
 
   constructor(contract: TContract) {
-    if (
-      (contract.metadata as ArvoOrchestratorContract['metadata'])
-        ?.contractType !== 'ArvoOrchestratorContract'
-    ) {
-      throw new Error(
-        `This factory can only be used for ArvoOrchestratorContract`,
-      );
+    if ((contract.metadata as ArvoOrchestratorContract['metadata'])?.contractType !== 'ArvoOrchestratorContract') {
+      throw new Error('This factory can only be used for ArvoOrchestratorContract');
     }
     super(contract);
   }
@@ -54,10 +46,7 @@ export class ArvoOrchestratorEventFactory<
    */
   init<TExtension extends Record<string, any>>(
     event: Omit<
-      CreateArvoEvent<
-        z.input<TContract['accepts']['schema']>,
-        TContract['accepts']['type']
-      >,
+      CreateArvoEvent<z.input<TContract['accepts']['schema']>, TContract['accepts']['type']>,
       'type' | 'datacontenttype' | 'dataschema' | 'subject'
     >,
     extensions?: TExtension,
@@ -67,27 +56,19 @@ export class ArvoOrchestratorEventFactory<
       spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();
-        const validationResult = this.contract.accepts.schema.safeParse(
-          event.data,
-        );
+        const validationResult = this.contract.accepts.schema.safeParse(event.data);
         if (!validationResult.success) {
-          throw new Error(
-            `Init Event data validation failed: ${validationResult.error.message}`,
-          );
+          throw new Error(`Init Event data validation failed: ${validationResult.error.message}`);
         }
-        const parentSubject: string | null =
-          validationResult.data.parentSubject$$;
-        let newSubject: string = parentSubject
+        const parentSubject: string | null = validationResult.data.parentSubject$$;
+        const newSubject: string = parentSubject
           ? ArvoOrchestrationSubject.from({
               orchestator: this.contract.accepts.type,
               subject: parentSubject,
               version: this.contract.version,
               meta: Object.fromEntries(
                 Object.entries({
-                  redirectto:
-                    event.redirectto ??
-                    ArvoOrchestrationSubject.parse(parentSubject).execution
-                      .initiator,
+                  redirectto: event.redirectto ?? ArvoOrchestrationSubject.parse(parentSubject).execution.initiator,
                 }).filter((item) => Boolean(item[1])),
               ),
             })
@@ -109,8 +90,7 @@ export class ArvoOrchestratorEventFactory<
           {
             ...event,
             subject: newSubject,
-            traceparent:
-              event.traceparent ?? otelHeaders.traceparent ?? undefined,
+            traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             type: this.contract.accepts.type,
             datacontenttype: ArvoDataContentType,
@@ -151,27 +131,21 @@ export class ArvoOrchestratorEventFactory<
       spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();
-        const validationResult = this.contract.emits?.[
-          this.contract.metadata.completeEventType
-        ]?.safeParse(event.data);
+        const validationResult = this.contract.emits?.[this.contract.metadata.completeEventType]?.safeParse(event.data);
         if (!validationResult?.success) {
           const msg =
-            validationResult?.error?.message ??
-            `No schema available for ${this.contract.metadata.completeEventType}`;
+            validationResult?.error?.message ?? `No schema available for ${this.contract.metadata.completeEventType}`;
           throw new Error(`Emit Event data validation failed: ${msg}`);
         }
         const generatedEvent = createArvoEvent<
-          z.infer<
-            TContract['emits'][TContract['metadata']['completeEventType']]
-          >,
+          z.infer<TContract['emits'][TContract['metadata']['completeEventType']]>,
           TExtension,
           TContract['metadata']['completeEventType']
         >(
           {
             ...event,
             type: this.contract.metadata.completeEventType,
-            traceparent:
-              event.traceparent ?? otelHeaders.traceparent ?? undefined,
+            traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.create(this.contract),

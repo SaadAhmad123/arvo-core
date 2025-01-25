@@ -1,9 +1,9 @@
-import { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
+import type { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
 import { WildCardArvoSemanticVersion } from './ArvoContract/WildCardArvoSemanticVersion';
-import ArvoEvent from './ArvoEvent';
+import type ArvoEvent from './ArvoEvent';
 import { logToSpan } from './OpenTelemetry';
 import { ArvoSemanticVersionSchema } from './schema';
-import { ArvoErrorType, ArvoSemanticVersion } from './types';
+import type { ArvoErrorType, ArvoSemanticVersion } from './types';
 
 /**
  * Cleans a string by removing leading/trailing whitespace from each line,
@@ -68,7 +68,7 @@ export const validateURI = (value: string) => {
  * // Returns current time with -5 hours offset
  * createTimestamp(-5);
  */
-export const createTimestamp = (offsetHours: number = 0): string => {
+export const createTimestamp = (offsetHours = 0): string => {
   const now = new Date();
   const offsetMinutes = offsetHours * 60;
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset() + offsetMinutes);
@@ -93,12 +93,10 @@ interface VersionComponents {
   patch: number;
 }
 
-export function parseSemanticVersion(
-  version: ArvoSemanticVersion,
-): VersionComponents {
+export function parseSemanticVersion(version: ArvoSemanticVersion): VersionComponents {
   const [major, minor, patch] = version.split('.').map((part) => {
-    const num = parseInt(part, 10);
-    if (isNaN(num)) {
+    const num = Number.parseInt(part, 10);
+    if (Number.isNaN(num)) {
       throw new Error(`Invalid version number in ${version}`);
     }
     return num;
@@ -116,10 +114,7 @@ export function parseSemanticVersion(
  * - Negative number if version1 < version2
  * - 0 if version1 === version2
  */
-export function compareSemanticVersions(
-  version1: ArvoSemanticVersion,
-  version2: ArvoSemanticVersion,
-): number {
+export function compareSemanticVersions(version1: ArvoSemanticVersion, version2: ArvoSemanticVersion): number {
   const v1 = parseSemanticVersion(version1);
   const v2 = parseSemanticVersion(version2);
   if (v1.major !== v2.major) {
@@ -135,11 +130,9 @@ export function compareSemanticVersions(
  * Manages event dataschema strings for versioned contracts.
  * Handles creation and parsing of dataschema identifiers.
  */
+// biome-ignore lint/complexity/noStaticOnlyClass: This needs to be a static class to group methods together
 export class EventDataschemaUtil {
-  static build<TUri extends string, TVersion extends ArvoSemanticVersion>(
-    uri: TUri,
-    version: TVersion,
-  ) {
+  static build<TUri extends string, TVersion extends ArvoSemanticVersion>(uri: TUri, version: TVersion) {
     return `${uri}/${version}` as const;
   }
 
@@ -157,10 +150,7 @@ export class EventDataschemaUtil {
    * ```
    */
   static create<T extends VersionedArvoContract<any, any>>(contract: T) {
-    return EventDataschemaUtil.build<T['uri'], T['version']>(
-      contract.uri,
-      contract.version,
-    );
+    return EventDataschemaUtil.build<T['uri'], T['version']>(contract.uri, contract.version);
   }
 
   /**
@@ -168,13 +158,11 @@ export class EventDataschemaUtil {
    * @param contract Versioned contract
    * @returns `{contract.uri}/{WildCardArvoSemanticVersion}`
    */
-  static createWithWildCardVersion<T extends VersionedArvoContract<any, any>>(
-    contract: T,
-  ) {
-    return EventDataschemaUtil.build<
-      T['uri'],
-      typeof WildCardArvoSemanticVersion
-    >(contract.uri, WildCardArvoSemanticVersion);
+  static createWithWildCardVersion<T extends VersionedArvoContract<any, any>>(contract: T) {
+    return EventDataschemaUtil.build<T['uri'], typeof WildCardArvoSemanticVersion>(
+      contract.uri,
+      WildCardArvoSemanticVersion,
+    );
   }
 
   /**
@@ -197,12 +185,9 @@ export class EventDataschemaUtil {
     version: ArvoSemanticVersion;
   } | null {
     try {
-      const dataschema: string =
-        typeof data === 'string' ? data : (data.dataschema ?? '');
+      const dataschema: string = typeof data === 'string' ? data : (data.dataschema ?? '');
       const items: string[] = dataschema.split('/');
-      const version: ArvoSemanticVersion = ArvoSemanticVersionSchema.parse(
-        items.pop(),
-      ) as ArvoSemanticVersion;
+      const version: ArvoSemanticVersion = ArvoSemanticVersionSchema.parse(items.pop()) as ArvoSemanticVersion;
       const uri: string = items.join('/');
       return { uri, version };
     } catch (e) {
@@ -220,25 +205,25 @@ export class EventDataschemaUtil {
    * - Follow the format {uri}/{version}
    * - Have a valid semantic version component
    * - Contain a non-empty URI
-   * 
+   *
    * @param data - ArvoEvent object or dataschema string to validate
    * @returns boolean - True if dataschema is valid, false otherwise
    */
-  static isValid(data: ArvoEvent | string) : boolean {
-    return Boolean(EventDataschemaUtil.parse(data))
+  static isValid(data: ArvoEvent | string): boolean {
+    return Boolean(EventDataschemaUtil.parse(data));
   }
 }
 
 /**
-* Creates a standardized ArvoError payload from an Error object. This utility 
-* ensures consistent error reporting across the event system by extracting and 
-* structuring key error information.
-* 
-* @param error - The source Error object to convert
-* @returns ArvoErrorType - The standardized error payload
-*/
+ * Creates a standardized ArvoError payload from an Error object. This utility
+ * ensures consistent error reporting across the event system by extracting and
+ * structuring key error information.
+ *
+ * @param error - The source Error object to convert
+ * @returns ArvoErrorType - The standardized error payload
+ */
 export const createArvoError = (error: Error): ArvoErrorType => ({
   errorName: error.name,
   errorMessage: error.message,
-  errorStack: error.stack ?? null
-})
+  errorStack: error.stack ?? null,
+});

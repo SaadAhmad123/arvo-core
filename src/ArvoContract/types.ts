@@ -1,6 +1,6 @@
-import { z } from 'zod';
-import { ArvoSemanticVersion } from '../types';
-import { VersionedArvoContractJSONSchema } from './VersionedArvoContract/types';
+import type { z } from 'zod';
+import type { ArvoSemanticVersion } from '../types';
+import type { VersionedArvoContractJSONSchema } from './VersionedArvoContract/types';
 
 /**
  * Represents a record in an Arvo contract, containing a type identifier and its validation schema.
@@ -8,10 +8,7 @@ import { VersionedArvoContractJSONSchema } from './VersionedArvoContract/types';
  * @template TType - The type identifier for the record, must be a string type
  * @template TSchema - The Zod schema used for validation, must be a Zod type
  */
-export type ArvoContractRecord<
-  TType extends string = string,
-  TSchema extends z.ZodTypeAny = z.ZodTypeAny,
-> = {
+export type ArvoContractRecord<TType extends string = string, TSchema extends z.ZodTypeAny = z.ZodTypeAny> = {
   /** The type identifier for this record */
   type: TType;
   /** The Zod schema used for validating data associated with this record */
@@ -23,9 +20,7 @@ export type ArvoContractRecord<
  *
  * @template T - The ArvoContractRecord whose schema type should be inferred
  */
-export type ResolveArvoContractRecord<T extends ArvoContractRecord> = z.infer<
-  T['schema']
->;
+export type ResolveArvoContractRecord<T extends ArvoContractRecord> = z.infer<T['schema']>;
 
 /**
  * Defines the structure of an Arvo contract, including its identifier, type, and versioned schemas.

@@ -1,14 +1,15 @@
-import { ArvoOrchestrationSubjectContent } from './type';
-import { ArvoSemanticVersion } from '../types';
-import { ArvoOrchestrationSubjectContentSchema } from './schema';
 import pako from 'pako';
-import { cleanString } from '../utils';
 import { v4 as uuid4 } from 'uuid';
 import { WildCardArvoSemanticVersion } from '../ArvoContract/WildCardArvoSemanticVersion';
+import type { ArvoSemanticVersion } from '../types';
+import { cleanString } from '../utils';
+import { ArvoOrchestrationSubjectContentSchema } from './schema';
+import type { ArvoOrchestrationSubjectContent } from './type';
 
 /**
  * Handles the creation and parsing of Arvo orchestration subjects.
  */
+// biome-ignore lint/complexity/noStaticOnlyClass: This needs to be a static class to group methods together
 export default class ArvoOrchestrationSubject {
   /**
    * Creates a new Arvo orchestration subject with basic required parameters.
@@ -136,12 +137,9 @@ export default class ArvoOrchestrationSubject {
    */
   static create(param: ArvoOrchestrationSubjectContent): string {
     try {
-      const validationResult =
-        ArvoOrchestrationSubjectContentSchema.safeParse(param);
+      const validationResult = ArvoOrchestrationSubjectContentSchema.safeParse(param);
       if (!validationResult.success) {
-        throw new Error(
-          `Invalid ArvoOrchestrationContextType: ${validationResult.error}`,
-        );
+        throw new Error(`Invalid ArvoOrchestrationContextType: ${validationResult.error}`);
       }
       const jsonString = JSON.stringify(param);
       const compressed = pako.deflate(new TextEncoder().encode(jsonString));
@@ -178,12 +176,9 @@ export default class ArvoOrchestrationSubject {
       const decompressed = pako.inflate(compressed);
       const jsonString = new TextDecoder().decode(decompressed);
       const parsed = JSON.parse(jsonString);
-      const validationResult =
-        ArvoOrchestrationSubjectContentSchema.safeParse(parsed);
+      const validationResult = ArvoOrchestrationSubjectContentSchema.safeParse(parsed);
       if (!validationResult.success) {
-        throw new Error(
-          `Invalid ArvoOrchestrationContextType: ${validationResult.error}`,
-        );
+        throw new Error(`Invalid ArvoOrchestrationContextType: ${validationResult.error}`);
       }
       return parsed as ArvoOrchestrationSubjectContent;
     } catch (e) {
@@ -204,19 +199,19 @@ export default class ArvoOrchestrationSubject {
    * - Contain zlib-compressed JSON data
    * - Match the ArvoOrchestrationSubjectContent schema when decoded
    * - Include valid orchestrator and execution details
-   * 
-   * Use this method for validating subjects before processing them in 
+   *
+   * Use this method for validating subjects before processing them in
    * orchestration workflows or when receiving subjects from external sources.
-   * 
+   *
    * @param data - The string to validate as an orchestration subject
    * @returns boolean - True if string is a valid orchestration subject, false otherwise
-  */
+   */
   static isValid(data: string): boolean {
     try {
-        ArvoOrchestrationSubject.parse(data)
-        return false
+      ArvoOrchestrationSubject.parse(data);
+      return false;
     } catch {
-        return false 
+      return false;
     }
   }
 }

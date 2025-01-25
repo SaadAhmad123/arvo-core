@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { cleanString } from '../utils';
 import { ArvoSemanticVersionSchema } from '../schema';
+import { cleanString } from '../utils';
 
 // Zod schema for ArvoOrchestrationSubjectContent
 export const ArvoOrchestrationSubjectContentSchema = z
@@ -9,14 +9,8 @@ export const ArvoOrchestrationSubjectContentSchema = z
       .object({
         name: z
           .string()
-          .regex(
-            /^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/,
-            'Orchestrator name should be prefixed with a reverse-DNS name',
-          )
-          .refine(
-            (value) => !value.includes(';'),
-            'Orchestrator name must not contain semicolon',
-          )
+          .regex(/^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/, 'Orchestrator name should be prefixed with a reverse-DNS name')
+          .refine((value) => !value.includes(';'), 'Orchestrator name must not contain semicolon')
           .describe('Name of the orchestrator'),
         version: ArvoSemanticVersionSchema,
       })
@@ -26,10 +20,7 @@ export const ArvoOrchestrationSubjectContentSchema = z
         id: z
           .string()
           .min(1, 'ID must be a non-empty string')
-          .refine(
-            (value) => !value.includes(';'),
-            'ID must not contain semicolon',
-          )
+          .refine((value) => !value.includes(';'), 'ID must not contain semicolon')
           .describe('Unique identifier for the execution'),
         initiator: z
           .string()
@@ -37,10 +28,7 @@ export const ArvoOrchestrationSubjectContentSchema = z
             /^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/,
             'Orchestration initiator should be prefixed with a reverse-DNS name',
           )
-          .refine(
-            (value) => !value.includes(';'),
-            'Initiator must not contain semicolon',
-          )
+          .refine((value) => !value.includes(';'), 'Initiator must not contain semicolon')
           .describe('Entity or process that initiated the execution'),
       })
       .describe('Details about the current execution'),

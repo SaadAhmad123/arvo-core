@@ -1,11 +1,10 @@
 import { z } from 'zod';
 import {
   ArvoContract,
-  ArvoSemanticVersion,
+  type ArvoSemanticVersion,
   cleanString,
   createArvoContract,
   createSimpleArvoContract,
-  InferVersionedArvoContract,
 } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
@@ -38,7 +37,7 @@ describe('ArvoContract', () => {
   describe('createArvoContract', () => {
     it('should create a valid simple contract, using createSimpleArvoContract', () => {
       const contract = createSimpleArvoContract({
-        uri: `#/simple/test`,
+        uri: '#/simple/test',
         type: 'simple.test',
         description: 'A simple contract',
         metadata: {
@@ -59,22 +58,18 @@ describe('ArvoContract', () => {
       const V = contract.version('0.0.1');
 
       expect(contract).toBeInstanceOf(ArvoContract);
-      expect(contract.uri).toBe(`#/simple/test`);
+      expect(contract.uri).toBe('#/simple/test');
       expect(contract.type).toBe('com.simple.test');
       expect(contract.version('0.0.1').accepts.type).toBe('com.simple.test');
-      expect(contract.version('0.0.1').emitList[0].type).toBe(
-        'evt.simple.test.success',
-      );
-      expect(contract.systemError.type).toBe(`sys.com.simple.test.error`);
+      expect(contract.version('0.0.1').emitList[0].type).toBe('evt.simple.test.success');
+      expect(contract.systemError.type).toBe('sys.com.simple.test.error');
       expect(contract.version('latest').version).toBe('1.0.1');
       expect(contract.metadata.access).toBe('private');
       expect(contract.metadata.contractType).toBe('SimpleArvoContract');
       expect(contract.metadata.rootType).toBe('simple.test');
 
       expect(contract.version('0.0.1').metadata.access).toBe('private');
-      expect(contract.version('0.0.1').metadata.contractType).toBe(
-        'SimpleArvoContract',
-      );
+      expect(contract.version('0.0.1').metadata.contractType).toBe('SimpleArvoContract');
       expect(contract.version('0.0.1').metadata.rootType).toBe('simple.test');
     });
 
@@ -84,9 +79,7 @@ describe('ArvoContract', () => {
       expect(contract.uri).toBe(validContractSpec.uri);
       expect(contract.type).toBe(validContractSpec.type);
       expect(contract.version('0.0.1').accepts.type).toBe(contract.type);
-      expect(contract.version('0.0.1').emitList[0].type).toBe(
-        'com.example.output',
-      );
+      expect(contract.version('0.0.1').emitList[0].type).toBe('com.example.output');
       expect(contract.systemError.type).toBe(`sys.${contract.type}.error`);
       expect(contract.version('latest').version).toBe('1.0.0');
     });
@@ -162,12 +155,8 @@ describe('ArvoContract', () => {
       };
       const contract = createArvoContract(contractSpec);
       expect(Object.keys(contract.versions['0.0.1'].emits)).toHaveLength(2);
-      expect(
-        contract.versions['0.0.1'].emits['com.example.output'],
-      ).toBeTruthy();
-      expect(
-        contract.versions['0.0.1'].emits['com.example.error'],
-      ).toBeTruthy();
+      expect(contract.versions['0.0.1'].emits['com.example.output']).toBeTruthy();
+      expect(contract.versions['0.0.1'].emits['com.example.error']).toBeTruthy();
     });
 
     it('should allow empty emits object for a version', () => {
@@ -185,11 +174,7 @@ describe('ArvoContract', () => {
   });
 
   describe('ArvoContract instance', () => {
-    let contract: ArvoContract<
-      string,
-      string,
-      Record<ArvoSemanticVersion, any>
-    >;
+    let contract: ArvoContract<string, string, Record<ArvoSemanticVersion, any>>;
 
     beforeEach(() => {
       contract = createArvoContract(validContractSpec);
@@ -293,9 +278,7 @@ describe('ArvoContract', () => {
 
         const contractVersion = contract.version('0.0.1');
         expect(contractVersion.accepts.type).toBe('com.example.complex');
-        expect(
-          contractVersion.accepts.schema.safeParse(validInput).success,
-        ).toBe(true);
+        expect(contractVersion.accepts.schema.safeParse(validInput).success).toBe(true);
       });
 
       it('should validate input without optional fields', () => {
@@ -310,9 +293,7 @@ describe('ArvoContract', () => {
 
         const contractVersion = contract.version('0.0.1');
         expect(contractVersion.accepts.type).toBe('com.example.complex');
-        expect(
-          contractVersion.accepts.schema.safeParse(validInput).success,
-        ).toBe(true);
+        expect(contractVersion.accepts.schema.safeParse(validInput).success).toBe(true);
       });
 
       it('should reject input with invalid field types', () => {
@@ -367,20 +348,12 @@ describe('ArvoContract', () => {
           timestamp: new Date(),
         };
 
-        expect(contract.version('0.0.1').accepts.type).toBe(
-          'com.example.complex',
-        );
-        const resultV1 = contract
-          .version('0.0.1')
-          .accepts.schema.safeParse(validInputV1);
+        expect(contract.version('0.0.1').accepts.type).toBe('com.example.complex');
+        const resultV1 = contract.version('0.0.1').accepts.schema.safeParse(validInputV1);
         expect(resultV1.success).toBe(true);
 
-        expect(contract.version('0.0.2').accepts.type).toBe(
-          'com.example.complex',
-        );
-        const resultV2 = contract
-          .version('0.0.2')
-          .accepts.schema.safeParse(validInputV2);
+        expect(contract.version('0.0.2').accepts.type).toBe('com.example.complex');
+        const resultV2 = contract.version('0.0.2').accepts.schema.safeParse(validInputV2);
         expect(resultV2.success).toBe(true);
       });
 
@@ -399,11 +372,7 @@ describe('ArvoContract', () => {
           },
         };
 
-        expect(
-          contract
-            .version('0.0.1')
-            .emits['com.example.success'].safeParse(successEmit).success,
-        ).toBe(true);
+        expect(contract.version('0.0.1').emits['com.example.success'].safeParse(successEmit).success).toBe(true);
       });
 
       it('should validate partial emission', () => {
@@ -413,11 +382,7 @@ describe('ArvoContract', () => {
           remaining: 100,
         };
 
-        expect(
-          contract
-            .version('0.0.1')
-            .emits['com.example.partial'].safeParse(partialEmit).success,
-        ).toBe(true);
+        expect(contract.version('0.0.1').emits['com.example.partial'].safeParse(partialEmit).success).toBe(true);
       });
 
       it('should validate validation error emission', () => {
@@ -429,11 +394,7 @@ describe('ArvoContract', () => {
           ],
         };
 
-        expect(
-          contract
-            .version('0.0.1')
-            .emits['com.example.validation'].safeParse(validationEmit).success,
-        ).toBe(true);
+        expect(contract.version('0.0.1').emits['com.example.validation'].safeParse(validationEmit).success).toBe(true);
       });
 
       it('should reject emissions with missing fields', () => {
@@ -445,11 +406,7 @@ describe('ArvoContract', () => {
           },
         };
 
-        expect(
-          contract
-            .version('0.0.1')
-            .emits['com.example.success'].safeParse(invalidEmit).success,
-        ).toBe(false);
+        expect(contract.version('0.0.1').emits['com.example.success'].safeParse(invalidEmit).success).toBe(false);
       });
 
       it('should reject emissions with invalid field types', () => {
@@ -459,11 +416,7 @@ describe('ArvoContract', () => {
           remaining: 100,
         };
 
-        expect(
-          contract
-            .version('0.0.1')
-            .emits['com.example.partial'].safeParse(invalidEmit).success,
-        ).toBe(false);
+        expect(contract.version('0.0.1').emits['com.example.partial'].safeParse(invalidEmit).success).toBe(false);
       });
 
       it('should validate against correct version schema', () => {
@@ -476,26 +429,14 @@ describe('ArvoContract', () => {
           },
         };
 
-        expect(
-          contract
-            .version('0.0.2')
-            .emits['com.example.success'].safeParse(successEmitV2).success,
-        ).toBe(true);
+        expect(contract.version('0.0.2').emits['com.example.success'].safeParse(successEmitV2).success).toBe(true);
       });
 
       it('should have correct dataschema', () => {
-        expect(contract.version('0.0.1').dataschema).toBe(
-          '#/contracts/complexContract/0.0.1',
-        );
-        expect(contract.version('0.0.1').systemError.dataschema).toBe(
-          '#/contracts/complexContract/0.0.0',
-        );
-        expect(contract.version('0.0.2').dataschema).toBe(
-          '#/contracts/complexContract/0.0.2',
-        );
-        expect(contract.version('0.0.2').systemError.dataschema).toBe(
-          '#/contracts/complexContract/0.0.0',
-        );
+        expect(contract.version('0.0.1').dataschema).toBe('#/contracts/complexContract/0.0.1');
+        expect(contract.version('0.0.1').systemError.dataschema).toBe('#/contracts/complexContract/0.0.0');
+        expect(contract.version('0.0.2').dataschema).toBe('#/contracts/complexContract/0.0.2');
+        expect(contract.version('0.0.2').systemError.dataschema).toBe('#/contracts/complexContract/0.0.0');
       });
 
       it('should handle version-specific emit types', () => {
@@ -504,11 +445,7 @@ describe('ArvoContract', () => {
           errors: [{ field: 'id', message: 'Invalid' }],
         };
 
-        expect(
-          contract
-            .version('0.0.1')
-            .emits['com.example.validation'].safeParse(validationEmit).success,
-        ).toBe(true);
+        expect(contract.version('0.0.1').emits['com.example.validation'].safeParse(validationEmit).success).toBe(true);
       });
     });
   });

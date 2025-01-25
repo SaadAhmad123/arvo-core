@@ -1,14 +1,11 @@
-import { z } from 'zod';
+import type { z } from 'zod';
+import type { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
 import { createArvoEvent } from '../ArvoEvent/helpers';
-import { CreateArvoEvent } from '../ArvoEvent/types';
 import { ArvoDataContentType } from '../ArvoEvent/schema';
-import { ArvoErrorSchema } from '../schema';
-import {
-  ArvoOpenTelemetry,
-  currentOpenTelemetryHeaders,
-} from '../OpenTelemetry';
-import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
-import { createArvoError, EventDataschemaUtil } from '../utils';
+import type { CreateArvoEvent } from '../ArvoEvent/types';
+import { ArvoOpenTelemetry, currentOpenTelemetryHeaders } from '../OpenTelemetry';
+import type { ArvoErrorSchema } from '../schema';
+import { EventDataschemaUtil, createArvoError } from '../utils';
 import { createSpanOptions } from './utils';
 
 /**
@@ -27,9 +24,7 @@ import { createSpanOptions } from './utils';
  * const factory = createArvoEventFactory(contract.version('1.0.0'));
  * ```
  */
-export default class ArvoEventFactory<
-  TContract extends VersionedArvoContract<any, any>,
-> {
+export default class ArvoEventFactory<TContract extends VersionedArvoContract<any, any>> {
   protected readonly _name: string = 'ArvoEventFactory';
   protected readonly contract: TContract;
 
@@ -62,10 +57,7 @@ export default class ArvoEventFactory<
    */
   accepts<TExtension extends Record<string, any>>(
     event: Omit<
-      CreateArvoEvent<
-        z.input<TContract['accepts']['schema']>,
-        TContract['accepts']['type']
-      >,
+      CreateArvoEvent<z.input<TContract['accepts']['schema']>, TContract['accepts']['type']>,
       'type' | 'datacontenttype' | 'dataschema'
     >,
     extensions?: TExtension,
@@ -75,13 +67,9 @@ export default class ArvoEventFactory<
       spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();
-        const validationResult = this.contract.accepts.schema.safeParse(
-          event.data,
-        );
+        const validationResult = this.contract.accepts.schema.safeParse(event.data);
         if (!validationResult.success) {
-          throw new Error(
-            `Accept Event data validation failed: ${validationResult.error.message}`,
-          );
+          throw new Error(`Accept Event data validation failed: ${validationResult.error.message}`);
         }
         const generatedEvent = createArvoEvent<
           z.infer<TContract['accepts']['schema']>,
@@ -90,8 +78,7 @@ export default class ArvoEventFactory<
         >(
           {
             ...event,
-            traceparent:
-              event.traceparent ?? otelHeaders.traceparent ?? undefined,
+            traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             type: this.contract.accepts.type,
             datacontenttype: ArvoDataContentType,
@@ -126,14 +113,8 @@ export default class ArvoEventFactory<
    * });
    * ```
    */
-  emits<
-    U extends string & keyof TContract['emits'],
-    TExtension extends Record<string, any>,
-  >(
-    event: Omit<
-      CreateArvoEvent<z.input<TContract['emits'][U]>, U>,
-      'datacontenttype' | 'dataschema'
-    >,
+  emits<U extends string & keyof TContract['emits'], TExtension extends Record<string, any>>(
+    event: Omit<CreateArvoEvent<z.input<TContract['emits'][U]>, U>, 'datacontenttype' | 'dataschema'>,
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
@@ -141,24 +122,15 @@ export default class ArvoEventFactory<
       spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();
-        const validationResult = this.contract.emits?.[event.type]?.safeParse(
-          event.data,
-        );
+        const validationResult = this.contract.emits?.[event.type]?.safeParse(event.data);
         if (!validationResult?.success) {
-          const msg =
-            validationResult?.error?.message ??
-            `No contract available for ${event.type}`;
+          const msg = validationResult?.error?.message ?? `No contract available for ${event.type}`;
           throw new Error(`Emit Event data validation failed: ${msg}`);
         }
-        const generatedEvent = createArvoEvent<
-          z.infer<TContract['emits'][U]>,
-          TExtension,
-          U
-        >(
+        const generatedEvent = createArvoEvent<z.infer<TContract['emits'][U]>, TExtension, U>(
           {
             ...event,
-            traceparent:
-              event.traceparent ?? otelHeaders.traceparent ?? undefined,
+            traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.create(this.contract),
@@ -193,10 +165,7 @@ export default class ArvoEventFactory<
    * ```
    */
   systemError<TExtension extends Record<string, any>>(
-    event: Omit<
-      CreateArvoEvent<any, any>,
-      'data' | 'type' | 'datacontenttype' | 'dataschema'
-    > & {
+    event: Omit<CreateArvoEvent<any, any>, 'data' | 'type' | 'datacontenttype' | 'dataschema'> & {
       error: Error;
     },
     extensions?: TExtension,
@@ -214,15 +183,12 @@ export default class ArvoEventFactory<
         >(
           {
             ..._event,
-            traceparent:
-              event.traceparent ?? otelHeaders.traceparent ?? undefined,
+            traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             type: this.contract.systemError.type,
             data: createArvoError(error),
             datacontenttype: ArvoDataContentType,
-            dataschema: EventDataschemaUtil.createWithWildCardVersion(
-              this.contract,
-            ),
+            dataschema: EventDataschemaUtil.createWithWildCardVersion(this.contract),
           },
           extensions,
           { disable: true },

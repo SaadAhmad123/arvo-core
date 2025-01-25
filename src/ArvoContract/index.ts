@@ -1,19 +1,12 @@
-import { z } from 'zod';
-import {
-  ArvoContractJSONSchema,
-  ArvoContractRecord,
-  IArvoContract,
-} from './types';
+import type { z } from 'zod';
+import { logToSpan } from '../OpenTelemetry';
 import { ArvoErrorSchema, ArvoSemanticVersionSchema } from '../schema';
-import { ArvoSemanticVersion } from '../types';
+import type { ArvoSemanticVersion } from '../types';
 import { compareSemanticVersions } from '../utils';
 import { VersionedArvoContract } from './VersionedArvoContract';
+import { WildCardArvoSemanticVersion, isWildCardArvoSematicVersion } from './WildCardArvoSemanticVersion';
+import type { ArvoContractJSONSchema, ArvoContractRecord, IArvoContract } from './types';
 import { ArvoContractValidators } from './validators';
-import {
-  isWildCardArvoSematicVersion,
-  WildCardArvoSemanticVersion,
-} from './WildCardArvoSemanticVersion';
-import { logToSpan } from '../OpenTelemetry';
 
 /**
  * Represents a contract with defined input and output schemas for event-driven architectures.
@@ -121,9 +114,7 @@ export default class ArvoContract<
     }
 
     if (!Object.keys(this._versions).length) {
-      throw new Error(
-        `An ArvoContract (uri=${this._uri}) must have at least one version`,
-      );
+      throw new Error(`An ArvoContract (uri=${this._uri}) must have at least one version`);
     }
   }
 
@@ -143,10 +134,7 @@ export default class ArvoContract<
    * - Can capture error details, messages, and stack traces
    * - Are version-independent (work the same across all contract versions)
    */
-  public get systemError(): ArvoContractRecord<
-    `sys.${TType}.error`,
-    typeof ArvoErrorSchema
-  > {
+  public get systemError(): ArvoContractRecord<`sys.${TType}.error`, typeof ArvoErrorSchema> {
     return {
       type: `sys.${this._type}.error`,
       schema: ArvoErrorSchema,
@@ -165,13 +153,7 @@ export default class ArvoContract<
    *
    * @throws {Error} When an invalid or non-existent version is requested
    */
-  public version<
-    V extends
-      | (ArvoSemanticVersion & keyof TVersions)
-      | 'any'
-      | 'latest'
-      | 'oldest',
-  >(
+  public version<V extends (ArvoSemanticVersion & keyof TVersions) | 'any' | 'latest' | 'oldest'>(
     option: V,
   ): V extends ArvoSemanticVersion & keyof TVersions
     ? VersionedArvoContract<typeof this, V>
@@ -184,9 +166,7 @@ export default class ArvoContract<
       resolvedVersion = this.getSortedVersionNumbers('ASC')[0];
       // @ts-ignore
     } else if (!this._versions[option]) {
-      throw new Error(
-        `The contract (uri=${this._uri}) does not have version=${option}`,
-      );
+      throw new Error(`The contract (uri=${this._uri}) does not have version=${option}`);
     } else {
       resolvedVersion = option as ArvoSemanticVersion & keyof TVersions;
     }
@@ -202,9 +182,7 @@ export default class ArvoContract<
    * @returns Array of semantic versions sorted according to specified ordering
    */
   public getSortedVersionNumbers(ordering: 'ASC' | 'DESC') {
-    const sorted = (Object.keys(this._versions) as ArvoSemanticVersion[]).sort(
-      (a, b) => compareSemanticVersions(b, a),
-    );
+    const sorted = (Object.keys(this._versions) as ArvoSemanticVersion[]).sort((a, b) => compareSemanticVersions(b, a));
     return ordering === 'DESC' ? sorted : sorted.reverse();
   }
 
@@ -234,9 +212,7 @@ export default class ArvoContract<
         description: this._description,
         metadata: this._metadata,
         versions: Object.keys(this._versions).map((version) => {
-          const jsonSchema = this.version(
-            version as ArvoSemanticVersion,
-          ).toJsonSchema();
+          const jsonSchema = this.version(version as ArvoSemanticVersion).toJsonSchema();
           return {
             version: jsonSchema.version,
             accepts: jsonSchema.accepts,

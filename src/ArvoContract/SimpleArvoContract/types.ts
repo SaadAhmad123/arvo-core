@@ -1,6 +1,6 @@
-import { z } from 'zod';
-import ArvoContract from '..';
-import { ArvoSemanticVersion } from '../../types';
+import type { z } from 'zod';
+import type ArvoContract from '..';
+import type { ArvoSemanticVersion } from '../../types';
 
 export type SimpleArvoContractEmitType<T extends string> = `evt.${T}.success`;
 

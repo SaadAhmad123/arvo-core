@@ -1,4 +1,4 @@
-import { ArvoSemanticVersion } from '../types';
+import type { ArvoSemanticVersion } from '../types';
 
 /**
  * Represents the content for Arvo orchestration subject.

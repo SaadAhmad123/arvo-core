@@ -11,6 +11,7 @@
  * const errorEvent = ArvoOrchestratorEventTypeGen.systemError('payment') // 'sys.arvo.orc.payment.error'
  * ```
  */
+// biome-ignore lint/complexity/noStaticOnlyClass: This needs to be a static class to group methods together
 export class ArvoOrchestratorEventTypeGen {
   /**
    * The standard prefix used for all Arvo orchestrator events.
@@ -41,9 +42,7 @@ export class ArvoOrchestratorEventTypeGen {
    * ArvoOrchestratorEventTypeGen.init('userRegistration') // Returns: 'arvo.orc.userRegistration'
    * ```
    */
-  public static init<T extends string>(
-    name: T,
-  ): `${typeof ArvoOrchestratorEventTypeGen.prefix}.${T}` {
+  public static init<T extends string>(name: T): `${typeof ArvoOrchestratorEventTypeGen.prefix}.${T}` {
     return `${ArvoOrchestratorEventTypeGen.prefix}.${name}`;
   }
 
@@ -60,9 +59,7 @@ export class ArvoOrchestratorEventTypeGen {
    * ArvoOrchestratorEventTypeGen.complete('userRegistration') // Returns: 'arvo.orc.userRegistration.done'
    * ```
    */
-  public static complete<T extends string>(
-    name: T,
-  ): `${ReturnType<typeof ArvoOrchestratorEventTypeGen.init<T>>}.done` {
+  public static complete<T extends string>(name: T): `${ReturnType<typeof ArvoOrchestratorEventTypeGen.init<T>>}.done` {
     return `${ArvoOrchestratorEventTypeGen.init(name)}.done`;
   }
 

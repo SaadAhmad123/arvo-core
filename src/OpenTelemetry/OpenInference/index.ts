@@ -3,6 +3,7 @@
  * These attribute names are defined as per the OpenInference specification:
  * @see https://github.com/Arize-ai/openinference/blob/main/spec/semantic_conventions.md
  */
+// biome-ignore lint/complexity/noStaticOnlyClass: This needs to be a static class to group methods together
 export default class OpenInference {
   static readonly ATTR_SPAN_KIND = 'openinference.span.kind';
 
@@ -37,14 +38,10 @@ export default class OpenInference {
   static readonly ATTR_LLM_INVOCATION_PARAMETERS = 'llm.invocation_parameters';
   static readonly ATTR_LLM_MODEL_NAME = 'llm.model_name';
   static readonly ATTR_LLM_OUTPUT_MESSAGES = 'llm.output_messages';
-  static readonly ATTR_LLM_PROMPT_TEMPLATE_TEMPLATE =
-    'llm.prompt_template.template';
-  static readonly ATTR_LLM_PROMPT_TEMPLATE_VARIABLES =
-    'llm.prompt_template.variables';
-  static readonly ATTR_LLM_PROMPT_TEMPLATE_VERSION =
-    'llm.prompt_template.version';
-  static readonly ATTR_LLM_TOKEN_COUNT_COMPLETION =
-    'llm.token_count.completion';
+  static readonly ATTR_LLM_PROMPT_TEMPLATE_TEMPLATE = 'llm.prompt_template.template';
+  static readonly ATTR_LLM_PROMPT_TEMPLATE_VARIABLES = 'llm.prompt_template.variables';
+  static readonly ATTR_LLM_PROMPT_TEMPLATE_VERSION = 'llm.prompt_template.version';
+  static readonly ATTR_LLM_TOKEN_COUNT_COMPLETION = 'llm.token_count.completion';
   static readonly ATTR_LLM_TOKEN_COUNT_PROMPT = 'llm.token_count.prompt';
   static readonly ATTR_LLM_TOKEN_COUNT_TOTAL = 'llm.token_count.total';
   static readonly ATTR_LLM_TOOLS = 'llm.tools';
@@ -52,10 +49,8 @@ export default class OpenInference {
   // Message attributes
   static readonly ATTR_MESSAGE_CONTENT = 'message.content';
   static readonly ATTR_MESSAGE_CONTENTS = 'message.contents';
-  static readonly ATTR_MESSAGE_FUNCTION_CALL_ARGUMENTS_JSON =
-    'message.function_call_arguments_json';
-  static readonly ATTR_MESSAGE_FUNCTION_CALL_NAME =
-    'message.function_call_name';
+  static readonly ATTR_MESSAGE_FUNCTION_CALL_ARGUMENTS_JSON = 'message.function_call_arguments_json';
+  static readonly ATTR_MESSAGE_FUNCTION_CALL_NAME = 'message.function_call_name';
   static readonly ATTR_MESSAGE_ROLE = 'message.role';
   static readonly ATTR_MESSAGE_TOOL_CALLS = 'message.tool_calls';
 
@@ -94,8 +89,7 @@ export default class OpenInference {
   static readonly ATTR_TOOL_PARAMETERS = 'tool.parameters';
 
   // Tool call attributes
-  static readonly ATTR_TOOL_CALL_FUNCTION_ARGUMENTS =
-    'tool_call.function.arguments';
+  static readonly ATTR_TOOL_CALL_FUNCTION_ARGUMENTS = 'tool_call.function.arguments';
   static readonly ATTR_TOOL_CALL_FUNCTION_NAME = 'tool_call.function.name';
 
   // User attribute

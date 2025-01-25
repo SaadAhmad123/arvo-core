@@ -1,15 +1,12 @@
 import zodToJsonSchema from 'zod-to-json-schema';
-import ArvoContract from '..';
-import { ArvoSemanticVersion } from '../../types';
-import { ArvoContractRecord } from '../types';
-import {
-  IVersionedArvoContract,
-  VersionedArvoContractJSONSchema,
-} from './types';
-import { transformEmitsToArray } from './utils';
+import type ArvoContract from '..';
 import { logToSpan } from '../../OpenTelemetry';
+import type { ArvoSemanticVersion } from '../../types';
 import { EventDataschemaUtil } from '../../utils';
 import { WildCardArvoSemanticVersion } from '../WildCardArvoSemanticVersion';
+import type { ArvoContractRecord } from '../types';
+import type { IVersionedArvoContract, VersionedArvoContractJSONSchema } from './types';
+import { transformEmitsToArray } from './utils';
 
 /**
  * Implements a version-specific view of an ArvoContract with type-safe schema validation
@@ -21,14 +18,9 @@ export class VersionedArvoContract<
 > {
   protected readonly _contract: TContract;
   protected readonly _version: TVersion;
-  protected readonly _accepts: ArvoContractRecord<
-    TContract['type'],
-    TContract['versions'][TVersion]['accepts']
-  >;
+  protected readonly _accepts: ArvoContractRecord<TContract['type'], TContract['versions'][TVersion]['accepts']>;
   protected readonly _emits: TContract['versions'][TVersion]['emits'];
-  protected readonly _emitList: ReturnType<
-    typeof transformEmitsToArray<TContract, TVersion>
-  >;
+  protected readonly _emitList: ReturnType<typeof transformEmitsToArray<TContract, TVersion>>;
 
   public get uri(): TContract['uri'] {
     return this._contract.uri;
@@ -43,19 +35,11 @@ export class VersionedArvoContract<
     return this._contract.metadata;
   }
   public get systemError(): TContract['systemError'] & {
-    dataschema: ReturnType<
-      typeof EventDataschemaUtil.build<
-        TContract['uri'],
-        typeof WildCardArvoSemanticVersion
-      >
-    >;
+    dataschema: ReturnType<typeof EventDataschemaUtil.build<TContract['uri'], typeof WildCardArvoSemanticVersion>>;
   } {
     return {
       ...this._contract.systemError,
-      dataschema: EventDataschemaUtil.build(
-        this.uri,
-        WildCardArvoSemanticVersion,
-      ),
+      dataschema: EventDataschemaUtil.build(this.uri, WildCardArvoSemanticVersion),
     };
   }
   public get accepts() {
@@ -68,10 +52,7 @@ export class VersionedArvoContract<
     return this._emitList;
   }
   public get dataschema() {
-    return EventDataschemaUtil.build<TContract['uri'], TVersion>(
-      this.uri,
-      this.version,
-    );
+    return EventDataschemaUtil.build<TContract['uri'], TVersion>(this.uri, this.version);
   }
 
   constructor(param: IVersionedArvoContract<TContract, TVersion>) {

@@ -1,7 +1,7 @@
-import { createArvoEvent, ArvoEvent, ArvoDataContentType } from '../../src';
+import { ArvoDataContentType, ArvoEvent, createArvoEvent } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
-describe(`ArvoEvent`, () => {
+describe('ArvoEvent', () => {
   beforeAll(() => {
     telemetrySdkStart();
   });

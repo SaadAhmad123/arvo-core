@@ -1,8 +1,7 @@
-import ArvoContract from '..';
-import { ArvoSemanticVersion } from '../../types';
-import { z } from 'zod';
+import type { z } from 'zod';
+import type { ArvoSemanticVersion } from '../../types';
 import { createArvoContract } from '../helpers';
-import { SimpleArvoContract, SimpleArvoContractEmitType } from './types';
+import type { SimpleArvoContract, SimpleArvoContractEmitType } from './types';
 
 /**
  * Creates an ArvoContract with standardized naming conventions and a simplified event pattern.

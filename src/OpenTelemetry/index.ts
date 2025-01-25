@@ -1,18 +1,18 @@
 import {
-  trace,
-  context,
-  Span,
-  TextMapSetter,
-  Tracer,
-  Context,
-  SpanOptions,
-  propagation,
+  type Context,
+  type Span,
+  type SpanOptions,
   SpanStatusCode,
+  type TextMapSetter,
+  type Tracer,
+  context,
+  propagation,
+  trace,
 } from '@opentelemetry/api';
-import { TelemetryLogLevel, OpenTelemetryHeaders } from './types';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import ArvoExecution from './ArvoExecution';
 import { ArvoExecutionSpanKind } from './ArvoExecution/types';
+import type { OpenTelemetryHeaders, TelemetryLogLevel } from './types';
 
 /**
  * Singleton class for managing OpenTelemetry instrumentation across libraries
@@ -78,9 +78,7 @@ export class ArvoOpenTelemetry {
     force?: boolean;
   }): void {
     if (!ArvoOpenTelemetry.instance) {
-      throw new Error(
-        'Cannot reinitialize before initialization. Call getInstance first.',
-      );
+      throw new Error('Cannot reinitialize before initialization. Call getInstance first.');
     }
 
     // Check for active spans unless force is true
@@ -88,8 +86,7 @@ export class ArvoOpenTelemetry {
       const activeSpan = trace.getActiveSpan();
       if (activeSpan) {
         throw new Error(
-          'Cannot reinitialize while spans are active. ' +
-            'Either end all spans or use force: true (not recommended)',
+          'Cannot reinitialize while spans are active. ' + 'Either end all spans or use force: true (not recommended)',
         );
       }
     }
@@ -132,10 +129,7 @@ export class ArvoOpenTelemetry {
   }): ReturnType<F> {
     let parentContext: Context | undefined;
     if (param.context) {
-      if (
-        param.context.inheritFrom === 'TRACE_HEADERS' &&
-        param.context.traceHeaders.traceparent
-      ) {
+      if (param.context.inheritFrom === 'TRACE_HEADERS' && param.context.traceHeaders.traceparent) {
         parentContext = makeOpenTelemetryContextContext(
           param.context.traceHeaders.traceparent,
           param.context.traceHeaders.tracestate,
@@ -210,10 +204,7 @@ export const logToSpan = (
  * @param span - The span to log the exception to. If not provided, the active span is used.
  *               If no active span is available, the error is logged to the console.
  */
-export const exceptionToSpan = (
-  error: Error,
-  span: Span | undefined = trace.getActiveSpan(),
-) => {
+export const exceptionToSpan = (error: Error, span: Span | undefined = trace.getActiveSpan()) => {
   if (span) {
     span.setAttributes({
       'exception.type': error.name,
@@ -258,10 +249,7 @@ export function currentOpenTelemetryHeaders(): OpenTelemetryHeaders {
 }
 
 // Helper function to extract context from traceparent and tracestate
-export const makeOpenTelemetryContextContext = (
-  traceparent: string,
-  tracestate: string | null,
-): Context => {
+export const makeOpenTelemetryContextContext = (traceparent: string, tracestate: string | null): Context => {
   const extractedContext = propagation.extract(context.active(), {
     traceparent,
     tracestate: tracestate ?? undefined,

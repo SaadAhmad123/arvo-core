@@ -19,5 +19,4 @@ export const ArvoSemanticVersionSchema = z
   .describe('Semantic version of the Arvo component in the format X.Y.Z');
 
 // Check is the provided version is a valid arvo semantic version
-export const isValidArvoSemanticVersion = (version: string) =>
-  ArvoSemanticVersionSchema.safeParse(version).success;
+export const isValidArvoSemanticVersion = (version: string) => ArvoSemanticVersionSchema.safeParse(version).success;

@@ -6,12 +6,7 @@
  * - ERROR: Used for more serious problems that prevent a specific function or feature from working correctly.
  * - CRITICAL: Used for very serious errors that might prevent the entire program from running.
  */
-export type TelemetryLogLevel =
-  | 'DEBUG'
-  | 'INFO'
-  | 'WARNING'
-  | 'ERROR'
-  | 'CRITICAL';
+export type TelemetryLogLevel = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL';
 
 /**
  * Represents the context for telemetry.

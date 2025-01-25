@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">75.8% </span>
+                <span class="strong">75.4% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>47/62</span>
+                <span class='fraction'>46/61</span>
             </div>
         
             
@@ -321,20 +321,7 @@
 <a name='L256'></a><a href='#L256'>256</a>
 <a name='L257'></a><a href='#L257'>257</a>
 <a name='L258'></a><a href='#L258'>258</a>
-<a name='L259'></a><a href='#L259'>259</a>
-<a name='L260'></a><a href='#L260'>260</a>
-<a name='L261'></a><a href='#L261'>261</a>
-<a name='L262'></a><a href='#L262'>262</a>
-<a name='L263'></a><a href='#L263'>263</a>
-<a name='L264'></a><a href='#L264'>264</a>
-<a name='L265'></a><a href='#L265'>265</a>
-<a name='L266'></a><a href='#L266'>266</a>
-<a name='L267'></a><a href='#L267'>267</a>
-<a name='L268'></a><a href='#L268'>268</a>
-<a name='L269'></a><a href='#L269'>269</a>
-<a name='L270'></a><a href='#L270'>270</a>
-<a name='L271'></a><a href='#L271'>271</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L259'></a><a href='#L259'>259</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -348,6 +335,7 @@
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -417,13 +405,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -468,9 +453,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">22x</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -544,11 +526,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">12x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -594,9 +573,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -604,20 +580,20 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import {
-  trace,
-  context,
-  Span,
-  TextMapSetter,
-  Tracer,
-  Context,
-  SpanOptions,
-  propagation,
+  type Context,
+  type Span,
+  type SpanOptions,
   SpanStatusCode,
+  type TextMapSetter,
+  type Tracer,
+  context,
+  propagation,
+  trace,
 } from '@opentelemetry/api';
-import { TelemetryLogLevel, OpenTelemetryHeaders } from './types';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import ArvoExecution from './ArvoExecution';
 import { ArvoExecutionSpanKind } from './ArvoExecution/types';
+import type { OpenTelemetryHeaders, TelemetryLogLevel } from './types';
 &nbsp;
 /**
  * Singleton class for managing OpenTelemetry instrumentation across libraries
@@ -683,9 +659,7 @@ export class ArvoOpenTelemetry {
     force?: boolean;
   }): void {
 <span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!ArvoOpenTelemetry.instance) {</span>
-<span class="cstat-no" title="statement not covered" >      throw new Error(</span>
-        'Cannot reinitialize before initialization. Call getInstance first.',
-      );
+<span class="cstat-no" title="statement not covered" >      throw new Error('Cannot reinitialize before initialization. Call getInstance first.');</span>
     }
 &nbsp;
     // Check for active spans unless force is true
@@ -693,8 +667,7 @@ export class ArvoOpenTelemetry {
       const activeSpan = <span class="cstat-no" title="statement not covered" >trace.getActiveSpan();</span>
 <span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (activeSpan) {</span>
 <span class="cstat-no" title="statement not covered" >        throw new Error(</span>
-          'Cannot reinitialize while spans are active. ' +
-            'Either end all spans or use force: true (not recommended)',
+          'Cannot reinitialize while spans are active. ' + 'Either end all spans or use force: true (not recommended)',
         );
       }
     }
@@ -737,10 +710,7 @@ export class ArvoOpenTelemetry {
   }): ReturnType&lt;F&gt; {
     let parentContext: Context | undefined;
     <span class="missing-if-branch" title="if path not taken" >I</span>if (param.context) {
-<span class="cstat-no" title="statement not covered" >      if (</span>
-        param.context.inheritFrom === 'TRACE_HEADERS' &amp;&amp;
-        param.context.traceHeaders.traceparent
-      ) {
+<span class="cstat-no" title="statement not covered" >      if (param.context.inheritFrom === 'TRACE_HEADERS' &amp;&amp; param.context.traceHeaders.traceparent) {</span>
 <span class="cstat-no" title="statement not covered" >        parentContext = makeOpenTelemetryContextContext(</span>
           param.context.traceHeaders.traceparent,
           param.context.traceHeaders.tracestate,
@@ -815,10 +785,7 @@ export const logToSpan = (
  * @param span - The span to log the exception to. If not provided, the active span is used.
  *               If no active span is available, the error is logged to the console.
  */
-export const exceptionToSpan = (
-  error: Error,
-  span: Span | undefined = trace.getActiveSpan(),
-) =&gt; {
+export const exceptionToSpan = (error: Error, span: Span | undefined = trace.getActiveSpan()) =&gt; {
   if (span) {
     span.setAttributes({
       'exception.type': error.name,
@@ -863,10 +830,7 @@ export function currentOpenTelemetryHeaders(): OpenTelemetryHeaders {
 }
 &nbsp;
 // Helper function to extract context from traceparent and tracestate
-export const makeOpenTelemetryContextContext = <span class="fstat-no" title="function not covered" >(</span>
-  traceparent: string,
-  tracestate: string | null,
-): Context =&gt; {
+export const makeOpenTelemetryContextContext = <span class="fstat-no" title="function not covered" >(t</span>raceparent: string, tracestate: string | null): Context =&gt; {
   const extractedContext = <span class="cstat-no" title="statement not covered" >propagation.extract(context.active(), {</span>
     traceparent,
     tracestate: tracestate ?? undefined,
@@ -880,7 +844,7 @@ export const makeOpenTelemetryContextContext = <span class="fstat-no" title="fun
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-01-25T06:49:56.247Z
+                at 2025-01-25T07:03:22.304Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

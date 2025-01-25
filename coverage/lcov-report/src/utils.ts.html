@@ -292,21 +292,7 @@
 <a name='L227'></a><a href='#L227'>227</a>
 <a name='L228'></a><a href='#L228'>228</a>
 <a name='L229'></a><a href='#L229'>229</a>
-<a name='L230'></a><a href='#L230'>230</a>
-<a name='L231'></a><a href='#L231'>231</a>
-<a name='L232'></a><a href='#L232'>232</a>
-<a name='L233'></a><a href='#L233'>233</a>
-<a name='L234'></a><a href='#L234'>234</a>
-<a name='L235'></a><a href='#L235'>235</a>
-<a name='L236'></a><a href='#L236'>236</a>
-<a name='L237'></a><a href='#L237'>237</a>
-<a name='L238'></a><a href='#L238'>238</a>
-<a name='L239'></a><a href='#L239'>239</a>
-<a name='L240'></a><a href='#L240'>240</a>
-<a name='L241'></a><a href='#L241'>241</a>
-<a name='L242'></a><a href='#L242'>242</a>
-<a name='L243'></a><a href='#L243'>243</a>
-<a name='L244'></a><a href='#L244'>244</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L230'></a><a href='#L230'>230</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
@@ -402,8 +388,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">4x</span>
 <span class="cline-any cline-yes">12x</span>
 <span class="cline-any cline-yes">12x</span>
@@ -425,9 +409,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
@@ -437,6 +418,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -445,9 +427,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">13x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -473,12 +452,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -505,12 +479,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -549,12 +520,13 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import type { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
 import { WildCardArvoSemanticVersion } from './ArvoContract/WildCardArvoSemanticVersion';
-import ArvoEvent from './ArvoEvent';
+import type ArvoEvent from './ArvoEvent';
 import { logToSpan } from './OpenTelemetry';
 import { ArvoSemanticVersionSchema } from './schema';
-import { ArvoErrorType, ArvoSemanticVersion } from './types';
+import type { ArvoErrorType, ArvoSemanticVersion } from './types';
 &nbsp;
 /**
  * Cleans a string by removing leading/trailing whitespace from each line,
@@ -619,7 +591,7 @@ export const validateURI = (value: string) =&gt; {
  * // Returns current time with -5 hours offset
  * createTimestamp(-5);
  */
-export const createTimestamp = (offsetHours: number = 0): string =&gt; {
+export const createTimestamp = (offsetHours = 0): string =&gt; {
   const now = new Date();
   const offsetMinutes = offsetHours * 60;
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset() + offsetMinutes);
@@ -644,12 +616,10 @@ interface VersionComponents {
   patch: number;
 }
 &nbsp;
-export function parseSemanticVersion(
-  version: ArvoSemanticVersion,
-): VersionComponents {
+export function parseSemanticVersion(version: ArvoSemanticVersion): VersionComponents {
   const [major, minor, patch] = version.split('.').map((part) =&gt; {
-    const num = parseInt(part, 10);
-    <span class="missing-if-branch" title="if path not taken" >I</span>if (isNaN(num)) {
+    const num = Number.parseInt(part, 10);
+    <span class="missing-if-branch" title="if path not taken" >I</span>if (Number.isNaN(num)) {
 <span class="cstat-no" title="statement not covered" >      throw new Error(`Invalid version number in ${version}`);</span>
     }
     return num;
@@ -667,10 +637,7 @@ export function parseSemanticVersion(
  * - Negative number if version1 &lt; version2
  * - 0 if version1 === version2
  */
-export function compareSemanticVersions(
-  version1: ArvoSemanticVersion,
-  version2: ArvoSemanticVersion,
-): number {
+export function compareSemanticVersions(version1: ArvoSemanticVersion, version2: ArvoSemanticVersion): number {
   const v1 = parseSemanticVersion(version1);
   const v2 = parseSemanticVersion(version2);
   if (v1.major !== v2.major) {
@@ -686,11 +653,9 @@ export function compareSemanticVersions(
  * Manages event dataschema strings for versioned contracts.
  * Handles creation and parsing of dataschema identifiers.
  */
+// biome-ignore lint/complexity/noStaticOnlyClass: This needs to be a static class to group methods together
 export class EventDataschemaUtil {
-  static build&lt;TUri extends string, TVersion extends ArvoSemanticVersion&gt;(
-    uri: TUri,
-    version: TVersion,
-  ) {
+  static build&lt;TUri extends string, TVersion extends ArvoSemanticVersion&gt;(uri: TUri, version: TVersion) {
     return `${uri}/${version}` as const;
   }
 &nbsp;
@@ -708,10 +673,7 @@ export class EventDataschemaUtil {
    * ```
    */
   static create&lt;T extends VersionedArvoContract&lt;any, any&gt;&gt;(contract: T) {
-    return EventDataschemaUtil.build&lt;T['uri'], T['version']&gt;(
-      contract.uri,
-      contract.version,
-    );
+    return EventDataschemaUtil.build&lt;T['uri'], T['version']&gt;(contract.uri, contract.version);
   }
 &nbsp;
   /**
@@ -719,13 +681,11 @@ export class EventDataschemaUtil {
    * @param contract Versioned contract
    * @returns `{contract.uri}/{WildCardArvoSemanticVersion}`
    */
-  static createWithWildCardVersion&lt;T extends VersionedArvoContract&lt;any, any&gt;&gt;(
-    contract: T,
-  ) {
-    return EventDataschemaUtil.build&lt;
-      T['uri'],
-      typeof WildCardArvoSemanticVersion
-    &gt;(contract.uri, WildCardArvoSemanticVersion);
+  static createWithWildCardVersion&lt;T extends VersionedArvoContract&lt;any, any&gt;&gt;(contract: T) {
+    return EventDataschemaUtil.build&lt;T['uri'], typeof WildCardArvoSemanticVersion&gt;(
+      contract.uri,
+      WildCardArvoSemanticVersion,
+    );
   }
 &nbsp;
   /**
@@ -748,12 +708,9 @@ export class EventDataschemaUtil {
     version: ArvoSemanticVersion;
   } | null {
     try {
-      const dataschema: string =
-        typeof data === 'string' ? <span class="branch-0 cbranch-no" title="branch not covered" >data </span>: (data.dataschema ?? <span class="branch-1 cbranch-no" title="branch not covered" >'')</span>;
+      const dataschema: string = typeof data === 'string' ? <span class="branch-0 cbranch-no" title="branch not covered" >data </span>: (data.dataschema ?? <span class="branch-1 cbranch-no" title="branch not covered" >'')</span>;
       const items: string[] = dataschema.split('/');
-      const version: ArvoSemanticVersion = ArvoSemanticVersionSchema.parse(
-        items.pop(),
-      ) as ArvoSemanticVersion;
+      const version: ArvoSemanticVersion = ArvoSemanticVersionSchema.parse(items.pop()) as ArvoSemanticVersion;
       const uri: string = items.join('/');
       return { uri, version };
     } catch (e) {
@@ -771,35 +728,36 @@ export class EventDataschemaUtil {
    * - Follow the format {uri}/{version}
    * - Have a valid semantic version component
    * - Contain a non-empty URI
-   * 
+   *
    * @param data - ArvoEvent object or dataschema string to validate
    * @returns boolean - True if dataschema is valid, false otherwise
    */
-<span class="fstat-no" title="function not covered" >  static i</span>sValid(data: ArvoEvent | string) : boolean {
-<span class="cstat-no" title="statement not covered" >    return Boolean(EventDataschemaUtil.parse(data))</span>
+<span class="fstat-no" title="function not covered" >  static i</span>sValid(data: ArvoEvent | string): boolean {
+<span class="cstat-no" title="statement not covered" >    return Boolean(EventDataschemaUtil.parse(data));</span>
   }
 }
 &nbsp;
 /**
-* Creates a standardized ArvoError payload from an Error object. This utility 
-* ensures consistent error reporting across the event system by extracting and 
-* structuring key error information.
-* 
-* @param error - The source Error object to convert
-* @returns ArvoErrorType - The standardized error payload
-*/
+ * Creates a standardized ArvoError payload from an Error object. This utility
+ * ensures consistent error reporting across the event system by extracting and
+ * structuring key error information.
+ *
+ * @param error - The source Error object to convert
+ * @returns ArvoErrorType - The standardized error payload
+ */
 export const createArvoError = (error: Error): ArvoErrorType =&gt; ({
   errorName: error.name,
   errorMessage: error.message,
-  errorStack: error.stack ?? <span class="branch-1 cbranch-no" title="branch not covered" >null</span>
-})</pre></td></tr></table></pre>
+  errorStack: error.stack ?? <span class="branch-1 cbranch-no" title="branch not covered" >null,</span>
+});
+&nbsp;</pre></td></tr></table></pre>
 
                 <div class='push'></div><!-- for sticky footer -->
             </div><!-- /wrapper -->
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-01-25T06:49:56.247Z
+                at 2025-01-25T07:03:22.304Z
             </div>
         <script src="../prettify.js"></script>
         <script>

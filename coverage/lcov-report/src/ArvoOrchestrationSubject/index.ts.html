@@ -280,18 +280,14 @@
 <a name='L215'></a><a href='#L215'>215</a>
 <a name='L216'></a><a href='#L216'>216</a>
 <a name='L217'></a><a href='#L217'>217</a>
-<a name='L218'></a><a href='#L218'>218</a>
-<a name='L219'></a><a href='#L219'>219</a>
-<a name='L220'></a><a href='#L220'>220</a>
-<a name='L221'></a><a href='#L221'>221</a>
-<a name='L222'></a><a href='#L222'>222</a>
-<a name='L223'></a><a href='#L223'>223</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L218'></a><a href='#L218'>218</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -423,12 +419,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">17x</span>
 <span class="cline-any cline-yes">17x</span>
 <span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">14x</span>
 <span class="cline-any cline-yes">14x</span>
@@ -465,13 +458,10 @@
 <span class="cline-any cline-yes">17x</span>
 <span class="cline-any cline-yes">15x</span>
 <span class="cline-any cline-yes">15x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">15x</span>
 <span class="cline-any cline-yes">15x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">14x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
@@ -507,17 +497,18 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { ArvoOrchestrationSubjectContent } from './type';
-import { ArvoSemanticVersion } from '../types';
-import { ArvoOrchestrationSubjectContentSchema } from './schema';
-import pako from 'pako';
-import { cleanString } from '../utils';
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import pako from 'pako';
 import { v4 as uuid4 } from 'uuid';
 import { WildCardArvoSemanticVersion } from '../ArvoContract/WildCardArvoSemanticVersion';
+import type { ArvoSemanticVersion } from '../types';
+import { cleanString } from '../utils';
+import { ArvoOrchestrationSubjectContentSchema } from './schema';
+import type { ArvoOrchestrationSubjectContent } from './type';
 &nbsp;
 /**
  * Handles the creation and parsing of Arvo orchestration subjects.
  */
+// biome-ignore lint/complexity/noStaticOnlyClass: This needs to be a static class to group methods together
 export default class ArvoOrchestrationSubject {
   /**
    * Creates a new Arvo orchestration subject with basic required parameters.
@@ -645,12 +636,9 @@ export default class ArvoOrchestrationSubject {
    */
   static create(param: ArvoOrchestrationSubjectContent): string {
     try {
-      const validationResult =
-        ArvoOrchestrationSubjectContentSchema.safeParse(param);
+      const validationResult = ArvoOrchestrationSubjectContentSchema.safeParse(param);
       if (!validationResult.success) {
-        throw new Error(
-          `Invalid ArvoOrchestrationContextType: ${validationResult.error}`,
-        );
+        throw new Error(`Invalid ArvoOrchestrationContextType: ${validationResult.error}`);
       }
       const jsonString = JSON.stringify(param);
       const compressed = pako.deflate(new TextEncoder().encode(jsonString));
@@ -687,12 +675,9 @@ export default class ArvoOrchestrationSubject {
       const decompressed = pako.inflate(compressed);
       const jsonString = new TextDecoder().decode(decompressed);
       const parsed = JSON.parse(jsonString);
-      const validationResult =
-        ArvoOrchestrationSubjectContentSchema.safeParse(parsed);
+      const validationResult = ArvoOrchestrationSubjectContentSchema.safeParse(parsed);
       if (!validationResult.success) {
-        throw new Error(
-          `Invalid ArvoOrchestrationContextType: ${validationResult.error}`,
-        );
+        throw new Error(`Invalid ArvoOrchestrationContextType: ${validationResult.error}`);
       }
       return parsed as ArvoOrchestrationSubjectContent;
     } catch (e) {
@@ -713,19 +698,19 @@ export default class ArvoOrchestrationSubject {
    * - Contain zlib-compressed JSON data
    * - Match the ArvoOrchestrationSubjectContent schema when decoded
    * - Include valid orchestrator and execution details
-   * 
-   * Use this method for validating subjects before processing them in 
+   *
+   * Use this method for validating subjects before processing them in
    * orchestration workflows or when receiving subjects from external sources.
-   * 
+   *
    * @param data - The string to validate as an orchestration subject
    * @returns boolean - True if string is a valid orchestration subject, false otherwise
-  */
+   */
 <span class="fstat-no" title="function not covered" >  static i</span>sValid(data: string): boolean {
 <span class="cstat-no" title="statement not covered" >    try {</span>
-<span class="cstat-no" title="statement not covered" >        ArvoOrchestrationSubject.parse(data)</span>
-<span class="cstat-no" title="statement not covered" >        return false</span>
+<span class="cstat-no" title="statement not covered" >      ArvoOrchestrationSubject.parse(data);</span>
+<span class="cstat-no" title="statement not covered" >      return false;</span>
     } catch {
-<span class="cstat-no" title="statement not covered" >        return false </span>
+<span class="cstat-no" title="statement not covered" >      return false;</span>
     }
   }
 }
@@ -736,7 +721,7 @@ export default class ArvoOrchestrationSubject {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-01-25T06:49:56.247Z
+                at 2025-01-25T07:03:22.304Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

@@ -6,8 +6,7 @@ import { isJSONSerializable } from './utils';
  * The content type for Arvo data in CloudEvents.
  * This is the recommended content type for Arvo events.
  */
-export const ArvoDataContentType =
-  'application/cloudevents+json;charset=UTF-8;profile=arvo';
+export const ArvoDataContentType = 'application/cloudevents+json;charset=UTF-8;profile=arvo';
 
 /**
  * Zod schema for validating the core properties of a CloudEvent.
@@ -16,10 +15,7 @@ export const ArvoDataContentType =
  */
 export const CloudEventContextSchema = z
   .object({
-    id: z
-      .string()
-      .min(1, 'ID must be a non-empty string')
-      .describe('Unique identifier of the event.'),
+    id: z.string().min(1, 'ID must be a non-empty string').describe('Unique identifier of the event.'),
     time: z
       .string()
       .datetime({ offset: true })
@@ -28,10 +24,7 @@ export const CloudEventContextSchema = z
       ),
     source: z
       .string()
-      .min(
-        1,
-        'Source must be a non-empty reference of the producer of the event',
-      )
+      .min(1, 'Source must be a non-empty reference of the producer of the event')
       .refine(validateURI, 'The source must be a properly encoded URI')
       .describe(
         cleanString(`
@@ -42,10 +35,7 @@ export const CloudEventContextSchema = z
     specversion: z
       .string()
       .min(1, 'Spec version must be a non-empty string')
-      .refine(
-        (val) => val === '1.0',
-        "Spec version must be '1.0' for this version of the specification",
-      )
+      .refine((val) => val === '1.0', "Spec version must be '1.0' for this version of the specification")
       .describe(
         cleanString(`
       The version of the CloudEvents specification which the event uses.
@@ -55,10 +45,7 @@ export const CloudEventContextSchema = z
     type: z
       .string()
       .min(1, 'Type must be a non-empty string')
-      .regex(
-        /^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/,
-        'Type should be prefixed with a reverse-DNS name',
-      )
+      .regex(/^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/, 'Type should be prefixed with a reverse-DNS name')
       .describe(
         cleanString(`
       Describes the type of event related to the originating occurrence.
@@ -79,9 +66,7 @@ export const CloudEventContextSchema = z
       .string()
       .min(1, 'Data content type must be a non-empty string')
       .refine(
-        (val) =>
-          Boolean(val?.includes('application/cloudevents+json')) ||
-          Boolean(val?.includes('application/json')),
+        (val) => Boolean(val?.includes('application/cloudevents+json')) || Boolean(val?.includes('application/json')),
         cleanString(`
           The content type must be a valid JSON e.g. it must contain 
           'application/cloudevents+json' or 'application/json'. 
@@ -89,9 +74,7 @@ export const CloudEventContextSchema = z
         `),
       )
       .default(ArvoDataContentType)
-      .describe(
-        'Content type of the data value. Must adhere to RFC 2046 format if present.',
-      ),
+      .describe('Content type of the data value. Must adhere to RFC 2046 format if present.'),
     dataschema: z
       .string()
       .min(1, 'Must be a non-empty string if present.')
@@ -122,13 +105,9 @@ export const CloudEventExtensionSchema = z
     ),
     z
       .union([z.string(), z.boolean(), z.number(), z.null()])
-      .describe(
-        'The CloudEvent extension can only contain a number, boolean, string or null',
-      ),
+      .describe('The CloudEvent extension can only contain a number, boolean, string or null'),
   )
-  .describe(
-    'Schema for custom CloudEvent extensions. Allows for additional custom fields in the CloudEvent.',
-  );
+  .describe('Schema for custom CloudEvent extensions. Allows for additional custom fields in the CloudEvent.');
 
 /**
  * Zod schema for validating the data payload of an Arvo event.
@@ -136,10 +115,7 @@ export const CloudEventExtensionSchema = z
  */
 export const ArvoDataSchema = z
   .record(z.string(), z.any())
-  .refine(
-    isJSONSerializable,
-    'The Arvo data object must be a JSON serializable object',
-  )
+  .refine(isJSONSerializable, 'The Arvo data object must be a JSON serializable object')
   .describe('A JSON serialisable object as ArvoEvent payload data');
 
 /**

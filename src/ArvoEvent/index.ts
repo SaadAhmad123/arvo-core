@@ -1,10 +1,5 @@
-import {
-  ArvoEventData,
-  ArvoExtension,
-  CloudEventContext,
-  CloudEventExtension,
-  OpenTelemetryExtension,
-} from './types';
+import { OTelNull } from '../OpenTelemetry';
+import type { InferArvoEvent } from '../types';
 import {
   ArvoDataContentType,
   ArvoDataSchema,
@@ -13,8 +8,13 @@ import {
   CloudEventExtensionSchema,
   OpenTelemetryExtensionSchema,
 } from './schema';
-import { OTelNull } from '../OpenTelemetry';
-import { InferArvoEvent } from '../types';
+import type {
+  ArvoEventData,
+  ArvoExtension,
+  CloudEventContext,
+  CloudEventExtension,
+  OpenTelemetryExtension,
+} from './types';
 
 /**
  * Represents an ArvoEvent, which extends the CloudEvent specification.
@@ -33,9 +33,7 @@ export default class ArvoEvent<
   public readonly dataschema: string | null;
   public readonly data: TData;
   public readonly time: string;
-  private readonly _extensions: TExtension &
-    ArvoExtension &
-    OpenTelemetryExtension;
+  private readonly _extensions: TExtension & ArvoExtension & OpenTelemetryExtension;
 
   /**
    * Creates an instance of ArvoEvent.
@@ -66,9 +64,7 @@ export default class ArvoEvent<
     const otelExtension = OpenTelemetryExtensionSchema.parse(context);
 
     this._extensions = {
-      ...((extensions
-        ? CloudEventExtensionSchema.parse(extensions)
-        : {}) as TExtension),
+      ...((extensions ? CloudEventExtensionSchema.parse(extensions) : {}) as TExtension),
       to: arvoExtension.to,
       accesscontrol: arvoExtension.accesscontrol,
       redirectto: arvoExtension.redirectto,
@@ -137,7 +133,7 @@ export default class ArvoEvent<
    * @param [spacing=0] - The number of spaces to use for indentation in the resulting JSON string.
    * @returns A JSON string representation of the ArvoEvent.
    */
-  toString(spacing: number = 0) {
+  toString(spacing = 0) {
     return JSON.stringify(this.toJSON(), null, spacing);
   }
 
@@ -159,11 +155,9 @@ export default class ArvoEvent<
       'cloudevents.event_time': this.time || OTelNull,
       'cloudevents.event_datacontenttype': this.datacontenttype || OTelNull,
       'cloudevents.event_dataschema': this.dataschema ?? OTelNull,
-      'cloudevents.arvo.event_redirectto':
-        this._extensions.redirectto ?? OTelNull,
+      'cloudevents.arvo.event_redirectto': this._extensions.redirectto ?? OTelNull,
       'cloudevents.arvo.event_to': this._extensions.to ?? OTelNull,
-      'cloudevents.arvo.event_executionunits':
-        this._extensions.executionunits ?? OTelNull,
+      'cloudevents.arvo.event_executionunits': this._extensions.executionunits ?? OTelNull,
     };
   }
 
@@ -202,15 +196,8 @@ export default class ArvoEvent<
    * For accessing the basic CloudEvent fields, use `<ArvoEvent>.cloudevent.default`.
    */
   get extensions() {
-    const {
-      traceparent,
-      tracestate,
-      to,
-      redirectto,
-      accesscontrol,
-      executionunits,
-      ...rest
-    } = this._extensions as Record<string, any>;
+    const { traceparent, tracestate, to, redirectto, accesscontrol, executionunits, ...rest } = this
+      ._extensions as Record<string, any>;
     return rest as TExtension;
   }
 }

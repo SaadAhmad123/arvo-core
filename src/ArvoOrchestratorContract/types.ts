@@ -1,8 +1,8 @@
-import { z } from 'zod';
-import { ArvoSemanticVersion } from '../types';
-import ArvoContract from '../ArvoContract';
-import { ArvoOrchestratorEventTypeGen } from './typegen';
-import { OrchestrationInitEventBaseSchema } from './schema';
+import type { z } from 'zod';
+import type ArvoContract from '../ArvoContract';
+import type { ArvoSemanticVersion } from '../types';
+import type { OrchestrationInitEventBaseSchema } from './schema';
+import type { ArvoOrchestratorEventTypeGen } from './typegen';
 
 /**
  * A specialized ArvoContract type for orchestrating complex event flows.
@@ -44,15 +44,10 @@ export type ArvoOrchestratorContract<
   {
     [V in ArvoSemanticVersion & keyof TVersions]: {
       accepts: ReturnType<
-        typeof OrchestrationInitEventBaseSchema.merge<
-          TVersions[V]['init'],
-          TVersions[V]['init']['shape']
-        >
+        typeof OrchestrationInitEventBaseSchema.merge<TVersions[V]['init'], TVersions[V]['init']['shape']>
       >;
       emits: {
-        [K in ReturnType<
-          typeof ArvoOrchestratorEventTypeGen.complete<TName>
-        >]: TVersions[V]['complete'];
+        [K in ReturnType<typeof ArvoOrchestratorEventTypeGen.complete<TName>>]: TVersions[V]['complete'];
       };
     };
   },
@@ -60,9 +55,7 @@ export type ArvoOrchestratorContract<
     contractType: 'ArvoOrchestratorContract';
     rootType: TName;
     initEventType: ReturnType<typeof ArvoOrchestratorEventTypeGen.init<TName>>;
-    completeEventType: ReturnType<
-      typeof ArvoOrchestratorEventTypeGen.complete<TName>
-    >;
+    completeEventType: ReturnType<typeof ArvoOrchestratorEventTypeGen.complete<TName>>;
   }
 >;
 

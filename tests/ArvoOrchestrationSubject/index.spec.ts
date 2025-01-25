@@ -1,9 +1,5 @@
-import {
-  ArvoOrchestrationSubject,
-  ArvoOrchestrationSubjectContent,
-  WildCardArvoSemanticVersion,
-} from '../../src';
 import * as zlib from 'node:zlib';
+import { ArvoOrchestrationSubject, type ArvoOrchestrationSubjectContent, WildCardArvoSemanticVersion } from '../../src';
 
 describe('ArvoOrchestrationSubject', () => {
   const validContent: ArvoOrchestrationSubjectContent = {
@@ -36,9 +32,7 @@ describe('ArvoOrchestrationSubject', () => {
       expect(parsed.orchestrator.name).toBe('com.example.orchestrator');
       expect(parsed.orchestrator.version).toBe('1.0.0');
       expect(parsed.execution.initiator).toBe('com.example.initiator');
-      expect(parsed.execution.id).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-      ); // UUID v4 format
+      expect(parsed.execution.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i); // UUID v4 format
       expect(parsed.meta.sessionId).toBe('test-123-456');
     });
 
@@ -66,9 +60,7 @@ describe('ArvoOrchestrationSubject', () => {
         orchestrator: { name: 'invalid name', version: '1.0.0' },
       };
       expect(() => {
-        ArvoOrchestrationSubject.create(
-          invalidContent as ArvoOrchestrationSubjectContent,
-        );
+        ArvoOrchestrationSubject.create(invalidContent as ArvoOrchestrationSubjectContent);
       }).toThrow();
     });
   });
@@ -127,9 +119,7 @@ describe('ArvoOrchestrationSubject', () => {
       expect(parsed.execution.initiator).toBe('com.parent.process');
       expect(parsed.meta.environment).toBe('test');
       expect(parsed.meta.parentKey).toBe('parentValue');
-      expect(parsed.execution.id).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-      );
+      expect(parsed.execution.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     });
 
     it('should merge metadata from parent and child', () => {

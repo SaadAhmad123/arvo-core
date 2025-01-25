@@ -1,8 +1,8 @@
+import type { z } from 'zod';
 import ArvoContract from '.';
 import { ArvoOrchestratorEventTypeGen } from '../ArvoOrchestratorContract/typegen';
+import type { ArvoSemanticVersion } from '../types';
 import { cleanString } from '../utils';
-import { ArvoSemanticVersion } from '../types';
-import { z } from 'zod';
 
 /**
  * Creates a validated ArvoContract instance with full control over event types and schemas.
@@ -53,11 +53,7 @@ export const createArvoContract = <
   metadata?: TMetaData;
   description?: string;
 }): ArvoContract<TUri, TType, TVersions, TMetaData> => {
-  const createErrorMessage = (
-    source: 'accepts' | 'emits',
-    type: string,
-    version: string | null,
-  ): string => {
+  const createErrorMessage = (source: 'accepts' | 'emits', type: string, version: string | null): string => {
     const versionString = version ? `, version=${version}` : '';
     return cleanString(`
       In contract (uri=${contract.uri}${versionString}), the '${source}' event (type=${type}) must not start
@@ -71,7 +67,7 @@ export const createArvoContract = <
   }
 
   for (const [version, versionContract] of Object.entries(contract.versions)) {
-    for (const emitType of Object.keys(versionContract['emits']))
+    for (const emitType of Object.keys(versionContract['emits' as const]))
       if (ArvoOrchestratorEventTypeGen.isOrchestratorEventType(emitType)) {
         throw new Error(createErrorMessage('emits', emitType, version));
       }

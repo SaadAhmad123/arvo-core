@@ -1,12 +1,9 @@
-import { z } from 'zod';
-import {
-  ICreateArvoOrchestratorContract,
-  ArvoOrchestratorContract,
-} from './types';
-import { ArvoOrchestratorEventTypeGen } from './typegen';
-import { OrchestrationInitEventBaseSchema } from './schema';
-import { ArvoSemanticVersion } from '../types';
+import type { z } from 'zod';
 import ArvoContract from '../ArvoContract';
+import type { ArvoSemanticVersion } from '../types';
+import { OrchestrationInitEventBaseSchema } from './schema';
+import { ArvoOrchestratorEventTypeGen } from './typegen';
+import type { ArvoOrchestratorContract, ICreateArvoOrchestratorContract } from './types';
 
 /**
  * Validates if a string contains only uppercase or lowercase alphanumeric characters.
@@ -123,8 +120,7 @@ export const createArvoOrchestratorContract = <
         {
           accepts: OrchestrationInitEventBaseSchema.merge(versionContract.init),
           emits: {
-            [ArvoOrchestratorEventTypeGen.complete(contract.name)]:
-              versionContract.complete,
+            [ArvoOrchestratorEventTypeGen.complete(contract.name)]: versionContract.complete,
           },
         },
       ]),

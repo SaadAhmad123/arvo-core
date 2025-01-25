@@ -88,3 +88,7 @@
 
 - Finalised the version 2 for Arvo core.
 
+## [2.2.7] - 2025-01-25
+
+- Added helper functions and added Biome for better linting
+

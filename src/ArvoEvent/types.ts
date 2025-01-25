@@ -1,9 +1,9 @@
-import { z } from 'zod';
-import {
-  CloudEventContextSchema,
-  ArvoExtensionSchema,
-  CloudEventExtensionSchema,
+import type { z } from 'zod';
+import type {
   ArvoDataSchema,
+  ArvoExtensionSchema,
+  CloudEventContextSchema,
+  CloudEventExtensionSchema,
   OpenTelemetryExtensionSchema,
 } from './schema';
 
@@ -30,19 +30,14 @@ export type ArvoExtension = z.infer<typeof ArvoExtensionSchema>;
 /**
  * Represents OpenTelemetry-specific extensions to the CloudEvent.
  */
-export type OpenTelemetryExtension = z.infer<
-  typeof OpenTelemetryExtensionSchema
->;
+export type OpenTelemetryExtension = z.infer<typeof OpenTelemetryExtensionSchema>;
 
 /**
  * Represents the input parameters for creating an ArvoEvent.
  * @template TData - The type of the event data, extending ArvoEventData.
  * @template TType - The type name of the event
  */
-export type CreateArvoEvent<
-  TData extends ArvoEventData,
-  TType extends string,
-> = {
+export type CreateArvoEvent<TData extends ArvoEventData, TType extends string> = {
   /** Unique identifier of the event. Must be a non-empty string. If not provided, a UUID will be generated. */
   id?: string;
   /** Timestamp of when the occurrence happened. Must be in ISO 8601 format with timezone offset. */

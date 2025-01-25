@@ -106,25 +106,19 @@
 <a name='L41'></a><a href='#L41'>41</a>
 <a name='L42'></a><a href='#L42'>42</a>
 <a name='L43'></a><a href='#L43'>43</a>
-<a name='L44'></a><a href='#L44'>44</a>
-<a name='L45'></a><a href='#L45'>45</a>
-<a name='L46'></a><a href='#L46'>46</a>
-<a name='L47'></a><a href='#L47'>47</a>
-<a name='L48'></a><a href='#L48'>48</a>
-<a name='L49'></a><a href='#L49'>49</a>
-<a name='L50'></a><a href='#L50'>50</a>
-<a name='L51'></a><a href='#L51'>51</a>
-<a name='L52'></a><a href='#L52'>52</a>
-<a name='L53'></a><a href='#L53'>53</a>
-<a name='L54'></a><a href='#L54'>54</a>
-<a name='L55'></a><a href='#L55'>55</a>
-<a name='L56'></a><a href='#L56'>56</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
+<a name='L44'></a><a href='#L44'>44</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">31x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -142,25 +136,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">31x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">31x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -174,8 +150,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { z } from 'zod';
-import { cleanString } from '../utils';
 import { ArvoSemanticVersionSchema } from '../schema';
+import { cleanString } from '../utils';
 &nbsp;
 // Zod schema for ArvoOrchestrationSubjectContent
 export const ArvoOrchestrationSubjectContentSchema = z
@@ -184,14 +160,8 @@ export const ArvoOrchestrationSubjectContentSchema = z
       .object({
         name: z
           .string()
-          .regex(
-            /^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/,
-            'Orchestrator name should be prefixed with a reverse-DNS name',
-          )
-          .refine(
-            (value) =&gt; !value.includes(';'),
-            'Orchestrator name must not contain semicolon',
-          )
+          .regex(/^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/, 'Orchestrator name should be prefixed with a reverse-DNS name')
+          .refine((value) =&gt; !value.includes(';'), 'Orchestrator name must not contain semicolon')
           .describe('Name of the orchestrator'),
         version: ArvoSemanticVersionSchema,
       })
@@ -201,10 +171,7 @@ export const ArvoOrchestrationSubjectContentSchema = z
         id: z
           .string()
           .min(1, 'ID must be a non-empty string')
-          .refine(
-            (value) =&gt; !value.includes(';'),
-            'ID must not contain semicolon',
-          )
+          .refine((value) =&gt; !value.includes(';'), 'ID must not contain semicolon')
           .describe('Unique identifier for the execution'),
         initiator: z
           .string()
@@ -212,10 +179,7 @@ export const ArvoOrchestrationSubjectContentSchema = z
             /^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/,
             'Orchestration initiator should be prefixed with a reverse-DNS name',
           )
-          .refine(
-            (value) =&gt; !value.includes(';'),
-            'Initiator must not contain semicolon',
-          )
+          .refine((value) =&gt; !value.includes(';'), 'Initiator must not contain semicolon')
           .describe('Entity or process that initiated the execution'),
       })
       .describe('Details about the current execution'),
@@ -235,7 +199,7 @@ export const ArvoOrchestrationSubjectContentSchema = z
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-01-25T06:49:56.247Z
+                at 2025-01-25T07:03:22.304Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

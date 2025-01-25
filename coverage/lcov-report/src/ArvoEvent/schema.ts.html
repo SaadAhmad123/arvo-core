@@ -296,31 +296,7 @@
 <a name='L231'></a><a href='#L231'>231</a>
 <a name='L232'></a><a href='#L232'>232</a>
 <a name='L233'></a><a href='#L233'>233</a>
-<a name='L234'></a><a href='#L234'>234</a>
-<a name='L235'></a><a href='#L235'>235</a>
-<a name='L236'></a><a href='#L236'>236</a>
-<a name='L237'></a><a href='#L237'>237</a>
-<a name='L238'></a><a href='#L238'>238</a>
-<a name='L239'></a><a href='#L239'>239</a>
-<a name='L240'></a><a href='#L240'>240</a>
-<a name='L241'></a><a href='#L241'>241</a>
-<a name='L242'></a><a href='#L242'>242</a>
-<a name='L243'></a><a href='#L243'>243</a>
-<a name='L244'></a><a href='#L244'>244</a>
-<a name='L245'></a><a href='#L245'>245</a>
-<a name='L246'></a><a href='#L246'>246</a>
-<a name='L247'></a><a href='#L247'>247</a>
-<a name='L248'></a><a href='#L248'>248</a>
-<a name='L249'></a><a href='#L249'>249</a>
-<a name='L250'></a><a href='#L250'>250</a>
-<a name='L251'></a><a href='#L251'>251</a>
-<a name='L252'></a><a href='#L252'>252</a>
-<a name='L253'></a><a href='#L253'>253</a>
-<a name='L254'></a><a href='#L254'>254</a>
-<a name='L255'></a><a href='#L255'>255</a>
-<a name='L256'></a><a href='#L256'>256</a>
-<a name='L257'></a><a href='#L257'>257</a>
-<a name='L258'></a><a href='#L258'>258</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
+<a name='L234'></a><a href='#L234'>234</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -335,15 +311,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -366,12 +334,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">17x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -430,9 +392,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -452,14 +411,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -585,8 +537,7 @@ import { isJSONSerializable } from './utils';
  * The content type for Arvo data in CloudEvents.
  * This is the recommended content type for Arvo events.
  */
-export const ArvoDataContentType =
-  'application/cloudevents+json;charset=UTF-8;profile=arvo';
+export const ArvoDataContentType = 'application/cloudevents+json;charset=UTF-8;profile=arvo';
 &nbsp;
 /**
  * Zod schema for validating the core properties of a CloudEvent.
@@ -595,10 +546,7 @@ export const ArvoDataContentType =
  */
 export const CloudEventContextSchema = z
   .object({
-    id: z
-      .string()
-      .min(1, 'ID must be a non-empty string')
-      .describe('Unique identifier of the event.'),
+    id: z.string().min(1, 'ID must be a non-empty string').describe('Unique identifier of the event.'),
     time: z
       .string()
       .datetime({ offset: true })
@@ -607,10 +555,7 @@ export const CloudEventContextSchema = z
       ),
     source: z
       .string()
-      .min(
-        1,
-        'Source must be a non-empty reference of the producer of the event',
-      )
+      .min(1, 'Source must be a non-empty reference of the producer of the event')
       .refine(validateURI, 'The source must be a properly encoded URI')
       .describe(
         cleanString(`
@@ -621,10 +566,7 @@ export const CloudEventContextSchema = z
     specversion: z
       .string()
       .min(1, 'Spec version must be a non-empty string')
-      .refine(
-        (val) =&gt; val === '1.0',
-        "Spec version must be '1.0' for this version of the specification",
-      )
+      .refine((val) =&gt; val === '1.0', "Spec version must be '1.0' for this version of the specification")
       .describe(
         cleanString(`
       The version of the CloudEvents specification which the event uses.
@@ -634,10 +576,7 @@ export const CloudEventContextSchema = z
     type: z
       .string()
       .min(1, 'Type must be a non-empty string')
-      .regex(
-        /^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/,
-        'Type should be prefixed with a reverse-DNS name',
-      )
+      .regex(/^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/, 'Type should be prefixed with a reverse-DNS name')
       .describe(
         cleanString(`
       Describes the type of event related to the originating occurrence.
@@ -658,9 +597,7 @@ export const CloudEventContextSchema = z
       .string()
       .min(1, 'Data content type must be a non-empty string')
       .refine(
-        (val) =&gt;
-          Boolean(val<span class="branch-0 cbranch-no" title="branch not covered" >?.i</span>ncludes('application/cloudevents+json')) ||
-          Boolean(val<span class="branch-0 cbranch-no" title="branch not covered" >?.i</span>ncludes('application/json')),
+        (val) =&gt; Boolean(val<span class="branch-0 cbranch-no" title="branch not covered" >?.i</span>ncludes('application/cloudevents+json')) || Boolean(val<span class="branch-0 cbranch-no" title="branch not covered" >?.i</span>ncludes('application/json')),
         cleanString(`
           The content type must be a valid JSON e.g. it must contain 
           'application/cloudevents+json' or 'application/json'. 
@@ -668,9 +605,7 @@ export const CloudEventContextSchema = z
         `),
       )
       .default(ArvoDataContentType)
-      .describe(
-        'Content type of the data value. Must adhere to RFC 2046 format if present.',
-      ),
+      .describe('Content type of the data value. Must adhere to RFC 2046 format if present.'),
     dataschema: z
       .string()
       .min(1, 'Must be a non-empty string if present.')
@@ -701,13 +636,9 @@ export const CloudEventExtensionSchema = z
     ),
     z
       .union([z.string(), z.boolean(), z.number(), z.null()])
-      .describe(
-        'The CloudEvent extension can only contain a number, boolean, string or null',
-      ),
+      .describe('The CloudEvent extension can only contain a number, boolean, string or null'),
   )
-  .describe(
-    'Schema for custom CloudEvent extensions. Allows for additional custom fields in the CloudEvent.',
-  );
+  .describe('Schema for custom CloudEvent extensions. Allows for additional custom fields in the CloudEvent.');
 &nbsp;
 /**
  * Zod schema for validating the data payload of an Arvo event.
@@ -715,10 +646,7 @@ export const CloudEventExtensionSchema = z
  */
 export const ArvoDataSchema = z
   .record(z.string(), z.any())
-  .refine(
-    isJSONSerializable,
-    'The Arvo data object must be a JSON serializable object',
-  )
+  .refine(isJSONSerializable, 'The Arvo data object must be a JSON serializable object')
   .describe('A JSON serialisable object as ArvoEvent payload data');
 &nbsp;
 /**
@@ -841,7 +769,7 @@ export const OpenTelemetryExtensionSchema = z
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-01-25T06:49:56.247Z
+                at 2025-01-25T07:03:22.304Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

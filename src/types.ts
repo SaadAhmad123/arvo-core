@@ -1,8 +1,9 @@
-import { z } from 'zod';
-import ArvoEvent from './ArvoEvent';
-import { ArvoExtension, OpenTelemetryExtension } from './ArvoEvent/types';
-import { ArvoErrorSchema } from './schema';
-import { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
+import type { z } from 'zod';
+import type { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
+import type ArvoEvent from './ArvoEvent';
+import type { CloudEventExtensionSchema } from './ArvoEvent/schema';
+import type { ArvoExtension, OpenTelemetryExtension } from './ArvoEvent/types';
+import type { ArvoErrorSchema } from './schema';
 /**
  * Represents a semantic version string following the SemVer format (MAJOR.MINOR.PATCH).
  */
@@ -57,9 +58,7 @@ export type ArvoErrorType = z.infer<typeof ArvoErrorSchema>;
  * @see {@link InferArvoEvent} for the event inference utility
  * @see {@link ArvoEvent} for the base event structure
  */
-export type InferVersionedArvoContract<
-  TVersion extends VersionedArvoContract<any, any>,
-> = {
+export type InferVersionedArvoContract<TVersion extends VersionedArvoContract<any, any>> = {
   uri: TVersion['uri'];
   version: TVersion['version'];
   description: TVersion['description'];
@@ -67,14 +66,14 @@ export type InferVersionedArvoContract<
   systemError: InferArvoEvent<
     ArvoEvent<
       InferZodSchema<TVersion['systemError']['schema']>,
-      {},
+      z.infer<typeof CloudEventExtensionSchema>,
       TVersion['systemError']['type']
     >
   >;
   accepts: InferArvoEvent<
     ArvoEvent<
       InferZodSchema<TVersion['accepts']['schema']>,
-      {},
+      z.infer<typeof CloudEventExtensionSchema>,
       TVersion['accepts']['type']
     >
   >;

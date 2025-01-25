@@ -1,20 +1,19 @@
 import { z } from 'zod';
 import {
-  createArvoOrchestratorContract,
-  ArvoOrchestratorEventTypeGen,
+  type ArvoEvent,
   ArvoEventSchema,
-  createArvoOrchestratorEventFactory,
   ArvoOrchestrationSubject,
+  ArvoOrchestratorEventTypeGen,
+  createArvoOrchestratorContract,
+  createArvoOrchestratorEventFactory,
   createSimpleArvoContract,
-  ArvoEvent,
 } from '../../src';
 
 describe('ArvoOrchestratorContract', () => {
   const testUri = 'test://example';
   const orchestratorType = 'test.contract';
   const testInitType = ArvoOrchestratorEventTypeGen.init(orchestratorType);
-  const testCompleteType =
-    ArvoOrchestratorEventTypeGen.complete(orchestratorType);
+  const testCompleteType = ArvoOrchestratorEventTypeGen.complete(orchestratorType);
   const testInitSchema = z.object({ foo: z.string() });
   const testCompleteSchema = z.object({ bar: z.number() });
 
@@ -42,15 +41,12 @@ describe('ArvoOrchestratorContract', () => {
 
     const acceptsSchema = contract.versions['0.0.1'].accepts;
     expect(acceptsSchema).toBeDefined();
-    const merged =
-      ArvoEventSchema.OrchestrationInitEventBaseSchema.merge(testInitSchema);
+    const merged = ArvoEventSchema.OrchestrationInitEventBaseSchema.merge(testInitSchema);
     expect(JSON.stringify(acceptsSchema)).toBe(JSON.stringify(merged));
 
     const emitsSchemas = contract.versions['0.0.1'].emits;
     expect(emitsSchemas[testCompleteType]).toBeDefined();
-    expect(JSON.stringify(emitsSchemas[testCompleteType])).toBe(
-      JSON.stringify(testCompleteSchema),
-    );
+    expect(JSON.stringify(emitsSchemas[testCompleteType])).toBe(JSON.stringify(testCompleteSchema));
 
     expect(Object.keys(contract.versions)[0]).toBe('0.0.1');
   });
@@ -135,7 +131,7 @@ describe('ArvoOrchestratorContract', () => {
     expect(() => {
       createArvoOrchestratorEventFactory(
         createSimpleArvoContract({
-          uri: `#/test`,
+          uri: '#/test',
           type: 'test.test',
           versions: {
             '0.0.1': {
@@ -147,9 +143,7 @@ describe('ArvoOrchestratorContract', () => {
       );
     }).toThrow('This factory can only be used for ArvoOrchestratorContract');
 
-    let event: ArvoEvent = createArvoOrchestratorEventFactory(
-      contract.version('2.0.0'),
-    ).init({
+    let event: ArvoEvent = createArvoOrchestratorEventFactory(contract.version('2.0.0')).init({
       source: 'com.test.test',
       data: {
         foo: 'saad',
@@ -162,9 +156,7 @@ describe('ArvoOrchestratorContract', () => {
     expect(event.to).toBe(contract.type);
     expect(event.type).toBe(contract.type);
     expect(event.redirectto).toBe('com.redirect.to');
-    expect(ArvoOrchestrationSubject.parse(event.subject).meta.redirectto).toBe(
-      event.redirectto,
-    );
+    expect(ArvoOrchestrationSubject.parse(event.subject).meta.redirectto).toBe(event.redirectto);
 
     event = createArvoOrchestratorEventFactory(contract.version('2.0.0')).init({
       source: 'com.test.test',
@@ -175,9 +167,7 @@ describe('ArvoOrchestratorContract', () => {
       },
     });
 
-    expect(ArvoOrchestrationSubject.parse(event.subject).meta.redirectto).toBe(
-      'com.test.test',
-    );
+    expect(ArvoOrchestrationSubject.parse(event.subject).meta.redirectto).toBe('com.test.test');
     expect(event.redirectto).toBe(null);
 
     event = createArvoOrchestratorEventFactory(contract.version('2.0.0')).init({
@@ -188,9 +178,7 @@ describe('ArvoOrchestratorContract', () => {
         parentSubject$$: null,
       },
     });
-    expect(ArvoOrchestrationSubject.parse(event.subject).meta.redirectto).toBe(
-      undefined,
-    );
+    expect(ArvoOrchestrationSubject.parse(event.subject).meta.redirectto).toBe(undefined);
 
     expect(() => {
       createArvoOrchestratorEventFactory(contract.version('2.0.0')).init({
@@ -204,9 +192,7 @@ describe('ArvoOrchestratorContract', () => {
       });
     }).toThrow('Init Event data validation failed: ');
 
-    event = createArvoOrchestratorEventFactory(
-      contract.version('1.0.0'),
-    ).complete({
+    event = createArvoOrchestratorEventFactory(contract.version('1.0.0')).complete({
       source: 'com.test.test',
       subject: 'test',
       data: {
@@ -215,9 +201,7 @@ describe('ArvoOrchestratorContract', () => {
       to: 'com.ret.test',
     });
 
-    expect(event.type).toBe(
-      contract.version('1.0.0').metadata.completeEventType,
-    );
+    expect(event.type).toBe(contract.version('1.0.0').metadata.completeEventType);
     expect(event.to).toBe('com.ret.test');
 
     expect(() => {

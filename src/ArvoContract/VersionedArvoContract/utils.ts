@@ -1,11 +1,8 @@
-import ArvoContract from '..';
-import { ArvoSemanticVersion } from '../../types';
-import { ArvoContractRecord } from '../types';
+import type ArvoContract from '..';
+import type { ArvoSemanticVersion } from '../../types';
+import type { ArvoContractRecord } from '../types';
 
-export const transformEmitsToArray = <
-  T extends ArvoContract,
-  V extends ArvoSemanticVersion,
->(
+export const transformEmitsToArray = <T extends ArvoContract, V extends ArvoSemanticVersion>(
   emitMap: T['versions'][V]['emits'],
 ) => {
   return Object.entries(emitMap).map(([type, schema]) => ({
@@ -13,10 +10,7 @@ export const transformEmitsToArray = <
     schema,
   })) as Array<
     {
-      [K in keyof T['versions'][V]['emits'] & string]: ArvoContractRecord<
-        K,
-        T['versions'][V]['emits'][K]
-      >;
+      [K in keyof T['versions'][V]['emits'] & string]: ArvoContractRecord<K, T['versions'][V]['emits'][K]>;
     }[keyof T['versions'][V]['emits'] & string]
   >;
 };

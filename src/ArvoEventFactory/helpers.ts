@@ -1,6 +1,5 @@
 import ArvoEventFactory from '.';
-import { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
-import { ArvoOrchestratorContract } from '../ArvoOrchestratorContract/types';
+import type { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
 import { ArvoOrchestratorEventFactory } from './Orchestrator';
 
 /**
@@ -16,11 +15,8 @@ import { ArvoOrchestratorEventFactory } from './Orchestrator';
  * const factory = createArvoEventFactory(v1Contract);
  * ```
  */
-export const createArvoEventFactory = <
-  TContract extends VersionedArvoContract<any, any>,
->(
-  contract: TContract,
-) => new ArvoEventFactory(contract);
+export const createArvoEventFactory = <TContract extends VersionedArvoContract<any, any>>(contract: TContract) =>
+  new ArvoEventFactory(contract);
 
 /**
  * Creates an ArvoOrchestratorEventFactory instance for handling orchestration events.
@@ -39,8 +35,6 @@ export const createArvoEventFactory = <
  * });
  * ```
  */
-export const createArvoOrchestratorEventFactory = <
-  TContract extends VersionedArvoContract<any, any>,
->(
+export const createArvoOrchestratorEventFactory = <TContract extends VersionedArvoContract<any, any>>(
   contract: TContract,
 ) => new ArvoOrchestratorEventFactory(contract);

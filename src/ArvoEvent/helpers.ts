@@ -1,13 +1,9 @@
+import { v4 as uuid4 } from 'uuid';
 import ArvoEvent from '.';
-import {
-  ArvoOpenTelemetry,
-  currentOpenTelemetryHeaders,
-  logToSpan,
-} from '../OpenTelemetry';
+import { ArvoOpenTelemetry, currentOpenTelemetryHeaders, logToSpan } from '../OpenTelemetry';
 import { cleanString, createTimestamp } from '../utils';
 import { ArvoDataContentType } from './schema';
-import { ArvoEventData, CloudEventExtension, CreateArvoEvent } from './types';
-import { v4 as uuid4 } from 'uuid';
+import type { ArvoEventData, CloudEventExtension, CreateArvoEvent } from './types';
 
 /**
  * Internal generator function for creating  instances.
@@ -107,11 +103,7 @@ export const createArvoEvent = <
   return ArvoOpenTelemetry.getInstance().startActiveSpan({
     name: `createArvoEvent<${event.type}>`,
     fn: (span) => {
-      const generatedEvent = generator(
-        event,
-        extensions,
-        currentOpenTelemetryHeaders(),
-      );
+      const generatedEvent = generator(event, extensions, currentOpenTelemetryHeaders());
       span.setAttributes(generatedEvent.otelAttributes);
       return generatedEvent;
     },

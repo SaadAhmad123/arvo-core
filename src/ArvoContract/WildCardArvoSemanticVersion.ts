@@ -1,12 +1,11 @@
 import { isValidArvoSemanticVersion } from '../schema';
-import { ArvoSemanticVersion } from '../types';
+import type { ArvoSemanticVersion } from '../types';
 
 /**
  * Special semantic version used as a wildcard matcher.
  * Represents version '0.0.0' which is reserved for system use.
  */
-export const WildCardArvoSemanticVersion: ArvoSemanticVersion & '0.0.0' =
-  '0.0.0';
+export const WildCardArvoSemanticVersion: ArvoSemanticVersion & '0.0.0' = '0.0.0';
 
 /**
  * Checks if a version is the special wildcard version.
@@ -16,5 +15,4 @@ export const WildCardArvoSemanticVersion: ArvoSemanticVersion & '0.0.0' =
  * @returns True if version is the wildcard version, false otherwise
  */
 export const isWildCardArvoSematicVersion = (version: ArvoSemanticVersion) =>
-  isValidArvoSemanticVersion(version) &&
-  version === WildCardArvoSemanticVersion;
+  isValidArvoSemanticVersion(version) && version === WildCardArvoSemanticVersion;

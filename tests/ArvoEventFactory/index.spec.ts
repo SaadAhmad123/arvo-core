@@ -1,10 +1,10 @@
+import { z } from 'zod';
 import {
-  createArvoContract,
-  createArvoEventFactory,
   EventDataschemaUtil,
   WildCardArvoSemanticVersion,
+  createArvoContract,
+  createArvoEventFactory,
 } from '../../src';
-import { z } from 'zod';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
 describe('createArvoEventFactory', () => {
@@ -48,24 +48,20 @@ describe('createArvoEventFactory', () => {
 
   describe('emits', () => {
     it('should create a valid event when data matches the schema', async () => {
-      const event = createArvoEventFactory(mockContract.version('0.0.1')).emits(
-        {
-          type: 'test.output.0',
-          source: 'test-source',
-          subject: 'test-subject',
-          data: { output: 42 },
-          to: 'cmd.saad.test',
-        },
-      );
+      const event = createArvoEventFactory(mockContract.version('0.0.1')).emits({
+        type: 'test.output.0',
+        source: 'test-source',
+        subject: 'test-subject',
+        data: { output: 42 },
+        to: 'cmd.saad.test',
+      });
 
       expect(event).toBeDefined();
       expect(event.type).toBe('test.output.0');
       expect(event.data).toEqual({ output: 42 });
       expect(event.dataschema).toEqual('#/mock/contract/0.0.1');
 
-      const event1 = createArvoEventFactory(
-        mockContract.version('0.0.1'),
-      ).emits({
+      const event1 = createArvoEventFactory(mockContract.version('0.0.1')).emits({
         type: 'test.output.1',
         source: 'test-source',
         subject: 'test-subject',
@@ -102,17 +98,13 @@ describe('createArvoEventFactory', () => {
           data: {} as any,
           to: 'cmd.saad.test',
         }),
-      ).toThrow(
-        'Emit Event data validation failed: No contract available for unknown.type.0',
-      );
+      ).toThrow('Emit Event data validation failed: No contract available for unknown.type.0');
     });
   });
 
   describe('accepts', () => {
     it('should create a valid event when data matches the schema', async () => {
-      const event = createArvoEventFactory(
-        mockContract.version('0.0.1'),
-      ).accepts({
+      const event = createArvoEventFactory(mockContract.version('0.0.1')).accepts({
         source: 'test-source',
         subject: 'test-subject',
         data: { input: 'test' },
@@ -138,9 +130,7 @@ describe('createArvoEventFactory', () => {
 
   describe('systemError', () => {
     it('should create system error message as per the contract', () => {
-      const eventFactory = createArvoEventFactory(
-        mockContract.version('0.0.1'),
-      );
+      const eventFactory = createArvoEventFactory(mockContract.version('0.0.1'));
       const event = eventFactory.systemError({
         source: 'test',
         subject: 'test',
@@ -150,9 +140,7 @@ describe('createArvoEventFactory', () => {
       expect(event.data.errorName).toBe('Error');
       expect(event.data.errorMessage).toBe('Some error');
       expect(event.data.errorStack).toBeTruthy();
-      expect(EventDataschemaUtil.parse(event)?.version).toBe(
-        WildCardArvoSemanticVersion,
-      );
+      expect(EventDataschemaUtil.parse(event)?.version).toBe(WildCardArvoSemanticVersion);
     });
   });
 });

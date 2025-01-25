@@ -19,10 +19,7 @@ export const ArvoContractValidators = {
     type: z
       .string()
       .min(1, 'Type must be a non-empty string')
-      .regex(
-        /^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/,
-        'Type should be prefixed with a reverse-DNS name',
-      )
+      .regex(/^[a-z0-9]+(\.[a-z0-9]+)+\.[a-z0-9]+$/, 'Type should be prefixed with a reverse-DNS name')
       .describe(
         cleanString(`
         The type of event related to the originating occurrence.
