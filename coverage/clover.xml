@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1737788602338" clover="3.2.0">
-  <project timestamp="1737788602338" name="All files">
-    <metrics statements="643" coveredstatements="590" conditionals="390" coveredconditionals="310" methods="155" coveredmethods="123" elements="1188" coveredelements="1023" complexity="0" loc="643" ncloc="643" packages="12" files="30" classes="30"/>
+<coverage generated="1738048696983" clover="3.2.0">
+  <project timestamp="1738048696983" name="All files">
+    <metrics statements="643" coveredstatements="585" conditionals="390" coveredconditionals="301" methods="155" coveredmethods="122" elements="1188" coveredelements="1008" complexity="0" loc="643" ncloc="643" packages="12" files="30" classes="30"/>
     <package name="src">
       <metrics statements="128" coveredstatements="119" conditionals="26" coveredconditionals="17" methods="49" coveredmethods="30"/>
-      <file name="errors.ts" path="/Users/saadahmad/Projects/Arvo/core/src/errors.ts">
+      <file name="errors.ts" path="/workspaces/arvo-core/src/errors.ts">
         <metrics statements="7" coveredstatements="7" conditionals="6" coveredconditionals="4" methods="2" coveredmethods="2"/>
         <line num="25" count="6" type="stmt"/>
         <line num="38" count="1" type="stmt"/>
@@ -14,7 +14,7 @@
         <line num="42" count="1" type="cond" truecount="3" falsecount="1"/>
         <line num="44" count="6" type="stmt"/>
       </file>
-      <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/index.ts">
+      <file name="index.ts" path="/workspaces/arvo-core/src/index.ts">
         <metrics statements="64" coveredstatements="64" conditionals="0" coveredconditionals="0" methods="31" coveredmethods="13"/>
         <line num="1" count="6" type="stmt"/>
         <line num="2" count="6" type="stmt"/>
@@ -81,14 +81,14 @@
         <line num="136" count="7" type="stmt"/>
         <line num="138" count="6" type="stmt"/>
       </file>
-      <file name="schema.ts" path="/Users/saadahmad/Projects/Arvo/core/src/schema.ts">
+      <file name="schema.ts" path="/workspaces/arvo-core/src/schema.ts">
         <metrics statements="4" coveredstatements="4" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
         <line num="1" count="6" type="stmt"/>
         <line num="9" count="6" type="stmt"/>
         <line num="16" count="6" type="stmt"/>
         <line num="22" count="18" type="stmt"/>
       </file>
-      <file name="utils.ts" path="/Users/saadahmad/Projects/Arvo/core/src/utils.ts">
+      <file name="utils.ts" path="/workspaces/arvo-core/src/utils.ts">
         <metrics statements="53" coveredstatements="44" conditionals="20" coveredconditionals="13" methods="15" coveredmethods="14"/>
         <line num="2" count="6" type="stmt"/>
         <line num="4" count="6" type="stmt"/>
@@ -147,14 +147,14 @@
     </package>
     <package name="src.ArvoContract">
       <metrics statements="78" coveredstatements="66" conditionals="30" coveredconditionals="26" methods="17" coveredmethods="13"/>
-      <file name="WildCardArvoSemanticVersion.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoContract/WildCardArvoSemanticVersion.ts">
+      <file name="WildCardArvoSemanticVersion.ts" path="/workspaces/arvo-core/src/ArvoContract/WildCardArvoSemanticVersion.ts">
         <metrics statements="4" coveredstatements="4" conditionals="2" coveredconditionals="2" methods="1" coveredmethods="1"/>
         <line num="1" count="6" type="stmt"/>
         <line num="8" count="6" type="stmt"/>
         <line num="17" count="6" type="stmt"/>
         <line num="18" count="18" type="cond" truecount="2" falsecount="0"/>
       </file>
-      <file name="helpers.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoContract/helpers.ts">
+      <file name="helpers.ts" path="/workspaces/arvo-core/src/ArvoContract/helpers.ts">
         <metrics statements="14" coveredstatements="14" conditionals="12" coveredconditionals="12" methods="2" coveredmethods="2"/>
         <line num="2" count="6" type="stmt"/>
         <line num="3" count="6" type="stmt"/>
@@ -171,7 +171,7 @@
         <line num="72" count="1" type="stmt"/>
         <line num="76" count="10" type="stmt"/>
       </file>
-      <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoContract/index.ts">
+      <file name="index.ts" path="/workspaces/arvo-core/src/ArvoContract/index.ts">
         <metrics statements="57" coveredstatements="45" conditionals="16" coveredconditionals="12" methods="14" coveredmethods="10"/>
         <line num="2" count="6" type="stmt"/>
         <line num="3" count="6" type="stmt"/>
@@ -231,7 +231,7 @@
         <line num="231" count="0" type="stmt"/>
         <line num="234" count="6" type="stmt"/>
       </file>
-      <file name="validators.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoContract/validators.ts">
+      <file name="validators.ts" path="/workspaces/arvo-core/src/ArvoContract/validators.ts">
         <metrics statements="3" coveredstatements="3" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
         <line num="1" count="6" type="stmt"/>
         <line num="2" count="6" type="stmt"/>
@@ -240,7 +240,7 @@
     </package>
     <package name="src.ArvoContract.SimpleArvoContract">
       <metrics statements="6" coveredstatements="6" conditionals="4" coveredconditionals="4" methods="2" coveredmethods="2"/>
-      <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoContract/SimpleArvoContract/index.ts">
+      <file name="index.ts" path="/workspaces/arvo-core/src/ArvoContract/SimpleArvoContract/index.ts">
         <metrics statements="6" coveredstatements="6" conditionals="4" coveredconditionals="4" methods="2" coveredmethods="2"/>
         <line num="3" count="6" type="stmt"/>
         <line num="48" count="6" type="stmt"/>
@@ -252,7 +252,7 @@
     </package>
     <package name="src.ArvoContract.VersionedArvoContract">
       <metrics statements="39" coveredstatements="32" conditionals="0" coveredconditionals="0" methods="15" coveredmethods="12"/>
-      <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoContract/VersionedArvoContract/index.ts">
+      <file name="index.ts" path="/workspaces/arvo-core/src/ArvoContract/VersionedArvoContract/index.ts">
         <metrics statements="37" coveredstatements="30" conditionals="0" coveredconditionals="0" methods="13" coveredmethods="10"/>
         <line num="1" count="6" type="stmt"/>
         <line num="3" count="6" type="stmt"/>
@@ -292,7 +292,7 @@
         <line num="99" count="0" type="stmt"/>
         <line num="102" count="6" type="stmt"/>
       </file>
-      <file name="utils.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoContract/VersionedArvoContract/utils.ts">
+      <file name="utils.ts" path="/workspaces/arvo-core/src/ArvoContract/VersionedArvoContract/utils.ts">
         <metrics statements="2" coveredstatements="2" conditionals="0" coveredconditionals="0" methods="2" coveredmethods="2"/>
         <line num="5" count="6" type="stmt"/>
         <line num="8" count="83" type="stmt"/>
@@ -300,7 +300,7 @@
     </package>
     <package name="src.ArvoEvent">
       <metrics statements="81" coveredstatements="77" conditionals="102" coveredconditionals="89" methods="19" coveredmethods="17"/>
-      <file name="helpers.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoEvent/helpers.ts">
+      <file name="helpers.ts" path="/workspaces/arvo-core/src/ArvoEvent/helpers.ts">
         <metrics statements="17" coveredstatements="17" conditionals="54" coveredconditionals="53" methods="3" coveredmethods="3"/>
         <line num="1" count="6" type="stmt"/>
         <line num="2" count="6" type="stmt"/>
@@ -320,7 +320,7 @@
         <line num="107" count="8" type="stmt"/>
         <line num="108" count="8" type="stmt"/>
       </file>
-      <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoEvent/index.ts">
+      <file name="index.ts" path="/workspaces/arvo-core/src/ArvoEvent/index.ts">
         <metrics statements="45" coveredstatements="42" conditionals="35" coveredconditionals="25" methods="13" coveredmethods="11"/>
         <line num="1" count="6" type="stmt"/>
         <line num="3" count="6" type="stmt"/>
@@ -368,7 +368,7 @@
         <line num="201" count="1" type="stmt"/>
         <line num="203" count="6" type="stmt"/>
       </file>
-      <file name="schema.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoEvent/schema.ts">
+      <file name="schema.ts" path="/workspaces/arvo-core/src/ArvoEvent/schema.ts">
         <metrics statements="11" coveredstatements="11" conditionals="10" coveredconditionals="8" methods="2" coveredmethods="2"/>
         <line num="1" count="6" type="stmt"/>
         <line num="2" count="6" type="stmt"/>
@@ -382,7 +382,7 @@
         <line num="126" count="6" type="stmt"/>
         <line num="201" count="6" type="stmt"/>
       </file>
-      <file name="utils.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoEvent/utils.ts">
+      <file name="utils.ts" path="/workspaces/arvo-core/src/ArvoEvent/utils.ts">
         <metrics statements="8" coveredstatements="7" conditionals="3" coveredconditionals="3" methods="1" coveredmethods="1"/>
         <line num="8" count="6" type="stmt"/>
         <line num="9" count="17" type="stmt"/>
@@ -395,8 +395,8 @@
       </file>
     </package>
     <package name="src.ArvoEventFactory">
-      <metrics statements="84" coveredstatements="84" conditionals="147" coveredconditionals="111" methods="18" coveredmethods="18"/>
-      <file name="Orchestrator.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoEventFactory/Orchestrator.ts">
+      <metrics statements="84" coveredstatements="84" conditionals="147" coveredconditionals="108" methods="18" coveredmethods="18"/>
+      <file name="Orchestrator.ts" path="/workspaces/arvo-core/src/ArvoEventFactory/Orchestrator.ts">
         <metrics statements="37" coveredstatements="37" conditionals="73" coveredconditionals="53" methods="7" coveredmethods="7"/>
         <line num="2" count="6" type="stmt"/>
         <line num="4" count="6" type="stmt"/>
@@ -436,7 +436,7 @@
         <line num="158" count="1" type="stmt"/>
         <line num="162" count="6" type="stmt"/>
       </file>
-      <file name="helpers.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoEventFactory/helpers.ts">
+      <file name="helpers.ts" path="/workspaces/arvo-core/src/ArvoEventFactory/helpers.ts">
         <metrics statements="6" coveredstatements="6" conditionals="0" coveredconditionals="0" methods="2" coveredmethods="2"/>
         <line num="1" count="6" type="stmt"/>
         <line num="3" count="6" type="stmt"/>
@@ -445,8 +445,8 @@
         <line num="38" count="6" type="stmt"/>
         <line num="40" count="7" type="stmt"/>
       </file>
-      <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoEventFactory/index.ts">
-        <metrics statements="35" coveredstatements="35" conditionals="74" coveredconditionals="58" methods="8" coveredmethods="8"/>
+      <file name="index.ts" path="/workspaces/arvo-core/src/ArvoEventFactory/index.ts">
+        <metrics statements="35" coveredstatements="35" conditionals="74" coveredconditionals="55" methods="8" coveredmethods="8"/>
         <line num="3" count="6" type="stmt"/>
         <line num="4" count="6" type="stmt"/>
         <line num="6" count="6" type="stmt"/>
@@ -483,7 +483,7 @@
         <line num="197" count="1" type="stmt"/>
         <line num="201" count="6" type="stmt"/>
       </file>
-      <file name="utils.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoEventFactory/utils.ts">
+      <file name="utils.ts" path="/workspaces/arvo-core/src/ArvoEventFactory/utils.ts">
         <metrics statements="6" coveredstatements="6" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
         <line num="1" count="6" type="stmt"/>
         <line num="3" count="6" type="stmt"/>
@@ -495,7 +495,7 @@
     </package>
     <package name="src.ArvoOrchestrationSubject">
       <metrics statements="44" coveredstatements="40" conditionals="22" coveredconditionals="20" methods="9" coveredmethods="8"/>
-      <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoOrchestrationSubject/index.ts">
+      <file name="index.ts" path="/workspaces/arvo-core/src/ArvoOrchestrationSubject/index.ts">
         <metrics statements="37" coveredstatements="33" conditionals="22" coveredconditionals="20" methods="6" coveredmethods="5"/>
         <line num="1" count="6" type="stmt"/>
         <line num="2" count="6" type="stmt"/>
@@ -535,7 +535,7 @@
         <line num="214" count="0" type="stmt"/>
         <line num="217" count="6" type="stmt"/>
       </file>
-      <file name="schema.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoOrchestrationSubject/schema.ts">
+      <file name="schema.ts" path="/workspaces/arvo-core/src/ArvoOrchestrationSubject/schema.ts">
         <metrics statements="7" coveredstatements="7" conditionals="0" coveredconditionals="0" methods="3" coveredmethods="3"/>
         <line num="1" count="6" type="stmt"/>
         <line num="2" count="6" type="stmt"/>
@@ -548,7 +548,7 @@
     </package>
     <package name="src.ArvoOrchestratorContract">
       <metrics statements="25" coveredstatements="24" conditionals="9" coveredconditionals="8" methods="8" coveredmethods="7"/>
-      <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoOrchestratorContract/index.ts">
+      <file name="index.ts" path="/workspaces/arvo-core/src/ArvoOrchestratorContract/index.ts">
         <metrics statements="11" coveredstatements="11" conditionals="9" coveredconditionals="8" methods="3" coveredmethods="3"/>
         <line num="2" count="6" type="stmt"/>
         <line num="4" count="6" type="stmt"/>
@@ -562,13 +562,13 @@
         <line num="112" count="3" type="stmt"/>
         <line num="118" count="5" type="stmt"/>
       </file>
-      <file name="schema.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoOrchestratorContract/schema.ts">
+      <file name="schema.ts" path="/workspaces/arvo-core/src/ArvoOrchestratorContract/schema.ts">
         <metrics statements="3" coveredstatements="3" conditionals="0" coveredconditionals="0" methods="0" coveredmethods="0"/>
         <line num="1" count="6" type="stmt"/>
         <line num="2" count="6" type="stmt"/>
         <line num="9" count="6" type="stmt"/>
       </file>
-      <file name="typegen.ts" path="/Users/saadahmad/Projects/Arvo/core/src/ArvoOrchestratorContract/typegen.ts">
+      <file name="typegen.ts" path="/workspaces/arvo-core/src/ArvoOrchestratorContract/typegen.ts">
         <metrics statements="11" coveredstatements="10" conditionals="0" coveredconditionals="0" methods="5" coveredmethods="4"/>
         <line num="15" count="6" type="stmt"/>
         <line num="20" count="6" type="stmt"/>
@@ -584,9 +584,9 @@
       </file>
     </package>
     <package name="src.OpenTelemetry">
-      <metrics statements="61" coveredstatements="46" conditionals="44" coveredconditionals="29" methods="11" coveredmethods="9"/>
-      <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/OpenTelemetry/index.ts">
-        <metrics statements="61" coveredstatements="46" conditionals="44" coveredconditionals="29" methods="11" coveredmethods="9"/>
+      <metrics statements="61" coveredstatements="42" conditionals="44" coveredconditionals="25" methods="11" coveredmethods="8"/>
+      <file name="index.ts" path="/workspaces/arvo-core/src/OpenTelemetry/index.ts">
+        <metrics statements="61" coveredstatements="42" conditionals="44" coveredconditionals="25" methods="11" coveredmethods="8"/>
         <line num="1" count="6" type="stmt"/>
         <line num="12" count="6" type="stmt"/>
         <line num="13" count="6" type="stmt"/>
@@ -629,20 +629,20 @@
         <line num="187" count="2" type="stmt"/>
         <line num="188" count="1" type="stmt"/>
         <line num="194" count="1" type="cond" truecount="1" falsecount="1"/>
-        <line num="195" count="1" type="stmt"/>
-        <line num="197" count="0" type="stmt"/>
+        <line num="195" count="0" type="stmt"/>
+        <line num="197" count="1" type="stmt"/>
         <line num="207" count="12" type="cond" truecount="1" falsecount="0"/>
-        <line num="208" count="6" type="cond" truecount="2" falsecount="0"/>
-        <line num="209" count="4" type="stmt"/>
-        <line num="213" count="4" type="stmt"/>
-        <line num="215" count="2" type="stmt"/>
+        <line num="208" count="6" type="cond" truecount="1" falsecount="1"/>
+        <line num="209" count="0" type="stmt"/>
+        <line num="213" count="0" type="stmt"/>
+        <line num="215" count="6" type="stmt"/>
         <line num="222" count="6" type="stmt"/>
         <line num="228" count="6" type="stmt"/>
         <line num="229" count="22" type="stmt"/>
         <line num="230" count="22" type="stmt"/>
         <line num="235" count="22" type="stmt"/>
-        <line num="237" count="16" type="cond" truecount="3" falsecount="0"/>
-        <line num="238" count="16" type="stmt"/>
+        <line num="237" count="0" type="cond" truecount="0" falsecount="3"/>
+        <line num="238" count="0" type="stmt"/>
         <line num="243" count="22" type="stmt"/>
         <line num="245" count="22" type="stmt"/>
         <line num="252" count="6" type="stmt"/>
@@ -652,13 +652,13 @@
     </package>
     <package name="src.OpenTelemetry.ArvoExecution">
       <metrics statements="7" coveredstatements="7" conditionals="2" coveredconditionals="2" methods="2" coveredmethods="2"/>
-      <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/OpenTelemetry/ArvoExecution/index.ts">
+      <file name="index.ts" path="/workspaces/arvo-core/src/OpenTelemetry/ArvoExecution/index.ts">
         <metrics statements="3" coveredstatements="3" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
         <line num="5" count="6" type="stmt"/>
         <line num="6" count="6" type="stmt"/>
         <line num="7" count="6" type="stmt"/>
       </file>
-      <file name="types.ts" path="/Users/saadahmad/Projects/Arvo/core/src/OpenTelemetry/ArvoExecution/types.ts">
+      <file name="types.ts" path="/workspaces/arvo-core/src/OpenTelemetry/ArvoExecution/types.ts">
         <metrics statements="4" coveredstatements="4" conditionals="2" coveredconditionals="2" methods="1" coveredmethods="1"/>
         <line num="1" count="6" type="cond" truecount="2" falsecount="0"/>
         <line num="2" count="6" type="stmt"/>
@@ -668,7 +668,7 @@
     </package>
     <package name="src.OpenTelemetry.OpenInference">
       <metrics statements="67" coveredstatements="67" conditionals="2" coveredconditionals="2" methods="2" coveredmethods="2"/>
-      <file name="index.ts" path="/Users/saadahmad/Projects/Arvo/core/src/OpenTelemetry/OpenInference/index.ts">
+      <file name="index.ts" path="/workspaces/arvo-core/src/OpenTelemetry/OpenInference/index.ts">
         <metrics statements="57" coveredstatements="57" conditionals="0" coveredconditionals="0" methods="1" coveredmethods="1"/>
         <line num="7" count="6" type="stmt"/>
         <line num="8" count="6" type="stmt"/>
@@ -728,7 +728,7 @@
         <line num="96" count="6" type="stmt"/>
         <line num="97" count="6" type="stmt"/>
       </file>
-      <file name="types.ts" path="/Users/saadahmad/Projects/Arvo/core/src/OpenTelemetry/OpenInference/types.ts">
+      <file name="types.ts" path="/workspaces/arvo-core/src/OpenTelemetry/OpenInference/types.ts">
         <metrics statements="10" coveredstatements="10" conditionals="2" coveredconditionals="2" methods="1" coveredmethods="1"/>
         <line num="5" count="6" type="cond" truecount="2" falsecount="0"/>
         <line num="6" count="6" type="stmt"/>
@@ -743,9 +743,9 @@
       </file>
     </package>
     <package name="tests">
-      <metrics statements="23" coveredstatements="22" conditionals="2" coveredconditionals="2" methods="3" coveredmethods="3"/>
-      <file name="utils.ts" path="/Users/saadahmad/Projects/Arvo/core/tests/utils.ts">
-        <metrics statements="23" coveredstatements="22" conditionals="2" coveredconditionals="2" methods="3" coveredmethods="3"/>
+      <metrics statements="23" coveredstatements="21" conditionals="2" coveredconditionals="0" methods="3" coveredmethods="3"/>
+      <file name="utils.ts" path="/workspaces/arvo-core/tests/utils.ts">
+        <metrics statements="23" coveredstatements="21" conditionals="2" coveredconditionals="0" methods="3" coveredmethods="3"/>
         <line num="1" count="3" type="stmt"/>
         <line num="2" count="3" type="stmt"/>
         <line num="3" count="3" type="stmt"/>
@@ -760,13 +760,13 @@
         <line num="14" count="3" type="stmt"/>
         <line num="17" count="3" type="stmt"/>
         <line num="18" count="3" type="stmt"/>
-        <line num="21" count="3" type="cond" truecount="1" falsecount="0"/>
-        <line num="22" count="3" type="stmt"/>
-        <line num="28" count="0" type="stmt"/>
+        <line num="21" count="3" type="cond" truecount="0" falsecount="1"/>
+        <line num="22" count="0" type="stmt"/>
+        <line num="28" count="3" type="stmt"/>
         <line num="36" count="3" type="stmt"/>
         <line num="38" count="3" type="stmt"/>
-        <line num="39" count="3" type="cond" truecount="1" falsecount="0"/>
-        <line num="40" count="3" type="stmt"/>
+        <line num="39" count="3" type="cond" truecount="0" falsecount="1"/>
+        <line num="40" count="0" type="stmt"/>
         <line num="44" count="3" type="stmt"/>
         <line num="45" count="3" type="stmt"/>
       </file>
