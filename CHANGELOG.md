@@ -96,3 +96,7 @@
 
 - Added better README.md docs and streamlined ArvoEventFactory subject field behaviour
 
+## [2.2.10] - 2025-01-29
+
+- Updated dependency versions to latest
+
