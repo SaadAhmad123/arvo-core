@@ -201,8 +201,24 @@ describe('ArvoOrchestratorContract', () => {
       to: 'com.ret.test',
     });
 
+    expect(event.subject).toBe('test');
     expect(event.type).toBe(contract.version('1.0.0').metadata.completeEventType);
     expect(event.to).toBe('com.ret.test');
+
+    event = createArvoOrchestratorEventFactory(contract.version('1.0.0')).complete({
+      source: 'com.test.test',
+      data: {
+        bar: 0,
+      },
+      to: 'com.ret.test',
+    });
+
+    expect(event.type).toBe(contract.version('1.0.0').metadata.completeEventType);
+    expect(event.to).toBe('com.ret.test');
+    const parsedSubject = ArvoOrchestrationSubject.parse(event.subject);
+    expect(parsedSubject.orchestrator.name).toBe(contract.version('1.0.0').metadata.completeEventType);
+    expect(parsedSubject.orchestrator.version).toBe(contract.version('1.0.0').version);
+    expect(parsedSubject.execution.initiator).toBe('com.test.test');
 
     expect(() => {
       createArvoOrchestratorEventFactory(contract.version('1.0.0')).complete({

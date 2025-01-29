@@ -48,7 +48,7 @@ export class ArvoOrchestratorEventFactory<
     event: Omit<
       CreateArvoEvent<z.input<TContract['accepts']['schema']>, TContract['accepts']['type']>,
       'type' | 'datacontenttype' | 'dataschema' | 'subject'
-    >,
+    > & { subject?: string },
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
@@ -61,27 +61,29 @@ export class ArvoOrchestratorEventFactory<
           throw new Error(`Init Event data validation failed: ${validationResult.error.message}`);
         }
         const parentSubject: string | null = validationResult.data.parentSubject$$;
-        const newSubject: string = parentSubject
-          ? ArvoOrchestrationSubject.from({
-              orchestator: this.contract.accepts.type,
-              subject: parentSubject,
-              version: this.contract.version,
-              meta: Object.fromEntries(
-                Object.entries({
-                  redirectto: event.redirectto ?? ArvoOrchestrationSubject.parse(parentSubject).execution.initiator,
-                }).filter((item) => Boolean(item[1])),
-              ),
-            })
-          : ArvoOrchestrationSubject.new({
-              orchestator: this.contract.accepts.type,
-              initiator: event.source,
-              version: this.contract.version,
-              meta: event.redirectto
-                ? {
-                    redirectto: event.redirectto,
-                  }
-                : undefined,
-            });
+        const eventSubject: string =
+          event.subject ??
+          (parentSubject
+            ? ArvoOrchestrationSubject.from({
+                orchestator: this.contract.accepts.type,
+                subject: parentSubject,
+                version: this.contract.version,
+                meta: Object.fromEntries(
+                  Object.entries({
+                    redirectto: event.redirectto ?? ArvoOrchestrationSubject.parse(parentSubject).execution.initiator,
+                  }).filter((item) => Boolean(item[1])),
+                ),
+              })
+            : ArvoOrchestrationSubject.new({
+                orchestator: this.contract.accepts.type,
+                initiator: event.source,
+                version: this.contract.version,
+                meta: event.redirectto
+                  ? {
+                      redirectto: event.redirectto,
+                    }
+                  : undefined,
+              }));
         const generatedEvent = createArvoEvent<
           z.infer<TContract['accepts']['schema']>,
           TExtension,
@@ -89,7 +91,7 @@ export class ArvoOrchestratorEventFactory<
         >(
           {
             ...event,
-            subject: newSubject,
+            subject: eventSubject,
             traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             type: this.contract.accepts.type,
@@ -122,8 +124,10 @@ export class ArvoOrchestratorEventFactory<
         z.input<TContract['emits'][TContract['metadata']['completeEventType']]>,
         TContract['metadata']['completeEventType']
       >,
-      'datacontenttype' | 'dataschema' | 'type'
-    >,
+      'datacontenttype' | 'dataschema' | 'type' | 'subject'
+    > & {
+      subject?: string;
+    },
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
@@ -137,6 +141,21 @@ export class ArvoOrchestratorEventFactory<
             validationResult?.error?.message ?? `No schema available for ${this.contract.metadata.completeEventType}`;
           throw new Error(`Emit Event data validation failed: ${msg}`);
         }
+
+        const eventType = this.contract.metadata.completeEventType;
+        const eventSubject =
+          event.subject ??
+          ArvoOrchestrationSubject.new({
+            initiator: event.source,
+            version: this.contract.version,
+            orchestator: eventType,
+            meta: event.redirectto
+              ? {
+                  redirectto: event.redirectto,
+                }
+              : undefined,
+          });
+
         const generatedEvent = createArvoEvent<
           z.infer<TContract['emits'][TContract['metadata']['completeEventType']]>,
           TExtension,
@@ -144,7 +163,8 @@ export class ArvoOrchestratorEventFactory<
         >(
           {
             ...event,
-            type: this.contract.metadata.completeEventType,
+            subject: eventSubject,
+            type: eventType,
             traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             datacontenttype: ArvoDataContentType,

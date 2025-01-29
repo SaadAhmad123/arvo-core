@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  ArvoOrchestrationSubject,
   EventDataschemaUtil,
   WildCardArvoSemanticVersion,
   createArvoContract,
@@ -60,6 +61,7 @@ describe('createArvoEventFactory', () => {
       expect(event.type).toBe('test.output.0');
       expect(event.data).toEqual({ output: 42 });
       expect(event.dataschema).toEqual('#/mock/contract/0.0.1');
+      expect(event.subject).toBe('test-subject');
 
       const event1 = createArvoEventFactory(mockContract.version('0.0.1')).emits({
         type: 'test.output.1',
@@ -142,5 +144,46 @@ describe('createArvoEventFactory', () => {
       expect(event.data.errorStack).toBeTruthy();
       expect(EventDataschemaUtil.parse(event)?.version).toBe(WildCardArvoSemanticVersion);
     });
+  });
+
+  it('should generate subject automatically for accepts event', () => {
+    const eventFactory = createArvoEventFactory(mockContract.version('0.0.1'));
+    const event = eventFactory.accepts({
+      source: 'com.test.test',
+      data: {
+        input: 'Name',
+      },
+    });
+    const parsedSubject = ArvoOrchestrationSubject.parse(event.subject);
+    expect(parsedSubject?.orchestrator?.name).toBe(mockContract.type);
+    expect(parsedSubject?.execution?.initiator).toBe('com.test.test');
+    expect(parsedSubject?.orchestrator?.version).toBe(mockContract.version('0.0.1').version);
+  });
+
+  it('should generate subject automatically for emit event', () => {
+    const eventFactory = createArvoEventFactory(mockContract.version('0.0.1'));
+    const event = eventFactory.emits({
+      type: 'test.output.0',
+      source: 'com.test.test',
+      data: {
+        output: 10,
+      },
+    });
+    const parsedSubject = ArvoOrchestrationSubject.parse(event.subject);
+    expect(parsedSubject?.orchestrator?.name).toBe('test.output.0');
+    expect(parsedSubject?.execution?.initiator).toBe('com.test.test');
+    expect(parsedSubject?.orchestrator?.version).toBe(mockContract.version('0.0.1').version);
+  });
+
+  it('should generate subject automatically for system error event', () => {
+    const eventFactory = createArvoEventFactory(mockContract.version('0.0.1'));
+    const event = eventFactory.systemError({
+      source: 'com.test.test',
+      error: new Error('Some event'),
+    });
+    const parsedSubject = ArvoOrchestrationSubject.parse(event.subject);
+    expect(parsedSubject?.orchestrator?.name).toBe(mockContract.systemError.type);
+    expect(parsedSubject?.execution?.initiator).toBe('com.test.test');
+    expect(parsedSubject?.orchestrator?.version).toBe(mockContract.version('0.0.1').version);
   });
 });

@@ -3,6 +3,7 @@ import type { VersionedArvoContract } from '../ArvoContract/VersionedArvoContrac
 import { createArvoEvent } from '../ArvoEvent/helpers';
 import { ArvoDataContentType } from '../ArvoEvent/schema';
 import type { CreateArvoEvent } from '../ArvoEvent/types';
+import ArvoOrchestrationSubject from '../ArvoOrchestrationSubject';
 import { ArvoOpenTelemetry, currentOpenTelemetryHeaders } from '../OpenTelemetry';
 import type { ArvoErrorSchema } from '../schema';
 import { EventDataschemaUtil, createArvoError } from '../utils';
@@ -58,8 +59,8 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
   accepts<TExtension extends Record<string, any>>(
     event: Omit<
       CreateArvoEvent<z.input<TContract['accepts']['schema']>, TContract['accepts']['type']>,
-      'type' | 'datacontenttype' | 'dataschema'
-    >,
+      'type' | 'datacontenttype' | 'dataschema' | 'subject'
+    > & { subject?: string },
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
@@ -71,6 +72,19 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
         if (!validationResult.success) {
           throw new Error(`Accept Event data validation failed: ${validationResult.error.message}`);
         }
+        const eventType = this.contract.accepts.type;
+        const eventSubject: string =
+          event.subject ??
+          ArvoOrchestrationSubject.new({
+            initiator: event.source,
+            version: this.contract.version,
+            orchestator: this.contract.accepts.type,
+            meta: event.redirectto
+              ? {
+                  redirectto: event.redirectto,
+                }
+              : undefined,
+          });
         const generatedEvent = createArvoEvent<
           z.infer<TContract['accepts']['schema']>,
           TExtension,
@@ -78,9 +92,10 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
         >(
           {
             ...event,
+            subject: eventSubject,
             traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
-            type: this.contract.accepts.type,
+            type: eventType,
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.create(this.contract),
             data: validationResult.data,
@@ -114,7 +129,9 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
    * ```
    */
   emits<U extends string & keyof TContract['emits'], TExtension extends Record<string, any>>(
-    event: Omit<CreateArvoEvent<z.input<TContract['emits'][U]>, U>, 'datacontenttype' | 'dataschema'>,
+    event: Omit<CreateArvoEvent<z.input<TContract['emits'][U]>, U>, 'datacontenttype' | 'dataschema' | 'subject'> & {
+      subject?: string;
+    },
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
@@ -127,9 +144,24 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
           const msg = validationResult?.error?.message ?? `No contract available for ${event.type}`;
           throw new Error(`Emit Event data validation failed: ${msg}`);
         }
+
+        const eventSubject =
+          event.subject ??
+          ArvoOrchestrationSubject.new({
+            initiator: event.source,
+            version: this.contract.version,
+            orchestator: event.type,
+            meta: event.redirectto
+              ? {
+                  redirectto: event.redirectto,
+                }
+              : undefined,
+          });
+
         const generatedEvent = createArvoEvent<z.infer<TContract['emits'][U]>, TExtension, U>(
           {
             ...event,
+            subject: eventSubject,
             traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
             datacontenttype: ArvoDataContentType,
@@ -165,8 +197,9 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
    * ```
    */
   systemError<TExtension extends Record<string, any>>(
-    event: Omit<CreateArvoEvent<any, any>, 'data' | 'type' | 'datacontenttype' | 'dataschema'> & {
+    event: Omit<CreateArvoEvent<any, any>, 'data' | 'type' | 'datacontenttype' | 'dataschema' | 'subject'> & {
       error: Error;
+      subject?: string;
     },
     extensions?: TExtension,
   ) {
@@ -176,6 +209,21 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();
         const { error, ..._event } = event;
+
+        const eventType = this.contract.systemError.type;
+        const eventSubject =
+          event.subject ??
+          ArvoOrchestrationSubject.new({
+            initiator: event.source,
+            version: this.contract.version,
+            orchestator: eventType,
+            meta: event.redirectto
+              ? {
+                  redirectto: event.redirectto,
+                }
+              : undefined,
+          });
+
         const generatedEvent = createArvoEvent<
           z.infer<typeof ArvoErrorSchema>,
           TExtension,
@@ -183,9 +231,10 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
         >(
           {
             ..._event,
+            subject: eventSubject,
             traceparent: event.traceparent ?? otelHeaders.traceparent ?? undefined,
             tracestate: event.tracestate ?? otelHeaders.tracestate ?? undefined,
-            type: this.contract.systemError.type,
+            type: eventType,
             data: createArvoError(error),
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.createWithWildCardVersion(this.contract),
