@@ -209,7 +209,7 @@ export default class ArvoOrchestrationSubject {
   static isValid(data: string): boolean {
     try {
       ArvoOrchestrationSubject.parse(data);
-      return false;
+      return true;
     } catch {
       return false;
     }
