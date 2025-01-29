@@ -5,6 +5,7 @@ group: Guides
 
 # ArvoEvent - A Event Design for Evolutionary and Reliable Event-Driven Architecture
 
+
 In the world of event-driven architecture (EDA), managing communication between services presents a unique set of challenges. As systems grow and evolve, the complexity of maintaining reliable service communication often becomes a significant hurdle. Arvo addresses these challenges by providing a standardised event structure, called `ArvoEvent` that promotes reliability, scalability, and system evolution while remaining flexible enough to adapt to diverse business needs.
 
 ## The Challenge of Event Standardisation
@@ -163,6 +164,80 @@ When an event related to a workflow arrives, the `ArvoOrchestrator` uses the 
 In this way, the `ArvoOrchestrator` can reliably manage multiple concurrent instances of the same workflow. Even if different instances are at different stages the orchestrator can accurately retrieve and update each instance's state independently.
 
 Moreover, having a consistent `subject` across all events enables powerful auditing and event sourcing capabilities. By storing events with the same `subject` together, ordered by their `time` field, it becomes possible to replay the entire history of a workflow to the `ArvoOrchestrator`. This allows for detailed auditing, as the orchestrator can reconstruct the state at any point in the workflow's lifecycle. Event sourcing also provides a robust foundation for debugging, as issues can be reproduced by replaying the relevant events.
+
+### Creating a `subject` in Arvo
+
+The `subject` field in an `ArvoEvent` might appear to be a simple string, but it represents a valuable piece of data real-estate that can carry rich information shared across handlers and services during a single execution. Recognising this potential, the `arvo-core` package introduces the `ArvoOrchestrationSubject` utility, which enables the creation of information-rich and unique subject strings. For creation of subject strings in Arvo it is recommended to use only this utility.
+
+Despite its name suggesting an orchestrator-specific purpose, the `ArvoOrchestrationSubject` can be employed for various event types, including simple events that invoke a single service. This utility becomes particularly crucial for events destined for `ArvoOrchestrator` event handlers. While high-level utilities like `createArvoOrchestratorEventFactory` abstract away the complexities of subject creation, understanding the underlying mechanics empowers developers to craft more nuanced and information-rich event subjects.
+
+>  **Good to know:** The easiest way to figure out which event is going to `ArvoOrchestrator` event handler is by look at the event type and seeing if the event type is prefixed with `arvo.orc.`
+
+The utility provides two primary methods for creating subjects:
+
+1. Developers can construct a new subject with comprehensive details using the `ArvoOrchestrationSubject.new()`method. This approach allows for creating a subject with essential information such as the orchestrator name, version, initiator address, and optional metadata. The method supports adding contextual information like environment details or unique stream topics, providing flexibility in subject creation.
+
+```typescript
+import { ArvoOrchestrationSubject } from 'arvo-core'
+import { v4 as uuid4 } from 'uuid'
+
+const subject = ArvoOrchestrationSubject.new({
+  orchestator: "arvo.orc.order.create", // The orchestrator name
+  version: "1.0.0", // The version of the orchestrator
+  initiator: "com.test.test", // The initiator address
+});
+
+// With metadata
+const subjectWithMeta = ArvoOrchestrationSubject.new({
+  orchestator: "arvo.orc.order.create",
+  version: "1.0.0",
+  initiator: "com.test.test",
+  meta: {
+    environment: "production",
+    stream_topic: uuid4(), // [Optional] Maybe stream topic to publish all streaming events for an execution. Each execution may have a unique topic or not. Depends on the particular implementation
+  }
+});
+```
+
+2. The method `ArvoOrchestrationSubject.from()`, enables subject chaining—a powerful feature for maintaining context across complex workflows. This method allows creating a new orchestration subject from an existing parent subject, preserving the relationship between different process stages. By parsing the parent subject and merging metadata, developers can create child subjects that inherit and extend the context of their predecessors.
+
+```typescript
+import { ArvoOrchestrationSubject } from 'arvo-core'
+import { v4 as uuid4 } from 'uuid'
+
+// Create a parent subject
+const parentSubject = ArvoOrchestrationSubject.new({
+  orchestator: "parentProcess",
+  version: "1.0.0",
+  initiator: "systemA",
+  meta: { environment: "production" }
+});
+
+// Create a new subject from the parent
+const childSubject = ArvoOrchestrationSubject.from({
+  orchestator: "childProcess",
+  version: "2.0.0",
+  subject: parentSubject,
+  meta: { step: "processing" }  // Will be merged with parent's metadata
+});
+```
+
+> For those seeking a deeper understanding of the intricacies of `ArvoOrchestrationSubject`, the comprehensive [technical documentation](https://saadahmad123.github.io/arvo-core/classes/index.ArvoOrchestrationSubject.html) offers extensive details about its implementation and usage.
+
+#### Anti-patterns in Subject Usage
+
+While the `subject` field represents a powerful mechanism for contextual tracking in Arvo's event-driven architecture, its flexibility can also lead to potential misuse that undermines system design principles. Developers must exercise careful restraint to prevent the subject from becoming an unintended catch-all for system metadata.
+
+The primary anti-pattern to avoid is transforming the `subject` into a bloated information container. Despite its seemingly flexible nature, the subject should remain focused on its core purpose: providing a unique, consistent identifier for tracking workflow progression. Overloading the subject with excessive metadata quickly leads to decreased system readability, increased complexity, and potential performance overhead.
+
+A strict architectural guideline emerges from this consideration: metadata should be kept minimal and purposeful. If absolutely necessary, limit additional metadata to no more than three string fields. However, the preferred approach is to store complex contextual information elsewhere in the system architecture. For extensive metadata requirements, developers should leverage alternative strategies such as:
+
+1. Storing detailed information in a dedicated data plane and referencing it through a compact key
+2. Utilizing the `data` field for comprehensive contextual information
+3. Employing dedicated metadata management services that can be referenced through lightweight identifiers
+
+By maintaining a disciplined approach to subject creation, architects can preserve the clean, focused design that makes Arvo's event handling so powerful and maintainable. The subject should remain a precise, lightweight mechanism for tracking event lineage, not a dumping ground for system-wide contextual information.
+
 ## Deep Dive: System Observability 
 
 System observability in distributed event-driven architectures presents unique challenges, particularly in tracing events as they flow between multiple services. Arvo addresses this challenge through native integration with OpenTelemetry, implementing distributed tracing through two critical event extensions: `traceparent` and `tracestate`. The `traceparent` field carries the core OpenTelemetry context, including trace ID, span ID, and trace flags, maintaining the connection between different spans as events traverse service boundaries. Meanwhile, the `tracestate` field supports vendor-specific tracing information, allowing organisations to include additional context while remaining compatible with the OpenTelemetry specification. This implementation ensures that when an event leaves one handler and moves to another, the tracing context seamlessly transfers, maintaining an unbroken chain of observability across the entire system.
