@@ -1,3 +1,9 @@
+---
+title: ArvoEventFactory
+group: Guides
+---
+
+
 # ArvoEventFactory: Streamlined Contract-Compliant Event Creation
 
 In the heart of Arvo's event-driven architecture lies the relationship between `ArvoEvent` and `ArvoContract`. While these structures form the foundation of the system, creating events that precisely align with contract specifications can be a complex endeavor. The `arvo-core` package addresses this challenge by introducing the ArvoEventFactory, a sophisticated utility that transforms event creation into an intuitive and reliable process.

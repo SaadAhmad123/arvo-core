@@ -92,3 +92,7 @@
 
 - Added helper functions and added Biome for better linting
 
+## [2.2.9] - 2025-01-29
+
+- Added better README.md docs and streamlined ArvoEventFactory subject field behaviour
+
