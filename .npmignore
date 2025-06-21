@@ -13,3 +13,6 @@ docs
 node_modules
 generate-changelog.sh
 .sonarcloud.properties
+.vscode
+biome.json
+CHANGELOG.md
