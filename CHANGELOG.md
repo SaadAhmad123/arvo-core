@@ -100,3 +100,7 @@
 
 - Updated dependency versions to latest
 
+## [2.3.0] - 2025-06-22
+
+- Adding support for event domain in the orchestration. This will allow the orchestrator to segregate events into domain and handle them as per their domains. This model opens up the possiblity of human in the loop kind of workflow as well as other very interesting ways to handle events
+
