@@ -71,4 +71,6 @@ export type CreateArvoEvent<TData extends ArvoEventData, TType extends string> =
   traceparent?: string;
   /** Conveys vendor-specific trace information across service boundaries (OpenTelemetry). */
   tracestate?: string;
+  /** The unique identifier of the event that directly triggered the creation of this event within the Arvo ecosystem. */
+  parentid?: string;
 };

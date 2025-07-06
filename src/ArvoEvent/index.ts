@@ -71,6 +71,7 @@ export default class ArvoEvent<
       executionunits: arvoExtension.executionunits,
       traceparent: otelExtension.traceparent,
       tracestate: otelExtension.tracestate,
+      parentid: arvoExtension.parentid,
     };
 
     if (this.datacontenttype === ArvoDataContentType) {
@@ -158,6 +159,7 @@ export default class ArvoEvent<
       'cloudevents.arvo.event_redirectto': this._extensions.redirectto ?? OTelNull,
       'cloudevents.arvo.event_to': this._extensions.to ?? OTelNull,
       'cloudevents.arvo.event_executionunits': this._extensions.executionunits ?? OTelNull,
+      'cloudevents.arvo.event_parentid': this._extensions.parentid ?? OTelNull,
     };
   }
 
@@ -185,6 +187,10 @@ export default class ArvoEvent<
     return this._extensions.tracestate;
   }
 
+  get parentid() {
+    return this._extensions.parentid;
+  }
+
   /**
    * Gets the custom extensions of the ArvoEvent.
    *
@@ -196,7 +202,7 @@ export default class ArvoEvent<
    * For accessing the basic CloudEvent fields, use `<ArvoEvent>.cloudevent.default`.
    */
   get extensions() {
-    const { traceparent, tracestate, to, redirectto, accesscontrol, executionunits, ...rest } = this
+    const { traceparent, tracestate, to, redirectto, accesscontrol, executionunits, parentid, ...rest } = this
       ._extensions as Record<string, any>;
     return rest as TExtension;
   }

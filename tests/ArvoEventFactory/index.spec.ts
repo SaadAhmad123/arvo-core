@@ -146,6 +146,92 @@ describe('createArvoEventFactory', () => {
     });
   });
 
+  describe('parentid support', () => {
+    it('should handle parentid in accepts method', () => {
+      const eventFactory = createArvoEventFactory(mockContract.version('0.0.1'));
+      const event = eventFactory.accepts({
+        source: 'com.test.test',
+        parentid: 'parent-event-123',
+        data: {
+          input: 'test-input',
+        },
+      });
+
+      expect(event.parentid).toBe('parent-event-123');
+      expect(event.type).toBe('test.input.0');
+      expect(event.data).toEqual({ input: 'test-input' });
+    });
+
+    it('should handle parentid in emits method', () => {
+      const eventFactory = createArvoEventFactory(mockContract.version('0.0.1'));
+      const event = eventFactory.emits({
+        type: 'test.output.0',
+        source: 'com.test.test',
+        parentid: 'parent-event-456',
+        data: {
+          output: 42,
+        },
+      });
+
+      expect(event.parentid).toBe('parent-event-456');
+      expect(event.type).toBe('test.output.0');
+      expect(event.data).toEqual({ output: 42 });
+    });
+
+    it('should handle parentid in systemError method', () => {
+      const eventFactory = createArvoEventFactory(mockContract.version('0.0.1'));
+      const event = eventFactory.systemError({
+        source: 'com.test.test',
+        parentid: 'parent-event-789',
+        error: new Error('Test error'),
+      });
+
+      expect(event.parentid).toBe('parent-event-789');
+      expect(event.data.errorName).toBe('Error');
+      expect(event.data.errorMessage).toBe('Test error');
+    });
+
+    it('should encode parentid with special characters', () => {
+      const eventFactory = createArvoEventFactory(mockContract.version('0.0.1'));
+      const event = eventFactory.accepts({
+        source: 'com.test.test',
+        parentid: 'parent event with spaces',
+        data: {
+          input: 'test-input',
+        },
+      });
+
+      expect(event.parentid).toBe('parent%20event%20with%20spaces');
+    });
+
+    it('should default parentid to null when not provided', () => {
+      const eventFactory = createArvoEventFactory(mockContract.version('0.0.1'));
+      const event = eventFactory.accepts({
+        source: 'com.test.test',
+        data: {
+          input: 'test-input',
+        },
+      });
+
+      expect(event.parentid).toBe(null);
+    });
+
+    it('should include parentid in OpenTelemetry attributes', () => {
+      const eventFactory = createArvoEventFactory(mockContract.version('0.0.1'));
+      const event = eventFactory.emits({
+        type: 'test.output.1',
+        source: 'com.test.test',
+        parentid: 'otel-parent-event',
+        data: {
+          message: 'test message',
+        },
+      });
+
+      const otelAttributes = event.otelAttributes;
+      expect(otelAttributes['cloudevents.arvo.event_parentid']).toBe('otel-parent-event');
+    });
+  });
+
   it('should generate subject automatically for accepts event', () => {
     const eventFactory = createArvoEventFactory(mockContract.version('0.0.1'));
     const event = eventFactory.accepts({

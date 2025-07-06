@@ -41,6 +41,7 @@ const generator = (
       to: event.to ? encodeURI(event.to) : encodeURI(event.type),
       redirectto: event.redirectto ? encodeURI(event.redirectto) : null,
       dataschema: event.dataschema ? encodeURI(event.dataschema) : null,
+      parentid: event.parentid ? encodeURI(event.parentid) : null,
     },
     event.data,
     extensions,

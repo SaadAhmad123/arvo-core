@@ -190,6 +190,19 @@ export const ArvoExtensionSchema = z
       within cloud-based systems or applications.
     `),
       ),
+    parentid: z
+      .string()
+      .min(1, 'ID must be a non-empty string')
+      .nullable()
+      .describe(
+        cleanString(`
+      The unique identifier of the event that directly triggered the creation 
+      of this event within the Arvo ecosystem. When set, it establishes a 
+      direct causal relationship for event lineage tracking and workflow 
+      orchestration. When null, it indicates this is an initiating event 
+      or was generated outside of direct event causation.
+      `),
+      ),
   })
   .describe('Schema for Arvo-specific extensions to the CloudEvent.');
 

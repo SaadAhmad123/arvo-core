@@ -153,4 +153,86 @@ describe('ArvoEvent', () => {
 
     expect(event.cloudevent.extensions.executionunits).toBe(100);
   });
+
+  it('should handle parentid extension', () => {
+    const eventWithParentId = {
+      ...baseEvent,
+      parentid: 'parent-event-123',
+    };
+
+    const event = createArvoEvent(eventWithParentId);
+
+    expect(event.parentid).toBe('parent-event-123');
+  });
+
+  it('should encode parentid URI components', () => {
+    const eventWithSpecialParentId = {
+      ...baseEvent,
+      parentid: 'parent event with spaces',
+    };
+
+    const event = createArvoEvent(eventWithSpecialParentId);
+
+    expect(event.parentid).toBe('parent%20event%20with%20spaces');
+  });
+
+  it('should handle null parentid', () => {
+    const event = createArvoEvent(baseEvent);
+
+    expect(event.parentid).toBe(null);
+  });
+
+  it('should include parentid in cloudevent extensions', () => {
+    const eventWithParentId = {
+      ...baseEvent,
+      parentid: 'parent-event-456',
+    };
+
+    const event = createArvoEvent(eventWithParentId);
+
+    expect(event.cloudevent.extensions.parentid).toBe('parent-event-456');
+  });
+
+  it('should include parentid in toJSON output', () => {
+    const eventWithParentId = {
+      ...baseEvent,
+      parentid: 'parent-event-789',
+    };
+
+    const event = createArvoEvent(eventWithParentId);
+    const jsonOutput = event.toJSON();
+
+    expect(jsonOutput.parentid).toBe('parent-event-789');
+  });
+
+  it('should include parentid in OpenTelemetry attributes', () => {
+    const eventWithParentId = {
+      ...baseEvent,
+      parentid: 'parent-event-otel',
+    };
+
+    const event = createArvoEvent(eventWithParentId);
+    const otelAttributes = event.otelAttributes;
+
+    expect(otelAttributes['cloudevents.arvo.event_parentid']).toBe('parent-event-otel');
+  });
+
+  it('should handle parentid with other Arvo extensions', () => {
+    const eventWithMultipleExtensions = {
+      ...baseEvent,
+      parentid: 'parent-event-multi',
+      to: 'recipient',
+      accesscontrol: 'public',
+      redirectto: 'redirect-url',
+      executionunits: 5,
+    };
+
+    const event = createArvoEvent(eventWithMultipleExtensions);
+
+    expect(event.parentid).toBe('parent-event-multi');
+    expect(event.to).toBe('recipient');
+    expect(event.accesscontrol).toBe('public');
+    expect(event.redirectto).toBe('redirect-url');
+    expect(event.executionunits).toBe(5);
+  });
 });
