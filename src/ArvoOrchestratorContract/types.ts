@@ -96,4 +96,5 @@ export interface ICreateArvoOrchestratorContract<
   versions: TVersions;
   metadata?: TMetaData;
   description?: string;
+  domain?: string;
 }

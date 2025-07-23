@@ -4,6 +4,357 @@ group: Guides
 ---
 # ArvoContract - A pragmatic contract system
 
+# Getting Started with ArvoContract
+
+This section provides a practical, step-by-step introduction to ArvoContract. You'll learn by building a simple user management service contract, creating events, and understanding the core patterns.
+
+
+## Your First Contract
+
+Let's create a contract for a user registration service. This will demonstrate the core ArvoContract concepts in a realistic scenario.
+
+### Step 1: Define Your First Contract
+
+Create a new file `contracts/user-registration.ts`:
+
+```typescript
+import { createArvoContract } from 'arvo-core';
+import { z } from 'zod';
+
+// Define the contract for user registration
+export const userRegistrationContract = createArvoContract({
+    uri: '#/services/user/registration',
+    type: 'com.user.register',
+    versions: {
+        '1.0.0': {
+            // What events this service accepts
+            accepts: z.object({
+                email: z.string().email('Must be a valid email'),
+                username: z.string().min(3, 'Username must be at least 3 characters'),
+                password: z.string().min(8, 'Password must be at least 8 characters'),
+            }),
+            // What events this service can emit
+            emits: {
+                'evt.user.registered': z.object({
+                    user_id: z.string(),
+                    email: z.string(),
+                    username: z.string(),
+                    created_at: z.string().datetime(),
+                }),
+                'evt.user.registration.failed': z.object({
+                    reason: z.string(),
+                    error_code: z.enum(['EMAIL_EXISTS', 'USERNAME_TAKEN', 'INVALID_INPUT']),
+                })
+            }
+        }
+    }
+});
+```
+
+**What's happening here?**
+- `uri`: Unique identifier for your contract
+- `type`: The event type your service accepts
+- `accepts`: Schema for incoming events (using Zod for validation)
+- `emits`: All possible events your service can send back
+
+### Step 2: Create Events Using Your Contract
+
+Create `examples/create-events.ts`:
+
+```typescript
+import { createArvoEventFactory } from 'arvo-core';
+import { userRegistrationContract } from '../contracts/user-registration';
+
+// Create a factory for your contract
+const factory = createArvoEventFactory(userRegistrationContract.version('1.0.0'));
+
+// Create an event that your service can accept
+const registrationRequest = factory.accepts({
+    source: 'com.web.frontend',
+    data: {
+        email: 'john.doe@example.com',
+        username: 'johndoe',
+        password: 'securepassword123'
+    }
+});
+
+console.log('Registration Request Event:');
+console.log(JSON.stringify(registrationRequest.toJSON(), null, 2));
+// Alternatively
+// console.log(registrationRequest.toString(2));
+
+// Create a success response event
+const successResponse = factory.emits({
+    type: 'evt.user.registered',
+    source: 'com.user.service',
+    subject: registrationRequest.subject, // Link to the original request
+    parentid: registrationRequest.id // Link the causality of the event
+    data: {
+        user_id: 'user_123456',
+        email: 'john.doe@example.com', 
+        username: 'johndoe',
+        created_at: new Date().toISOString()
+    }
+});
+
+console.log('\nSuccess Response Event:');
+console.log(successResponse.toString(2));
+
+// Create an error response event
+const errorResponse = factory.emits({
+    type: 'evt.user.registration.failed',
+    source: 'com.user.service',
+    subject: registrationRequest.subject, // Link to the original request
+    parentid: registrationRequest.id // Link the causality of the event
+    data: {
+        reason: 'Email address already exists in the system',
+        error_code: 'EMAIL_EXISTS'
+    }
+});
+
+console.log('\nError Response Event:');
+console.log(errorResponse.toString(2));
+```
+
+### Step 3: Run Your First Example
+
+```bash
+npx tsx examples/create-events.ts
+```
+
+You should see three formatted JSON events printed to the console, each properly validated and structured according to your contract.
+
+## Understanding What You Built
+
+### Event Structure
+Each event you created contains:
+- **Standard CloudEvent fields**: `id`, `source`, `type`, `subject`, `time`, etc.
+- **Validated data**: Your `data` field is validated against the contract schema
+- **Automatic dataschema**: References your contract version (e.g., `#/services/user/registration/1.0.0`)
+
+### Type Safety
+Try modifying the data in your example with invalid values:
+
+```typescript
+// This will throw a validation error
+const invalidRequest = factory.accepts({
+    source: 'com.web.frontend',
+    data: {
+        email: 'not-an-email',  // Invalid email format
+        username: 'ab',         // Too short
+        password: '123'         // Too short
+    }
+});
+```
+
+The contract will catch these errors at intellisence time, compile time and event creation time, preventing invalid events from entering your system.
+
+## Next Steps: Building a Simple Service Pattern
+
+Let's see how contracts work in a realistic service handler pattern. 
+
+> **Note:** Please, use `ArvoEventHandler` from `arvo-event-handler` package to handle events properly in development and production. The following documentation is for learning purposes only
+
+### Step 4: Create a Simple Event Handler
+
+Create `examples/user-service-handler.ts`:
+
+```typescript
+import { ArvoEvent, createArvoEventFactory } from 'arvo-core';
+import { userRegistrationContract } from '../contracts/user-registration';
+
+// Simulate a simple user database
+const userDatabase = new Set<string>(); // Store emails
+const usernameDatabase = new Set<string>(); // Store usernames
+
+// Create the factory for generating responses
+const factory = createArvoEventFactory(userRegistrationContract.version('1.0.0'));
+
+// Your service handler function
+async function handleUserRegistration(event: ArvoEvent): Promise<ArvoEvent[]> {
+    // Validate this is an event we can handle
+    if (event.type !== userRegistrationContract.type) {
+        // Return system error for unknown event types
+        return [factory.systemError({
+            source: 'com.user.service',
+            subject: event.subject,
+            error: new Error(`Unknown event type: ${event.type}`)
+        })];
+    }
+
+    try {
+        // Extract and validate the registration data
+        const contractVersion = userRegistrationContract.version('1.0.0');
+        const validationResult = contractVersion.accepts.schema.safeParse(event.data);
+        
+        if (!validationResult.success) {
+            return [factory.emits({
+                type: 'evt.user.registration.failed',
+                source: 'com.user.service',
+                subject: event.subject,
+                data: {
+                    reason: 'Invalid input data: ' + validationResult.error.message,
+                    error_code: 'INVALID_INPUT'
+                }
+            })];
+        }
+
+        const { email, username, password } = validationResult.data;
+
+        // Check for existing email
+        if (userDatabase.has(email)) {
+            return [factory.emits({
+                type: 'evt.user.registration.failed',
+                source: 'com.user.service',
+                subject: event.subject,
+                data: {
+                    reason: 'Email address already exists',
+                    error_code: 'EMAIL_EXISTS'
+                }
+            })];
+        }
+
+        // Check for existing username
+        if (usernameDatabase.has(username)) {
+            return [factory.emits({
+                type: 'evt.user.registration.failed',
+                source: 'com.user.service',
+                subject: event.subject,
+                data: {
+                    reason: 'Username already taken',
+                    error_code: 'USERNAME_TAKEN'
+                }
+            })];
+        }
+
+        // Simulate user creation
+        userDatabase.add(email);
+        usernameDatabase.add(username);
+        const userId = `user_${Date.now()}`;
+
+        // Return success event
+        return [factory.emits({
+            type: 'evt.user.registered',
+            source: 'com.user.service',
+            subject: event.subject,
+            data: {
+                user_id: userId,
+                email,
+                username,
+                created_at: new Date().toISOString()
+            }
+        })];
+
+    } catch (error) {
+        // Handle unexpected errors with system error events
+        return [factory.systemError({
+            source: 'com.user.service',
+            subject: event.subject,
+            error: error as Error
+        })];
+    }
+}
+
+// Test the handler
+async function testHandler() {
+    // Create a test registration request
+    const testRequest = factory.accepts({
+        source: 'com.web.frontend',
+        data: {
+            email: 'test@example.com',
+            username: 'testuser',
+            password: 'password123'
+        }
+    });
+
+    console.log('Processing registration request...');
+    const responses = await handleUserRegistration(testRequest);
+    
+    responses.forEach((response, index) => {
+        console.log(`\nResponse ${index + 1}:`);
+        console.log(`Type: ${response.type}`);
+        console.log(`Data:`, response.data);
+    });
+
+    // Test duplicate email
+    console.log('\n--- Testing duplicate email ---');
+    const duplicateRequest = factory.accepts({
+        source: 'com.web.frontend',
+        data: {
+            email: 'test@example.com', // Same email
+            username: 'anotheruser',
+            password: 'password123'
+        }
+    });
+
+    const duplicateResponses = await handleUserRegistration(duplicateRequest);
+    duplicateResponses.forEach((response, index) => {
+        console.log(`\nDuplicate Response ${index + 1}:`);
+        console.log(`Type: ${response.type}`);
+        console.log(`Data:`, response.data);
+    });
+}
+
+// Run the test
+testHandler().catch(console.error);
+```
+
+### Step 5: Run the Service Handler
+
+```bash
+npx tsx examples/user-service-handler.ts
+```
+
+This will demonstrate:
+- Contract-based event validation
+- Proper error handling with typed error events
+- Service response patterns following Arvo conventions
+
+## Key Patterns You've Learned
+
+### 1. Contract-First Design
+
+The most important pattern here is defining your contract before you write any service code. This might feel backwards if you're used to building the service first and then documenting it, but trust me on this one. When you start with the contract, you're forced to think through exactly what data your service needs and what it promises to return. The contract becomes your single source of truth for validation, and as a bonus, you get amazing TypeScript intellisense and compile-time type safety throughout your entire codebase.
+
+### 2. Event Factory Pattern
+
+The event factory pattern is your best friend for creating events safely. You'll use `createArvoEventFactory()` to get a factory instance, then call different methods depending on what you're doing. Use `.accepts()` when creating events that your service will receive, `.emits()` for events your service sends out to other parts of the system, and `.systemError()` when something goes wrong and you need to communicate that failure. This pattern eliminates the guesswork around event creation and makes sure everything is properly validated.
+
+### 3. Service Handler Pattern
+
+Every service in Arvo follows the same basic signature: it takes an `ArvoEvent` and returns a `Promise<ArvoEvent[]>`. This consistency makes the entire system predictable and easy to reason about. Always validate incoming events against your contract first thing, use system errors when unexpected stuff happens (like network failures or database crashes), and use business errors through emit events for things you expect might go wrong (like validation failures or business rule violations).
+
+### 4. Type Safety Throughout
+
+The combination of TypeScript and Zod gives you protection at every level. TypeScript catches type errors at compile time so you can't accidentally create malformed events, Zod validates the actual data at runtime to make sure it matches your schema, and your IDE will give you autocompletion and inline documentation for all your event fields. This safety net catches bugs early and makes refactoring much less scary.
+
+## What's Next?
+
+Now that you understand the basics, you can explore:
+
+1. **[Contract Evolution](#contract-evolution)** - Learn how to safely evolve your contracts over time
+2. **[Event Creation](#event-creation)** - Dive deeper into advanced event creation patterns
+3. **[Simple Contracts](#simple-contracts-with-createsimplearvocontract)** - Use streamlined contract creation for common patterns
+4. **[Orchestrator Contracts](#orchestrator-contracts)** - Coordinate complex workflows across multiple services
+5. **[Domain Routing](#contract-domains)** - Organize events across different processing contexts
+
+The foundation you've built here will support all these advanced patterns while maintaining the same type safety and validation guarantees.
+
+## Common Questions
+
+**Q: Do I need to define every possible event type in `emits`?**
+A: Yes, this is intentional. It makes your service's interface explicit and enables type safety for consumers.
+
+**Q: Can I change the contract after deployment?**
+A: You can add optional fields and new event types to the same version. Breaking changes require a new version. See the [Contract Evolution](#contract-evolution) section for details.
+
+**Q: How do I handle events from multiple contracts?**
+A: Create separate factories for each contract and check the event type to determine which handler to use.
+
+**Q: Should I put the contract in the same repository as my service?**
+A: For learning, yes. In production, consider distributing contracts as separate packages to enable better collaboration between teams.
+
+
 # Core concepts
 
 **Arvo** is built on a foundation where all communication occurs through specialised events called `ArvoEvent`, which are basically `CloudEvent` with a few extension fields to facilitate routing and distributed telemetry. These events flow through a system of services, each acting as an event handler that processes incoming events and potentially generates new ones in response. At its heart, Arvo treats every service as a function with a consistent signature: `ArvoEvent => Promise<ArvoEvent[]>`.
@@ -873,6 +1224,154 @@ Key Implementation Strategy:
 - Use semantic versioning to signal magnitude of changes, not compatibility
 
 This versioning philosophy acknowledges that in distributed systems, clear boundaries and explicit contracts are more valuable than complex compatibility promises.
+
+
+# Contract Domains
+
+The `domain` field in ArvoContract provides a powerful mechanism for organizing and routing events across different processing contexts within your distributed system. Domains enable specialized processing flows such as human-in-the-loop operations, third-party integrations, priority queues, or analytics pipelines while maintaining clear boundaries between different operational contexts.
+
+## Understanding Contract Domains
+
+When you define a domain at the contract level, it serves as a default processing context for all events created using that contract. This provides a consistent way to categorize and route events without requiring explicit domain specification for each event creation:
+
+```typescript
+const paymentContract = createArvoContract({
+    uri: '#/services/payments/transaction',
+    type: 'com.payment.process',
+    domain: 'financial.priority',  // Default domain for all events
+    versions: {
+        '1.0.0': {
+            accepts: z.object({
+                amount: z.number(),
+                currency: z.string(),
+                priority: z.enum(['standard', 'urgent'])
+            }),
+            emits: {
+                'evt.payment.processed': z.object({
+                    transaction_id: z.string(),
+                    status: z.string()
+                })
+            }
+        }
+    }
+});
+```
+
+## Domain Inheritance and Override Patterns
+
+The domain system follows a clear inheritance hierarchy that provides flexibility while maintaining consistency:
+
+1. **Contract Default**: Events inherit the contract's domain by default
+2. **Explicit Override**: Event creation can override the contract domain
+3. **Explicit Nullification**: Setting `domain: null` explicitly disables domain routing
+
+```typescript
+const factory = createArvoEventFactory(paymentContract.version('1.0.0'));
+
+// Uses contract's default domain: 'financial.priority'
+const standardEvent = factory.accepts({
+    source: 'com.payment.service',
+    data: { amount: 100, currency: 'USD', priority: 'standard' }
+});
+
+// Override to different domain
+const analyticsEvent = factory.accepts({
+    source: 'com.payment.service',
+    domain: 'analytics.realtime',
+    data: { amount: 100, currency: 'USD', priority: 'standard' }
+});
+
+// Explicitly disable domain routing
+const undirectedEvent = factory.accepts({
+    source: 'com.payment.service',
+    domain: null,
+    data: { amount: 100, currency: 'USD', priority: 'standard' }
+});
+```
+
+## Domain Naming Conventions
+
+Domains must follow strict naming rules to ensure consistent routing behavior:
+
+- **Character Set**: Only lowercase letters (a-z), numbers (0-9), and dots (.) are allowed
+- **Structure**: Use dot notation for hierarchical organization (e.g., `analytics.realtime`, `external.partners`)
+- **Length**: Keep domain names concise but descriptive
+- **Reserved Names**: Avoid generic names that might conflict with infrastructure components
+
+### Recommended Domain Patterns
+
+```typescript
+// Functional domains
+domain: 'analytics'          // Analytics processing
+domain: 'external'           // Third-party integrations
+domain: 'priority.high'      // High-priority processing
+domain: 'batch.nightly'      // Batch processing contexts
+
+// Environmental domains
+domain: 'staging.validation' // Staging environment validation
+domain: 'canary.testing'     // Canary deployment testing
+
+// Operational domains
+domain: 'human.review'       // Human-in-the-loop processes
+domain: 'compliance.audit'   // Compliance and audit workflows
+```
+
+## Orchestrator Domain Handling
+
+Orchestrator contracts have special domain handling that supports complex workflow coordination. The domain propagates through the orchestration hierarchy, maintaining context across parent-child relationships:
+
+```typescript
+const orderOrchestrator = createArvoOrchestratorContract({
+    uri: '#/orchestrators/order/fulfillment',
+    name: 'order.fulfillment',
+    domain: 'priority.processing',
+    versions: {
+        '1.0.0': {
+            init: z.object({
+                order_id: z.string(),
+                priority_level: z.enum(['standard', 'express', 'overnight'])
+            }),
+            complete: z.object({
+                fulfillment_status: z.string(),
+                tracking_number: z.string().optional()
+            })
+        }
+    }
+});
+
+const factory = createArvoOrchestratorEventFactory(orderOrchestrator.version('1.0.0'));
+
+// Inherits orchestrator's domain in the execution context
+const initEvent = factory.init({
+    source: 'com.order.service',
+    data: {
+        parentSubject$$: null,
+        order_id: 'ord-123',
+        priority_level: 'express'
+    }
+});
+
+// The orchestration subject contains domain information
+const subject = ArvoOrchestrationSubject.parse(initEvent.subject);
+console.log(subject.execution.domain); // 'priority.processing'
+```
+
+## Best Practices for Domain Usage
+
+> **Caution**: Use contract domain features sparingly and with clear intentionality. Events inherit domains from contracts by default, which can cause implicit routing behavior that makes debugging extremely challenging. The recommended default pattern is to keep contracts domain-free and instead specify domains explicitly during event creation within handlers. This approach ensures domain assignment remains visible and intentional at the point of event generation. Only assign contract-level domains when you are absolutely certain that every event from that contract should always be processed within that specific domain context.
+
+**Domain Boundaries**: Use domains to create clear operational boundaries that align with your system's processing requirements. Each domain should represent a distinct processing context with its own characteristics (latency requirements, security policies, resource allocation).
+
+**Avoid Over-Segmentation**: While domains provide powerful routing capabilities, avoid creating too many granular domains that complicate your system's operational model. Start with broad categories and refine as needed.
+
+**Consistent Naming**: Establish domain naming conventions early and document them clearly. Consistent naming helps with operational understanding and automation.
+
+**Domain Documentation**: Document what each domain represents, its processing characteristics, and any special handling requirements. This becomes crucial for system operations and troubleshooting.
+
+**Migration Strategy**: When introducing domains to existing systems, start with a null domain default and gradually migrate services to appropriate domains. This approach minimizes disruption while enabling gradual adoption of domain-based routing.
+
+The domain system in ArvoContract provides a foundation for sophisticated event routing and processing while maintaining the simplicity and clarity that makes Arvo effective for distributed system development.
+
 
 # Conclusion
 

@@ -30,6 +30,12 @@ export const ArvoOrchestrationSubjectContentSchema = z
           )
           .refine((value) => !value.includes(';'), 'Initiator must not contain semicolon')
           .describe('Entity or process that initiated the execution'),
+        domain: z
+          .string()
+          .min(1, 'The domain must be non-empty string')
+          .regex(/^[a-z0-9.]+$/, 'Domain must contain only lowercase letters, numbers, and dots')
+          .nullable()
+          .describe('The domain of the orchestration init event'),
       })
       .describe('Details about the current execution'),
     meta: z.record(z.string(), z.string()).describe(

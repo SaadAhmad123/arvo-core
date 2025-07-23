@@ -50,6 +50,7 @@ export const createArvoContract = <
   uri: TUri;
   type: TType;
   versions: TVersions;
+  domain?: string;
   metadata?: TMetaData;
   description?: string;
 }): ArvoContract<TUri, TType, TVersions, TMetaData> => {
@@ -76,6 +77,7 @@ export const createArvoContract = <
   return new ArvoContract({
     uri: contract.uri,
     type: contract.type,
+    domain: contract?.domain ?? null,
     description: contract.description ?? null,
     metadata: contract.metadata ?? ({} as TMetaData),
     versions: contract.versions,

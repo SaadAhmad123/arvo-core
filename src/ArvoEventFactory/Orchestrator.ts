@@ -47,8 +47,8 @@ export class ArvoOrchestratorEventFactory<
   init<TExtension extends Record<string, any>>(
     event: Omit<
       CreateArvoEvent<z.input<TContract['accepts']['schema']>, TContract['accepts']['type']>,
-      'type' | 'datacontenttype' | 'dataschema' | 'subject'
-    > & { subject?: string },
+      'type' | 'datacontenttype' | 'dataschema' | 'subject' | 'domain'
+    > & { subject?: string; domain?: string | null },
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
@@ -78,6 +78,7 @@ export class ArvoOrchestratorEventFactory<
                 orchestator: this.contract.accepts.type,
                 initiator: event.source,
                 version: this.contract.version,
+                domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
                 meta: event.redirectto
                   ? {
                       redirectto: event.redirectto,
@@ -98,6 +99,7 @@ export class ArvoOrchestratorEventFactory<
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.create(this.contract),
             data: validationResult.data,
+            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
           },
           extensions,
           { disable: true },
@@ -124,9 +126,10 @@ export class ArvoOrchestratorEventFactory<
         z.input<TContract['emits'][TContract['metadata']['completeEventType']]>,
         TContract['metadata']['completeEventType']
       >,
-      'datacontenttype' | 'dataschema' | 'type' | 'subject'
+      'datacontenttype' | 'dataschema' | 'type' | 'subject' | 'domain'
     > & {
       subject?: string;
+      domain?: string | null;
     },
     extensions?: TExtension,
   ) {
@@ -149,6 +152,7 @@ export class ArvoOrchestratorEventFactory<
             initiator: event.source,
             version: this.contract.version,
             orchestator: eventType,
+            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
             meta: event.redirectto
               ? {
                   redirectto: event.redirectto,
@@ -170,6 +174,7 @@ export class ArvoOrchestratorEventFactory<
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.create(this.contract),
             data: validationResult.data,
+            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
           },
           extensions,
           { disable: true },

@@ -107,3 +107,8 @@
 ## [2.3.3] - 2025-07-07
 
 - Added support for `parentid` in the ArvoEvent to track event causality
+
+## [3.0.0] - 2025-07-23
+
+- Added ArvoEvent domain which is a big change in thinkinh. However, by default there is not need to think about them the most. Bumping major verion as I am planning to merge the packages `arvo-event-handler` and `arvo-xstate` to `arvo-event-handler` because the now `arvo-xstate` has outgrown its conceptual boundaries. `ArvoResumable` is coming which is a resumable event orchestrator function and handler.
+

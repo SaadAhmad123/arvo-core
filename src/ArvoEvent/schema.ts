@@ -203,6 +203,22 @@ export const ArvoExtensionSchema = z
       or was generated outside of direct event causation.
       `),
       ),
+    domain: z
+      .string()
+      .min(1, 'Domain must be non-empty string')
+      .regex(/^[a-z0-9.]+$/, 'Domain must contain only lowercase letters, numbers, and dots')
+      .nullable()
+      .describe(
+        cleanString(`
+      Specifies the processing domain for event routing and workflow orchestration.
+      Events can be assigned to specific domains (e.g., 'external', 'analytics', 'priority')
+      to enable specialized processing flows such as human-in-the-loop operations,
+      third-party integrations, or custom handling pipelines. Each event can only
+      belong to one domain - if an event needs to be processed by multiple domains,
+      separate identical events (with different IDs) must be created for each respective
+      domain. Domain names must contain only lowercase letters, numbers, and dots.
+    `),
+      ),
   })
   .describe('Schema for Arvo-specific extensions to the CloudEvent.');
 

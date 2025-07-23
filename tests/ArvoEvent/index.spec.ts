@@ -1,4 +1,4 @@
-import { ArvoDataContentType, ArvoEvent, createArvoEvent } from '../../src';
+import { ArvoDataContentType, ArvoEvent, createArvoEvent, OTelNull } from '../../src';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
 describe('ArvoEvent', () => {
@@ -197,12 +197,15 @@ describe('ArvoEvent', () => {
     const eventWithParentId = {
       ...baseEvent,
       parentid: 'parent-event-789',
+      domain: 'test',
     };
 
     const event = createArvoEvent(eventWithParentId);
     const jsonOutput = event.toJSON();
 
     expect(jsonOutput.parentid).toBe('parent-event-789');
+    expect(jsonOutput.domain).toBe('test');
+    expect(jsonOutput.domain).toBe(event.domain);
   });
 
   it('should include parentid in OpenTelemetry attributes', () => {
@@ -215,6 +218,8 @@ describe('ArvoEvent', () => {
     const otelAttributes = event.otelAttributes;
 
     expect(otelAttributes['cloudevents.arvo.event_parentid']).toBe('parent-event-otel');
+    expect(event.domain).toBe(null);
+    expect(event.otelAttributes['cloudevents.arvo.event_domain']).toBe(OTelNull);
   });
 
   it('should handle parentid with other Arvo extensions', () => {
@@ -225,6 +230,7 @@ describe('ArvoEvent', () => {
       accesscontrol: 'public',
       redirectto: 'redirect-url',
       executionunits: 5,
+      domain: 'test.test',
     };
 
     const event = createArvoEvent(eventWithMultipleExtensions);
@@ -234,5 +240,48 @@ describe('ArvoEvent', () => {
     expect(event.accesscontrol).toBe('public');
     expect(event.redirectto).toBe('redirect-url');
     expect(event.executionunits).toBe(5);
+    expect(event.domain).toBe('test.test');
+    expect(event.otelAttributes['cloudevents.arvo.event_domain']).toBe('test.test');
+  });
+
+  it('should throw error on faulty domain', () => {
+    const eventWithMultipleExtensions = {
+      ...baseEvent,
+      parentid: 'parent-event-multi',
+      to: 'recipient',
+      accesscontrol: 'public',
+      redirectto: 'redirect-url',
+      executionunits: 5,
+      domain: 'test.test.TEST',
+    };
+
+    let error: Error | null = null;
+    try {
+      createArvoEvent(eventWithMultipleExtensions);
+    } catch (e) {
+      error = e as Error;
+    }
+
+    expect(error?.message?.includes('Domain must contain only lowercase letters, numbers, and dots')).toBe(true);
+  });
+
+  it('should throw error on empty string of domain', () => {
+    const eventWithMultipleExtensions = {
+      ...baseEvent,
+      parentid: 'parent-event-multi',
+      to: 'recipient',
+      accesscontrol: 'public',
+      redirectto: 'redirect-url',
+      executionunits: 5,
+      domain: '',
+    };
+
+    let error: Error | null = null;
+    try {
+      createArvoEvent(eventWithMultipleExtensions);
+    } catch (e) {
+      error = e as Error;
+    }
+    expect(error?.message?.includes('Domain must be non-empty string')).toBe(true);
   });
 });

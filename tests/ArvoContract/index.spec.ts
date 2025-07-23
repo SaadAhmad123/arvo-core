@@ -55,8 +55,6 @@ describe('ArvoContract', () => {
         },
       });
 
-      const V = contract.version('0.0.1');
-
       expect(contract).toBeInstanceOf(ArvoContract);
       expect(contract.uri).toBe('#/simple/test');
       expect(contract.type).toBe('com.simple.test');
@@ -71,6 +69,10 @@ describe('ArvoContract', () => {
       expect(contract.version('0.0.1').metadata.access).toBe('private');
       expect(contract.version('0.0.1').metadata.contractType).toBe('SimpleArvoContract');
       expect(contract.version('0.0.1').metadata.rootType).toBe('simple.test');
+
+      expect(contract.domain).toBe(null);
+      expect(contract.version('0.0.1').domain).toBe(null);
+      expect(contract.version('1.0.1').domain).toBe(null);
     });
 
     it('should create a valid ArvoContract instance', () => {
@@ -82,6 +84,9 @@ describe('ArvoContract', () => {
       expect(contract.version('0.0.1').emitList[0].type).toBe('com.example.output');
       expect(contract.systemError.type).toBe(`sys.${contract.type}.error`);
       expect(contract.version('latest').version).toBe('1.0.0');
+      expect(contract.domain).toBe(null);
+      expect(contract.version('0.0.1').domain).toBe(null);
+      expect(contract.version('1.0.0').domain).toBe(null);
     });
 
     it('should throw an error for invalid URI', () => {
@@ -196,6 +201,7 @@ describe('ArvoContract', () => {
     const complexContractSpec = {
       uri: '#/contracts/complexContract',
       type: 'com.example.complex',
+      domain: 'test.test',
       versions: {
         '0.0.1': {
           accepts: z.object({
@@ -263,6 +269,13 @@ describe('ArvoContract', () => {
     } as const;
 
     const contract = createArvoContract(complexContractSpec);
+
+    it('should have correct domains', () => {
+      expect(contract.domain).toBe('test.test');
+      expect(contract.version('0.0.1').domain).toBe('test.test');
+      expect(contract.version('0.0.2').domain).toBe('test.test');
+      expect(contract.version('any').domain).toBe('test.test');
+    });
 
     describe('validateAccepts', () => {
       it('should validate input with all required fields', () => {

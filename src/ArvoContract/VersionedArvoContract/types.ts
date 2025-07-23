@@ -36,6 +36,7 @@ export type ArvoContractRecordJsonSchema = {
 export type VersionedArvoContractJSONSchema = {
   uri: string;
   description: string | null;
+  domain: string | null;
   version: ArvoSemanticVersion;
   accepts: ArvoContractRecordJsonSchema;
   systemError: ArvoContractRecordJsonSchema;

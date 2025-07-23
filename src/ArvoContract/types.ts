@@ -58,6 +58,8 @@ export interface IArvoContract<
   metadata: TMetaData;
   /** A record mapping semantic versions to their corresponding schemas */
   versions: TVersions;
+  /** The domain of the contract handler */
+  domain: string | null;
 }
 
 /**
@@ -66,6 +68,7 @@ export interface IArvoContract<
  */
 export type ArvoContractJSONSchema = {
   uri: string;
+  domain: string | null;
   description: string | null;
   metadata: Record<string, any> | null;
   versions: Omit<VersionedArvoContractJSONSchema, 'uri' | 'description'>[];

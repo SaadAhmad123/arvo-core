@@ -14,6 +14,12 @@ export const ArvoContractValidators = {
       operations
     `),
       ),
+    domain: z
+      .string()
+      .min(1, 'The domain must be non-empty string')
+      .regex(/^[a-z0-9.]+$/, 'Domain must contain only lowercase letters, numbers, and dots')
+      .nullable()
+      .describe('The contract handler domian'),
   },
   record: {
     type: z

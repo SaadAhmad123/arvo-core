@@ -111,6 +111,7 @@ export const createArvoOrchestratorContract = <
 
   return new ArvoContract({
     uri: contract.uri,
+    domain: contract.domain ?? null,
     type: ArvoOrchestratorEventTypeGen.init(contract.name),
     description: contract.description ?? null,
     metadata: mergedMetaData,

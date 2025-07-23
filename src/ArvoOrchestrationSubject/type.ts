@@ -52,6 +52,9 @@ export type ArvoOrchestrationSubjectContent = {
      * "com.example.initiator-service"
      */
     initiator: string;
+
+    /** The domain of the init event */
+    domain: string | null;
   };
 
   /**

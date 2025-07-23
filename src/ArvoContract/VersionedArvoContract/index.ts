@@ -54,6 +54,9 @@ export class VersionedArvoContract<
   public get dataschema() {
     return EventDataschemaUtil.build<TContract['uri'], TVersion>(this.uri, this.version);
   }
+  public get domain() {
+    return this._contract.domain;
+  }
 
   constructor(param: IVersionedArvoContract<TContract, TVersion>) {
     this._version = param.version;
@@ -75,6 +78,7 @@ export class VersionedArvoContract<
       return {
         uri: this.uri,
         description: this.description,
+        domain: this.domain,
         version: this.version,
         metadata: this.metadata,
         accepts: {

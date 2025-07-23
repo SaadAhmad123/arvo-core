@@ -59,8 +59,8 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
   accepts<TExtension extends Record<string, any>>(
     event: Omit<
       CreateArvoEvent<z.input<TContract['accepts']['schema']>, TContract['accepts']['type']>,
-      'type' | 'datacontenttype' | 'dataschema' | 'subject'
-    > & { subject?: string },
+      'type' | 'datacontenttype' | 'dataschema' | 'subject' | 'domain'
+    > & { subject?: string; domain?: string | null },
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
@@ -99,6 +99,7 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.create(this.contract),
             data: validationResult.data,
+            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
           },
           extensions,
           { disable: true },
@@ -129,8 +130,12 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
    * ```
    */
   emits<U extends string & keyof TContract['emits'], TExtension extends Record<string, any>>(
-    event: Omit<CreateArvoEvent<z.input<TContract['emits'][U]>, U>, 'datacontenttype' | 'dataschema' | 'subject'> & {
+    event: Omit<
+      CreateArvoEvent<z.input<TContract['emits'][U]>, U>,
+      'datacontenttype' | 'dataschema' | 'subject' | 'domain'
+    > & {
       subject?: string;
+      domain?: string | null;
     },
     extensions?: TExtension,
   ) {
@@ -167,6 +172,7 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.create(this.contract),
             data: validationResult.data,
+            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
           },
           extensions,
           { disable: true },
@@ -197,9 +203,13 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
    * ```
    */
   systemError<TExtension extends Record<string, any>>(
-    event: Omit<CreateArvoEvent<any, any>, 'data' | 'type' | 'datacontenttype' | 'dataschema' | 'subject'> & {
+    event: Omit<
+      CreateArvoEvent<any, any>,
+      'data' | 'type' | 'datacontenttype' | 'dataschema' | 'subject' | 'domain'
+    > & {
       error: Error;
       subject?: string;
+      domain?: string | null;
     },
     extensions?: TExtension,
   ) {
@@ -238,6 +248,7 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
             data: createArvoError(error),
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.createWithWildCardVersion(this.contract),
+            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
           },
           extensions,
           { disable: true },

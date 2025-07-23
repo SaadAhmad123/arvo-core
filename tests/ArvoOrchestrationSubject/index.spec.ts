@@ -10,6 +10,7 @@ describe('ArvoOrchestrationSubject', () => {
     execution: {
       id: '123e4567-e89b-12d3-a456-426614174000',
       initiator: 'com.example.initiator',
+      domain: null,
     },
     meta: {},
   };
@@ -34,6 +35,30 @@ describe('ArvoOrchestrationSubject', () => {
       expect(parsed.execution.initiator).toBe('com.example.initiator');
       expect(parsed.execution.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i); // UUID v4 format
       expect(parsed.meta.sessionId).toBe('test-123-456');
+      expect(parsed.execution.domain).toBe(null);
+    });
+
+    it('should create a valid domained subject string', () => {
+      const subject = ArvoOrchestrationSubject.new({
+        orchestator: 'com.example.orchestrator',
+        version: '1.0.0',
+        initiator: 'com.example.initiator',
+        domain: 'test.test',
+        meta: {
+          sessionId: 'test-123-456',
+        },
+      });
+
+      expect(subject).toBeTruthy();
+      expect(typeof subject).toBe('string');
+
+      const parsed = ArvoOrchestrationSubject.parse(subject);
+      expect(parsed.orchestrator.name).toBe('com.example.orchestrator');
+      expect(parsed.orchestrator.version).toBe('1.0.0');
+      expect(parsed.execution.initiator).toBe('com.example.initiator');
+      expect(parsed.execution.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i); // UUID v4 format
+      expect(parsed.meta.sessionId).toBe('test-123-456');
+      expect(parsed.execution.domain).toBe('test.test');
     });
 
     it('should throw an error for invalid input', () => {

@@ -73,4 +73,6 @@ export type CreateArvoEvent<TData extends ArvoEventData, TType extends string> =
   tracestate?: string;
   /** The unique identifier of the event that directly triggered the creation of this event within the Arvo ecosystem. */
   parentid?: string;
+  /** Specifies the processing domain for event routing and workflow orchestration. Must contain only lowercase letters, numbers, and dots. */
+  domain?: string;
 };

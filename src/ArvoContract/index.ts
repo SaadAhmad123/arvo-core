@@ -62,6 +62,7 @@ export default class ArvoContract<
   protected readonly _versions: TVersions;
   protected readonly _description: string | null;
   protected readonly _metadata: TMetaData;
+  protected readonly _domain: string | null;
 
   public get uri() {
     return this._uri;
@@ -78,6 +79,9 @@ export default class ArvoContract<
   public get metadata() {
     return this._metadata;
   }
+  public get domain() {
+    return this._domain;
+  }
 
   /**
    * Creates a new ArvoContract instance with validated parameters.
@@ -90,16 +94,19 @@ export default class ArvoContract<
    * @throws {Error} When version is a reserved wildcard version
    * @throws {Error} When emit type format is invalid
    * @throws {Error} When no versions are provided
+   * @throws {Error} When domain does not have follow the condition Domain must contain only lowercase letters, numbers, and dots
    */
   constructor(params: IArvoContract<TUri, TType, TVersions, TMetaData>) {
+    ArvoContractValidators.contract.uri.parse(params.uri);
+    ArvoContractValidators.record.type.parse(params.type);
+    ArvoContractValidators.contract.domain.parse(params.domain);
+
     this._uri = params.uri;
     this._type = params.type;
     this._versions = params.versions;
     this._description = params.description ?? null;
     this._metadata = params.metadata;
-
-    ArvoContractValidators.contract.uri.parse(params.uri);
-    ArvoContractValidators.record.type.parse(params.type);
+    this._domain = params.domain;
 
     for (const [version, versionContract] of Object.entries(params.versions)) {
       ArvoSemanticVersionSchema.parse(version);
@@ -194,6 +201,7 @@ export default class ArvoContract<
     return {
       uri: this._uri,
       type: this._type,
+      domain: this._domain,
       description: this._description,
       versions: this._versions,
       metadata: this._metadata,
@@ -209,11 +217,13 @@ export default class ArvoContract<
     try {
       return {
         uri: this._uri,
+        domain: this._domain,
         description: this._description,
         metadata: this._metadata,
         versions: Object.keys(this._versions).map((version) => {
           const jsonSchema = this.version(version as ArvoSemanticVersion).toJsonSchema();
           return {
+            domain: jsonSchema.domain,
             version: jsonSchema.version,
             accepts: jsonSchema.accepts,
             systemError: jsonSchema.systemError,

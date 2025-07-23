@@ -60,6 +60,7 @@ export const createSimpleArvoContract = <
   uri: TUri;
   type: TType;
   versions: TVersions;
+  domain?: string;
   metadata?: TMetaData;
   description?: string;
 }) => {
@@ -73,6 +74,7 @@ export const createSimpleArvoContract = <
 
   return createArvoContract({
     uri: param.uri,
+    domain: param.domain,
     type: `com.${param.type}`,
     description: param.description,
     metadata: mergedMetadata,
