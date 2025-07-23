@@ -171,15 +171,15 @@ const usernameDatabase = new Set<string>(); // Store usernames
 const factory = createArvoEventFactory(userRegistrationContract.version('1.0.0'));
 
 // Your service handler function
-async function handleUserRegistration(event: ArvoEvent): Promise<ArvoEvent[]> {
+async function handleUserRegistration(event: ArvoEvent): Promise<{events: ArvoEvent[]}> {
     // Validate this is an event we can handle
     if (event.type !== userRegistrationContract.type) {
         // Return system error for unknown event types
-        return [factory.systemError({
+        return {events: [factory.systemError({
             source: 'com.user.service',
             subject: event.subject,
             error: new Error(`Unknown event type: ${event.type}`)
-        })];
+        })]};
     }
 
     try {
@@ -188,7 +188,7 @@ async function handleUserRegistration(event: ArvoEvent): Promise<ArvoEvent[]> {
         const validationResult = contractVersion.accepts.schema.safeParse(event.data);
         
         if (!validationResult.success) {
-            return [factory.emits({
+            return {events: [factory.emits({
                 type: 'evt.user.registration.failed',
                 source: 'com.user.service',
                 subject: event.subject,
@@ -196,14 +196,14 @@ async function handleUserRegistration(event: ArvoEvent): Promise<ArvoEvent[]> {
                     reason: 'Invalid input data: ' + validationResult.error.message,
                     error_code: 'INVALID_INPUT'
                 }
-            })];
+            })]};
         }
 
         const { email, username, password } = validationResult.data;
 
         // Check for existing email
         if (userDatabase.has(email)) {
-            return [factory.emits({
+            return {events: [factory.emits({
                 type: 'evt.user.registration.failed',
                 source: 'com.user.service',
                 subject: event.subject,
@@ -211,12 +211,12 @@ async function handleUserRegistration(event: ArvoEvent): Promise<ArvoEvent[]> {
                     reason: 'Email address already exists',
                     error_code: 'EMAIL_EXISTS'
                 }
-            })];
+            })]};
         }
 
         // Check for existing username
         if (usernameDatabase.has(username)) {
-            return [factory.emits({
+            return {events: [factory.emits({
                 type: 'evt.user.registration.failed',
                 source: 'com.user.service',
                 subject: event.subject,
@@ -224,7 +224,7 @@ async function handleUserRegistration(event: ArvoEvent): Promise<ArvoEvent[]> {
                     reason: 'Username already taken',
                     error_code: 'USERNAME_TAKEN'
                 }
-            })];
+            })]};
         }
 
         // Simulate user creation
@@ -233,7 +233,7 @@ async function handleUserRegistration(event: ArvoEvent): Promise<ArvoEvent[]> {
         const userId = `user_${Date.now()}`;
 
         // Return success event
-        return [factory.emits({
+        return {events: [factory.emits({
             type: 'evt.user.registered',
             source: 'com.user.service',
             subject: event.subject,
@@ -243,15 +243,15 @@ async function handleUserRegistration(event: ArvoEvent): Promise<ArvoEvent[]> {
                 username,
                 created_at: new Date().toISOString()
             }
-        })];
+        })]};
 
     } catch (error) {
         // Handle unexpected errors with system error events
-        return [factory.systemError({
+        return {events: [factory.systemError({
             source: 'com.user.service',
             subject: event.subject,
             error: error as Error
-        })];
+        })]};
     }
 }
 
@@ -270,7 +270,7 @@ async function testHandler() {
     console.log('Processing registration request...');
     const responses = await handleUserRegistration(testRequest);
     
-    responses.forEach((response, index) => {
+    responses.events.forEach((response, index) => {
         console.log(`\nResponse ${index + 1}:`);
         console.log(`Type: ${response.type}`);
         console.log(`Data:`, response.data);
@@ -288,7 +288,7 @@ async function testHandler() {
     });
 
     const duplicateResponses = await handleUserRegistration(duplicateRequest);
-    duplicateResponses.forEach((response, index) => {
+    duplicateResponses.events.forEach((response, index) => {
         console.log(`\nDuplicate Response ${index + 1}:`);
         console.log(`Type: ${response.type}`);
         console.log(`Data:`, response.data);
@@ -322,7 +322,7 @@ The event factory pattern is your best friend for creating events safely. You'll
 
 ### 3. Service Handler Pattern
 
-Every service in Arvo follows the same basic signature: it takes an `ArvoEvent` and returns a `Promise<ArvoEvent[]>`. This consistency makes the entire system predictable and easy to reason about. Always validate incoming events against your contract first thing, use system errors when unexpected stuff happens (like network failures or database crashes), and use business errors through emit events for things you expect might go wrong (like validation failures or business rule violations).
+Every service in Arvo follows the same basic signature: it takes an `ArvoEvent` and returns a `Promise<{events: ArvoEvent[]}>`. This consistency makes the entire system predictable and easy to reason about. Always validate incoming events against your contract first thing, use system errors when unexpected stuff happens (like network failures or database crashes), and use business errors through emit events for things you expect might go wrong (like validation failures or business rule violations).
 
 ### 4. Type Safety Throughout
 
