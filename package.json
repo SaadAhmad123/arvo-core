@@ -1,6 +1,6 @@
 {
   "name": "arvo-core",
-  "version": "3.0.1",
+  "version": "3.0.5",
   "description": "This core package contains all the core classes and components of the Arvo Event Driven System",
   "main": "dist/index.js",
   "scripts": {
