@@ -51,6 +51,10 @@ describe('createArvoEventFactory', () => {
   describe('emits', () => {
     it('should create a valid event when data matches the schema', async () => {
       const event = createArvoEventFactory(mockContract.version('0.0.1')).emits({
+        id: {
+          deduplication: 'DEVELOPER_MANAGED',
+          value: 'custom-id',
+        },
         type: 'test.output.0',
         source: 'test-source',
         subject: 'test-subject',
@@ -58,6 +62,7 @@ describe('createArvoEventFactory', () => {
         to: 'cmd.saad.test',
       });
 
+      expect(event.id).toBe('custom-id');
       expect(event).toBeDefined();
       expect(event.type).toBe('test.output.0');
       expect(event.data).toEqual({ output: 42 });

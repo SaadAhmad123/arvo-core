@@ -1,4 +1,5 @@
 import { ArvoDataContentType, ArvoEvent, createArvoEvent, OTelNull } from '../../src';
+import { parseArvoEventId } from '../../src/ArvoEvent/id';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 
 describe('ArvoEvent', () => {
@@ -58,16 +59,35 @@ describe('ArvoEvent', () => {
     }
   });
 
-  it('should use provided id and time if given', () => {
-    const eventWithIdAndTime = {
+  it('should use provided developer managed id and time if given', () => {
+    const event = createArvoEvent({
       ...baseEvent,
-      id: 'custom-id',
+      id: {
+        deduplication: 'DEVELOPER_MANAGED',
+        value: 'custom-id',
+      },
       time: '2023-05-01T12:00:00Z',
-    };
-
-    const event = createArvoEvent(eventWithIdAndTime);
+    });
 
     expect(event.id).toBe('custom-id');
+    expect(event.time).toBe('2023-05-01T12:00:00Z');
+  });
+
+  it('should use provided arvo managed id and time if given', () => {
+    const event = createArvoEvent({
+      ...baseEvent,
+      id: {
+        deduplication: 'ARVO_MANAGED',
+        value: 'custom-id',
+      },
+      time: '2023-05-01T12:00:00Z',
+    });
+
+    const result = parseArvoEventId(event.id);
+    expect(Boolean(result[1])).toBe(false);
+    if (result[1]) return;
+
+    expect(result[0].value).toBe('custom-id');
     expect(event.time).toBe('2023-05-01T12:00:00Z');
   });
 

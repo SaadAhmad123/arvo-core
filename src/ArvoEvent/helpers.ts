@@ -4,6 +4,7 @@ import { ArvoOpenTelemetry, currentOpenTelemetryHeaders, logToSpan } from '../Op
 import { cleanString, createTimestamp } from '../utils';
 import { ArvoDataContentType } from './schema';
 import type { ArvoEventData, CloudEventExtension, CreateArvoEvent } from './types';
+import { createArvoEventId } from './id';
 
 /**
  * Internal generator function for creating  instances.
@@ -27,7 +28,7 @@ const generator = (
 
   return new ArvoEvent<any, any, any>(
     {
-      id: event.id ?? uuid4(),
+      id: createArvoEventId(event.id),
       type: event.type,
       accesscontrol: event.accesscontrol ?? null,
       executionunits: event.executionunits ?? null,

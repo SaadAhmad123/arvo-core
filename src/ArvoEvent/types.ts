@@ -38,8 +38,28 @@ export type OpenTelemetryExtension = z.infer<typeof OpenTelemetryExtensionSchema
  * @template TType - The type name of the event
  */
 export type CreateArvoEvent<TData extends ArvoEventData, TType extends string> = {
-  /** Unique identifier of the event. Must be a non-empty string. If not provided, a UUID will be generated. */
-  id?: string;
+  /**
+   * The event id serves as the primary deduplication key within the Arvo system,
+   * ensuring idempotent event processing. If not provided, a UUID v4 will be automatically generated.
+   */
+  id?: {
+    /**
+     * Deduplication identifier management strategy.
+     *
+     * - `DEVELOPER_MANAGED`: You, the developer, guarantee uniqueness of the identifier value.
+     *   The provided value is used directly as the deduplication key without modification.
+     *
+     * - `ARVO_MANAGED`: Arvo manages identifier uniqueness by generating a composite key.
+     *   The final identifier follows the format `base64({uuid: uuid4(), value: value})`,
+     *   where a UUID v4 prefix ensures global uniqueness while preserving the developer's
+     *   value for reference.
+     */
+    deduplication: 'DEVELOPER_MANAGED' | 'ARVO_MANAGED';
+    /**
+     * The id value
+     */
+    value: string;
+  };
   /** Timestamp of when the occurrence happened. Must be in ISO 8601 format with timezone offset. */
   time?: string;
   /** Identifies the context in which an event happened. Must be a valid URI representing the event producer. */

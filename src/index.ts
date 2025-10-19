@@ -57,6 +57,7 @@ import { OpenInferenceSpanKind } from './OpenTelemetry/OpenInference/types';
 import { ViolationError, ViolationErrorParam } from './errors';
 import { ArvoErrorSchema, ArvoSemanticVersionSchema, isValidArvoSemanticVersion } from './schema';
 import { ArvoErrorType, ArvoSemanticVersion, InferArvoEvent, InferVersionedArvoContract } from './types';
+import { ArvoEventIdObjectSchema, createArvoEventId, parseArvoEventId, ArvoEventIdObject } from './ArvoEvent/id';
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -136,4 +137,8 @@ export {
   ViolationError,
   ViolationErrorParam,
   createArvoError,
+  createArvoEventId,
+  parseArvoEventId,
+  ArvoEventIdObjectSchema,
+  ArvoEventIdObject,
 };
