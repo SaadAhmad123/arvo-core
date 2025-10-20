@@ -1,10 +1,9 @@
-import { v4 as uuid4 } from 'uuid';
 import ArvoEvent from '.';
 import { ArvoOpenTelemetry, currentOpenTelemetryHeaders, logToSpan } from '../OpenTelemetry';
 import { cleanString, createTimestamp } from '../utils';
+import { createArvoEventId } from './id';
 import { ArvoDataContentType } from './schema';
 import type { ArvoEventData, CloudEventExtension, CreateArvoEvent } from './types';
-import { createArvoEventId } from './id';
 
 /**
  * Internal generator function for creating  instances.

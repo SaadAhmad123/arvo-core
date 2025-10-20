@@ -112,3 +112,7 @@
 
 - Added ArvoEvent domain which is a big change in thinkinh. However, by default there is not need to think about them the most. Bumping major verion as I am planning to merge the packages `arvo-event-handler` and `arvo-xstate` to `arvo-event-handler` because the now `arvo-xstate` has outgrown its conceptual boundaries. `ArvoResumable` is coming which is a resumable event orchestrator function and handler.
 
+## [3.0.8] - 2025-10-20
+
+- Added primitive for type guarding ViolationError which is quite robust
+

@@ -25,7 +25,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>68/68</span>
+                <span class='fraction'>69/69</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">41.17% </span>
+                <span class="strong">42.85% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>14/34</span>
+                <span class='fraction'>15/35</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>68/68</span>
+                <span class='fraction'>69/69</span>
             </div>
         
             
@@ -207,7 +207,8 @@
 <a name='L142'></a><a href='#L142'>142</a>
 <a name='L143'></a><a href='#L143'>143</a>
 <a name='L144'></a><a href='#L144'>144</a>
-<a name='L145'></a><a href='#L145'>145</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
@@ -254,19 +255,19 @@
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
-<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -343,13 +344,14 @@
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">21x</span>
 <span class="cline-any cline-yes">9x</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">12x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">23x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import ArvoContract from './ArvoContract';
 import { createArvoContract } from './ArvoContract/helpers';
@@ -393,6 +395,7 @@ import {
   ResolveArvoContractRecord,
 } from './ArvoContract/types';
 import { ArvoContractValidators } from './ArvoContract/validators';
+import { ArvoEventIdObject, ArvoEventIdObjectSchema, createArvoEventId, parseArvoEventId } from './ArvoEvent/id';
 import ArvoEventFactory from './ArvoEventFactory';
 import { ArvoOrchestratorEventFactory } from './ArvoEventFactory/Orchestrator';
 import { createArvoEventFactory, createArvoOrchestratorEventFactory } from './ArvoEventFactory/helpers';
@@ -407,10 +410,9 @@ import ArvoExecution from './OpenTelemetry/ArvoExecution';
 import { ArvoExecutionSpanKind } from './OpenTelemetry/ArvoExecution/types';
 import OpenInference from './OpenTelemetry/OpenInference';
 import { OpenInferenceSpanKind } from './OpenTelemetry/OpenInference/types';
-import { ViolationError, ViolationErrorParam } from './errors';
+import { ViolationError, ViolationErrorParam, isViolationError } from './errors';
 import { ArvoErrorSchema, ArvoSemanticVersionSchema, isValidArvoSemanticVersion } from './schema';
 import { ArvoErrorType, ArvoSemanticVersion, InferArvoEvent, InferVersionedArvoContract } from './types';
-import { ArvoEventIdObjectSchema, createArvoEventId, parseArvoEventId, ArvoEventIdObject } from './ArvoEvent/id';
 &nbsp;
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -494,6 +496,7 @@ export {
 <span class="fstat-no" title="function not covered" >  parseArvoEventId,</span>
 <span class="fstat-no" title="function not covered" >  ArvoEventIdObjectSchema,</span>
   ArvoEventIdObject,
+  isViolationError,
 };
 &nbsp;</pre></td></tr></table></pre>
 
@@ -502,7 +505,7 @@ export {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-10-19T10:10:52.410Z
+                at 2025-10-20T00:45:09.496Z
             </div>
         <script src="../prettify.js"></script>
         <script>

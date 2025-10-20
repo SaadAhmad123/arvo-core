@@ -1,4 +1,4 @@
-import { ArvoDataContentType, ArvoEvent, createArvoEvent, OTelNull } from '../../src';
+import { ArvoDataContentType, ArvoEvent, OTelNull, createArvoEvent } from '../../src';
 import { parseArvoEventId } from '../../src/ArvoEvent/id';
 import { telemetrySdkStart, telemetrySdkStop } from '../utils';
 

@@ -40,6 +40,7 @@ import {
   ResolveArvoContractRecord,
 } from './ArvoContract/types';
 import { ArvoContractValidators } from './ArvoContract/validators';
+import { ArvoEventIdObject, ArvoEventIdObjectSchema, createArvoEventId, parseArvoEventId } from './ArvoEvent/id';
 import ArvoEventFactory from './ArvoEventFactory';
 import { ArvoOrchestratorEventFactory } from './ArvoEventFactory/Orchestrator';
 import { createArvoEventFactory, createArvoOrchestratorEventFactory } from './ArvoEventFactory/helpers';
@@ -54,10 +55,9 @@ import ArvoExecution from './OpenTelemetry/ArvoExecution';
 import { ArvoExecutionSpanKind } from './OpenTelemetry/ArvoExecution/types';
 import OpenInference from './OpenTelemetry/OpenInference';
 import { OpenInferenceSpanKind } from './OpenTelemetry/OpenInference/types';
-import { ViolationError, ViolationErrorParam } from './errors';
+import { ViolationError, ViolationErrorParam, isViolationError } from './errors';
 import { ArvoErrorSchema, ArvoSemanticVersionSchema, isValidArvoSemanticVersion } from './schema';
 import { ArvoErrorType, ArvoSemanticVersion, InferArvoEvent, InferVersionedArvoContract } from './types';
-import { ArvoEventIdObjectSchema, createArvoEventId, parseArvoEventId, ArvoEventIdObject } from './ArvoEvent/id';
 
 /**
  * Collection of Zod schemas for validating various aspects of Arvo events.
@@ -141,4 +141,5 @@ export {
   parseArvoEventId,
   ArvoEventIdObjectSchema,
   ArvoEventIdObject,
+  isViolationError,
 };

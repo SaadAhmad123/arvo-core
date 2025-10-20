@@ -1,7 +1,7 @@
 import pako from 'pako';
 import { v4 as uuid4 } from 'uuid';
-import { CreateArvoEvent } from './types';
 import { z } from 'zod';
+import type { CreateArvoEvent } from './types';
 
 export const ArvoEventIdObjectSchema = z.object({
   uuid: z.string(),
