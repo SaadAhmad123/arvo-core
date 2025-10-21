@@ -4,7 +4,7 @@
  * @see https://github.com/Arize-ai/openinference/blob/main/spec/semantic_conventions.md
  */
 // biome-ignore lint/complexity/noStaticOnlyClass: This needs to be a static class to group methods together
-export default class OpenInference {
+export class OpenInference {
   static readonly ATTR_SPAN_KIND = 'openinference.span.kind';
 
   // Document attributes
@@ -95,3 +95,19 @@ export default class OpenInference {
   // User attribute
   static readonly ATTR_USER_ID = 'user.id';
 }
+
+/**
+ * The open inference span kind as per
+ * https://github.com/Arize-ai/openinference/blob/main/spec/traces.md#span-kind
+ */
+export const OpenInferenceSpanKind = {
+  CHAIN: 'CHAIN',
+  RETRIEVER: 'RETRIEVER',
+  RERANKER: 'RERANKER',
+  LLM: 'LLM',
+  EMBEDDING: 'EMBEDDING',
+  TOOL: 'TOOL',
+  GUARDRAIL: 'GUARDRAIL',
+  EVALUATOR: 'EVALUATOR',
+  INTERNAL: 'INTERNAL',
+};

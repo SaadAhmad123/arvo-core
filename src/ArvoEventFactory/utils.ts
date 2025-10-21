@@ -1,9 +1,7 @@
 import { SpanKind } from '@opentelemetry/api';
 import type { VersionedArvoContract } from '../ArvoContract/VersionedArvoContract';
-import ArvoExecution from '../OpenTelemetry/ArvoExecution';
-import { ArvoExecutionSpanKind } from '../OpenTelemetry/ArvoExecution/types';
-import OpenInference from '../OpenTelemetry/OpenInference';
-import { OpenInferenceSpanKind } from '../OpenTelemetry/OpenInference/types';
+import { ArvoExecution, ArvoExecutionSpanKind } from '../OpenTelemetry/ArvoExecution';
+import { OpenInference, OpenInferenceSpanKind } from '../OpenTelemetry/OpenInference';
 
 export const createSpanOptions = (contract: VersionedArvoContract<any, any>) => ({
   kind: SpanKind.INTERNAL,

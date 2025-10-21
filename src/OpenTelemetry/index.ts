@@ -10,8 +10,7 @@ import {
   trace,
 } from '@opentelemetry/api';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
-import ArvoExecution from './ArvoExecution';
-import { ArvoExecutionSpanKind } from './ArvoExecution/types';
+import { ArvoExecution, ArvoExecutionSpanKind } from './ArvoExecution';
 import type { OpenTelemetryHeaders, TelemetryLogLevel } from './types';
 
 /**
@@ -247,6 +246,12 @@ export function currentOpenTelemetryHeaders(): OpenTelemetryHeaders {
     tracestate: carrier.tracestate,
   };
 }
+
+export const getOtelHeaderFromSpan = (span: Span) =>
+  ({
+    traceparent: `00-${span.spanContext().traceId}-${span.spanContext().spanId}-01`,
+    tracestate: span.spanContext().traceState ?? null,
+  }) as OpenTelemetryHeaders;
 
 // Helper function to extract context from traceparent and tracestate
 export const makeOpenTelemetryContextContext = (traceparent: string, tracestate: string | null): Context => {

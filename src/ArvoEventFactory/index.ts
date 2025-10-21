@@ -26,7 +26,7 @@ import { createSpanOptions } from './utils';
  * ```
  */
 export default class ArvoEventFactory<TContract extends VersionedArvoContract<any, any>> {
-  protected readonly _name: string = 'ArvoEventFactory';
+  protected readonly _name: string = 'EventFactory';
   protected readonly contract: TContract;
 
   /**
@@ -64,7 +64,7 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
-      name: `${this._name}.accepts`,
+      name: `${this._name}.accepts<${this.contract.accepts.type}>`,
       spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();
@@ -214,7 +214,7 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
-      name: `${this._name}.systemError`,
+      name: `${this._name}.systemError<${this.contract.systemError.type}>`,
       spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();

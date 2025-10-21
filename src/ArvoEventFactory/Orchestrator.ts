@@ -24,7 +24,7 @@ import { createSpanOptions } from './utils';
 export class ArvoOrchestratorEventFactory<
   TContract extends VersionedArvoContract<any, any>,
 > extends ArvoEventFactory<TContract> {
-  protected readonly _name: string = 'ArvoOrchestratorEventFactory';
+  protected readonly _name: string = 'OrchestratorEventFactory';
 
   constructor(contract: TContract) {
     if ((contract.metadata as ArvoOrchestratorContract['metadata'])?.contractType !== 'ArvoOrchestratorContract') {
@@ -52,7 +52,7 @@ export class ArvoOrchestratorEventFactory<
     extensions?: TExtension,
   ) {
     return ArvoOpenTelemetry.getInstance().startActiveSpan({
-      name: `${this._name}.init`,
+      name: `${this._name}.init<${this.contract.accepts.type}>`,
       spanOptions: createSpanOptions(this.contract),
       fn: (span) => {
         const otelHeaders = currentOpenTelemetryHeaders();

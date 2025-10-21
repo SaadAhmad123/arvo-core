@@ -116,3 +116,7 @@
 
 - Added primitive for type guarding ViolationError which is quite robust
 
+## [3.0.10] - 2025-10-21
+
+- Improved OTEL logging
+

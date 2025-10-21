@@ -18,7 +18,14 @@ import {
   CreateArvoEvent,
   OpenTelemetryExtension,
 } from './ArvoEvent/types';
-import { ArvoOpenTelemetry, OTelNull, currentOpenTelemetryHeaders, exceptionToSpan, logToSpan } from './OpenTelemetry';
+import {
+  ArvoOpenTelemetry,
+  OTelNull,
+  currentOpenTelemetryHeaders,
+  exceptionToSpan,
+  getOtelHeaderFromSpan,
+  logToSpan,
+} from './OpenTelemetry';
 import { OpenTelemetryHeaders, TelemetryLogLevel } from './OpenTelemetry/types';
 import {
   EventDataschemaUtil,
@@ -51,10 +58,8 @@ import { createArvoOrchestratorContract } from './ArvoOrchestratorContract';
 import { OrchestrationInitEventBaseSchema } from './ArvoOrchestratorContract/schema';
 import { ArvoOrchestratorEventTypeGen } from './ArvoOrchestratorContract/typegen';
 import { ArvoOrchestratorContract, ICreateArvoOrchestratorContract } from './ArvoOrchestratorContract/types';
-import ArvoExecution from './OpenTelemetry/ArvoExecution';
-import { ArvoExecutionSpanKind } from './OpenTelemetry/ArvoExecution/types';
-import OpenInference from './OpenTelemetry/OpenInference';
-import { OpenInferenceSpanKind } from './OpenTelemetry/OpenInference/types';
+import { ArvoExecution, ArvoExecutionSpanKind } from './OpenTelemetry/ArvoExecution';
+import { OpenInference, OpenInferenceSpanKind } from './OpenTelemetry/OpenInference';
 import { ViolationError, ViolationErrorParam, isViolationError } from './errors';
 import { ArvoErrorSchema, ArvoSemanticVersionSchema, isValidArvoSemanticVersion } from './schema';
 import { ArvoErrorType, ArvoSemanticVersion, InferArvoEvent, InferVersionedArvoContract } from './types';
@@ -142,4 +147,5 @@ export {
   ArvoEventIdObjectSchema,
   ArvoEventIdObject,
   isViolationError,
+  getOtelHeaderFromSpan,
 };
