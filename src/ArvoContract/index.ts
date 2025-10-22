@@ -5,7 +5,7 @@ import type { ArvoSemanticVersion } from '../types';
 import { compareSemanticVersions } from '../utils';
 import { VersionedArvoContract } from './VersionedArvoContract';
 import { WildCardArvoSemanticVersion, isWildCardArvoSematicVersion } from './WildCardArvoSemanticVersion';
-import type { ArvoContractJSONSchema, ArvoContractRecord, IArvoContract } from './types';
+import type { ArvoContractJSONSchema, ArvoContractParam, ArvoContractRecord } from './types';
 import { ArvoContractValidators } from './validators';
 
 /**
@@ -96,7 +96,7 @@ export default class ArvoContract<
    * @throws {Error} When no versions are provided
    * @throws {Error} When domain does not have follow the condition Domain must contain only lowercase letters, numbers, and dots
    */
-  constructor(params: IArvoContract<TUri, TType, TVersions, TMetaData>) {
+  constructor(params: ArvoContractParam<TUri, TType, TVersions, TMetaData>) {
     ArvoContractValidators.contract.uri.parse(params.uri);
     ArvoContractValidators.record.type.parse(params.type);
     ArvoContractValidators.contract.domain.parse(params.domain);
@@ -197,7 +197,7 @@ export default class ArvoContract<
    * Exports the ArvoContract instance as a plain object conforming to the IArvoContract interface.
    * This method can be used to serialize the contract or to create a new instance with the same parameters.
    */
-  public export(): IArvoContract<TUri, TType, TVersions> {
+  public export(): ArvoContractParam<TUri, TType, TVersions> {
     return {
       uri: this._uri,
       type: this._type,

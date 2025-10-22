@@ -30,7 +30,7 @@ export type ResolveArvoContractRecord<T extends ArvoContractRecord> = z.infer<T[
  * @template TVersions - A record of versioned schemas, mapping semantic versions to their accept/emit schemas
  * @template TMetaData - Optional metadata type
  */
-export interface IArvoContract<
+export type ArvoContractParam<
   TUri extends string = string,
   TType extends string = string,
   TVersions extends Record<
@@ -47,7 +47,7 @@ export interface IArvoContract<
     }
   >,
   TMetaData extends Record<string, any> = Record<string, any>,
-> {
+> = {
   /** The unique URI identifier for this contract */
   uri: TUri;
   /** The event type that this contract's handler accepts */
@@ -60,7 +60,7 @@ export interface IArvoContract<
   versions: TVersions;
   /** The domain of the contract handler */
   domain: string | null;
-}
+};
 
 /**
  * Represents the JSON Schema representation of an ArvoContract, used for serialization

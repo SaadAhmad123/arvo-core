@@ -7,13 +7,13 @@ import type { ArvoSemanticVersion } from '../../types';
  * to contract specifications for a particular semantic version. This interface acts as
  * a bridge between the base contract and its versioned implementation.
  */
-export interface IVersionedArvoContract<
+export type VersionedArvoContractParam<
   TContract extends ArvoContract,
   TVersion extends ArvoSemanticVersion & keyof TContract['versions'],
-> {
+> = {
   contract: TContract;
   version: TVersion;
-}
+};
 
 /**
  * Represents the standardized JSON Schema structure for an Arvo contract record.

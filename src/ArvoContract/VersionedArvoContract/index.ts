@@ -5,7 +5,7 @@ import type { ArvoSemanticVersion } from '../../types';
 import { EventDataschemaUtil } from '../../utils';
 import { WildCardArvoSemanticVersion } from '../WildCardArvoSemanticVersion';
 import type { ArvoContractRecord } from '../types';
-import type { IVersionedArvoContract, VersionedArvoContractJSONSchema } from './types';
+import type { VersionedArvoContractJSONSchema, VersionedArvoContractParam } from './types';
 import { transformEmitsToArray } from './utils';
 
 /**
@@ -58,7 +58,7 @@ export class VersionedArvoContract<
     return this._contract.domain;
   }
 
-  constructor(param: IVersionedArvoContract<TContract, TVersion>) {
+  constructor(param: VersionedArvoContractParam<TContract, TVersion>) {
     this._version = param.version;
     this._contract = param.contract;
     this._accepts = {

@@ -87,11 +87,11 @@ export const createTimestamp = (offsetHours = 0): string => {
  * @param version Semantic version string (e.g. "1.2.3")
  * @returns Object containing major, minor, and patch numbers
  */
-interface VersionComponents {
+type VersionComponents = {
   major: number;
   minor: number;
   patch: number;
-}
+};
 
 export function parseSemanticVersion(version: ArvoSemanticVersion): VersionComponents {
   const [major, minor, patch] = version.split('.').map((part) => {

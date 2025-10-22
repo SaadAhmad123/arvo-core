@@ -3,7 +3,7 @@ import ArvoContract from '../ArvoContract';
 import type { ArvoSemanticVersion } from '../types';
 import { OrchestrationInitEventBaseSchema } from './schema';
 import { ArvoOrchestratorEventTypeGen } from './typegen';
-import type { ArvoOrchestratorContract, ICreateArvoOrchestratorContract } from './types';
+import type { ArvoOrchestratorContract, CreateArvoOrchestratorContractParam } from './types';
 
 /**
  * Validates if a string contains only uppercase or lowercase alphanumeric characters.
@@ -93,7 +93,7 @@ export const createArvoOrchestratorContract = <
   >,
   TMetaData extends Record<string, any>,
 >(
-  contract: ICreateArvoOrchestratorContract<TUri, TName, TVersions, TMetaData>,
+  contract: CreateArvoOrchestratorContractParam<TUri, TName, TVersions, TMetaData>,
 ) => {
   if (!isLowerAlphanumeric(contract.name)) {
     throw new Error(

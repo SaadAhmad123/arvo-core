@@ -42,8 +42,8 @@ import { VersionedArvoContract } from './ArvoContract/VersionedArvoContract';
 import { WildCardArvoSemanticVersion, isWildCardArvoSematicVersion } from './ArvoContract/WildCardArvoSemanticVersion';
 import {
   ArvoContractJSONSchema,
+  ArvoContractParam,
   ArvoContractRecord,
-  IArvoContract,
   ResolveArvoContractRecord,
 } from './ArvoContract/types';
 import { ArvoContractValidators } from './ArvoContract/validators';
@@ -57,7 +57,7 @@ import { ArvoOrchestrationSubjectContent } from './ArvoOrchestrationSubject/type
 import { createArvoOrchestratorContract } from './ArvoOrchestratorContract';
 import { OrchestrationInitEventBaseSchema } from './ArvoOrchestratorContract/schema';
 import { ArvoOrchestratorEventTypeGen } from './ArvoOrchestratorContract/typegen';
-import { ArvoOrchestratorContract, ICreateArvoOrchestratorContract } from './ArvoOrchestratorContract/types';
+import { ArvoOrchestratorContract, CreateArvoOrchestratorContractParam } from './ArvoOrchestratorContract/types';
 import { ArvoExecution, ArvoExecutionSpanKind } from './OpenTelemetry/ArvoExecution';
 import { OpenInference, OpenInferenceSpanKind } from './OpenTelemetry/OpenInference';
 import { ViolationError, ViolationErrorParam, isViolationError } from './errors';
@@ -104,7 +104,7 @@ export {
   createArvoContract,
   ArvoContractValidators,
   ArvoContractRecord,
-  IArvoContract,
+  ArvoContractParam as IArvoContract,
   ResolveArvoContractRecord,
   ArvoEventFactory,
   createArvoEventFactory,
@@ -119,7 +119,7 @@ export {
   ArvoSemanticVersion,
   InferArvoEvent,
   createArvoOrchestratorContract,
-  ICreateArvoOrchestratorContract,
+  CreateArvoOrchestratorContractParam as ICreateArvoOrchestratorContract,
   ArvoOrchestratorEventTypeGen,
   EventDataschemaUtil,
   ArvoOrchestrationSubjectContentSchema,

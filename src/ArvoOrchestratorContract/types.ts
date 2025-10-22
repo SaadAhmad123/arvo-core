@@ -79,7 +79,7 @@ export type ArvoOrchestratorContract<
  * - The type will be used to generate appropriate event type strings
  * - Each version must conform to {@link ArvoSemanticVersion} format
  */
-export interface ICreateArvoOrchestratorContract<
+export type CreateArvoOrchestratorContractParam<
   TUri extends string,
   TName extends string,
   TVersions extends Record<
@@ -90,11 +90,11 @@ export interface ICreateArvoOrchestratorContract<
     }
   >,
   TMetaData extends Record<string, any>,
-> {
+> = {
   uri: TUri;
   name: TName;
   versions: TVersions;
   metadata?: TMetaData;
   description?: string;
   domain?: string;
-}
+};
