@@ -1,10 +1,7 @@
 ARG NODE_VERSION=18
 FROM node:${NODE_VERSION}-alpine
 
-# Set up clean working directory
 WORKDIR /install
-
-# Copy package files (package.json and package-lock.json if it exists)
 COPY package*.json ./
 
 # Build arguments for optional package installation
@@ -21,14 +18,11 @@ RUN if [ -n "$PACKAGES" ]; then \
         npm install; \
     fi
 
-# Post-install malware detection
+# Post-install malware detection. This is extremely basic, as I am running it for my local host, but
+# it can be made complex here
 RUN echo "Running malware detection..." && \
-    # Check for suspicious files
     find node_modules -name "*.sh" -o -name "*.bat" -o -name "*.exe" 2>/dev/null | head -5 && \
-    # Check for common obfuscation patterns (eval + base64)
     find node_modules -name "*.js" -exec grep -l "eval.*atob\|eval.*Buffer.*toString" {} \; 2>/dev/null | head -5 && \
-    # Check for network access in install scripts
     grep -r "https\?://" node_modules/*/package.json 2>/dev/null | grep -E "preinstall|postinstall|install\":" | head -5 && \
-    # Run npm audit for known CVEs
     npm audit --audit-level=high || true && \
     echo "Security scan complete"
