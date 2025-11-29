@@ -1,8 +1,12 @@
 ARG NODE_VERSION=18
 FROM node:${NODE_VERSION}-alpine
 
+RUN npm install -g @aikidosec/safe-chain
+RUN safe-chain setup-ci
+
 WORKDIR /install
 COPY package*.json ./
+COPY .npmrc ./
 
 # Build arguments for optional package installation
 ARG PACKAGES=""
@@ -17,12 +21,3 @@ RUN if [ -n "$PACKAGES" ]; then \
     else \
         npm install; \
     fi
-
-# Post-install malware detection. This is extremely basic, as I am running it for my local host, but
-# it can be made complex here
-RUN echo "Running malware detection..." && \
-    find node_modules -name "*.sh" -o -name "*.bat" -o -name "*.exe" 2>/dev/null | head -5 && \
-    find node_modules -name "*.js" -exec grep -l "eval.*atob\|eval.*Buffer.*toString" {} \; 2>/dev/null | head -5 && \
-    grep -r "https\?://" node_modules/*/package.json 2>/dev/null | grep -E "preinstall|postinstall|install\":" | head -5 && \
-    npm audit --audit-level=high || true && \
-    echo "Security scan complete"
