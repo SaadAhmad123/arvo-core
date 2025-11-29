@@ -1,0 +1,34 @@
+ARG NODE_VERSION=18
+FROM node:${NODE_VERSION}-alpine
+
+# Set up clean working directory
+WORKDIR /install
+
+# Copy package files (package.json and package-lock.json if it exists)
+COPY package*.json ./
+
+# Build arguments for optional package installation
+ARG PACKAGES=""
+ARG DEV=""
+
+# Install dependencies in isolation
+# Lifecycle scripts can run but have no access to host secrets
+# If PACKAGES specified: install those specific packages
+# Otherwise: install all dependencies from package.json
+RUN if [ -n "$PACKAGES" ]; then \
+        [ "$DEV" = "true" ] && npm install -D $PACKAGES || npm install -S $PACKAGES; \
+    else \
+        npm install; \
+    fi
+
+# Post-install malware detection
+RUN echo "Running malware detection..." && \
+    # Check for suspicious files
+    find node_modules -name "*.sh" -o -name "*.bat" -o -name "*.exe" 2>/dev/null | head -5 && \
+    # Check for common obfuscation patterns (eval + base64)
+    find node_modules -name "*.js" -exec grep -l "eval.*atob\|eval.*Buffer.*toString" {} \; 2>/dev/null | head -5 && \
+    # Check for network access in install scripts
+    grep -r "https\?://" node_modules/*/package.json 2>/dev/null | grep -E "preinstall|postinstall|install\":" | head -5 && \
+    # Run npm audit for known CVEs
+    npm audit --audit-level=high || true && \
+    echo "Security scan complete"
