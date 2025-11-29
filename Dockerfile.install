@@ -1,0 +1,23 @@
+ARG NODE_VERSION=18
+FROM node:${NODE_VERSION}-alpine
+
+RUN npm install -g @aikidosec/safe-chain
+RUN safe-chain setup-ci
+
+WORKDIR /install
+COPY package*.json ./
+COPY .npmrc ./
+
+# Build arguments for optional package installation
+ARG PACKAGES=""
+ARG DEV=""
+
+# Install dependencies in isolation
+# Lifecycle scripts can run but have no access to host secrets
+# If PACKAGES specified: install those specific packages
+# Otherwise: install all dependencies from package.json
+RUN if [ -n "$PACKAGES" ]; then \
+        [ "$DEV" = "true" ] && npm install -D $PACKAGES || npm install $PACKAGES; \
+    else \
+        npm install; \
+    fi
