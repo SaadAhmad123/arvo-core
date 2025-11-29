@@ -1,4 +1,4 @@
-import zodToJsonSchema from 'zod-to-json-schema';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import type ArvoContract from '..';
 import { logToSpan } from '../../OpenTelemetry';
 import type { ArvoSemanticVersion } from '../../types';
@@ -83,15 +83,15 @@ export class VersionedArvoContract<
         metadata: this.metadata,
         accepts: {
           type: this._accepts.type,
-          schema: zodToJsonSchema(this._accepts.schema),
+          schema: zodToJsonSchema(this._accepts.schema as any),
         },
         systemError: {
           type: this.systemError.type,
-          schema: zodToJsonSchema(this.systemError.schema),
+          schema: zodToJsonSchema(this.systemError.schema as any),
         },
         emits: Object.entries(this._emits).map(([key, value]) => ({
           type: key,
-          schema: zodToJsonSchema(value),
+          schema: zodToJsonSchema(value as any),
         })),
       };
     } catch (e) {

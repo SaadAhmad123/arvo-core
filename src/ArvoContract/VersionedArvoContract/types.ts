@@ -1,4 +1,4 @@
-import type zodToJsonSchema from 'zod-to-json-schema';
+import type { zodToJsonSchema } from 'zod-to-json-schema';
 import type ArvoContract from '..';
 import type { ArvoSemanticVersion } from '../../types';
 

@@ -121,3 +121,6 @@ test:
 
 clean:
     rm -rf node_modules
+
+install-biome:
+    npm i -D @biomejs/biome@1.9.4
