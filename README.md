@@ -3,11 +3,9 @@
 
 # Arvo - A toolkit for event driven applications (arvo-core)
 
-The foundational package of, Arvo, a TypeScript toolkit for building event-driven applications that are distributed system-compliant. Arvo Core provides CloudEvents-compliant event primitives, type-safe contract validation, and OpenTelemetry observability without infrastructure lock-in.
+The foundational package of, [Arvo](https://www.arvo.land/), a TypeScript toolkit for building event-driven applications that are distributed system-compliant. Arvo Core provides CloudEvents-compliant event primitives, type-safe contract validation, and OpenTelemetry observability without infrastructure lock-in.
 
-## What is Arvo Core?
-
-Arvo Core gives you three essential building blocks for event-driven architecture:
+This package gives you three essential building blocks for event-driven architecture:
 
 **ArvoEvent** - CloudEvents-compliant event primitives with built-in validation, tracing, and execution cost tracking.
 
