@@ -3,6 +3,10 @@
   "version": "3.0.20",
   "main": "dist/index.js",
   "description": "The core Arvo package which provides application tier core primitives and contract system for building production-grade event-driven application. Provides ArvoEvent (CloudEvents-compliant), ArvoContract for type-safe service interfaces, event factories, OpenTelemetry integration, and orchestration utilities - enabling infrastructure-agnostic, composable, and observable distributed systems-compliant applications.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SaadAhmad123/arvo-core"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node ./dist/index.js",
