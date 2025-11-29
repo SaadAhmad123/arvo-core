@@ -1,7 +1,7 @@
 [![SonarCloud](https://sonarcloud.io/images/project_badges/sonarcloud-white.svg)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=SaadAhmad123_arvo-core&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=SaadAhmad123_arvo-core)
 
-# Arvo - A toolkit for event driven application (arvo-core)
+# Arvo - A toolkit for event driven applications (arvo-core)
 
 The foundational package of, Arvo, a TypeScript toolkit for building event-driven applications that are distributed system-compliant. Arvo Core provides CloudEvents-compliant event primitives, type-safe contract validation, and OpenTelemetry observability without infrastructure lock-in.
 
