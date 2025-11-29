@@ -1,8 +1,8 @@
 {
   "name": "arvo-core",
   "version": "3.0.19",
-  "description": "This core package contains all the core classes and components of the Arvo Event Driven System",
   "main": "dist/index.js",
+  "description": "The core Arvo package which provides application tier core primitives and contract system for building production-grade event-driven application. Provides ArvoEvent (CloudEvents-compliant), ArvoContract for type-safe service interfaces, event factories, OpenTelemetry integration, and orchestration utilities - enabling infrastructure-agnostic, composable, and observable distributed systems.",
   "scripts": {
     "build": "tsc",
     "start": "node ./dist/index.js",
@@ -12,7 +12,15 @@
     "format": "biome format --fix",
     "doc": "npx typedoc"
   },
-  "keywords": ["arvo", "event-driven architecture", "xorca", "core", "cloudevent", "opentelemetry", "orchestrator"],
+  "keywords": [
+    "arvo",
+    "event-driven architecture",
+    "xorca",
+    "core",
+    "cloudevent",
+    "opentelemetry",
+    "orchestrator"
+  ],
   "author": "Saad Ahmad <saadkwi12@hotmail.com>",
   "license": "MIT",
   "devDependencies": {
@@ -25,19 +33,18 @@
     "@opentelemetry/sdk-metrics": "^1.25.1",
     "@opentelemetry/sdk-node": "^0.52.1",
     "@opentelemetry/sdk-trace-node": "^1.25.1",
-    "@opentelemetry/semantic-conventions": "^1.25.1",
+    "@opentelemetry/semantic-conventions": "^1.38.0",
     "@types/jest": "^29.5.12",
-    "@types/node": "^22.5.0",
-    "@types/pako": "^2.0.3",
-    "@types/uuid": "^10.0.0",
-    "dotenv": "^16.4.5",
+    "@types/node": "^22.19.1",
+    "@types/pako": "^2.0.4",
+    "dotenv": "^16.6.1",
     "jest": "^29.7.0",
-    "ts-jest": "^29.2.5",
+    "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
-    "typedoc": "^0.26.6",
-    "typedoc-github-theme": "^0.1.2",
-    "typedoc-plugin-zod": "^1.2.1",
-    "typescript": "^5.5.4"
+    "typedoc": "^0.28.15",
+    "typedoc-github-theme": "^0.3.1",
+    "typedoc-plugin-zod": "^1.4.3",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
@@ -45,7 +52,7 @@
     "pako": "^2.1.0",
     "uuid": "^11.1.0",
     "zod": "^3.25.74",
-    "zod-to-json-schema": "^3.24.6"
+    "zod-to-json-schema": "^3.25.0"
   },
   "engines": {
     "node": ">=18.0.0"

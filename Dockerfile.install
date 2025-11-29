@@ -13,7 +13,7 @@ ARG DEV=""
 # If PACKAGES specified: install those specific packages
 # Otherwise: install all dependencies from package.json
 RUN if [ -n "$PACKAGES" ]; then \
-        [ "$DEV" = "true" ] && npm install -D $PACKAGES || npm install -S $PACKAGES; \
+        [ "$DEV" = "true" ] && npm install -D $PACKAGES || npm install $PACKAGES; \
     else \
         npm install; \
     fi

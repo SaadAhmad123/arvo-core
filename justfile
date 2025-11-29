@@ -1,6 +1,6 @@
 # Docker-Isolated NPM Development Environment
 #
-# This justfile provides Docker-based isolation for npm operations to protect against
+# This justfile provides Docker-based sandbox isolation for npm operations to protect against
 # supply chain attacks during local development on local machine. All npm operations 
 # run in ephemeral containers with no access to your host filesystem, environment 
 # variables, or secrets.
@@ -16,11 +16,16 @@
 # - Malicious code in package runtime logic when you actually run your application
 # - Sophisticated obfuscated malware that bypasses basic pattern detection
 # - Attacks that only activate in production environments
+# 
+# **Disclaimer:** This does not gate against malware in node_modules or in your code 
+# (you need to update the Docker.install to add that gate as per your requirments 
+# - if you need one). Rather, its scope is **strictly limited** to attempting to protect
+# the host device from exposure if the malware gets excuted.
 #
 # HOW IT WORKS:
 # INSTALL PHASE:
 #   1. npm install runs inside a clean Docker container with no volume mounts
-#   2. Basic malware detection scans run after installation completes
+#   2. Basic placeholder malware detection (so the you can add more complex methods if you want) scans run after installation completes
 #   3. Only node_modules and package files are extracted back to your host
 #   4. Container is destroyed, leaving no trace of potentially malicious install scripts
 #
