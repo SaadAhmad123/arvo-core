@@ -84,6 +84,7 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
                   redirectto: event.redirectto,
                 }
               : undefined,
+            domain: event.domain ?? null,
           });
         const generatedEvent = createArvoEvent<
           z.infer<TContract['accepts']['schema']>,
@@ -99,7 +100,7 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.create(this.contract),
             data: validationResult.data,
-            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
+            domain: event.domain ?? undefined,
           },
           extensions,
           { disable: true },
@@ -161,6 +162,7 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
                   redirectto: event.redirectto,
                 }
               : undefined,
+            domain: event.domain ?? null,
           });
 
         const generatedEvent = createArvoEvent<z.infer<TContract['emits'][U]>, TExtension, U>(
@@ -172,7 +174,7 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.create(this.contract),
             data: validationResult.data,
-            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
+            domain: event.domain ?? undefined,
           },
           extensions,
           { disable: true },
@@ -232,6 +234,7 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
                   redirectto: event.redirectto,
                 }
               : undefined,
+            domain: event.domain ?? null,
           });
 
         const generatedEvent = createArvoEvent<
@@ -248,7 +251,7 @@ export default class ArvoEventFactory<TContract extends VersionedArvoContract<an
             data: createArvoError(error),
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.createWithWildCardVersion(this.contract),
-            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
+            domain: event.domain ?? undefined,
           },
           extensions,
           { disable: true },

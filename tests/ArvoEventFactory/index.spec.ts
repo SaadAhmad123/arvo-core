@@ -86,6 +86,44 @@ describe('createArvoEventFactory', () => {
       expect(event.domain).toBe(null);
     });
 
+    it('should pass domain to subject and event when provided', async () => {
+      let event = createArvoEventFactory(mockContract.version('0.0.1')).emits({
+        type: 'test.output.0',
+        source: 'test.test.test',
+        data: { output: 42 },
+        domain: 'external.review',
+      });
+      expect(event.domain).toBe('external.review');
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
+
+      event = createArvoEventFactory(mockContract.version('0.0.1')).emits({
+        subject: event.subject,
+        type: 'test.output.0',
+        source: 'test.test.test',
+        data: { output: 42 },
+        domain: 'external.review.1',
+      });
+      expect(event.domain).toBe('external.review.1');
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
+
+      event = createArvoEventFactory(mockContract.version('0.0.1')).emits({
+        subject: event.subject,
+        type: 'test.output.0',
+        source: 'test.test.test',
+        data: { output: 42 },
+      });
+      expect(event.domain).toBe(null);
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
+
+      event = createArvoEventFactory(mockContract.version('0.0.1')).emits({
+        type: 'test.output.0',
+        source: 'test.test.test',
+        data: { output: 42 },
+      });
+      expect(event.domain).toBe(null);
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe(null);
+    });
+
     it('should throw an error when data does not match the schema', async () => {
       expect(() =>
         createArvoEventFactory(mockContract.version('0.0.1')).emits({
@@ -112,6 +150,40 @@ describe('createArvoEventFactory', () => {
   });
 
   describe('accepts', () => {
+    it('should pass domain to subject and event when provided', async () => {
+      let event: ArvoEvent = createArvoEventFactory(mockContract.version('0.0.1')).accepts({
+        source: 'test.test.test',
+        data: { input: '42' },
+        domain: 'external.review',
+      });
+      expect(event.domain).toBe('external.review');
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
+
+      event = createArvoEventFactory(mockContract.version('0.0.1')).accepts({
+        subject: event.subject,
+        source: 'test.test.test',
+        data: { input: '42' },
+        domain: 'external.review.1',
+      });
+      expect(event.domain).toBe('external.review.1');
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
+
+      event = createArvoEventFactory(mockContract.version('0.0.1')).accepts({
+        subject: event.subject,
+        source: 'test.test.test',
+        data: { input: '42' },
+      });
+      expect(event.domain).toBe(null);
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
+
+      event = createArvoEventFactory(mockContract.version('0.0.1')).accepts({
+        source: 'test.test.test',
+        data: { input: '42' },
+      });
+      expect(event.domain).toBe(null);
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe(null);
+    });
+
     it('should create a valid event when data matches the schema', async () => {
       const event = createArvoEventFactory(mockContract.version('0.0.1')).accepts({
         source: 'test-source',
@@ -152,6 +224,40 @@ describe('createArvoEventFactory', () => {
       expect(event.data.errorStack).toBeTruthy();
       expect(EventDataschemaUtil.parse(event)?.version).toBe(WildCardArvoSemanticVersion);
       expect(event.domain).toBe(null);
+    });
+
+    it('should pass domain to subject and event when provided', async () => {
+      let event: ArvoEvent = createArvoEventFactory(mockContract.version('0.0.1')).systemError({
+        source: 'test.test.test',
+        error: new Error('Some error'),
+        domain: 'external.review',
+      });
+      expect(event.domain).toBe('external.review');
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
+
+      event = createArvoEventFactory(mockContract.version('0.0.1')).systemError({
+        subject: event.subject,
+        source: 'test.test.test',
+        error: new Error('Some error'),
+        domain: 'external.review.1',
+      });
+      expect(event.domain).toBe('external.review.1');
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
+
+      event = createArvoEventFactory(mockContract.version('0.0.1')).systemError({
+        subject: event.subject,
+        source: 'test.test.test',
+        error: new Error('Some error'),
+      });
+      expect(event.domain).toBe(null);
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
+
+      event = createArvoEventFactory(mockContract.version('0.0.1')).systemError({
+        source: 'test.test.test',
+        error: new Error('Some error'),
+      });
+      expect(event.domain).toBe(null);
+      expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe(null);
     });
   });
 
@@ -282,122 +388,5 @@ describe('createArvoEventFactory', () => {
     expect(parsedSubject?.orchestrator?.name).toBe(mockContract.systemError.type);
     expect(parsedSubject?.execution?.initiator).toBe('com.test.test');
     expect(parsedSubject?.orchestrator?.version).toBe(mockContract.version('0.0.1').version);
-  });
-
-  it('should generate domained event on domained mock contract', () => {
-    const mockContract = createArvoContract({
-      uri: '#/mock/contract',
-      type: 'test.input.0',
-      domain: 'test.test',
-      versions: {
-        '0.0.1': {
-          accepts: z.object({ input: z.string() }),
-          emits: {
-            'test.output.0': z.object({
-              output: z.number(),
-            }),
-            'test.output.1': z.object({
-              message: z.string(),
-            }),
-          },
-        },
-        '0.0.8': {
-          accepts: z.object({ input: z.string() }),
-          emits: {
-            'test.output.0': z.object({
-              output: z.number(),
-              saad: z.string(),
-            }),
-            'test.output.1': z.object({
-              message: z.string(),
-            }),
-          },
-        },
-      },
-    });
-
-    let event: ArvoEvent = createArvoEventFactory(mockContract.version('0.0.1')).accepts({
-      source: 'com.test.test',
-      data: {
-        input: 'test',
-      },
-    });
-
-    expect(event.domain).toBe('test.test');
-
-    event = createArvoEventFactory(mockContract.version('0.0.1')).accepts({
-      source: 'com.test.test',
-      domain: null,
-      data: {
-        input: 'test',
-      },
-    });
-
-    expect(event.domain).toBe(null);
-
-    event = createArvoEventFactory(mockContract.version('0.0.1')).accepts({
-      source: 'com.test.test',
-      domain: 'test.test.test',
-      data: {
-        input: 'test',
-      },
-    });
-
-    expect(event.domain).toBe('test.test.test');
-
-    event = createArvoEventFactory(mockContract.version('0.0.1')).emits({
-      type: 'test.output.0',
-      source: 'com.test.test',
-      domain: 'test.test.test',
-      data: {
-        output: 23,
-      },
-    });
-
-    expect(event.domain).toBe('test.test.test');
-
-    event = createArvoEventFactory(mockContract.version('0.0.1')).emits({
-      type: 'test.output.0',
-      source: 'com.test.test',
-      domain: null,
-      data: {
-        output: 23,
-      },
-    });
-
-    expect(event.domain).toBe(null);
-
-    event = createArvoEventFactory(mockContract.version('0.0.1')).emits({
-      type: 'test.output.0',
-      source: 'com.test.test',
-      data: {
-        output: 23,
-      },
-    });
-
-    expect(event.domain).toBe('test.test');
-
-    event = createArvoEventFactory(mockContract.version('0.0.1')).systemError({
-      source: 'com.test.test',
-      error: new Error('error'),
-    });
-
-    expect(event.domain).toBe('test.test');
-
-    event = createArvoEventFactory(mockContract.version('0.0.1')).systemError({
-      source: 'com.test.test',
-      domain: null,
-      error: new Error('error'),
-    });
-
-    expect(event.domain).toBe(null);
-
-    event = createArvoEventFactory(mockContract.version('0.0.1')).systemError({
-      source: 'com.test.test',
-      domain: 'test.test.test',
-      error: new Error('error'),
-    });
-
-    expect(event.domain).toBe('test.test.test');
   });
 });

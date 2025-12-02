@@ -120,3 +120,7 @@
 
 - Improved OTEL logging
 
+## [3.0.24] - 2025-12-02
+
+- Made domains simple in Event Factories
+

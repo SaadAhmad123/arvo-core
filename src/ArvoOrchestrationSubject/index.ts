@@ -47,7 +47,7 @@ export default class ArvoOrchestrationSubject {
     orchestator: string;
     version: ArvoSemanticVersion | null;
     initiator: string;
-    domain?: string;
+    domain?: string | null;
     meta?: Record<string, string>;
   }): string {
     return ArvoOrchestrationSubject.create({
@@ -109,7 +109,7 @@ export default class ArvoOrchestrationSubject {
       initiator: parsedSubject.orchestrator.name,
       version: param.version ?? WildCardArvoSemanticVersion,
       orchestator: param.orchestator,
-      domain: param.domain === null ? undefined : (param.domain ?? parsedSubject.execution.domain ?? undefined),
+      domain: param.domain === null ? null : (param.domain ?? parsedSubject.execution.domain ?? null),
       meta: {
         ...(parsedSubject.meta ?? {}),
         ...(param.meta ?? {}),

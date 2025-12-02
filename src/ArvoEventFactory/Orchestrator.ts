@@ -78,7 +78,7 @@ export class ArvoOrchestratorEventFactory<
                 orchestator: this.contract.accepts.type,
                 initiator: event.source,
                 version: this.contract.version,
-                domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
+                domain: event.domain ?? null,
                 meta: event.redirectto
                   ? {
                       redirectto: event.redirectto,
@@ -99,7 +99,7 @@ export class ArvoOrchestratorEventFactory<
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.create(this.contract),
             data: validationResult.data,
-            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
+            domain: event.domain ?? undefined,
           },
           extensions,
           { disable: true },
@@ -152,7 +152,7 @@ export class ArvoOrchestratorEventFactory<
             initiator: event.source,
             version: this.contract.version,
             orchestator: eventType,
-            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
+            domain: event.domain ?? null,
             meta: event.redirectto
               ? {
                   redirectto: event.redirectto,
@@ -174,7 +174,7 @@ export class ArvoOrchestratorEventFactory<
             datacontenttype: ArvoDataContentType,
             dataschema: EventDataschemaUtil.create(this.contract),
             data: validationResult.data,
-            domain: event.domain === null ? undefined : (event.domain ?? this.contract.domain ?? undefined),
+            domain: event.domain ?? undefined,
           },
           extensions,
           { disable: true },

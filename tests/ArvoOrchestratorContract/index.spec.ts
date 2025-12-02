@@ -50,7 +50,7 @@ describe('ArvoOrchestratorContract', () => {
 
     expect(Object.keys(contract.versions)[0]).toBe('0.0.1');
 
-    const event = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+    let event: ArvoEvent = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
       source: 'com.test.test',
       data: {
         parentSubject$$: null,
@@ -60,6 +60,41 @@ describe('ArvoOrchestratorContract', () => {
 
     expect(event.domain).toBe(null);
     expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe(null);
+
+    event = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.test',
+      data: {
+        parentSubject$$: null,
+        foo: 'test',
+      },
+      domain: 'external.review',
+    });
+
+    expect(event.domain).toBe('external.review');
+    expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
+
+    event = createArvoOrchestratorEventFactory(contract.version('0.0.1')).complete({
+      source: 'com.test.test',
+      data: {
+        bar: 1,
+      },
+      domain: 'external.review',
+    });
+
+    expect(event.domain).toBe('external.review');
+    expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
+
+    event = createArvoOrchestratorEventFactory(contract.version('0.0.1')).complete({
+      subject: event.subject,
+      source: 'com.test.test',
+      data: {
+        bar: 1,
+      },
+      domain: 'external.review.1',
+    });
+
+    expect(event.domain).toBe('external.review.1');
+    expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('external.review');
   });
 
   it('should throw an error for invalid type format', () => {
@@ -241,90 +276,5 @@ describe('ArvoOrchestratorContract', () => {
         to: 'com.ret.test',
       });
     }).toThrow('Emit Event data validation failed: ');
-  });
-
-  it('should create domained event on domained contracts', () => {
-    const contract = createArvoOrchestratorContract({
-      uri: testUri,
-      name: orchestratorType,
-      domain: 'test.test',
-      versions: {
-        '0.0.1': {
-          init: testInitSchema,
-          complete: testCompleteSchema,
-        },
-        '0.0.2': {
-          init: testInitSchema,
-          complete: testCompleteSchema,
-        },
-      },
-    });
-
-    let event: ArvoEvent = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
-      source: 'com.test.test',
-      data: {
-        parentSubject$$: null,
-        foo: 'test',
-      },
-    });
-
-    expect(event.domain).toBe('test.test');
-    expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('test.test');
-
-    event = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
-      source: 'com.test.test',
-      domain: null,
-      data: {
-        parentSubject$$: null,
-        foo: 'test',
-      },
-    });
-
-    expect(event.domain).toBe(null);
-    expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe(null);
-
-    event = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
-      source: 'com.test.test',
-      domain: 'test',
-      data: {
-        parentSubject$$: null,
-        foo: 'test',
-      },
-    });
-
-    expect(event.domain).toBe('test');
-    expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('test');
-
-    event = createArvoOrchestratorEventFactory(contract.version('0.0.1')).complete({
-      source: 'com.test.test',
-      domain: 'test',
-      data: {
-        bar: 100,
-      },
-    });
-
-    expect(event.domain).toBe('test');
-    expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('test');
-
-    event = createArvoOrchestratorEventFactory(contract.version('0.0.1')).complete({
-      source: 'com.test.test',
-      data: {
-        bar: 100,
-      },
-    });
-
-    expect(event.domain).toBe('test.test');
-    expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe('test.test');
-
-    event = createArvoOrchestratorEventFactory(contract.version('0.0.1')).complete({
-      source: 'com.test.test',
-      domain: null,
-      data: {
-        bar: 100,
-      },
-    });
-
-    expect(event.domain).toBe(null);
-    expect(ArvoOrchestrationSubject.parse(event.subject).execution.domain).toBe(null);
   });
 });
