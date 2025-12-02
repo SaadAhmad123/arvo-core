@@ -109,7 +109,7 @@ export default class ArvoOrchestrationSubject {
       initiator: parsedSubject.orchestrator.name,
       version: param.version ?? WildCardArvoSemanticVersion,
       orchestator: param.orchestator,
-      domain: param.domain === null ? null : (param.domain ?? parsedSubject.execution.domain ?? null),
+      domain: param.domain ?? parsedSubject.execution.domain ?? null,
       meta: {
         ...(parsedSubject.meta ?? {}),
         ...(param.meta ?? {}),

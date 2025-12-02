@@ -277,4 +277,258 @@ describe('ArvoOrchestratorContract', () => {
       });
     }).toThrow('Emit Event data validation failed: ');
   });
+
+  it('should handle domain inheritance in child orchestrations via parentSubject$$', () => {
+    const contract = createArvoOrchestratorContract({
+      uri: testUri,
+      name: orchestratorType,
+      versions: {
+        '0.0.1': {
+          init: testInitSchema,
+          complete: testCompleteSchema,
+        },
+      },
+    });
+
+    // Parent orchestration with domain
+    const parentEvent = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.parent',
+      data: {
+        parentSubject$$: null,
+        foo: 'parent',
+      },
+      domain: 'production.us',
+    });
+
+    expect(parentEvent.domain).toBe('production.us');
+    expect(ArvoOrchestrationSubject.parse(parentEvent.subject).execution.domain).toBe('production.us');
+
+    // Child orchestration inherits parent's domain through subject
+    const childEvent = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.child',
+      data: {
+        parentSubject$$: parentEvent.subject,
+        foo: 'child',
+      },
+    });
+
+    // Child event domain is null (not explicitly set)
+    expect(childEvent.domain).toBe(null);
+    // Child subject's initiator is the parent orchestrator name
+    const childSubject = ArvoOrchestrationSubject.parse(childEvent.subject);
+    expect(childSubject.execution.initiator).toBe(testInitType);
+    expect(childSubject.execution.domain).toBe('production.us');
+
+    // When child spawns with explicit different domain
+    const childWithDomain = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.child',
+      data: {
+        parentSubject$$: parentEvent.subject,
+        foo: 'child',
+      },
+      domain: 'staging.eu',
+    });
+
+    expect(childWithDomain.domain).toBe('staging.eu');
+    // Subject still reflects the parent orchestrator as initiator
+    const childWithDomainSubject = ArvoOrchestrationSubject.parse(childWithDomain.subject);
+    expect(childWithDomainSubject.execution.initiator).toBe(testInitType);
+    expect(childWithDomainSubject.execution.domain).toBe('staging.eu')
+  });
+
+  it('should allow explicit domain override on completion events', () => {
+    const contract = createArvoOrchestratorContract({
+      uri: testUri,
+      name: orchestratorType,
+      versions: {
+        '0.0.1': {
+          init: testInitSchema,
+          complete: testCompleteSchema,
+        },
+      },
+    });
+
+    // Create orchestration in specific domain
+    const initEvent = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.test',
+      data: {
+        parentSubject$$: null,
+        foo: 'test',
+      },
+      domain: 'region.asia',
+    });
+
+    // Complete event without domain - defaults to null
+    const completeLocal = createArvoOrchestratorEventFactory(contract.version('0.0.1')).complete({
+      subject: initEvent.subject,
+      source: 'com.test.test',
+      data: { bar: 42 },
+    });
+
+    expect(completeLocal.domain).toBe(null);
+    expect(ArvoOrchestrationSubject.parse(completeLocal.subject).execution.domain).toBe('region.asia');
+
+    // Complete event with explicit domain override
+    const completeOverride = createArvoOrchestratorEventFactory(contract.version('0.0.1')).complete({
+      subject: initEvent.subject,
+      source: 'com.test.test',
+      data: { bar: 42 },
+      domain: 'notification.email',
+    });
+
+    expect(completeOverride.domain).toBe('notification.email');
+    expect(ArvoOrchestrationSubject.parse(completeOverride.subject).execution.domain).toBe('region.asia');
+  });
+
+  it('should handle null domain explicitly set vs undefined domain', () => {
+    const contract = createArvoOrchestratorContract({
+      uri: testUri,
+      name: orchestratorType,
+      versions: {
+        '0.0.1': {
+          init: testInitSchema,
+          complete: testCompleteSchema,
+        },
+      },
+    });
+
+    // No domain parameter (undefined)
+    const eventUndefined = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.test',
+      data: {
+        parentSubject$$: null,
+        foo: 'test',
+      },
+    });
+
+    expect(eventUndefined.domain).toBe(null);
+    expect(ArvoOrchestrationSubject.parse(eventUndefined.subject).execution.domain).toBe(null);
+
+    // Explicit null domain
+    const eventNull = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.test',
+      data: {
+        parentSubject$$: null,
+        foo: 'test',
+      },
+      domain: null,
+    });
+
+    expect(eventNull.domain).toBe(null);
+    expect(ArvoOrchestrationSubject.parse(eventNull.subject).execution.domain).toBe(null);
+
+    // Both behave identically - domain defaults to null
+    expect(eventUndefined.domain).toBe(eventNull.domain);
+
+    // Domain string
+    const eventWithDomain = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.test',
+      data: {
+        parentSubject$$: null,
+        foo: 'test',
+      },
+      domain: 'custom.domain',
+    });
+
+    expect(eventWithDomain.domain).toBe('custom.domain');
+    expect(ArvoOrchestrationSubject.parse(eventWithDomain.subject).execution.domain).toBe('custom.domain');
+  });
+
+  it('should allow explicit domain override on completion events', () => {
+    const contract = createArvoOrchestratorContract({
+      uri: testUri,
+      name: orchestratorType,
+      versions: {
+        '0.0.1': {
+          init: testInitSchema,
+          complete: testCompleteSchema,
+        },
+      },
+    });
+
+    // Create orchestration in specific domain
+    const initEvent = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.test',
+      data: {
+        parentSubject$$: null,
+        foo: 'test',
+      },
+      domain: 'region.asia',
+    });
+
+    // Complete event without domain - defaults to null
+    const completeLocal = createArvoOrchestratorEventFactory(contract.version('0.0.1')).complete({
+      subject: initEvent.subject,
+      source: 'com.test.test',
+      data: { bar: 42 },
+    });
+
+    expect(completeLocal.domain).toBe(null);
+    expect(ArvoOrchestrationSubject.parse(completeLocal.subject).execution.domain).toBe('region.asia');
+
+    // Complete event with explicit domain override
+    const completeOverride = createArvoOrchestratorEventFactory(contract.version('0.0.1')).complete({
+      subject: initEvent.subject,
+      source: 'com.test.test',
+      data: { bar: 42 },
+      domain: 'notification.email',
+    });
+
+    expect(completeOverride.domain).toBe('notification.email');
+    expect(ArvoOrchestrationSubject.parse(completeOverride.subject).execution.domain).toBe('region.asia');
+  });
+
+  it('should handle null domain explicitly set vs undefined domain', () => {
+    const contract = createArvoOrchestratorContract({
+      uri: testUri,
+      name: orchestratorType,
+      versions: {
+        '0.0.1': {
+          init: testInitSchema,
+          complete: testCompleteSchema,
+        },
+      },
+    });
+
+    // No domain parameter (undefined)
+    const eventUndefined = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.test',
+      data: {
+        parentSubject$$: null,
+        foo: 'test',
+      },
+    });
+
+    expect(eventUndefined.domain).toBe(null);
+    expect(ArvoOrchestrationSubject.parse(eventUndefined.subject).execution.domain).toBe(null);
+
+    // Explicit null domain
+    const eventNull = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.test',
+      data: {
+        parentSubject$$: null,
+        foo: 'test',
+      },
+      domain: null,
+    });
+
+    expect(eventNull.domain).toBe(null);
+    expect(ArvoOrchestrationSubject.parse(eventNull.subject).execution.domain).toBe(null);
+
+    // Both behave identically - domain defaults to null
+    expect(eventUndefined.domain).toBe(eventNull.domain);
+
+    // Domain string
+    const eventWithDomain = createArvoOrchestratorEventFactory(contract.version('0.0.1')).init({
+      source: 'com.test.test',
+      data: {
+        parentSubject$$: null,
+        foo: 'test',
+      },
+      domain: 'custom.domain',
+    });
+
+    expect(eventWithDomain.domain).toBe('custom.domain');
+    expect(ArvoOrchestrationSubject.parse(eventWithDomain.subject).execution.domain).toBe('custom.domain');
+  });
 });
