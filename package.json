@@ -23,6 +23,7 @@
     "start": "node ./dist/index.js",
     "dev": "ts-node ./src/index.ts",
     "test": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --coverage",
     "lint": "biome check --fix",
     "format": "biome format --fix",
     "changeset": "changeset",
@@ -52,6 +53,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.5",
     "@changesets/cli": "2.31.1",
+    "@opentelemetry/api": "1.9.1",
     "@types/node": "22.20.1",
     "@vitest/coverage-v8": "4.1.10",
     "dotenv": "16.6.1",
@@ -61,6 +63,7 @@
     "zod": "4.4.3"
   },
   "peerDependencies": {
+    "@opentelemetry/api": "^1.9.0",
     "zod": "^4.0.0"
   },
   "packageManager": "pnpm@11.17.0+sha512.cca3cea332ad254bb84145f966d19f4879615210346fc92c79a047f23a0d7b3cca3c3792f0076ba1f1831d277efbcf0a9119b31a9a60eca7fb3d6231f331ef72",

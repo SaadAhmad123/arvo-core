@@ -26,7 +26,7 @@
     "attributePosition": "auto",
     "indentStyle": "space",
     "indentWidth": 2,
-    "lineWidth": 120,
+    "lineWidth": 80,
     "lineEnding": "lf"
   },
   "assist": { "actions": { "source": { "organizeImports": "on" } } },
