@@ -1,27 +1,18 @@
 {
   "compilerOptions": {
-    "target": "ES5", // Target ECMAScript version
-    "module": "commonjs", // Module system
+    "target": "ES2022", // Target ECMAScript version
+    "module": "NodeNext", // Module system
+    "moduleResolution": "NodeNext", // Node's own ESM resolution semantics
     "declaration": true, // Generates corresponding '.d.ts' file
+    "rootDir": "./src", // Explicit source root (required as of TS7)
     "outDir": "./dist", // Output directory for compiled JavaScript
     "strict": true, // Enables strict type checking
-    "esModuleInterop": true, // Enables CommonJS/AMD/UMD module interop
     "skipLibCheck": true, // Skip type checking of all declaration files
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "tests"],
-  "typedocOptions": {
-    "entryPoints": ["src/index.ts"],
-    "projectDocuments": [
-      "src/ArvoEvent/README.md",
-      "src/ArvoContract/README.md",
-      "src/ArvoEventFactory/README.md",
-      "CHANGELOG.md",
-      "LICENSE.md"
-    ],
-    "plugin": ["typedoc-plugin-zod", "typedoc-github-theme"],
-    "out": "docs"
-  }
+  "exclude": ["node_modules", "tests"]
 }

@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.5/schema.json",
   "vcs": {
     "enabled": false,
     "clientKind": "git",
@@ -7,33 +7,33 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "ignore": [
-      "**/dist/**",
-      "**/node_modules/**",
-      "**/.turbo/**",
-      "**/coverage/**",
-      "**/.github/**",
-      "**/docs/**",
-      "*.md"
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/.turbo",
+      "!**/coverage",
+      "!**/.github",
+      "!**/docs",
+      "!**/src-v3",
+      "!**/*.md"
     ]
   },
   "formatter": {
     "enabled": true,
     "formatWithErrors": false,
-    "ignore": [],
+    "includes": ["**"],
     "attributePosition": "auto",
     "indentStyle": "space",
     "indentWidth": 2,
     "lineWidth": 120,
     "lineEnding": "lf"
   },
-  "organizeImports": {
-    "enabled": true
-  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "correctness": {
         "noUnusedImports": "warn"
       },
@@ -43,13 +43,11 @@
     }
   },
   "javascript": {
-    "jsxRuntime": "reactClassic",
     "formatter": {
       "quoteStyle": "single",
       "arrowParentheses": "always",
       "bracketSameLine": false,
       "bracketSpacing": true,
-      "jsxQuoteStyle": "single",
       "quoteProperties": "asNeeded",
       "semicolons": "always",
       "trailingCommas": "all"

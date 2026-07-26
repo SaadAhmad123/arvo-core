@@ -1,34 +1,26 @@
-name: Publish
+name: CI
 
 on:
-  push:
+  pull_request:
     branches:
       - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-
-permissions:
-  id-token: write  # Required for npm OIDC trusted publishing
-  contents: write  # Required for changesets to push the Version Packages PR
-  pull-requests: write
+  cancel-in-progress: true
 
 jobs:
-  publish:
+  lint_build_test:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22.23.1'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Enable Corepack
         run: corepack enable
@@ -48,13 +40,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint
+        run: pnpm run lint
+
       - name: Build
         run: pnpm run build
 
-      - name: Create Release Pull Request or Publish
-        uses: changesets/action@v1
-        with:
-          version: pnpm run version
-          publish: pnpm run release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Test
+        run: pnpm run test
