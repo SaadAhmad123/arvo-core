@@ -27,7 +27,7 @@ export type ArvoEventParam<
   to?: string;
   /** RFC 3339 timestamp of when the event occurred. Defaults to the current time when omitted. */
   time?: string;
-  /** The cost associated with producing this event. Defaults to `null` when omitted. */
+  /** A custom domain defined cost associated with producing this event. Defaults to `null` when omitted. */
   executionunits?: number;
   /** Processing domain used for routing/segregation of the event. Defaults to `null` when omitted. */
   domain?: string;
