@@ -36,8 +36,9 @@ An Arvo application is understood conceptually as a dynamic graph of independent
 - **Implementation dependency:** A database, API, library, model provider, or other resource used internally by a node without participating in the portable application model.
 - **Handler:** An application-layer implementation of an Arvo node. An ArvoEventHandler implements one ArvoContract, declares its ArvoContract dependencies, and may continue its logical execution across multiple event deliveries and infrastructure executions.
 - **Infrastructure adapter:** An integration that binds Arvo's portable application model to execution, delivery, persistence, scheduling, discovery, or other infrastructure.
-- **Arvo Application Model (AAM):** The versioned, language-independent model defined by this ADR and its descendants. AAM versions are distinct from the versions of any package implementing them. `arvo-core` v4 is the first TypeScript implementation of AAM 1.
-- **Portable application model:** The ArvoEvent identities and data; ArvoContract identities, versions, and declared event capabilities; inter-node interactions; causation, lineage, and trace context; handler interfaces and lifecycle semantics; execution capability requirements; validation and compatibility semantics; and failure categories whose meaning must remain consistent across supporting infrastructure adapters. It excludes physical transport, persistence technology, scheduling implementation, retry counts, batching, telemetry collection and export, and handler implementation dependencies.
+- **Arvo Application Model (AAM):** Arvo's versioned, language-independent portable application model, defined by this ADR and its descendants. It comprises the ArvoEvent identities and data; ArvoContract identities, versions, and declared event capabilities; inter-node interactions; causation, lineage, and trace context; handler interfaces and lifecycle semantics; execution capability requirements; validation and compatibility semantics; and failure categories whose meaning must remain consistent across supporting infrastructure adapters. It excludes physical transport, persistence technology, scheduling implementation, retry counts, batching, telemetry collection and export, and handler implementation dependencies. AAM versions are distinct from the versions of any package implementing them; `arvo-core` v4 is the first TypeScript implementation of AAM 1.
+
+  *AAM* is the formal name. *Portable application model* is used descriptively throughout this ADR and refers to the same thing.
 - **Execution slice:** One active period of handler execution, beginning when the handler receives or resumes from an event and ending when it completes, fails, or suspends while awaiting another event.
 - **Execution capability profile:** The declared runtime capabilities and constraints required to execute a handler. Its exact model is defined separately.
 
@@ -316,7 +317,7 @@ Every downstream ADR must state:
 - what it requires of infrastructure adapters;
 - what it leaves deferred.
 
-The membership lists in **Portable application model** are exhaustive as of this ADR. A downstream ADR that places a new concern inside or outside the model amends those lists by explicit reference. Concerns listed under **Deferred Decisions** have undetermined membership until the relevant ADR decides it; their absence from the lists is not exclusion.
+The membership lists in the **Arvo Application Model (AAM)** definition are exhaustive as of this ADR. A downstream ADR that places a new concern inside or outside the model amends those lists by explicit reference. Concerns listed under **Deferred Decisions** have undetermined membership until the relevant ADR decides it; their absence from the lists is not exclusion.
 
 ### Standing Constraints
 
