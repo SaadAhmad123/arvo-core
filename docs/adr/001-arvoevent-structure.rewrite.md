@@ -68,7 +68,7 @@ An event constructed from only the required fields, taking every default, is a w
 
 Global uniqueness is required because `id` is used alone. `parentid` and `initid` reference an event by `id` and nothing else, and `id` is an input to execution identity derivation. A reference must identify exactly one event, so `id` alone must be enough to identify one. Source-scoped uniqueness would not suffice: two producers could each emit `id: "1"`, and `parentid: "1"` would then name two events, while two distinct triggering events would derive the same execution identity — the collision the derivation exists to prevent.
 
-Deduplication follows the CloudEvents convention: `source` together with `id` identifies an event, and a consumer may treat two events sharing both as duplicates. A globally unique `id` satisfies that trivially, so the pair names the collision domain without weakening anything.
+Deduplication keys on `id` alone, which global uniqueness makes sufficient. That also satisfies the CloudEvents convention that `source` together with `id` identifies an event — a globally unique `id` is trivially unique within a source — so an Arvo event deduplicates correctly for a CloudEvents consumer without either side weakening its rule.
 
 Uniqueness is a producer obligation. The ecosystem cannot verify it, and a producer that reuses an `id` does not merely confuse a duplicate check — it collides two distinct executions onto one durable identity.
 
@@ -84,13 +84,13 @@ This matters when a caller has several requests outstanding to the same downstre
 
 ### Workflow and execution identity
 
-**`subject`** identifies the workflow. Minted once on the root event, carried unchanged across every event in that workflow at every hop and depth. It is the query key: give me everything that happened in this business process.
+**`subject`** identifies the workflow. It is the query key: give me everything that happened in this business process.
 
-`subject` is deliberately inert. It does not change, encodes nothing, and nothing is derived from it by inspection. Earlier designs chained subjects to carry coordination state, making one field both the workflow key and the coordination mechanism; it served neither well. Those are now separate fields.
+`subject` is deliberately inert — it encodes nothing, and nothing is derived from it by inspection. Earlier designs chained subjects to carry coordination state, making one field both the workflow key and the coordination mechanism; it served neither well. Those concerns now have fields of their own.
 
 **`executionid`** identifies a specific durable, resumable execution of a handler. It is what lets a redelivered trigger resolve to the same execution rather than forking a new one, and a multi-step handler resume under the identity it started with.
 
-It is derived deterministically from fields carried on events, with no random or time-based input, so the same trigger always yields the same identity. On a root event it equals `subject`: one value serves as both the workflow identifier and the root execution's identity, and every descendant execution derives from that pair transitively.
+On a root event it equals `subject`: one value serves as both the workflow identifier and the root execution's identity, and every descendant execution derives from that pair transitively. This ADR requires that derivation be deterministic — the same trigger must always yield the same identity, so a redelivered trigger resolves to the existing execution rather than forking a new one — and leaves the derivation itself to the handler protocol ADR.
 
 Two consequences shape the rest of this document. `executionid` equalling `subject` occurs on more than root events — every event the root execution emits carries it, as do failure events routed to the root from any depth — which is why rootness rests on `parentid` rather than on this equality. And because a completion carries its caller's identity rather than its own, a completing execution's identity never appears on the event that ends it. An execution that emits downstream still stamps its identity on those events, so its position can be traced; one that only completes stamps it nowhere and is invisible in the event stream. Reconstructing the full execution tree therefore requires handler state.
 
@@ -107,9 +107,7 @@ Two consequences shape the rest of this document. `executionid` equalling `subje
 
 The field is an open string rather than a closed enum, so a domain may classify events for its own purposes without the model growing a value for each one. As of this ADR any other value, including `null`, carries no ecosystem meaning.
 
-Arvo namespaces its own values under `io.arvo.` and will only ever use that namespace. This puts the burden of avoiding collisions on Arvo rather than on every domain using the field: any value not `io.arvo.`-prefixed is safe against every category Arvo adds in future. Collisions between two domains are those domains' concern.
-
-The `io.arvo.` namespace is assigned by contract event factories rather than by handler or application code, so within Arvo's tooling a recognized value consistently reflects what the producing contract constructed. Values outside that namespace are set by their producer and never interpreted by Arvo.
+Arvo namespaces its own values under `io.arvo.`, will only ever use that namespace, and assigns them through contract event factories rather than handler or application code. This puts the burden of avoiding collisions on Arvo rather than on every domain using the field: any value not `io.arvo.`-prefixed is safe against every category Arvo adds in future, and within Arvo's tooling a recognized value consistently reflects what the producing contract constructed. Values outside that namespace are set by their producer, never interpreted by Arvo, and collisions between two domains are those domains' concern.
 
 Nothing prevents a foreign producer, a replay tool, or a hand-written event from carrying a recognized value it did not earn, and no field in this envelope could — ADR-000 is explicit that validation establishes no authenticity. Nothing needs to. `category` never overrides contract resolution: only the two named values are recognized, anything else is ignored entirely, and a recognized value is checked against the receiver's own contract lookup. So it can corroborate what the contract already says, or contradict it and be rejected. It cannot redirect anything.
 
@@ -163,7 +161,7 @@ This is Arvo baggage. It is not W3C Baggage, shares none of its structure or pro
 
 Both are opaque strings and neither is validated. The only commitment made here is that these fields exist to propagate tracing headers compatibly with OpenTelemetry. Their format, their validity, and any relationship between them are defined by the tracing mechanism attached to them, not by the envelope.
 
-ADR-000 requires the model to preserve correlation, causation, lineage, and trace context. `subject` provides correlation, `parentid` and `initid` provide causation, `executionid` provides lineage, `depth` measures it, and these two carry trace context.
+ADR-000 requires the model to preserve correlation, causation, lineage, and trace context. `subject` provides correlation, `parentid` and `initid` provide causation, `executionid` and `depth` provide execution lineage as far as events can carry it — subject to the limit above, that an execution which only completes never stamps its own identity anywhere — and these two carry trace context.
 
 ### Accounting
 
@@ -197,7 +195,7 @@ Nothing propagates by default. A field is inherited only where stated below, whi
 
 - On a root event, `subject`.
 - On an event a handler emits that is not a completion, the emitting handler's own execution identity — unchanged across every suspension and resumption of that execution.
-- On a completion, the execution identity of whatever triggered the completing handler: its caller's, not its own. The handler read that value off its triggering event and held it for the life of the execution. Writing it back is what returns control to the execution that spawned it, and it means the completing handler's own execution identity does not appear on the event that ends it.
+- On a completion, the execution identity of whatever triggered the completing handler: its caller's, not its own. The handler read that value off its triggering event and held it for the life of the execution. Writing it back is what returns control to the execution that spawned it, and it means the completing handler's own execution identity does not appear on the event that ends it. The root execution is the exception, having no caller: its completion carries `subject`, which is also its own identity.
 - On a failure event routed to the workflow root, `subject`, bypassing intermediate executions so the failure surfaces at the top regardless of depth.
 - Never rewritten in transit. A boundary that consumes an event and emits a replacement carries the value through unchanged.
 
@@ -213,7 +211,9 @@ An ArvoEvent is structurally valid by construction — it cannot be constructed 
 
 **Non-empty:** `id`, `subject`, `executionid`, `source`, `type`, `dataschema`, and — when not `null` — `parentid`, `initid`, `category`, `to`, `domain`.
 
-**Typed:** `depth` is a non-negative integer. `time` is RFC 3339 with an offset. `traceparent` and `tracestate` are unvalidated.
+**Typed:** `depth` is a non-negative integer. `time` is RFC 3339 with an offset.
+
+**Unvalidated:** `traceparent` and `tracestate`.
 
 **JSON validity.** Every numeric value anywhere in an event MUST be finite; `NaN`, `Infinity`, and `-Infinity` are rejected because none round-trips as a JSON number. This applies to `executionunits`, to values in `baggage`, and to numbers at any depth within `data`.
 
@@ -237,7 +237,7 @@ executionid equals subject    and    depth is 0
 
 A required `dataschema` means every producer, including a boundary standing in for a foreign system, must know which contract version it is speaking. And because a completion carries its caller's execution identity rather than its own, an execution that never emits downstream leaves no trace of its own identity anywhere, so an audit or post-mortem working from an event log alone cannot recover the full execution tree.
 
-Factory methods and defaults answer much of this for participants using Arvo's tooling: derived identity fields cannot drift, `category` is assigned rather than chosen, an author supplies a handful of fields rather than all of them. That mitigation stops at the tooling boundary. ADR-000 deliberately invites participants without it — cross-language implementations, external systems behind a proxy, replay tools, hand-written fixtures — and for those, these rules check form rather than coherence. They will accept an event whose `depth` contradicts its `executionid`, or whose `initid` names an event that never existed.
+Factory methods and defaults answer much of this for participants using Arvo's tooling: derived identity fields cannot drift, `io.arvo.*` categories are assigned by factories rather than chosen, an author supplies a handful of fields rather than all of them. That mitigation stops at the tooling boundary. ADR-000 deliberately invites participants without it — cross-language implementations, external systems behind a proxy, replay tools, hand-written fixtures — and for those, these rules check form rather than coherence. They will accept an event whose `depth` contradicts its `executionid`, or whose `initid` names an event that never existed.
 
 ## Conformance to ADR-000
 
@@ -247,7 +247,7 @@ Outside the model: the routing behaviour an adapter or boundary derives from `to
 
 **Invariants depended on.** *Event-Only Communication* — the event is the sole medium, which is why the field set must be sufficient on its own. *Explicit Contracts and Runtime Validation* — a required `dataschema` is what makes contract validation possible at a trust boundary. *Observability by Default* — the correlation, causation, lineage, and trace context fields. *Nondeterminism Is Permitted* — nothing in the structure assumes deterministic production.
 
-**Invariants strained.** None. `baggage` was considered against *Explicit Contracts and Runtime Validation*, since it carries data no contract types. Write-once-at-the-root settles it: no handler can place anything in baggage, so it carries ambient context established before any node ran rather than application data flowing between nodes. That places it alongside `source` and `time` — untyped by contracts, fixed by the event's origin — rather than alongside `data`.
+**Invariants strained.** None. `baggage` was considered against *Explicit Contracts and Runtime Validation*, since it carries data no contract types. Write-once-at-the-root settles it: no handler can place anything in baggage, so it carries ambient context established when the workflow began, before any handler executed, rather than application data flowing between nodes. That places it alongside `source` and `time` — untyped by contracts, fixed by the event's origin — rather than alongside `data`.
 
 **Required of infrastructure adapters.** Carry every field unchanged; do not synthesize, mutate, or drop any, and in particular do not populate `traceparent` or `tracestate`. A boundary moving an event between lattices consumes it and emits a new event rather than editing the one it received. Do not depend on `time`, or on any ordering of `id` values, for correctness.
 
