@@ -92,7 +92,9 @@ The presence of a contract does not guarantee that a participating implementatio
 
 The exact execution, state, suspension, resumption, concurrency, and recovery semantics are defined in dedicated ArvoEventHandler ADRs.
 
-## Architectural Principles
+## Invariants
+
+These are normative. Changing one is an architectural change and requires a superseding ADR.
 
 ### Infrastructure Independence
 
@@ -126,12 +128,6 @@ Nodes compose through explicit, versioned contracts. The portable application mo
 
 Dedicated ADRs define the validation boundaries and failure representations. Compile-time type safety should be provided as strongly as practical, but it does not replace runtime validation and must not prevent future cross-language participation.
 
-### Standards-Based Interoperability
-
-Arvo uses established standards where they provide suitable semantics. ArvoEvent supports transformation into a CloudEvent for interoperability while remaining an independent JSON-serializable event model.
-
-Arvo is TypeScript-first, with future support for other languages. TypeScript implementation details must not unnecessarily become protocol requirements.
-
 ### Observability by Default
 
 The portable application model must preserve sufficient correlation, causation, lineage, and trace context to make distributed composition observable.
@@ -147,6 +143,16 @@ Arvo distinguishes among:
 - Infrastructure and delivery failures
 
 Detailed failure representations and recovery semantics are deferred to dedicated ADRs.
+
+## Project Values
+
+These describe current project policy. They may evolve without superseding this ADR and are not requirements for Arvo conformance.
+
+### Standards-Based Interoperability
+
+Arvo uses established standards where they provide suitable semantics rather than defining new ones. The CloudEvent transformation described under ArvoEvent is one instance.
+
+Arvo is TypeScript-first, with future support for other languages. The project avoids letting TypeScript implementation details become requirements of the portable application model; cross-language compatibility is addressed in a dedicated ADR.
 
 ### Developer Experience
 
