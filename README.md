@@ -58,6 +58,8 @@ Arvo abstracts infrastructure concerns from your business logic. Write applicati
 
 The same primitives work for simple request-response services, complex multi-service workflows, AI agent systems, and everything in between. No framework lock-in, no mandatory infrastructure, just clean event-driven code that integrates with your existing stack.
 
+For the thesis behind this — what Arvo is betting on, and how that bet could turn out to be wrong — see [the Arvo vision document](docs/vision.md). The binding architectural commitments are recorded in [ADR-000](docs/adr/000-arvo-system-identity-and-architectural-principles.md).
+
 ## What is `arvo-core`?
 
 The `arvo-core` is one of the two foundational packages in the Arvo ecosystem, alongside `arvo-event-handler`. Together, they provide the complete foundation for building event-driven applications that are distributed system-compliant. Explore additional tools and integrations in the `@arvo-tools` namespace.

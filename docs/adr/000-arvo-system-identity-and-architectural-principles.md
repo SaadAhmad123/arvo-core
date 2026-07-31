@@ -17,6 +17,8 @@ Those constraints are useful within their intended environments, but they make a
 
 Arvo needs an application model in which these different participants can compose without requiring one execution engine to own the complete process. Arvo seeks to keep their composition and lifecycle semantics portable while infrastructure adapters and platforms perform execution, persistence, delivery, scheduling, and recovery according to their strengths.
 
+The motivating thesis, its failure conditions, and a worked example are described in [the Arvo vision document](../vision.md). This ADR records the resulting architectural commitments.
+
 This ADR establishes the identity and architectural principles of Arvo. It governs the Arvo ecosystem beyond a single package or major version. Arvo v4 is the first implementation expected to conform to it.
 
 ## Decision
