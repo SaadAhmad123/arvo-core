@@ -248,6 +248,9 @@ Rejected because disconnected event, validation, and telemetry utilities would n
 
 ### Benefits
 
+- Composition is closed, so a subgraph can be sealed behind one contract and domain or team boundaries can be drawn and redrawn without rearchitecting.
+- Node granularity is a reversible design decision rather than an architectural commitment; getting boundaries wrong early is cheap in both directions.
+- Reuse is of contract-addressed running capabilities rather than packages, enabling cross-team and cross-language reuse without bindings or a shared runtime.
 - The portable application model remains consistent across infrastructure adapters that support the required execution capability profile.
 - Declared contract boundaries make every handler's possible Arvo event effects explicit while allowing its internal behaviour to remain nondeterministic.
 - Deterministic and nondeterministic components can participate in one application model.
@@ -262,6 +265,10 @@ Rejected because disconnected event, validation, and telemetry utilities would n
 - The portable application model may not expose every proprietary guarantee or optimization.
 - Portability of handler implementation logic depends on its runtime and declared implementation dependencies.
 - Changing a handler's Arvo event capability set requires changing its handler definition and may require contract versioning and redeployment. Active executions cannot acquire new Arvo event capabilities dynamically.
+- Arvo does not prescribe where node boundaries belong. Granularity is an unguided design decision and can be wrong in either direction.
+- Declared event capabilities are boundary-local, so system-wide effect analysis requires traversing the graph rather than reading one contract.
+- Convergence across a boundary whose inner contracts have external consumers is a breaking change for those consumers.
+- Merging nodes unions their execution capability profiles and coarsens failure, retry, and lineage granularity.
 - Adapters carry significant responsibility for correctly mapping infrastructure behaviour to Arvo semantics.
 - Event-driven distributed applications must account for delivery uncertainty and partial failure.
 - Strong runtime validation and observability introduce implementation and execution overhead.
