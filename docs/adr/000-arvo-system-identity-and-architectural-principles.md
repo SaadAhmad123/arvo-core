@@ -1,6 +1,6 @@
 # ADR-000: Arvo System Identity and Architectural Invariants
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-31
 - **Scope:** Arvo ecosystem
 - **Defines:** Arvo Application Model (AAM) 1
