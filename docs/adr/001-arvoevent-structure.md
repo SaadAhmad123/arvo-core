@@ -11,7 +11,7 @@ Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-a
 
 This ADR defines the fields of an ArvoEvent: their types, defaults, structural constraints, semantics including how each is intended to propagate, and the reasoning for each.
 
-It does not define handler behaviour. How `executionid` is derived, how an incoming event is classified, how `depth` is assigned, and the conditions under which a handler routes a failure to the workflow root belong to the handler protocol ADR.
+It does not define handler behaviour. How `executionid` is derived, how an incoming event is classified, and the conditions under which a handler routes a failure to the workflow root belong to the handler protocol ADR.
 
 It does not define contract validation of `data`. This ADR defines structural validity — that an event is well formed. Whether an event's payload satisfies the schema its `dataschema` names is a separate check performed at handler trust boundaries, and belongs to the contract and handler protocol ADRs.
 
@@ -98,9 +98,11 @@ On a root event, `executionid` equals `subject`. One value is minted and serves 
 
 Two consequences follow. `executionid === subject` appears on more than root events — the root execution's own outbound events carry it, and so do failure events from any depth — which is why rootness requires the conjunction under **Structural validity** rather than this equality alone. And because a completion carries its caller's identity rather than its own, a completing execution's identity never appears on the event that ends it, so the execution tree is reconstructable only from handler state, never from the event stream.
 
-**`depth`** is the event's stack depth within its workflow — `0` on a root event, `1` or greater otherwise. It exists for operational comprehension: ADR-000 imposes no architectural limit on composition depth, which makes runaway or unexpectedly deep nesting an operational risk rather than a structural impossibility, and `depth` is what makes it visible without traversing the graph.
+**`depth`** is the nesting level of the execution this event belongs to, measured from the root — `0` on a root event, `1` or greater otherwise. It exists for operational comprehension: ADR-000 imposes no architectural limit on composition depth, which makes runaway or unexpectedly deep nesting an operational risk rather than a structural impossibility, and `depth` is what makes it visible without traversing the graph.
 
-How `depth` is assigned is an implementation concern and is not decided here.
+`depth` counts nesting, not events. An event that opens a new execution carries one more than the level of the execution that emitted it; every other event carries the level of the execution that emitted it. Sibling requests issued by one execution therefore share a depth, and an execution that emits ten events does not advance the counter ten times. Counting events instead would make the value grow along a chain without any nesting occurring, which is exactly the signal the field exists to give.
+
+A completion carries the level of the execution it completes, not the level it returns to. `depth` never decrements.
 
 ### Classification
 
@@ -121,7 +123,7 @@ Beyond being a non-empty string or `null`, `category` is structurally unvalidate
 
 **`source`** identifies the producer of the event. It is required so that every event records where it came from. Its format is unconstrained, so what `source` establishes is only as strong as the convention a deployment adopts.
 
-**`to`** names the intended recipient. It is always carried, including across a boundary between processing lattices.
+**`to`** names the intended recipient of this event. The emitter sets it per event; it is not inherited from the event that triggered the emission. A boundary that consumes an event and emits a replacement preserves it.
 
 **`domain`** marks an event that cannot be fulfilled within the lattice currently holding it. `null` — the default and the ordinary case — means the event belongs where it is. A non-null value, set by the emitter, means the event must be lifted out and fulfilled elsewhere: by a human participant, an external system, or a separate Arvo deployment.
 
@@ -172,6 +174,33 @@ ADR-000 requires the model to preserve correlation, causation, lineage, and trac
 ### Accounting
 
 **`executionunits`** is an opaque numeric value whose meaning is defined entirely by the emitting handler and its domain. Arvo carries it and interprets it in no way. It is not a measure of compute, resource consumption, or infrastructure cost, and this ADR places no constraint on its sign or magnitude beyond finiteness.
+
+## Propagation
+
+Every field falls into one of four patterns: fresh on each event, inherited unchanged from the triggering event, written once at the root, or role-dependent. The table below is exhaustive over the field set.
+
+| Field | Propagation |
+|---|---|
+| `id` | Fresh on every event. Never inherited. |
+| `parentid` | The `id` of the event that caused this one. `null` only on the root event. |
+| `initid` | On a completion, the `id` of the init event that opened the execution being completed. `null` on every other event. |
+| `subject` | Minted on the root event, then copied unchanged onto every event in the workflow. |
+| `executionid` | Role-dependent. See the `executionid` propagation rules above. |
+| `category` | Set per event according to its contractual role. `io.arvo.*` values are set only by contract factories. Never inherited. |
+| `depth` | Nesting level. An event opening a new execution carries one more than the level of the execution emitting it; every other event carries the emitting execution's level. `0` at the root, never decrements. |
+| `source` | Set fresh by each producer. Never inherited. |
+| `to` | Set fresh by the emitter. Never inherited; preserved by a boundary re-emitting an event. |
+| `domain` | `null` for traffic inside a lattice. Set non-null by an emitter whose event must be fulfilled elsewhere; the boundary emits a replacement carrying `null`. |
+| `type` | Set per event from the contract. Never inherited. |
+| `data` | Set per event. Never inherited. |
+| `dataschema` | Set per event to the contract version its producer is speaking. Never inherited. |
+| `baggage` | Written once on the root event, then copied unchanged onto every event in the workflow. |
+| `time` | Fresh on every event. |
+| `traceparent` | Set by whoever creates the event, per the attached tracing mechanism. The envelope neither inherits nor synthesizes it. |
+| `tracestate` | As `traceparent`. |
+| `executionunits` | Set by the emitting handler on events it emits. Never inherited. |
+
+Nothing propagates by default. A field is inherited only where this table says so, which is why `subject` and `baggage` are the only two values that survive a hop unchanged, and why every other field is the responsibility of whoever constructs the event.
 
 ## Structural validity
 
@@ -225,4 +254,4 @@ What remains outside the model: the routing behaviour an adapter or boundary der
 
 **Required of infrastructure adapters.** Carry every field unchanged. Do not synthesize, mutate, or drop any field, and in particular do not populate `traceparent` or `tracestate`. A boundary that moves an event between lattices consumes it and emits a new event rather than editing the one it received. Do not depend on `time`, or on any ordering of `id` values, for correctness.
 
-**Left deferred.** `executionid` derivation — what a handler computes to obtain its own execution identity. Event classification and who may set `category`. `depth` assignment. The conditions under which a handler routes a failure to the workflow root rather than returning normally. Contract validation of `data`, and the trust boundaries at which it occurs. Deserialization and wire format. CloudEvent transformation, including any binding limit on `baggage` size. Ordering guarantees.
+**Left deferred.** `executionid` derivation — what a handler computes to obtain its own execution identity. Event classification and who may set `category`. The conditions under which a handler routes a failure to the workflow root rather than returning normally. Contract validation of `data`, and the trust boundaries at which it occurs. Deserialization and wire format. CloudEvent transformation, including any binding limit on `baggage` size. Ordering guarantees.
