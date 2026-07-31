@@ -27,7 +27,9 @@ Production use of earlier versions surfaced a specific class of problem. Coordin
 
 The structure is also deliberately broad. Carrying a field that goes unused costs a null on the wire; needing a field that does not exist costs a workaround, and in an event system a workaround means overloading a field that meant something else or smuggling the value through `data` — the failure described above. Because this structure changes only by a superseding ADR, those two costs are not symmetric, and the design favours the cheaper error. It is not an attempt to enumerate every field an Arvo application will ever want, but a refusal to constrain the envelope to what is knowable today.
 
-Breadth is applied in two tiers. Fields exist for concerns whose shape is knowable even where their content is not: `category`, `domain`, and `executionunits` are slots with deliberately thin semantics, reserved so that meaning can arrive later without a new envelope. `extensions` and `baggage` absorb what cannot be named in advance at all, which is what keeps the approach from requiring foresight it cannot have. The constraints placed on those open fields — flat, scalar-only, size-bounded, written once — limit depth and volume rather than expressiveness, so that a generous field does not become a second payload channel.
+Breadth here means named fields with deliberately thin semantics, not open extensibility. `category`, `domain`, and `executionunits` are slots reserved for concerns whose shape is knowable even where their content is not, so meaning can arrive later without a new envelope. `baggage` carries ambient context, written once at the root and bounded in shape and size.
+
+Beyond those, there is no general-purpose place to attach something. That is deliberate. An open per-event extension map was considered and rejected: it becomes the second payload channel the envelope exists to prevent, and it lets a producer attach data that no contract declares and no receiver can be expected to understand. Anything a handler needs to communicate travels in `data`, under a contract.
 
 ## Decision
 
@@ -48,7 +50,6 @@ An ArvoEvent has the following fields and no others.
 | `type` | `string` | yes | — |
 | `data` | `JSONRecord` | yes | — |
 | `dataschema` | `string` | yes | — |
-| `extensions` | `Record<string, JSONPrimitive>` | no | `{}` |
 | `baggage` | `Record<string, JSONPrimitive>` | no | `{}` |
 | `time` | `string` | yes | now |
 | `traceparent` | `string \| null` | no | `null` |
@@ -132,13 +133,11 @@ Both fields are hints the application supplies to infrastructure. ADR-000 makes 
 
 `dataschema` is required because there is no legitimate class of ArvoEvent that lacks a contract. Every inter-node interaction is contract-governed, so an event that could not name its contract version could not be validated by any receiver, and version skew would become undetectable rather than merely awkward. Events from foreign systems enter through a boundary that declares a contract on their behalf; the boundary supplies the value.
 
-### Open metadata
+### Ambient context
 
-Two open maps exist, and they are not interchangeable. Both are flat and scalar-only. Nesting is prohibited so that a reader can consume either without knowing its shape, and so that neither becomes an untyped alternative to `data`.
+**`baggage`** carries ambient context for an entire workflow. It is flat and scalar-only; nesting is prohibited so that a reader can consume it without knowing its shape, and so that it cannot become an untyped alternative to `data`.
 
-**`extensions`** describes this event to systems outside Arvo. It is scoped to the single event and set by its producer; it is not propagated to events derived from this one. Keys MUST NOT collide with the name of any known ArvoEvent field.
-
-**`baggage`** carries ambient context for an entire workflow. It is written exactly once, on the root event, and carried unchanged by every event in that workflow. Handlers read it. No handler may add a key, remove a key, or change a value.
+`baggage` It is written exactly once, on the root event, and carried unchanged by every event in that workflow. Handlers read it. No handler may add a key, remove a key, or change a value.
 
 Write-once at the root is what makes baggage genuinely workflow-global rather than merely inherited. Because there is only one writer, every event in the workflow carries an identical map, no two branches can diverge, no fan-in requires a merge rule, and no collision is possible. Its size is fixed when the workflow begins and cannot grow.
 
@@ -174,11 +173,11 @@ Contract validation is separate and is not defined here. Whether `data` satisfie
 
 **Typed:** `depth` is a non-negative integer. `time` is RFC 3339 with an offset. `traceparent` and `tracestate` are unvalidated.
 
-**JSON validity.** Every numeric value anywhere in an event MUST be finite: `NaN`, `Infinity`, and `-Infinity` are rejected, because none round-trips as a JSON number. This applies to `executionunits`, to values in `baggage` and `extensions`, and to numbers at any depth within `data`.
+**JSON validity.** Every numeric value anywhere in an event MUST be finite: `NaN`, `Infinity`, and `-Infinity` are rejected, because none round-trips as a JSON number. This applies to `executionunits`, to values in `baggage`, and to numbers at any depth within `data`.
 
 `data` is a JSON record, defined recursively: a string-keyed object whose values are JSON values, where a JSON value is a finite number, a string, a boolean, `null`, an array of JSON values, or a JSON record. Structural validity is defined by that domain rather than by whether a particular serializer happens not to throw.
 
-`baggage` and `extensions` are flat records whose values are a finite number, a string, a boolean, or `null`.
+`baggage` is a flat record whose values are a finite number, a string, a boolean, or `null`.
 
 **Root conjunction.** A root event is one where all three of the following hold:
 
@@ -190,8 +189,6 @@ Either `depth === 0` or `parentid === null` is sufficient to make an event root,
 
 **Correlation:** `initid` is non-null if and only if `category === 'io.arvo.complete'`.
 
-**Collision:** no key in `extensions` may equal the name of a known ArvoEvent field.
-
 **Size:** the serialized size of `baggage` SHOULD NOT exceed 8192 bytes, a recommendation rather than a hard limit. Any binding limit depends on transformation and transport constraints and is decided in the CloudEvent transformation ADR.
 
 ## Consequences
@@ -200,11 +197,11 @@ Either `depth === 0` or `parentid === null` is sufficient to make an event root,
 
 **Paid for.** Breadth is bought rather than free. Every field is something a cross-language implementer must implement and every reader must understand, and a field with deliberately thin semantics becomes somewhere to put things. That discipline can be recommended here and cannot be enforced here. Identity is spread across five fields — `subject`, `executionid`, `parentid`, `initid`, `depth` — which can therefore disagree; only the root conjunction and the `initid` correlation are checked, so a structurally valid event can still be incoherent. Several fields carry meaning this ADR cannot enforce: `executionid` is opaque, `category` is unconstrained beyond shape, and `depth`'s assignment is defined elsewhere, so structural validity proves form rather than sense. Write-once baggage removes a capability that was being used: a handler that discovers something downstream nodes need must now thread it through contracts, which is more work in exchange for the coupling being declared. And a required `dataschema` means every producer, including a boundary standing in for a foreign system, must know which contract version it is speaking.
 
-Factory methods and sensible defaults answer much of this for participants using Arvo's tooling: derived identity fields cannot drift from one another, `category` is assigned rather than chosen, and an author supplies a handful of fields rather than nineteen. That mitigation stops at the tooling boundary. ADR-000 deliberately invites participants that do not have it — cross-language implementations, external systems behind a proxy, replay tools, hand-written fixtures — and for those, the rules defined here check form rather than coherence. They will accept an event whose `depth` contradicts its `executionid`, or one whose `initid` names an event that never existed.
+Factory methods and sensible defaults answer much of this for participants using Arvo's tooling: derived identity fields cannot drift from one another, `category` is assigned rather than chosen, and an author supplies a handful of fields rather than all of them. That mitigation stops at the tooling boundary. ADR-000 deliberately invites participants that do not have it — cross-language implementations, external systems behind a proxy, replay tools, hand-written fixtures — and for those, the rules defined here check form rather than coherence. They will accept an event whose `depth` contradicts its `executionid`, or one whose `initid` names an event that never existed.
 
 ## Conformance to ADR-000
 
-**Effect on AAM.** This ADR amends the AAM membership list, replacing the entry *"ArvoEvent identities, data, and CloudEvent transformability"* with the nineteen fields enumerated above, together with their types, structural constraints, and defaults. Every field is inside the model: an adapter MUST carry all of them unchanged and MUST NOT synthesize, mutate, or drop any. CloudEvent transformability remains a member as ADR-000 established it; this ADR does not touch it.
+**Effect on AAM.** This ADR amends the AAM membership list, replacing the entry *"ArvoEvent identities, data, and CloudEvent transformability"* with the eighteen fields enumerated above, together with their types, structural constraints, and defaults. Every field is inside the model: an adapter MUST carry all of them unchanged and MUST NOT synthesize, mutate, or drop any. CloudEvent transformability remains a member as ADR-000 established it; this ADR does not touch it.
 
 What remains outside the model: the routing behaviour an adapter or boundary derives from `to` and `domain`, and the meaning of the value carried in `executionunits`.
 
