@@ -36,7 +36,7 @@ An Arvo application is understood conceptually as a dynamic graph of independent
 - **Implementation dependency:** A database, API, library, model provider, or other resource used internally by a node without participating in the portable application model.
 - **Handler:** An application-layer implementation of an Arvo node. An ArvoEventHandler implements one ArvoContract, declares its ArvoContract dependencies, and may continue its logical execution across multiple event deliveries and infrastructure executions.
 - **Infrastructure adapter:** An integration that binds Arvo's portable application model to execution, delivery, persistence, scheduling, discovery, or other infrastructure.
-- **Arvo Application Model (AAM):** Arvo's versioned, language-independent portable application model, defined by this ADR and its descendants. It comprises the ArvoEvent identities and data; ArvoContract identities, versions, and declared event capabilities; inter-node interactions; causation, lineage, and trace context; handler interfaces and lifecycle semantics; execution capability requirements; validation and compatibility semantics; and failure categories whose meaning must remain consistent across supporting infrastructure adapters. It excludes physical transport, persistence technology, scheduling implementation, retry counts, batching, telemetry collection and export, and handler implementation dependencies. AAM versions are distinct from the versions of any package implementing them; `arvo-core` v4 is the first TypeScript implementation of AAM 1.
+- **Arvo Application Model (AAM):** Arvo's versioned, language-independent portable application model, defined by this ADR and its descendants. It comprises the ArvoEvent identities, data, and CloudEvent transformability; ArvoContract identities, versions, and declared event capabilities; inter-node interactions; causation, lineage, and trace context; handler interfaces and lifecycle semantics; execution capability requirements; validation and compatibility semantics; and failure categories whose meaning must remain consistent across supporting infrastructure adapters. It excludes physical transport, persistence technology, scheduling implementation, retry counts, batching, telemetry collection and export, and handler implementation dependencies. AAM versions are distinct from the versions of any package implementing them; `arvo-core` v4 is the first TypeScript implementation of AAM 1.
 
   *AAM* is the formal name. *Portable application model* is used descriptively throughout this ADR and refers to the same thing.
 - **Execution slice:** One active period of handler execution, beginning when the handler receives or resumes from an event and ending when it completes, fails, or suspends while awaiting another event.
@@ -66,7 +66,7 @@ Arvo is founded on three primary concepts.
 
 ### ArvoEvent
 
-An ArvoEvent is a JSON-serializable event used for communication between Arvo nodes. It can be transformed into a CloudEvent for standards-based interoperability. Whether that transformation is lossless and bidirectional is not decided here and is determined by the ArvoEvent ADR.
+An ArvoEvent is a JSON-serializable event used for communication between Arvo nodes. Every ArvoEvent must be transformable into a CloudEvent for standards-based interoperability. Transformability is a binding capability of AAM 1; whether the transformation is lossless and bidirectional is determined by the ArvoEvent ADR.
 
 The exact ArvoEvent model, self-description semantics, validation rules, lineage fields, observability fields, and CloudEvent transformation semantics are defined in the dedicated ArvoEvent ADR.
 
@@ -152,7 +152,7 @@ These describe current project policy. They may evolve without superseding this 
 
 ### Standards-Based Interoperability
 
-Arvo uses established standards where they provide suitable semantics rather than defining new ones. The CloudEvent transformation described under ArvoEvent is one instance.
+Arvo uses established standards where they provide suitable semantics rather than defining new ones. Standards commitments that bind the model, such as the CloudEvent transformability required of every ArvoEvent, are recorded as part of AAM rather than as project policy.
 
 Arvo is TypeScript-first, with future support for other languages. The project avoids letting TypeScript implementation details become requirements of the portable application model; cross-language compatibility is addressed in a dedicated ADR.
 
