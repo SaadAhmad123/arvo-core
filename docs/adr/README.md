@@ -17,4 +17,4 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 
 | ADR | Title | Status |
 | --- | --- | --- |
-| [ADR-000](./000-arvo-system-identity-and-architectural-principles.md) | Arvo System Identity and Architectural Principles | Proposed |
+| [ADR-000](./000-arvo-system-identity-and-architectural-principles.md) | Arvo System Identity and Architectural Invariants | Proposed |
