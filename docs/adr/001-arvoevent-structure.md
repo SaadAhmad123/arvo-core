@@ -148,9 +148,9 @@ That is deliberate rather than an inconvenience. When a downstream node needs a 
 
 **`time`** is the RFC 3339 timestamp of when the event occurred, with a UTC offset. It is descriptive, not authoritative: ADR-000 assumes delayed, reordered, and replayed delivery, so `time` MUST NOT be used to establish ordering.
 
-**`traceparent`** and **`tracestate`** carry W3C Trace Context. They are set explicitly by whoever creates the event, or derived from a span at creation. They are never populated automatically and never synthesized by an adapter. Automatic population produced trace context that looked authoritative while being wrong, which is worse than absent trace context.
+**`traceparent`** and **`tracestate`** carry tracing context. They are set explicitly by whoever creates the event, or derived from a span at creation. They are never populated automatically and never synthesized by an adapter. Automatic population produced trace context that looked authoritative while being wrong, which is worse than absent trace context.
 
-Because these fields claim W3C semantics, they are held to W3C's syntax. `traceparent`, when non-null, MUST match the W3C `traceparent` form. `tracestate` MUST be `null` when `traceparent` is `null`, since W3C defines it as a companion and a standalone `tracestate` cannot be interpreted. `tracestate` content is otherwise opaque: it is deliberately vendor-extensible, and validating it would couple this structure to vendor conventions for no gain. Rejecting a malformed `traceparent` follows the same reasoning as refusing to auto-populate it — trace context that looks authoritative while being wrong is the failure being avoided.
+Both are opaque strings and neither is validated. The only commitment this structure makes is that these fields exist to propagate tracing headers compatibly with OpenTelemetry. Their format, their validity, and any relationship between them are defined by the tracing mechanism attached to them, not by the event envelope.
 
 ADR-000 requires the model to preserve correlation, causation, lineage, and trace context. `subject` provides correlation, `parentid` and `initid` provide causation, `executionid` provides lineage, `depth` measures it, and these two fields provide trace context.
 
@@ -168,9 +168,9 @@ Contract validation is separate and is not defined here. Whether `data` satisfie
 
 **Required:** `id`, `subject`, `executionid`, `source`, `type`, `data`, `dataschema`, `time`.
 
-**Non-empty:** `id`, `subject`, `executionid`, `source`, `type`, `dataschema`, and — when not `null` — `parentid`, `initid`, `category`, `to`, `domain`, `traceparent`, `tracestate`.
+**Non-empty:** `id`, `subject`, `executionid`, `source`, `type`, `dataschema`, and — when not `null` — `parentid`, `initid`, `category`, `to`, `domain`.
 
-**Typed:** `id` is a UUIDv7. `depth` is a non-negative integer. `time` is RFC 3339 with an offset. `traceparent`, when non-null, matches the W3C `traceparent` form.
+**Typed:** `depth` is a non-negative integer. `time` is RFC 3339 with an offset. `traceparent` and `tracestate` are unvalidated.
 
 **JSON validity.** Every numeric value anywhere in an event MUST be finite: `NaN`, `Infinity`, and `-Infinity` are rejected, because none round-trips as a JSON number. This applies to `executionunits`, to values in `baggage` and `extensions`, and to numbers at any depth within `data`.
 
@@ -187,8 +187,6 @@ executionid === subject     &&     parentid === null     &&     depth === 0
 Either `depth === 0` or `parentid === null` is sufficient to make an event root, so if either holds, all three MUST hold. `executionid === subject` is necessary but not sufficient — the root execution's own outbound events carry it at depth 1 with a non-null `parentid` — so it does not on its own trigger the requirement.
 
 **Correlation:** `initid` is non-null if and only if `category === 'io.arvo.complete'`.
-
-**Trace companionship:** `tracestate` is `null` whenever `traceparent` is `null`.
 
 **Collision:** no key in `extensions` may equal the name of a known ArvoEvent field.
 
