@@ -19,7 +19,7 @@ Arvo needs an application model in which these different participants can compos
 
 The motivating thesis, its failure conditions, and a worked example are described in [the Arvo vision document](../vision.md). This ADR records the resulting architectural commitments.
 
-This ADR establishes the identity and architectural principles of Arvo. It governs the Arvo ecosystem beyond a single package or major version. Arvo v4 is the first implementation expected to conform to it.
+This ADR establishes the identity and architectural principles of Arvo. It governs the Arvo ecosystem beyond a single package or major version, and defines the first version of the Arvo Application Model, AAM 1. `arvo-core` v4 is the first implementation expected to conform to it.
 
 ## Decision
 
@@ -36,6 +36,7 @@ An Arvo application is understood conceptually as a dynamic graph of independent
 - **Implementation dependency:** A database, API, library, model provider, or other resource used internally by a node without participating in the portable application model.
 - **Handler:** An application-layer implementation of an Arvo node. An ArvoEventHandler implements one ArvoContract, declares its ArvoContract dependencies, and may continue its logical execution across multiple event deliveries and infrastructure executions.
 - **Infrastructure adapter:** An integration that binds Arvo's portable application model to execution, delivery, persistence, scheduling, discovery, or other infrastructure.
+- **Arvo Application Model (AAM):** The versioned, language-independent model defined by this ADR and its descendants. AAM versions are distinct from the versions of any package implementing them. `arvo-core` v4 is the first TypeScript implementation of AAM 1.
 - **Portable application model:** The ArvoEvent identities and data; ArvoContract identities, versions, and declared event capabilities; inter-node interactions; causation and lineage; handler interfaces and lifecycle semantics; execution capability requirements; validation and compatibility semantics; and failure categories whose meaning must remain consistent across supporting infrastructure adapters. It excludes physical transport, persistence technology, scheduling implementation, retry counts, batching, telemetry collection and export, and handler implementation dependencies.
 - **Execution slice:** One active period of handler execution, beginning when the handler receives or resumes from an event and ending when it completes, fails, or suspends while awaiting another event.
 - **Execution capability profile:** The declared runtime capabilities and constraints required to execute a handler. Its exact model is defined separately.
@@ -330,4 +331,4 @@ Accepted ADRs and feature specifications must conform to this decision. A later 
 
 This repository is the canonical source of Arvo ecosystem ADRs until a dedicated architecture repository supersedes it. Ecosystem repositories must reference these records rather than maintain independent copies.
 
-This ADR should be marked **Accepted** only after review confirms that it accurately represents Arvo's enduring identity rather than the incidental details of its current TypeScript implementation.
+This ADR should be marked **Accepted** only after review confirms that it accurately describes the Arvo Application Model rather than the incidental details of any one implementation of it.
