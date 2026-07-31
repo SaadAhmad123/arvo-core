@@ -42,7 +42,9 @@ A deterministic pricing workflow computes terms and requests a draft from an LLM
 
 Four participants. Four completely different execution characteristics — deterministic, nondeterministic, human-latency, foreign. One composition model, no privileged control path, and a three-day gap that has to survive a deployment.
 
-Later, pricing and terms-drafting turn out to belong together and are sealed behind a single `terms` contract. Nothing calling them changes.
+Later, pricing and terms-drafting turn out to belong together, and are sealed behind a single `terms` node. Order intake always addressed the pricing contract, and the sealed node continues to implement it, so nothing calling in changes. The drafting contract — which only pricing ever addressed — disappears from the graph entirely.
+
+That is the rule, not a special case: decomposition behind a boundary is always invisible to callers, and convergence is invisible exactly when the contracts being absorbed had no external consumers. Had another team been calling drafting directly, sealing it would have been a breaking change for them.
 
 ## Next
 
