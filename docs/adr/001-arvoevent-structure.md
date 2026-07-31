@@ -125,7 +125,9 @@ Beyond being a non-empty string or `null`, `category` is structurally unvalidate
 
 The value is relative to the lattice reading it, not a global address. Inside any lattice, ordinary traffic carries `domain: null`; a non-null `domain` exists only while an event is in transit across a boundary.
 
-Events are immutable, so a boundary does not rewrite `domain`. It consumes the event it lifted out and emits a new one carrying `domain: null` into the destination lattice, and the same on the return path. The original event is preserved as the record of what crossed. Adapters never mutate a field.
+Events are immutable, so a boundary does not rewrite `domain`. It consumes the event it lifted out and emits a new one carrying `domain: null` into the destination lattice, and the same on the return path. The original event is preserved as the record of what crossed.
+
+That boundary is an Arvo node, not invisible adapter behaviour. It participates through a declared contract like any other node, and consuming one event and emitting another is ordinary node behaviour rather than an exception to the rule that adapters never mutate a field.
 
 Both fields are hints the application supplies to infrastructure. ADR-000 makes routing an infrastructure responsibility, so this ADR requires only that they be carried unchanged where an event is carried at all. What a boundary does — including how it tracks an event it lifted out and correlates the result back — is outside AAM.
 
@@ -144,6 +146,8 @@ Both fields are hints the application supplies to infrastructure. ADR-000 makes 
 ### Ambient context
 
 **`baggage`** carries ambient context for an entire workflow. It is flat and scalar-only; nesting is prohibited so that a reader can consume it without knowing its shape, and so that it cannot become an untyped alternative to `data`.
+
+This is Arvo baggage. It is not W3C Baggage, shares none of its structure or propagation rules, and nothing here should be read as a claim of compatibility with it.
 
 `baggage` It is written exactly once, on the root event, and carried unchanged by every event in that workflow. Handlers read it. No handler may add a key, remove a key, or change a value.
 
@@ -197,7 +201,7 @@ Either `depth === 0` or `parentid === null` is sufficient to make an event root,
 
 **Correlation:** `initid` is non-null if and only if `category === 'io.arvo.complete'`.
 
-**Size:** the serialized size of `baggage` SHOULD NOT exceed 8192 bytes, a recommendation rather than a hard limit. Any binding limit depends on transformation and transport constraints and is decided in the CloudEvent transformation ADR.
+**Size:** `baggage` SHOULD NOT exceed 8192 bytes when encoded as compact UTF-8 JSON — no insignificant whitespace, keys in any order. The measure is fixed so that the figure does not vary by serializer. It is a recommendation rather than a hard limit; any binding limit depends on transformation and transport constraints and is decided in the CloudEvent transformation ADR.
 
 ## Consequences
 
