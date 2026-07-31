@@ -37,7 +37,7 @@ An Arvo application is understood conceptually as a dynamic graph of independent
 - **Handler:** An application-layer implementation of an Arvo node. An ArvoEventHandler implements one ArvoContract, declares its ArvoContract dependencies, and may continue its logical execution across multiple event deliveries and infrastructure executions.
 - **Infrastructure adapter:** An integration that binds Arvo's portable application model to execution, delivery, persistence, scheduling, discovery, or other infrastructure.
 - **Arvo Application Model (AAM):** The versioned, language-independent model defined by this ADR and its descendants. AAM versions are distinct from the versions of any package implementing them. `arvo-core` v4 is the first TypeScript implementation of AAM 1.
-- **Portable application model:** The ArvoEvent identities and data; ArvoContract identities, versions, and declared event capabilities; inter-node interactions; causation and lineage; handler interfaces and lifecycle semantics; execution capability requirements; validation and compatibility semantics; and failure categories whose meaning must remain consistent across supporting infrastructure adapters. It excludes physical transport, persistence technology, scheduling implementation, retry counts, batching, telemetry collection and export, and handler implementation dependencies.
+- **Portable application model:** The ArvoEvent identities and data; ArvoContract identities, versions, and declared event capabilities; inter-node interactions; causation, lineage, and trace context; handler interfaces and lifecycle semantics; execution capability requirements; validation and compatibility semantics; and failure categories whose meaning must remain consistent across supporting infrastructure adapters. It excludes physical transport, persistence technology, scheduling implementation, retry counts, batching, telemetry collection and export, and handler implementation dependencies.
 - **Execution slice:** One active period of handler execution, beginning when the handler receives or resumes from an event and ending when it completes, fails, or suspends while awaiting another event.
 - **Execution capability profile:** The declared runtime capabilities and constraints required to execute a handler. Its exact model is defined separately.
 
@@ -65,7 +65,7 @@ Arvo is founded on three primary concepts.
 
 ### ArvoEvent
 
-An ArvoEvent is a JSON-serializable event used for communication between Arvo nodes. It can be transformed into a CloudEvent for standards-based interoperability.
+An ArvoEvent is a JSON-serializable event used for communication between Arvo nodes. It can be transformed into a CloudEvent for standards-based interoperability. Whether that transformation is lossless and bidirectional is not decided here and is determined by the ArvoEvent ADR.
 
 The exact ArvoEvent model, self-description semantics, validation rules, lineage fields, observability fields, and CloudEvent transformation semantics are defined in the dedicated ArvoEvent ADR.
 
@@ -79,7 +79,7 @@ An ArvoEventHandler must declare its complete ArvoContract capability set as par
 
 This static capability boundary makes the handler's possible event-driven effects explicit and predictable without making its behaviour deterministic. Arvo does not prescribe which permitted events a handler emits, their sequence or frequency, or the reasoning that leads to them.
 
-Within an execution slice, Arvo does not constrain a handler's internal computation or its use of implementation dependencies. No live implementation dependency is assumed to survive a suspension boundary; resumable state semantics are defined separately. Implementation dependencies do not expand a handler's declared Arvo event capabilities.
+Within an execution slice, Arvo does not constrain a handler's internal computation or its use of implementation dependencies. No live implementation dependency must be relied upon to survive a suspension boundary; resumable state semantics are defined separately. Implementation dependencies do not expand a handler's declared Arvo event capabilities.
 
 The exact contract model and compatibility rules are deferred to dedicated ADRs.
 
@@ -127,7 +127,7 @@ Deterministic, imperative, nondeterministic, human-driven, and agentic handlers 
 
 Nodes compose through explicit, versioned contracts. The portable application model requires runtime validation at defined trust boundaries. Compile-time types improve developer experience but cannot establish validity across independently deployed, external, or cross-language participants.
 
-Dedicated ADRs define the validation boundaries and failure representations. Compile-time type safety should be provided as strongly as practical, but it does not replace runtime validation and must not prevent future cross-language participation.
+Dedicated ADRs define the validation boundaries and failure representations. Compile-time type safety does not replace runtime validation and must not prevent future cross-language participation.
 
 ### Observability by Default
 
@@ -157,7 +157,7 @@ Arvo is TypeScript-first, with future support for other languages. The project a
 
 ### Developer Experience
 
-Arvo prioritizes an approachable application-development experience. Strong opinions, validation, diagnostics, and type inference should reduce the effort required to build robust distributed and agentic systems.
+Arvo prioritizes an approachable application-development experience. Strong opinions, validation, diagnostics, and type inference are used to reduce the effort required to build robust distributed and agentic systems, and compile-time type safety is provided as strongly as practical.
 
 Minimal dependencies are preferred, but not at the expense of correctness, standards compliance, observability, or developer experience.
 
@@ -289,7 +289,7 @@ These trade-offs are accepted. Arvo prioritizes the portable application model a
 
 The following require dedicated ADRs or specifications:
 
-- ArvoEvent structure, self-description, and CloudEvent transformation
+- ArvoEvent structure, self-description, and CloudEvent transformation, including whether that transformation is lossless and bidirectional
 - ArvoContract structure, dependency declaration, event capabilities, resolution, and version compatibility
 - ArvoEventHandler execution semantics
 - Handler state serialization, persistence, migration, and recovery
