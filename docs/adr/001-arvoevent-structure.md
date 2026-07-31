@@ -113,6 +113,8 @@ The field is an open string rather than a closed enum, so a domain may classify 
 
 Arvo's own values are namespaced under `io.arvo.` and Arvo will only ever use that namespace. This puts the burden of avoiding collisions on Arvo rather than on every domain that uses the field: a domain may choose any value that is not `io.arvo.`-prefixed and be safe against every category Arvo adds in future. Collisions between two domains are those domains' concern; Arvo makes no claim over the rest of the value space.
 
+The `io.arvo.` namespace is set only by contract event factories, never by handler or application code. A recognized value therefore always reflects what the producing contract actually constructed, and cannot be hand-forged or drift from it — which is what makes `category` usable as a cross-check against contract lookup rather than merely a hint. Values outside that namespace are set by whoever produces the event; Arvo neither assigns nor interprets them.
+
 Beyond being a non-empty string or `null`, `category` is structurally unvalidated. Which values are legitimate for a given event, and who is permitted to set them, are contract and handler protocol concerns.
 
 ### Routing
