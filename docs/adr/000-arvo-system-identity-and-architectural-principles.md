@@ -163,9 +163,9 @@ Minimal dependencies are preferred, but not at the expense of correctness, stand
 
 ### Stable Evolution
 
-Arvo v4 is a deliberate architectural rebuild and is not constrained by compatibility with earlier major versions.
+`arvo-core` v4 is a deliberate architectural rebuild and is not constrained by compatibility with earlier major versions.
 
-Compatibility guarantees for stable APIs, event representations, contracts, persisted state, and adapter interfaces must be defined separately before v4 is declared stable.
+Compatibility guarantees for stable APIs, event representations, contracts, persisted state, and adapter interfaces will be defined separately before v4 is declared stable.
 
 ## Delivery Assumptions
 
@@ -224,6 +224,7 @@ Arvo is not:
 - A hosting or deployment platform
 - A service discovery system
 - A complete representation or controller of an application's graph
+- A prescription of where node boundaries belong within an application
 
 Arvo does not guarantee that a contract implementation exists, that an event will be delivered, or that all infrastructure adapters provide identical operational guarantees.
 
@@ -331,4 +332,4 @@ Accepted ADRs and feature specifications must conform to this decision. A later 
 
 This repository is the canonical source of Arvo ecosystem ADRs until a dedicated architecture repository supersedes it. Ecosystem repositories must reference these records rather than maintain independent copies.
 
-This ADR should be marked **Accepted** only after review confirms that it accurately describes the Arvo Application Model rather than the incidental details of any one implementation of it.
+This ADR must be marked **Accepted** only after review confirms that it accurately describes the Arvo Application Model rather than the incidental details of any one implementation of it.
