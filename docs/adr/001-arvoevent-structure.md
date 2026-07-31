@@ -151,13 +151,13 @@ Both fields are hints the application supplies to infrastructure. ADR-000 makes 
 
 This is Arvo baggage. It is not W3C Baggage, shares none of its structure or propagation rules, and nothing here should be read as a claim of compatibility with it.
 
-`baggage` It is written exactly once, on the root event, and carried unchanged by every event in that workflow. Handlers read it. No handler may add a key, remove a key, or change a value.
+It is written exactly once, on the root event, and carried unchanged by every event in that workflow. Handlers read it. No handler may add a key, remove a key, or change a value.
 
 Write-once at the root is what makes baggage genuinely workflow-global rather than merely inherited. Because there is only one writer, every event in the workflow carries an identical map, no two branches can diverge, no fan-in requires a merge rule, and no collision is possible. Its size is fixed when the workflow begins and cannot grow.
 
 The restriction also selects for the right content. A root minter — an API gateway, a scheduler, a webhook receiver — knows ambient request context: tenant, actor, locale, a correlation token to a foreign system, a feature flag set. It cannot know anything computed later in the workflow. So baggage carries what is true of the whole workflow from the outset, and anything a handler discovers travels through a contract instead.
 
-That is deliberate rather than an inconvenience. When a downstream node needs a value an upstream node produced, it has a real dependency on that node's output, and a contract is where such a dependency belongs — declared, versioned, and validated. Baggage previously allowed that coupling to remain invisible.
+That is deliberate rather than an inconvenience. When a downstream node needs a value an upstream node produced, it has a real dependency on that node's output, and a contract is where such a dependency belongs — declared, versioned, and validated. A writable baggage would let that coupling exist without being declared anywhere.
 
 ### Observability
 
