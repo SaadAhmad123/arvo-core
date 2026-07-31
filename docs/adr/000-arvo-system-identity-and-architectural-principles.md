@@ -305,6 +305,25 @@ The following require dedicated ADRs or specifications:
 - Security and trust integration
 - Cross-language protocol compatibility
 
+## Applying This ADR
+
+Every downstream ADR must state:
+
+- what it adds to, refines, or excludes from the portable application model;
+- which invariants it depends on or strains;
+- what it requires of infrastructure adapters;
+- what it leaves deferred.
+
+The membership lists in **Portable application model** are exhaustive as of this ADR. A downstream ADR that places a new concern inside or outside the model amends those lists by explicit reference. Concerns listed under **Deferred Decisions** have undetermined membership until the relevant ADR decides it; their absence from the lists is not exclusion.
+
+### Standing Constraints
+
+Deferred decisions must preserve the following:
+
+- Node identity must not become the durable key for anything a boundary refactor would invalidate, including lineage records, persisted handler state, and external correlation. Reversible composition depends on this.
+- Execution capability profiles must compose, because a sealed node's profile derives from the profiles of its members.
+- Contract compatibility rules determine how much internal change a sealed boundary can absorb, and therefore whether reversible composition holds in practice.
+
 ## Governance
 
 Accepted ADRs and feature specifications must conform to this decision. A later decision that conflicts with this ADR must identify the conflict explicitly and supersede the affected principle or this ADR as a whole.
