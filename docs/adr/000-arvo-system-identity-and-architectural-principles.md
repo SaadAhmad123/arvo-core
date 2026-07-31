@@ -323,7 +323,7 @@ The membership lists in the **Arvo Application Model (AAM)** definition are exha
 
 Deferred decisions must preserve the following:
 
-- Node identity must not become the durable key for anything a boundary refactor would invalidate, including lineage records, persisted handler state, and external correlation. Reversible composition depends on this.
+- Durable records may carry node identity, but must not depend on it for continued correctness where a boundary refactor would invalidate that identity. Contract identity and execution identity must remain stable across composition and decomposition, so that lineage, persisted handler state, and external correlation survive a boundary change. Reversible composition depends on this.
 - Execution capability profiles must compose, because a sealed node's profile derives from the profiles of its members.
 - Contract compatibility rules determine how much internal change a sealed boundary can absorb, and therefore whether reversible composition holds in practice.
 
