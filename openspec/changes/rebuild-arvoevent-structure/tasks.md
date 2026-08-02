@@ -4,12 +4,14 @@
 - [ ] 1.2 In `src/types.ts`, add a flat-map type for scalar-only string-keyed maps so ambient context is not spelled inline in several places
 - [ ] 1.3 **DELETE** `NoKnownKeys` from `src/types.ts` — it exists solely to police the removed `extensions` field
 - [ ] 1.4 Confirm nothing outside `src/ArvoEvent/` references the deleted type
+- [ ] 1.5 Write the TSDoc in `src/types.ts` for the package consumer — one line per alias, no provenance, no citation. Nothing in this file warrants one
 
 ## 2. Errors
 
 - [ ] 2.1 In `src/ArvoEvent/errors.ts`, keep the existing discriminant and cause-chaining shape
 - [ ] 2.2 In `src/ArvoEvent/errors.ts`, establish the message conventions the Diagnostic Quality requirement demands — field name, value received, rule violated, and for cross-field rules why the combination is illegal
 - [ ] 2.3 In `src/ArvoEvent/errors.ts`, support reporting several field-level failures in one message rather than only the first
+- [ ] 2.4 Write the TSDoc in `src/ArvoEvent/errors.ts` for the package consumer — that this error means the event is malformed rather than that contract validation failed, plus a `docs/adr/` citation. Not an explanation of what structural validity is
 
 ## 3. Payload walk
 
@@ -43,7 +45,7 @@
 - [ ] 5.3 **DELETE** `extensions` and `rootsubject` from `src/ArvoEvent/types.ts`
 - [ ] 5.4 Tighten the payload generic's constraint toward a JSON object while keeping ordinary interfaces assignable
 - [ ] 5.5 Preserve the discriminated union making a span mutually exclusive with raw trace values
-- [ ] 5.6 **REWRITE** every documentation comment in `src/ArvoEvent/types.ts` — several describe superseded semantics, in particular the ambient-context comment licensing handlers to append keys, which ADR-001's write-once rule forbids
+- [ ] 5.6 **REWRITE** every documentation comment in `src/ArvoEvent/types.ts` — several describe superseded semantics, in particular the ambient-context comment licensing handlers to append keys, which is no longer permitted. Consumer-facing: state each field's rule and default, cite no reasoning
 
 ## 6. Event class
 
@@ -54,7 +56,8 @@
 - [ ] 6.5 Add the trusted-input option, skipping only the payload walk and its deep freeze
 - [ ] 6.6 Shallow-freeze the instance on every path, including the trusted one
 - [ ] 6.7 **REPLACE** the serialization try/catch with the walk from section 3
-- [ ] 6.8 **REWRITE** the class and field documentation in `src/ArvoEvent/index.ts` against ADR-001
+- [ ] 6.8 **REWRITE** the class and field documentation in `src/ArvoEvent/index.ts` — consumer-facing, one `docs/adr/001-arvoevent-structure.md` citation on the class for the full field definitions
+- [ ] 6.9 Document the finiteness rule on `data`, `baggage`, and `executionunits` in `src/ArvoEvent/index.ts`, where a caller meets it, rather than on the value types
 
 ## 7. Events arriving as data
 
