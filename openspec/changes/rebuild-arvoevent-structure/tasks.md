@@ -15,14 +15,14 @@
 
 ## 3. Payload walk
 
-- [ ] 3.1 Add a module under `src/ArvoEvent/` that walks a value against the JSON value domain and reports the path to any offending value
-- [ ] 3.2 Reject non-finite numbers at any depth
-- [ ] 3.3 Reject values outside the JSON domain — functions, symbols, arbitrary-precision integers
-- [ ] 3.4 Treat undefined as absent: omit the key within a map, substitute null within an array so later positions do not shift
-- [ ] 3.5 Detect reference cycles and report them as cycles rather than exhausting memory
-- [ ] 3.6 Enforce that the payload's top level is a map, not an array or scalar
-- [ ] 3.7 Enforce that ambient context is flat and scalar-valued
-- [ ] 3.8 Deep-freeze as the walk unwinds, so immutability costs no second traversal
+- [x] 3.1 Add a module under `src/ArvoEvent/` that walks a value against the JSON value domain and reports the path to any offending value
+- [x] 3.2 Reject non-finite numbers at any depth
+- [x] 3.3 Reject values outside the JSON domain — functions, symbols, arbitrary-precision integers
+- [x] 3.4 Treat undefined as absent: omit the key within a map, substitute null within an array so later positions do not shift
+- [x] 3.5 Detect reference cycles and report them as cycles rather than exhausting memory
+- [x] 3.6 Enforce that the payload's top level is a map, not an array or scalar
+- [x] 3.7 Enforce that ambient context is flat and scalar-valued
+- [x] 3.8 Deep-freeze as the walk unwinds, so immutability costs no second traversal
 
 ## 4. Validator
 
