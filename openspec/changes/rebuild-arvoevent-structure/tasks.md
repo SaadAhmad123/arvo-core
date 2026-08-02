@@ -67,9 +67,9 @@
 
 ## 8. Exports
 
-- [ ] 8.1 In `src/index.ts`, export the new types and the data-admitting entry point
-- [ ] 8.2 **REMOVE** exports for deleted types from `src/index.ts`
-- [ ] 8.3 Confirm the public surface exposes nothing referencing removed fields
+- [x] 8.1 In `src/index.ts`, export the new types and the data-admitting entry point
+- [x] 8.2 **REMOVE** exports for deleted types from `src/index.ts`
+- [x] 8.3 Confirm the public surface exposes nothing referencing removed fields
 
 ## 9. Tests
 
