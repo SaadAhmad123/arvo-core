@@ -61,7 +61,7 @@ Biome-enforced. Run `pnpm lint` before finishing any change.
 
 Before writing non-trivial logic, check whether something already in the dependency tree does it — see `package.json` for what is currently there. An existing dependency costs consumers nothing they are not already paying; a new one does.
 
-The heuristic: **if the code you are about to write would make sense in a package that knows nothing about Arvo, it probably already exists in one.** Recursive JSON validation, path reporting, date parsing, deep equality — none of these are Arvo's problem to solve. A rule that comes from an ADR is.
+The heuristic: **if the code you are about to write would make sense in a package that knows nothing about Arvo, it probably already exists in one.** A rule that comes from an ADR is Arvo's problem; a general-purpose data or validation concern usually is not.
 
 *Minimal dependencies* is a rule against gratuitous ones, not a licence to reinvent. Bespoke code is a standing cost: its own tests, its own edge cases, its own maintenance, and it is where subtle bugs live.
 
