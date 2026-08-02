@@ -41,11 +41,19 @@ The single exception is the span used to supply trace context, which is a legiti
 
 **Alternative rejected:** lax acceptance for forward compatibility with fields added later. That concern belongs to wire data, and ADR-001 defers wire format entirely. Strict-then-relax is safe; lax-then-tighten breaks callers later.
 
-### Payload validity is decided by a domain walk, not by serialization
+### Payload validity is decided by a domain walk, not a dependency
 
-ADR-001 states that validity is defined by the JSON value domain, "not by whether a particular serializer happens not to throw". The existing serializer round-trip is unsound in both directions: it admits non-finite numbers, which serialize to null rather than raising, and it silently discards keys whose values are undefined.
+ADR-001 states that validity is defined by the JSON value domain, "not by whether a particular serializer happens not to throw". Three alternatives were considered before writing a bespoke module, in the order they were ruled out.
 
-The walk is a separate module rather than a schema refinement, because it carries responsibilities a schema expresses poorly — cycle detection, reporting the path to an offending value, and freezing.
+**`JSON.stringify` wrapped in try/catch**, what the previous implementation did. Rejected because it is unsound in both directions, not just the one direction the ADR names. It does not throw on `NaN` or `Infinity` — both silently become `null`. It does not throw on a function or a symbol as an object property — the key is silently dropped; as an array element, it silently becomes `null`. It does not throw on a `Date`, `Map`, `Set`, `RegExp`, or class instance — each is silently coerced into something else (a `Date` into a string; a `Map` or `Set` into `{}`, discarding everything inside). It only throws on a circular reference and on a `bigint`, and even then produces one error for the whole value, with no path and no way to report a second problem in the same payload. Every one of the silent cases is worse than an exception: the caller believes their value survived, and it did not.
+
+**An existing npm package**, checked per the reuse convention before anything was written. `deep-freeze` and `is-circular` are the right shape for the freeze and cycle-detection pieces, but each is small enough to be "too trivial for a dependency" on its own, and both are unmaintained — years since their last publish. An unmaintained micro-package is worse than the few lines it would replace: its bug surface is inherited with none of the ability to fix it. `json-strictify` is the closer fit — it validates before serialization and reports a circular reference with a JSON-Pointer path — but its API throws on the first problem rather than aggregating every one, which the spec's Diagnostic Quality requirement rules out, and it has no way to know the normalization rule below, which is Arvo's and not a general JSON-safety concern. Adopting it would mean wrapping its throw and still hand-writing the normalization and freeze passes around it — a dependency added on top of the bespoke code, not instead of it. `flatted` solves the opposite problem, preserving cycles by making them serializable, where this exists to reject them.
+
+**Zod**, which `validator.ts` is built on and which is squarely right there. It does not fit here for a documented reason, not a guess: Zod's own documentation states that passing cyclical data into a Zod schema causes an infinite loop, so cycle detection must run as a bespoke pass before any validation touches the value, regardless of what validates the rest. Once that pass is bespoke, the only remaining piece Zod would replace is classifying a value as a scalar, array, or object. The normalization and the freeze are Arvo-specific and are not produced by a schema for free — expressing them as a `.transform()` at every recursive level is still hand-written recursive code, wrapped in Zod's API rather than removed by it. Routing all four concerns through Zod would mean a bespoke cycle check, then a Zod parse, then a bespoke normalize pass, then a bespoke freeze pass — four traversals in place of the one this module does.
+
+**What the module is, given the above**: one recursive pass doing four things together — classify, detect cycles, normalize per the rule below, and freeze — because none of the four could be removed by an existing tool without either losing a required guarantee or adding traversals for no benefit.
+
+Because none of this rode in on a dependency's own test suite, it carries none of a dependency's track record either. Every rejected value class above gets its own test — see `tasks.md` §9 — not a representative sample of them.
 
 ### Undefined follows serialization semantics
 
@@ -89,6 +97,7 @@ Field-level failures aggregate rather than short-circuit. Fixing one field per r
 - **Strict rejection breaks every existing call site** → Intended, and the reason this ships as a major. The real risk is messages poor enough to make the break confusing rather than instructive, which the diagnostic requirements exist to prevent.
 - **The package will conform structurally but not behaviourally** → With propagation unenforced, a reader may assume "conforms to ADR-001" means more than it does. Stated in the proposal's Impact and to be repeated in the release notes.
 - **The payload walk and the freeze are coupled** → Sharing a pass is what makes immutability free, but it means the trusted path silently gives up deep immutability as well as deep validation. Documented on the option rather than designed around.
+- **The payload walk is bespoke and carries no upstream battle-testing** → This is public package code; a missed edge case here does not surface as a caught exception, it surfaces as silently wrong data in a consumer's event. Mitigated by testing every rejected value class individually rather than sampling — see `tasks.md` §9 — and by the comparison above being recorded so the coverage can be checked against it.
 
 ## Migration Plan
 
