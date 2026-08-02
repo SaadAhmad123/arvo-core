@@ -1,5 +1,5 @@
 import type { Span, SpanContext } from '@opentelemetry/api';
-import type { FlatMap, JSONObject, JSONPrimitive } from '../types.js';
+import type { FlatMap, JSONObject } from '../types.js';
 
 /** The eighteen fields of an ArvoEvent, defaulted and structurally valid. */
 export type ArvoEventFields = {
@@ -24,9 +24,9 @@ export type ArvoEventFields = {
 };
 
 /**
- * Input shape for constructing an {@link ArvoEvent}. All fields except
- * `source`, `subject`, `type`, and `data` are optional and are defaulted or
- * derived by the `ArvoEvent` constructor when omitted.
+ * Input shape for constructing an {@link ArvoEvent}. `subject`, `source`,
+ * `type`, `data`, and `dataschema` are required; every other field is
+ * defaulted or derived by the constructor when omitted.
  *
  * @template T - The literal string type of the event's `type` field.
  * @template D - The shape of the event's JSON-serializable `data` payload.
@@ -35,55 +35,71 @@ export type ArvoEventParam<
   T extends string = string,
   D extends Record<string, any> = Record<string, any>,
 > = {
-  /**
-   * The event's identity/deduplication key. Defaults to a generated UUID v4
-   * (`crypto.randomUUID()`) when omitted.
-   */
+  /** Identity/deduplication key. Defaults to a random UUID when omitted. */
   id?: string;
   /**
-   * The id of the event that directly caused this one, for causal lineage
-   * tracking. Defaults to `null` when omitted.
+   * The `id` of the event that directly caused this one. Defaults to `null`
+   * when omitted, marking a root event.
    */
   parentid?: string;
-  /** Intended recipient/destination of the event, used for routing. Defaults to `null` when omitted. */
-  to?: string;
-  /** RFC 3339 timestamp of when the event occurred. Defaults to the current time when omitted. */
-  time?: string;
-  /** A custom domain defined cost associated with producing this event. Defaults to `null` when omitted. */
-  executionunits?: number;
-  /** Processing domain used for routing/segregation of the event. Defaults to `null` when omitted. */
-  domain?: string;
   /**
-   * Loosely-typed, scalar-only metadata that propagates unchanged across an
-   * entire workflow, distinct from `data`. Functions like distributed global
-   * state shared between handlers: a handler may only read from it and
-   * append new keys — existing keys must never be overwritten. Defaults to
-   * `{}` when omitted.
+   * The `id` of the request this event answers. Required, and only
+   * meaningful, on a completion. Defaults to `null` when omitted.
    */
-  baggage?: Record<string, JSONPrimitive>;
+  initid?: string;
+  /** The workflow this event belongs to. Required. */
+  subject: string;
   /**
-   * The `subject` of the workflow's originating event. An event is a root
-   * event when `rootsubject === subject`. Defaults to `subject` when
-   * omitted, marking a root event by default.
+   * This event's execution identity. Defaults to `subject` when omitted,
+   * which is correct for a root event.
    */
-  rootsubject?: string;
+  executionid?: string;
   /**
-   * The non-negative integer "stack depth" of this event within its
-   * workflow. Must be `0` for root events (`rootsubject === subject`) and
-   * `>= 1` otherwise — enforced by `ArvoEvent`'s validation. Defaults to `0`
-   * when omitted.
+   * This event's execution role. `io.arvo.init` and `io.arvo.complete` are
+   * recognized; any other value, including a domain's own, carries no
+   * ecosystem meaning. Defaults to `null` when omitted.
+   */
+  category?: string;
+  /**
+   * This event's nesting level, measured from the root. Must be a
+   * non-negative integer. Defaults to `0` when omitted.
    */
   depth?: number;
-  /** URI identifying the schema that `data` conforms to. Defaults to `null` when omitted. */
-  dataschema?: string;
-  /** Identifies the producer of the event. Required. */
+  /** Identifies the producer of this event. Required. */
   source: string;
-  /** Identifies the specific process/entity this event belongs to. Required. */
-  subject: string;
-  /** The event's type name. Required. */
+  /** The intended recipient of this event. Defaults to `null` when omitted. */
+  to?: string;
+  /**
+   * Marks an event that cannot be fulfilled where it is and must be lifted
+   * to another lattice, a human participant, or an external system. `null`
+   * — the default — means ordinary traffic.
+   */
+  domain?: string;
+  /** This event's type name. Required. */
   type: T;
-  /** The event's JSON-serializable payload. Required. */
+  /** This event's JSON-serializable payload. Required. */
   data: D;
+  /** The exact contract URI and version this event relates to. Required. */
+  dataschema: string;
+  /**
+   * Ambient context carried unchanged across the entire workflow: a flat map
+   * of scalars, with no nesting at any depth. Written once, on the root
+   * event — a later event may only copy it forward, never add, remove, or
+   * change a key. Defaults to an empty object when omitted.
+   */
+  baggage?: FlatMap;
+  /**
+   * RFC 3339 timestamp of when the event occurred, with a UTC offset.
+   * Descriptive only — never used to establish ordering. Defaults to the
+   * current time when omitted.
+   */
+  time?: string;
+  /**
+   * An opaque numeric value whose meaning is defined entirely by the
+   * emitting handler. Any finite number is accepted, with no constraint on
+   * sign or magnitude. Defaults to `null` when omitted.
+   */
+  executionunits?: number;
 } & (
   | {
       /** Raw W3C `traceparent` header string. Mutually exclusive with `span` — prefer `span` when you have one, since it derives this for you. */

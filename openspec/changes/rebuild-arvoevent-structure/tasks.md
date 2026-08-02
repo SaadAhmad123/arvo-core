@@ -40,12 +40,12 @@
 
 ## 5. Input types
 
-- [ ] 5.1 In `src/ArvoEvent/types.ts`, redefine the input shape over the eighteen fields, with `dataschema` now required
-- [ ] 5.2 Add `executionid`, `initid`, `category` to `src/ArvoEvent/types.ts`
-- [ ] 5.3 **DELETE** `extensions` and `rootsubject` from `src/ArvoEvent/types.ts`
-- [ ] 5.4 Tighten the payload generic's constraint toward a JSON object while keeping ordinary interfaces assignable
-- [ ] 5.5 Preserve the discriminated union making a span mutually exclusive with raw trace values
-- [ ] 5.6 **REWRITE** every documentation comment in `src/ArvoEvent/types.ts` — several describe superseded semantics, in particular the ambient-context comment licensing handlers to append keys, which is no longer permitted. Consumer-facing: state each field's rule and default, cite no reasoning
+- [x] 5.1 In `src/ArvoEvent/types.ts`, redefine the input shape over the eighteen fields, with `dataschema` now required
+- [x] 5.2 Add `executionid`, `initid`, `category` to `src/ArvoEvent/types.ts`
+- [x] 5.3 **DELETE** `extensions` and `rootsubject` from `src/ArvoEvent/types.ts`
+- [x] 5.4 **NOT DONE — found unachievable.** Tightening `D`'s constraint beyond `Record<string, any>` rejects ordinary concrete interfaces; TypeScript only exempts a no-index-signature interface from a constraint's index signature when its value type is exactly `any`. See design.md, "The `data` generic's constraint stays `Record<string, any>`". Constraint left unchanged.
+- [x] 5.5 Preserve the discriminated union making a span mutually exclusive with raw trace values
+- [x] 5.6 **REWRITE** every documentation comment in `src/ArvoEvent/types.ts` — several describe superseded semantics, in particular the ambient-context comment licensing handlers to append keys, which is no longer permitted. Consumer-facing: state each field's rule and default, cite no reasoning
 
 ## 6. Event class
 

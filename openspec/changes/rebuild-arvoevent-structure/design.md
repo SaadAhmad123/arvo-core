@@ -91,6 +91,16 @@ Unrecognised keys first because a typo otherwise surfaces as a confusing downstr
 
 Field-level failures aggregate rather than short-circuit. Fixing one field per run is a poor experience with eighteen of them.
 
+### The `data` generic's constraint stays `Record<string, any>`
+
+The original plan was to tighten `ArvoEventParam`'s `D extends Record<string, any>` toward something shaped like the JSON value domain, so a caller's concrete `data` interface would be checked at compile time as well as at runtime. This turned out not to be achievable without breaking the common case.
+
+TypeScript exempts a concrete interface — one declared without its own index signature — from needing one to satisfy a generic constraint that has one, but only when the constraint's index signature value type is exactly `any`. Verified directly: the identical interface satisfies `D extends Record<string, any>` and fails `D extends Record<string, unknown>` and `D extends JSONObject` (whose value type is the `JSONValue` union), with the same "does not satisfy the constraint" error in both stricter cases. Since almost every real `data` interface is declared this way — the class's own example is `data: { orderId: '123' }` — any constraint tighter than `any` rejects ordinary usage, not just malformed usage.
+
+Nor does the nullability transformation compose into something a generic utility type could express even if this worked. Going from `ArvoEventParam` to a materialized shape isn't a uniform "make every optional field required": `id`, `executionid`, `depth`, and `time` resolve to a concrete non-null value when omitted, while `parentid`, `initid`, `category`, `to`, `domain`, `traceparent`, `tracestate`, and `executionunits` resolve to `null`. `Required<T>` only removes the `?`; it does not add `| null` where defaulting introduces one. A mapped type covering this would need to special-case eight of the eighteen fields individually, at which point it is no shorter or safer than declaring the materialized shape directly, and considerably harder to read.
+
+`D` stays `Record<string, any>`, matching what was already there. Compile-time typing was never the enforcement mechanism for JSON-domain validity in this design — the runtime walk in `json.ts` is, for every `data` regardless of how precisely its caller-supplied interface happened to be typed, which is consistent with ADR-000: compile-time types must not replace runtime validation.
+
 ## Risks / Trade-offs
 
 - **Full-depth validation is a new per-event cost proportional to payload size** → The trusted-input escape hatch exists for hot paths. The default remains the safe one, so large payloads will notice; accepted, because the ADR requires the guarantee and correctness precedes throughput here.
