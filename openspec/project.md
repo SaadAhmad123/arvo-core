@@ -83,6 +83,14 @@ Vitest, in `tests/` mirroring `src/`. Tests must cover the cases an ADR calls ou
 
 Trunk is `main`; the v4 rebuild line is `v4`. Work happens on topic branches.
 
+**Commit each task group as it completes, then move on.** Do not batch a whole change into one commit. A rebuild touches many files for many different reasons, and a single commit spanning all of them cannot be reviewed, bisected, or partially reverted.
+
+Tick the task in `tasks.md` in the same commit that does the work, so the checklist and the tree never disagree about what is finished.
+
+A mid-sequence commit may legitimately not typecheck. Deleting a type in one group and removing its last consumer in a later one leaves the tree broken in between, and that is preferable to one commit large enough to hide a mistake. The final group in a change is what has to be green.
+
+Commit messages explain why the change was made, not what the diff already shows.
+
 ## Domain Glossary
 
 - **AAM** — Arvo Application Model. The versioned, language-independent model this package implements.
