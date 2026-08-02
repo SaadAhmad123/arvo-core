@@ -1,16 +1,18 @@
-/** A single JSON scalar value: string, number, boolean, or null. */
-export type JSONPrimitive = string | number | boolean | null;
-/** Any valid JSON value: a scalar, an array of JSON values, or a JSON object. */
-export type JSONValue = JSONPrimitive | JSONArray | JSONRecord;
-/** A JSON array — an array of any valid JSON value. */
+/** A string, number, boolean, or null. */
+export type JSONScalar = string | number | boolean | null;
+
+/** An array of JSON values. */
 export type JSONArray = JSONValue[];
-/** A JSON object: a string-keyed record whose values are any JSON value. For a scalar-only record, use `Record<string, JSONPrimitive>` directly instead. */
-export type JSONRecord = { [key: string]: JSONValue };
+
+/** A string-keyed map of JSON values. */
+export type JSONObject = { [key: string]: JSONValue };
+
+/** Any JSON value: a scalar, an array, or an object. */
+export type JSONValue = JSONScalar | JSONArray | JSONObject;
 
 /**
- * Intersects `T` with a mapped type that poisons every key in `Known` to
- * `never`, so an object literal (or a variable) supplying one of those keys
- * fails to typecheck. Used to guarantee `ArvoEvent`'s `extensions` can never
- * collide with one of its own known field names.
+ * A string-keyed map of scalars, with no nesting at any depth.
+ *
+ * The shape of an ArvoEvent's `baggage`.
  */
-export type NoKnownKeys<T, Known extends string> = T & { [K in Known]?: never };
+export type FlatMap = { [key: string]: JSONScalar };

@@ -1,10 +1,10 @@
 ## 1. Shared value types
 
-- [ ] 1.1 In `src/types.ts`, align the JSON type family's names and documentation with ADR-001's value vocabulary — scalar, object, JSON value, flat map
-- [ ] 1.2 In `src/types.ts`, add a flat-map type for scalar-only string-keyed maps so ambient context is not spelled inline in several places
-- [ ] 1.3 **DELETE** `NoKnownKeys` from `src/types.ts` — it exists solely to police the removed `extensions` field
-- [ ] 1.4 Confirm nothing outside `src/ArvoEvent/` references the deleted type
-- [ ] 1.5 Write the TSDoc in `src/types.ts` for the package consumer — one line per alias, no provenance, no citation. Nothing in this file warrants one
+- [x] 1.1 In `src/types.ts`, align the JSON type family's names and documentation with ADR-001's value vocabulary — scalar, object, JSON value, flat map
+- [x] 1.2 In `src/types.ts`, add a flat-map type for scalar-only string-keyed maps so ambient context is not spelled inline in several places
+- [x] 1.3 **DELETE** `NoKnownKeys` from `src/types.ts` — it exists solely to police the removed `extensions` field
+- [x] 1.4 Confirm nothing outside `src/ArvoEvent/` references the deleted type
+- [x] 1.5 Write the TSDoc in `src/types.ts` for the package consumer — one line per alias, no provenance, no citation. Nothing in this file warrants one
 
 ## 2. Errors
 
