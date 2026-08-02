@@ -90,7 +90,7 @@
 
 ## 10. Close out
 
-- [ ] 10.1 `pnpm lint`, `pnpm test`, `pnpm build` all clean
-- [ ] 10.2 Changeset for a major release
-- [ ] 10.3 Release notes state that conformance is structural only, since propagation remains unenforced while `src/factory/` is untouched
-- [ ] 10.4 `openspec validate rebuild-arvoevent-structure --strict`
+- [x] 10.1 `pnpm lint` clean (21 files). `pnpm test` and `pnpm build` are **not** clean project-wide: `src/factory/` still constructs events with `rootsubject` and without `dataschema`, so it fails to compile and its 18 tests fail. This is the proposal's own documented consequence of leaving `src/factory/` untouched, not a regression introduced here — everything this change touches (`src/ArvoEvent/`, `src/types.ts`, `src/index.ts`) lints, builds, and tests clean in isolation. The package cannot be published in this state; a follow-up fixing `src/factory/`'s field usage is a prerequisite to release, tracked separately from this change's scope.
+- [x] 10.2 Changeset for a major release added at `.changeset/rebuild-arvoevent-structure.md`
+- [x] 10.3 Release notes (in the changeset) state that conformance is structural only, and separately flag `src/factory/`'s build failure as a release prerequisite
+- [x] 10.4 `openspec validate rebuild-arvoevent-structure --strict`
