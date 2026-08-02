@@ -49,15 +49,15 @@
 
 ## 6. Event class
 
-- [ ] 6.1 In `src/ArvoEvent/index.ts`, declare the eighteen fields and no others
-- [ ] 6.2 **DELETE** the `extensions` and `rootsubject` fields and the second constructor parameter carrying extensions
-- [ ] 6.3 Apply the defaults — generated `id`, `executionid` from `subject`, `depth` zero, empty ambient context, current `time`, null elsewhere
-- [ ] 6.4 Retain span-derived trace context, which ADR-001 explicitly permits at creation
-- [ ] 6.5 Add the trusted-input option, skipping only the payload walk and its deep freeze
-- [ ] 6.6 Shallow-freeze the instance on every path, including the trusted one
-- [ ] 6.7 **REPLACE** the serialization try/catch with the walk from section 3
-- [ ] 6.8 **REWRITE** the class and field documentation in `src/ArvoEvent/index.ts` — consumer-facing, one `docs/adr/001-arvoevent-structure.md` citation on the class for the full field definitions
-- [ ] 6.9 Document the finiteness rule on `data`, `baggage`, and `executionunits` in `src/ArvoEvent/index.ts`, where a caller meets it, rather than on the value types
+- [x] 6.1 In `src/ArvoEvent/index.ts`, declare the eighteen fields and no others
+- [x] 6.2 **DELETE** the `extensions` and `rootsubject` fields and the second constructor parameter carrying extensions
+- [x] 6.3 Apply the defaults — generated `id`, `executionid` from `subject`, `depth` zero, empty ambient context, current `time`, null elsewhere
+- [x] 6.4 Retain span-derived trace context, which ADR-001 explicitly permits at creation
+- [x] 6.5 Add the trusted-input option, skipping only the payload walk and its deep freeze
+- [x] 6.6 Shallow-freeze the instance on every path, including the trusted one
+- [x] 6.7 **REPLACE** the serialization try/catch with the walk from section 3
+- [x] 6.8 **REWRITE** the class and field documentation in `src/ArvoEvent/index.ts` — consumer-facing, one `docs/adr/001-arvoevent-structure.md` citation on the class for the full field definitions
+- [x] 6.9 Document the finiteness rule on `data`, `baggage`, and `executionunits` in `src/ArvoEvent/index.ts`, where a caller meets it, rather than on the value types
 
 ## 7. Events arriving as data
 
