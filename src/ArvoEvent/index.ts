@@ -1,5 +1,6 @@
 import type { Span, SpanContext } from '@opentelemetry/api';
 import type { FlatMap } from '../types.js';
+import type { ArvoEventValidationIssue } from './errors.js';
 import { ArvoEventValidationError } from './errors.js';
 import { traceContextFromSpan } from './opentelemetry.js';
 import type { ArvoEventParam } from './types.js';
@@ -7,6 +8,17 @@ import {
   type ArvoEventValidationOptions,
   validateArvoEvent,
 } from './validator.js';
+
+/**
+ * The outcome of {@link ArvoEvent.safeParse}: the event on success, or every
+ * structural rule broken on failure.
+ */
+export type ArvoEventParseResult<
+  T extends string = string,
+  D extends Record<string, any> = Record<string, any>,
+> =
+  | { success: true; event: ArvoEvent<T, D> }
+  | { success: false; issues: readonly ArvoEventValidationIssue[] };
 
 /**
  * An immutable, structurally valid event exchanged between Arvo nodes.
@@ -104,5 +116,32 @@ export class ArvoEvent<
     this.executionunits = fields.executionunits;
 
     Object.freeze(this);
+  }
+
+  /**
+   * Validates plain data against every structural rule and reports the
+   * outcome rather than throwing — for an event arriving from replay, a
+   * fixture, or a foreign producer, where an exception is the wrong control
+   * flow.
+   *
+   * This checks structure only. It is not a wire-format or CloudEvent
+   * decoder.
+   */
+  static safeParse<
+    T extends string = string,
+    D extends Record<string, any> = Record<string, any>,
+  >(input: unknown): ArvoEventParseResult<T, D> {
+    const result = validateArvoEvent(input);
+
+    if (result.issues.length > 0) {
+      return { success: false, issues: Object.freeze([...result.issues]) };
+    }
+
+    const event = new ArvoEvent<T, D>(
+      result.value as unknown as ArvoEventParam<T, D>,
+      { skipPayloadValidation: true },
+    );
+
+    return { success: true, event };
   }
 }

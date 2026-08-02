@@ -61,9 +61,9 @@
 
 ## 7. Events arriving as data
 
-- [ ] 7.1 Add an entry point under `src/ArvoEvent/` accepting plain data and reporting validity rather than raising
-- [ ] 7.2 Run the identical validation core as creation — no second schema
-- [ ] 7.3 Document that it validates structure only and is not a wire-format decoder
+- [x] 7.1 Add an entry point under `src/ArvoEvent/` accepting plain data and reporting validity rather than raising
+- [x] 7.2 Run the identical validation core as creation — no second schema
+- [x] 7.3 Document that it validates structure only and is not a wire-format decoder
 
 ## 8. Exports
 
