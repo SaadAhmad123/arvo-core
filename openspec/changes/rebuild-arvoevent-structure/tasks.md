@@ -91,6 +91,25 @@
 ## 10. Close out
 
 - [x] 10.1 `pnpm lint` clean (21 files). `pnpm test` and `pnpm build` are **not** clean project-wide: `src/factory/` still constructs events with `rootsubject` and without `dataschema`, so it fails to compile and its 18 tests fail. This is the proposal's own documented consequence of leaving `src/factory/` untouched, not a regression introduced here — everything this change touches (`src/ArvoEvent/`, `src/types.ts`, `src/index.ts`) lints, builds, and tests clean in isolation. The package cannot be published in this state; a follow-up fixing `src/factory/`'s field usage is a prerequisite to release, tracked separately from this change's scope.
-- [x] 10.2 Changeset for a major release added at `.changeset/rebuild-arvoevent-structure.md`
-- [x] 10.3 Release notes (in the changeset) state that conformance is structural only, and separately flag `src/factory/`'s build failure as a release prerequisite
+- [x] 10.2 **REVERSED.** No changeset. This change merges into `v4`, which is not being deployed now — a changeset now would falsely imply an imminent release. The `.changeset/rebuild-arvoevent-structure.md` file added earlier is deleted. Add the changeset when `v4` actually approaches release, covering everything merged into it by then, not just this change.
+- [x] 10.3 Release-note content (conformance is structural only; `src/factory/`'s build failure is a release prerequisite) stays recorded in this file (10.1) and in `design.md` / the proposal's Impact section, to be pulled into the changeset whenever one is actually written
 - [x] 10.4 `openspec validate rebuild-arvoevent-structure --strict`
+
+## 11. Dedicated module tests and full coverage
+
+- [ ] 11.1 Add `tests/ArvoEvent/errors.spec.ts` testing `errors.ts`'s own exported surface directly: `ArvoEventValidationIssue` construction, `describeValue`'s branches (string, number, boolean, bigint, function, symbol, array, plain object, cyclic/unserializable object) via `ArvoEventValidationError`'s rendered message, single vs. aggregated-issue message formatting, truncation of a long string and a long serialized object, and that `issues` on the thrown error is frozen
+- [ ] 11.2 Add `tests/ArvoEvent/json.spec.ts` testing `walkPayload` and `walkFlatMap` directly (not only indirectly through `ArvoEvent`): every rejected value class, cycle detection including mutual references and the legitimately-repeated-value case, undefined handling in map and array position, path reporting including non-identifier keys, deep freezing of the returned value, and the top-level shape guards for both functions
+- [ ] 11.3 Add `tests/ArvoEvent/validator.spec.ts` testing `validateArvoEvent` directly: the non-object top-level guard, unrecognised-key rejection, every field rule, both cross-field constraints including their permitted cases, `skipPayloadValidation` behaviour, and issue aggregation — independent of whatever `ArvoEvent`'s constructor happens to pass through
+- [ ] 11.4 Run `pnpm test:coverage` and drive coverage of `src/ArvoEvent/` (`errors.ts`, `json.ts`, `validator.ts`, `index.ts`, `opentelemetry.ts`, `types.ts` where executable) to 100% lines and branches, adding whatever targeted cases close the remaining gaps
+- [ ] 11.5 Record the coverage result in this file once achieved
+
+## 12. `toJSON()` support in the payload walk
+
+- [ ] 12.1 Decide and record in `design.md`: a value with an own, callable `toJSON()` has it invoked before classification, at any depth, in both map and array position — matching `JSON.stringify`, and reversing the earlier blanket rejection of non-plain objects for this one case
+- [ ] 12.2 Add the requirement (and permitted/forbidden scenarios) to `specs/arvo-event/spec.md`
+- [ ] 12.3 Implement in `src/ArvoEvent/json.ts`: call `.toJSON()` when present on a rejected non-plain-object value, then walk its result in place of the original value
+- [ ] 12.4 Decide and implement how a throwing `toJSON()` is reported — wrapped as an issue naming the failure, not an uncaught exception escaping the walk
+- [ ] 12.5 Decide and implement how a `toJSON()` returning a still-invalid value is handled — rejected at the same path, per the normal rules, not specially exempted
+- [ ] 12.6 Confirm `Date` (has `toJSON`) now serializes via it rather than being rejected, and that `Map`/`Set`/a plain class instance with no `toJSON` are still rejected exactly as before
+- [ ] 12.7 Tests: `toJSON()` accepted and correctly transformed at object and array position; a `toJSON()` returning an invalid value; a `toJSON()` that throws; `Date` now accepted; `Map`/`Set` still rejected
+- [ ] 12.8 Update `developer-usage-findings.md` Finding 3 with a note that it is resolved and how
