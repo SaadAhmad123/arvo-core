@@ -60,6 +60,8 @@ The same primitives work for simple request-response services, complex multi-ser
 
 For the thesis behind this — what Arvo is betting on, and how that bet could turn out to be wrong — see [the Arvo vision document](docs/vision.md). The binding architectural commitments are recorded in [ADR-000](docs/adr/000-arvo-system-identity-and-architectural-principles.md).
 
+This repository is built specification-first and written to be read by humans and coding agents alike. If you are wondering why it carries this much recorded reasoning, [why this repository is agent-native](docs/why-agent-native-development.md) makes the case.
+
 ## What is `arvo-core`?
 
 The `arvo-core` is one of the two foundational packages in the Arvo ecosystem, alongside `arvo-event-handler`. Together, they provide the complete foundation for building event-driven applications that are distributed system-compliant. Explore additional tools and integrations in the `@arvo-tools` namespace.
