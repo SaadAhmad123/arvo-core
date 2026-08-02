@@ -1,5 +1,27 @@
 import type { Span, SpanContext } from '@opentelemetry/api';
-import type { JSONPrimitive } from '../types.js';
+import type { FlatMap, JSONObject, JSONPrimitive } from '../types.js';
+
+/** The eighteen fields of an ArvoEvent, defaulted and structurally valid. */
+export type ArvoEventFields = {
+  id: string;
+  parentid: string | null;
+  initid: string | null;
+  subject: string;
+  executionid: string;
+  category: string | null;
+  depth: number;
+  source: string;
+  to: string | null;
+  domain: string | null;
+  type: string;
+  data: JSONObject;
+  dataschema: string;
+  baggage: FlatMap;
+  time: string;
+  traceparent: string | null;
+  tracestate: string | null;
+  executionunits: number | null;
+};
 
 /**
  * Input shape for constructing an {@link ArvoEvent}. All fields except

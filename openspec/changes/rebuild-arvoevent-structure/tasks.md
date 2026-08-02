@@ -26,17 +26,17 @@
 
 ## 4. Validator
 
-- [ ] 4.1 **REPLACE** `src/ArvoEvent/validator.ts` entirely — the current schema encodes the superseded design and is not adapted
-- [ ] 4.2 Reject unrecognised keys, permitting only the span alongside the eighteen fields
-- [ ] 4.3 Non-empty string rules for `id`, `subject`, `executionid`, `source`, `type`, `dataschema`
-- [ ] 4.4 Null-or-non-empty rules for `parentid`, `initid`, `category`, `to`, `domain` — note `domain` currently has no non-empty check
-- [ ] 4.5 `depth` as a non-negative integer; `time` as RFC 3339 with an offset
-- [ ] 4.6 **REMOVE** the non-negative constraint on `executionunits`; require finite with no constraint on sign
-- [ ] 4.7 **REMOVE** the minimum-length check on `tracestate`; leave both trace fields entirely unvalidated
-- [ ] 4.8 **REPLACE** the rootness rule: one-directional on `parentid`, deleting the existing biconditional over `depth` and `rootsubject` rather than adapting it
-- [ ] 4.9 Add the completion correlation constraint, one-directional from `category` to `initid`
-- [ ] 4.10 Compose the payload walk from section 3
-- [ ] 4.11 Order the stages per the design — unrecognised keys, field rules, cross-field rules, payload walk — aggregating field-level failures
+- [x] 4.1 **REPLACE** `src/ArvoEvent/validator.ts` entirely — the current schema encodes the superseded design and is not adapted
+- [x] 4.2 Reject unrecognised keys, permitting only the span alongside the eighteen fields
+- [x] 4.3 Non-empty string rules for `id`, `subject`, `executionid`, `source`, `type`, `dataschema`
+- [x] 4.4 Null-or-non-empty rules for `parentid`, `initid`, `category`, `to`, `domain` — note `domain` currently has no non-empty check
+- [x] 4.5 `depth` as a non-negative integer; `time` as RFC 3339 with an offset
+- [x] 4.6 **REMOVE** the non-negative constraint on `executionunits`; require finite with no constraint on sign
+- [x] 4.7 **REMOVE** the minimum-length check on `tracestate`; leave both trace fields entirely unvalidated
+- [x] 4.8 **REPLACE** the rootness rule: one-directional on `parentid`, deleting the existing biconditional over `depth` and `rootsubject` rather than adapting it
+- [x] 4.9 Add the completion correlation constraint, one-directional from `category` to `initid`
+- [x] 4.10 Compose the payload walk from section 3
+- [x] 4.11 Order the stages per the design — unrecognised keys, field rules, cross-field rules, payload walk — aggregating field-level failures
 
 ## 5. Input types
 
