@@ -87,6 +87,8 @@ TSDoc is written for the **package consumer**, not the contributor. Someone who 
 
 The reasoning is not lost by keeping it out of source — it is recorded in the ADRs and in `openspec/`. Duplicating it into shipped comments creates a second copy that drifts and can only be corrected by cutting a release.
 
+This governs the package's **public export surface** — what `src/index.ts` re-exports, and therefore what a consumer's editor can ever surface. An internal module that is never exported may carry full contributor-facing reasoning at its top, in the same register as `design.md`, because no consumer's tooling will ever show it to them. Point to `design.md` for the canonical record rather than duplicating it — the same cite-don't-copy rule that governs everything else here.
+
 ### Errors
 
 Errors are human-facing. Every thrown error names what failed, the value involved, and the rule violated, and preserves the underlying cause. Generic messages such as "invalid input" are not acceptable — a reader should be able to correct the problem from the message alone without opening the source.
@@ -98,6 +100,8 @@ Runtime validation is not optional, and compile-time types do not substitute for
 ### Testing
 
 Vitest, in `tests/` mirroring `src/`. Tests must cover the cases an ADR calls out as **legal** as well as those it forbids. Several structural rules are deliberately one-directional, and a suite that only checks rejections will not notice an implementation that has quietly made them biconditional.
+
+**Bespoke code — anything that won out over a dependency under *Dependencies and reuse* — is held to a higher bar than code that delegates to one.** It carries none of a library's track record. This package is public: a missed edge case here does not surface as a caught exception, it surfaces as silently wrong data in a consumer's event. Test every failure mode the code exists to catch individually, not a representative sample, and check the coverage against the reasoning recorded in `design.md` for why the code is bespoke in the first place.
 
 ### Git
 
