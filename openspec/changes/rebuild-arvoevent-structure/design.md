@@ -65,6 +65,16 @@ This is the one place the design accepts silent loss, and it is bounded: the res
 
 **Alternative rejected:** rejecting undefined outright. Safer against a key vanishing unnoticed, but it fails ordinary spread-built payloads and pushes defensive cleanup onto every call site.
 
+### A value with its own `toJSON()` is honoured, not rejected
+
+Found during a developer-usage exercise after the walk was first built (`developer-usage-findings.md`, Finding 3): a class implementing its own `toJSON()` — a money type, a branded ID, a custom date wrapper — was rejected outright, the same as a bare `Date` or a `Map`. `JSON.stringify` would have called it and serialized the result without complaint; that's precisely how `Date` itself serializes.
+
+The original rejection was reasoned about a different case: an *implicit*, caller-didn't-ask-for-it coercion (`Date` silently becoming a string, a `Map` silently becoming `{}`, discarding its contents). A caller's own `toJSON()` is the opposite — an explicit statement of how they want their value to serialize. Rejecting it overrides a choice the caller made on purpose, which is a different act from refusing to guess on their behalf.
+
+So: when a non-plain object is encountered and has a callable own `toJSON`, it is invoked and its return value is walked in the object's place, at the same path, subject to every normal rule — a `toJSON()` that returns something still outside the JSON domain is rejected exactly as if that value had been supplied directly, and a `toJSON()` that throws is reported as an issue rather than escaping the walk as an uncaught exception. `Date` is accepted as a consequence, not a special case — it satisfies this rule because it has a `toJSON`, the same as any user-defined class would.
+
+**Alternative rejected:** keep rejecting everything without a `toJSON` check, and document the omission as deliberate. Simpler, and consistent with the original `Date`/`Map`/`Set` reasoning taken at face value — but leaves a common, unremarkable TypeScript pattern (a value class with `toJSON`) failing in a way that surprises anyone whose intuition comes from `JSON.stringify`, for no corresponding safety benefit: the caller already told the walker exactly what to do with the value.
+
 ### Trusted input skips only the payload walk
 
 The escape hatch disables the recursive walk and its accompanying freeze — the only work whose cost scales with payload size. Field and cross-field rules always run; they are eighteen cheap checks, and skipping them would remove the guarantees the type exists to provide for no measurable gain.

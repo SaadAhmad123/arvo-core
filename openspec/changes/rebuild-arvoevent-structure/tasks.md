@@ -105,8 +105,8 @@
 
 ## 12. `toJSON()` support in the payload walk
 
-- [ ] 12.1 Decide and record in `design.md`: a value with an own, callable `toJSON()` has it invoked before classification, at any depth, in both map and array position — matching `JSON.stringify`, and reversing the earlier blanket rejection of non-plain objects for this one case
-- [ ] 12.2 Add the requirement (and permitted/forbidden scenarios) to `specs/arvo-event/spec.md`
+- [x] 12.1 Decide and record in `design.md`: a value with an own, callable `toJSON()` has it invoked before classification, at any depth, in both map and array position — matching `JSON.stringify`, and reversing the earlier blanket rejection of non-plain objects for this one case
+- [x] 12.2 Add the requirement (and permitted/forbidden scenarios) to `specs/arvo-event/spec.md`
 - [ ] 12.3 Implement in `src/ArvoEvent/json.ts`: call `.toJSON()` when present on a rejected non-plain-object value, then walk its result in place of the original value
 - [ ] 12.4 Decide and implement how a throwing `toJSON()` is reported — wrapped as an issue naming the failure, not an uncaught exception escaping the walk
 - [ ] 12.5 Decide and implement how a `toJSON()` returning a still-invalid value is handled — rejected at the same path, per the normal rules, not specially exempted

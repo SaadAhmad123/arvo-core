@@ -190,6 +190,31 @@ The system SHALL determine payload validity by membership of the JSON value doma
 - **THEN** construction fails
 - **AND** the failure reports a cycle rather than exhausting available memory
 
+### Requirement: Custom Serialization via `toJSON`
+
+When a value that is not itself a JSON value has an own, callable `toJSON` method, the system SHALL invoke it and evaluate its return value against the JSON value domain in the original value's place, at the same path.
+
+The system SHALL apply this at any depth, in both map and array position.
+
+#### Scenario: A value with `toJSON` is accepted
+- **WHEN** `data` contains, at any depth, a value that is not a JSON value but has a `toJSON` method returning one
+- **THEN** construction succeeds
+- **AND** the constructed payload carries the return value of `toJSON` in that position
+
+#### Scenario: `toJSON`'s return value is still invalid
+- **WHEN** a value's `toJSON` method returns something that is not a JSON value
+- **THEN** construction fails
+- **AND** the failure identifies the same path the original value occupied
+
+#### Scenario: `toJSON` throws
+- **WHEN** invoking a value's `toJSON` method raises an error
+- **THEN** construction fails
+- **AND** the failure is reported as a validation issue at that path rather than escaping as an uncaught exception
+
+#### Scenario: A value with no `toJSON` is rejected as before
+- **WHEN** `data` contains a value that is not a JSON value and has no callable `toJSON` method
+- **THEN** construction fails, exactly as for any other value outside the JSON domain
+
 ### Requirement: Ambient Context Structure
 
 The system SHALL require `baggage` to be a string-keyed map whose values are all scalars, with no nesting at any depth.
