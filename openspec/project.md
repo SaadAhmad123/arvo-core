@@ -1,12 +1,12 @@
 # Project Context
 
+> Everything here must pass one test: **will this still be true in two years?** If it will not, it is not project context. Work that is only true now belongs in an OpenSpec change, which is archived when it lands; an architectural fact belongs in an ADR. A stale line in this file is worse than a missing one, because every proposal and every cold-starting agent reads it as authoritative.
+
 ## Purpose
 
 `arvo-core` is the reference TypeScript implementation of the **Arvo Application Model (AAM)** — a portable, language-independent application model for event-driven systems. It provides the application-tier primitives (`ArvoEvent`, `ArvoContract`, `ArvoEventHandler`) through which independently built participants compose.
 
 Arvo does not execute the model; infrastructure adapters do. This package is deliberately lightweight and opinionated.
-
-The current major line, v4, is a deliberate rebuild unconstrained by earlier majors. It is the first implementation of AAM 1.
 
 ## Where decisions live
 
@@ -25,8 +25,10 @@ The distinction that matters most: an ADR describes what Arvo *is*, in terms any
 
 **Accepted ADRs are authoritative over specs and code.** This repository is their canonical source.
 
-- [ADR-000](../docs/adr/000-arvo-system-identity-and-architectural-principles.md) — Arvo System Identity and Architectural Invariants. Defines AAM 1, its invariants, and what is inside versus outside the model. **Accepted.**
-- [ADR-001](../docs/adr/001-arvoevent-structure.md) — ArvoEvent Structure. Defines the event's eighteen fields, their types, defaults, structural constraints, and propagation. **Accepted.**
+- [ADR-000](../docs/adr/000-arvo-system-identity-and-architectural-principles.md) — Arvo System Identity and Architectural Invariants. Defines AAM 1, its invariants, and what is inside versus outside the model.
+- [ADR-001](../docs/adr/001-arvoevent-structure.md) — ArvoEvent Structure. Defines the event's fields, their types, defaults, structural constraints, and propagation.
+
+[`docs/adr/README.md`](../docs/adr/README.md) is the index and the source of truth for which ADRs exist and what status each holds. Check it rather than trusting this list to be current.
 
 Rules that follow:
 
@@ -81,7 +83,7 @@ Vitest, in `tests/` mirroring `src/`. Tests must cover the cases an ADR calls ou
 
 ### Git
 
-Trunk is `main`; the v4 rebuild line is `v4`. Work happens on topic branches.
+Trunk is `main`. Work happens on topic branches.
 
 **Commit each task group as it completes, then move on.** Do not batch a whole change into one commit. A rebuild touches many files for many different reasons, and a single commit spanning all of them cannot be reviewed, bisected, or partially reverted.
 
