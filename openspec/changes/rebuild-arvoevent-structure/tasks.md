@@ -8,10 +8,10 @@
 
 ## 2. Errors
 
-- [ ] 2.1 In `src/ArvoEvent/errors.ts`, keep the existing discriminant and cause-chaining shape
-- [ ] 2.2 In `src/ArvoEvent/errors.ts`, establish the message conventions the Diagnostic Quality requirement demands — field name, value received, rule violated, and for cross-field rules why the combination is illegal
-- [ ] 2.3 In `src/ArvoEvent/errors.ts`, support reporting several field-level failures in one message rather than only the first
-- [ ] 2.4 Write the TSDoc in `src/ArvoEvent/errors.ts` for the package consumer — that this error means the event is malformed rather than that contract validation failed, plus a `docs/adr/` citation. Not an explanation of what structural validity is
+- [x] 2.1 In `src/ArvoEvent/errors.ts`, keep the existing discriminant and cause-chaining shape
+- [x] 2.2 In `src/ArvoEvent/errors.ts`, establish the message conventions the Diagnostic Quality requirement demands — field name, value received, rule violated, and for cross-field rules why the combination is illegal
+- [x] 2.3 In `src/ArvoEvent/errors.ts`, support reporting several field-level failures in one message rather than only the first
+- [x] 2.4 Write the TSDoc in `src/ArvoEvent/errors.ts` for the package consumer — that this error means the event is malformed rather than that contract validation failed, plus a `docs/adr/` citation. Not an explanation of what structural validity is
 
 ## 3. Payload walk
 
