@@ -1,3 +1,5 @@
+import { truncate } from '../utils.js';
+
 /** A single structural rule that an event failed. */
 export type ArvoEventValidationIssue = {
   /**
@@ -24,10 +26,7 @@ const describeValue = (value: unknown): string => {
   if (value === undefined) return 'undefined';
   if (value === null) return 'null';
   if (typeof value === 'string') {
-    const quoted = JSON.stringify(value);
-    return quoted.length > MAX_RECEIVED_LENGTH
-      ? `${quoted.slice(0, MAX_RECEIVED_LENGTH - 1)}…"`
-      : quoted;
+    return truncate(JSON.stringify(value), MAX_RECEIVED_LENGTH);
   }
   if (typeof value === 'number' || typeof value === 'boolean')
     return String(value);
@@ -39,9 +38,7 @@ const describeValue = (value: unknown): string => {
   try {
     const serialized = JSON.stringify(value);
     if (serialized === undefined) return 'an object';
-    return serialized.length > MAX_RECEIVED_LENGTH
-      ? `${serialized.slice(0, MAX_RECEIVED_LENGTH - 1)}…`
-      : serialized;
+    return truncate(serialized, MAX_RECEIVED_LENGTH);
   } catch {
     // Cyclic or otherwise unserializable — the shape is what matters here.
     return 'an object';

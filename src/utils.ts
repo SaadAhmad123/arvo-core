@@ -32,3 +32,12 @@ export const createTimestamp = (offsetHours = 0): string => {
         : `-${String(Math.abs(offsetHours)).padStart(2, '0')}:00`,
     );
 };
+
+/**
+ * Truncates `text` to at most `maxLength` characters, replacing anything cut
+ * with a single ellipsis character.
+ */
+export const truncate = (text: string, maxLength: number): string =>
+  text.length > maxLength
+    ? `${text.slice(0, Math.max(0, maxLength - 1))}…`
+    : text;
