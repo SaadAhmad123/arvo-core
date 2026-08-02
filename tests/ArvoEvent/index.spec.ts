@@ -367,11 +367,13 @@ describe('ArvoEvent', () => {
       );
     });
 
-    it('rejects a Date', () => {
-      const data = { a: new Date() };
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data.a',
-      );
+    it('accepts a Date, serialized via its own toJSON — see the toJSON() block below', () => {
+      const date = new Date('2024-01-01T00:00:00.000Z');
+      const event = new ArvoEvent({
+        ...baseParam(),
+        data: { a: date } as never,
+      });
+      expect(event.data.a).toBe('2024-01-01T00:00:00.000Z');
     });
 
     it('rejects a Map', () => {
@@ -426,6 +428,138 @@ describe('ArvoEvent', () => {
         baggage: { a: Number.POSITIVE_INFINITY },
       };
       expect(pathsOf(() => new ArvoEvent(param))).toContain('baggage.a');
+    });
+  });
+
+  describe('toJSON() support', () => {
+    it('walks a value with toJSON() in its place, preserving the full return value', () => {
+      class Money {
+        constructor(public cents: number) {}
+        toJSON() {
+          return { cents: this.cents, currency: 'USD' };
+        }
+      }
+      const event = new ArvoEvent({
+        ...baseParam(),
+        data: { price: new Money(500) } as never,
+      });
+      expect(event.data.price).toEqual({ cents: 500, currency: 'USD' });
+    });
+
+    it('finds toJSON inherited through the prototype chain, not only an own property', () => {
+      // Date.prototype.toJSON, not an own property on any instance — this is
+      // what makes Date accepted a consequence of the rule, not a special case.
+      const date = new Date('2024-06-15T10:30:00.000Z');
+      const event = new ArvoEvent({
+        ...baseParam(),
+        data: { when: date } as never,
+      });
+      expect(event.data.when).toBe('2024-06-15T10:30:00.000Z');
+    });
+
+    it('honours toJSON at array position, not only as a map value', () => {
+      class Tag {
+        constructor(public name: string) {}
+        toJSON() {
+          return this.name;
+        }
+      }
+      const event = new ArvoEvent({
+        ...baseParam(),
+        data: { tags: [new Tag('a'), new Tag('b')] } as never,
+      });
+      expect(event.data.tags).toEqual(['a', 'b']);
+    });
+
+    it('rejects a toJSON return value that is still outside the JSON domain, at the same path', () => {
+      class Bad {
+        toJSON() {
+          return { fn: () => {} };
+        }
+      }
+      expect(
+        pathsOf(
+          () =>
+            new ArvoEvent({ ...baseParam(), data: { b: new Bad() } as never }),
+        ),
+      ).toContain('data.b.fn');
+    });
+
+    it('reports a throwing toJSON as a validation issue, not an uncaught exception', () => {
+      class Throws {
+        toJSON(): never {
+          throw new Error('boom');
+        }
+      }
+      const issues = issuesOf(
+        () =>
+          new ArvoEvent({
+            ...baseParam(),
+            data: { t: new Throws() } as never,
+          }),
+      );
+      const issue = issues.find((i) => i.path === 'data.t');
+      expect(issue?.message).toContain('boom');
+    });
+
+    it('still rejects a value with no toJSON at all, exactly as before', () => {
+      class PlainClass {}
+      expect(
+        pathsOf(
+          () =>
+            new ArvoEvent({
+              ...baseParam(),
+              data: { a: new PlainClass() } as never,
+            }),
+        ),
+      ).toContain('data.a');
+    });
+
+    it('still rejects Map and Set, which have no toJSON', () => {
+      expect(
+        pathsOf(
+          () =>
+            new ArvoEvent({ ...baseParam(), data: { a: new Map() } as never }),
+        ),
+      ).toContain('data.a');
+      expect(
+        pathsOf(
+          () =>
+            new ArvoEvent({ ...baseParam(), data: { a: new Set() } as never }),
+        ),
+      ).toContain('data.a');
+    });
+
+    it('catches a cycle created through toJSON, rather than exhausting the stack', () => {
+      class Cyclic {
+        toJSON(): unknown {
+          return { self: this };
+        }
+      }
+      const issues = issuesOf(
+        () =>
+          new ArvoEvent({
+            ...baseParam(),
+            data: { c: new Cyclic() } as never,
+          }),
+      );
+      expect(issues.some((i) => i.message.includes('circular'))).toBe(true);
+    });
+
+    it('accepts a toJSON-having value legitimately repeated in two branches', () => {
+      class Id {
+        constructor(public value: string) {}
+        toJSON() {
+          return this.value;
+        }
+      }
+      const shared = new Id('shared-id');
+      const event = new ArvoEvent({
+        ...baseParam(),
+        data: { a: shared, b: shared } as never,
+      });
+      expect(event.data.a).toBe('shared-id');
+      expect(event.data.b).toBe('shared-id');
     });
   });
 

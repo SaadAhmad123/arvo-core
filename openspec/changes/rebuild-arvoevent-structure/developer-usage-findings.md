@@ -41,6 +41,12 @@ Neither `specs/arvo-event/spec.md` nor ADR-001 addresses `toJSON` at all — "Pa
 
 No recommendation implied by leaving this unresolved — this is a decision for whoever owns the spec, not a bug for whoever owns the code.
 
+**Resolved.** The second option was chosen: `walk()` in `json.ts` now calls a value's `toJSON` — own or inherited through its prototype chain, checked the same way `JSON.stringify` checks it — before falling through to rejection, and walks the return value in the original value's place, at the same path. `Date` is now accepted as a direct consequence, not a special case; `Map`/`Set`/a plain class instance without `toJSON` are still rejected exactly as before. A `toJSON()` that throws is reported as a validation issue rather than an uncaught exception; a `toJSON()` that returns something still outside the JSON domain is rejected at the same path the original value occupied.
+
+One subtlety the fix had to account for that this finding didn't originally raise: a `toJSON()` whose return value transitively references the original object again (`toJSON() { return { self: this } }`) needed the same cycle guard as an ordinary object cycle, or it would recurse forever calling `toJSON()` on the same instance without ever revisiting a tracked ancestor. Handled by adding the value to the walk's `ancestors` set before invoking `toJSON` and removing it after, exactly as the existing array and plain-object branches already did — verified with a dedicated test.
+
+Recorded in `design.md` ("A value with its own `toJSON()` is honoured, not rejected") and `specs/arvo-event/spec.md` ("Custom Serialization via `toJSON`"), with test coverage for every case named above.
+
 ## Finding 4 — `dataschema` is documented as a URI but only checked for non-emptiness
 
 `dataschema: 'this is not a uri at all !! 123'` is accepted.

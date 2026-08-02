@@ -192,7 +192,7 @@ The system SHALL determine payload validity by membership of the JSON value doma
 
 ### Requirement: Custom Serialization via `toJSON`
 
-When a value that is not itself a JSON value has an own, callable `toJSON` method, the system SHALL invoke it and evaluate its return value against the JSON value domain in the original value's place, at the same path.
+When a value that is not itself a JSON value has a callable `toJSON` method, whether declared on the value itself or inherited through its prototype chain, the system SHALL invoke it and evaluate its return value against the JSON value domain in the original value's place, at the same path.
 
 The system SHALL apply this at any depth, in both map and array position.
 

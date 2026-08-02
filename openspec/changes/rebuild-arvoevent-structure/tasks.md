@@ -105,11 +105,11 @@
 
 ## 12. `toJSON()` support in the payload walk
 
-- [x] 12.1 Decide and record in `design.md`: a value with an own, callable `toJSON()` has it invoked before classification, at any depth, in both map and array position — matching `JSON.stringify`, and reversing the earlier blanket rejection of non-plain objects for this one case
+- [x] 12.1 Decide and record in `design.md`: a value with a callable `toJSON` — own or inherited through its prototype chain, checked the same way `JSON.stringify` checks it — has it invoked before classification, at any depth, in both map and array position — matching `JSON.stringify`, and reversing the earlier blanket rejection of non-plain objects for this one case. **Corrected mid-implementation:** the first wording said "own" specifically, which would have excluded `Date` (whose `toJSON` lives on `Date.prototype`) and directly contradicted the stated goal that `Date` becomes accepted as a consequence of this rule. Caught before any code was written.
 - [x] 12.2 Add the requirement (and permitted/forbidden scenarios) to `specs/arvo-event/spec.md`
-- [ ] 12.3 Implement in `src/ArvoEvent/json.ts`: call `.toJSON()` when present on a rejected non-plain-object value, then walk its result in place of the original value
-- [ ] 12.4 Decide and implement how a throwing `toJSON()` is reported — wrapped as an issue naming the failure, not an uncaught exception escaping the walk
-- [ ] 12.5 Decide and implement how a `toJSON()` returning a still-invalid value is handled — rejected at the same path, per the normal rules, not specially exempted
-- [ ] 12.6 Confirm `Date` (has `toJSON`) now serializes via it rather than being rejected, and that `Map`/`Set`/a plain class instance with no `toJSON` are still rejected exactly as before
-- [ ] 12.7 Tests: `toJSON()` accepted and correctly transformed at object and array position; a `toJSON()` returning an invalid value; a `toJSON()` that throws; `Date` now accepted; `Map`/`Set` still rejected
-- [ ] 12.8 Update `developer-usage-findings.md` Finding 3 with a note that it is resolved and how
+- [x] 12.3 Implement in `src/ArvoEvent/json.ts`: call `.toJSON()` when present on a rejected non-plain-object value, then walk its result in place of the original value
+- [x] 12.4 Decide and implement how a throwing `toJSON()` is reported — wrapped as an issue naming the failure, not an uncaught exception escaping the walk
+- [x] 12.5 Decide and implement how a `toJSON()` returning a still-invalid value is handled — rejected at the same path, per the normal rules, not specially exempted
+- [x] 12.6 Confirm `Date` (has `toJSON`) now serializes via it rather than being rejected, and that `Map`/`Set`/a plain class instance with no `toJSON` are still rejected exactly as before
+- [x] 12.7 Tests: `toJSON()` accepted and correctly transformed at object and array position; a `toJSON()` returning an invalid value; a `toJSON()` that throws; `Date` now accepted; `Map`/`Set` still rejected
+- [x] 12.8 Update `developer-usage-findings.md` Finding 3 with a note that it is resolved and how

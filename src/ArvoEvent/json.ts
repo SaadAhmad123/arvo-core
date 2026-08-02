@@ -95,10 +95,13 @@ const classifyScalar = (
  * True for objects that carry JSON data rather than behaviour: object
  * literals, `Object.create(null)`, and nothing else.
  *
- * Anything with another prototype — a Date, Map, Set, RegExp, or class
- * instance — is rejected rather than coerced. `JSON.stringify` would quietly
- * turn a Date into a string and most of the others into `{}`, so accepting
- * them means an event whose payload no longer resembles what was passed in.
+ * By the time this runs, anything with a callable `toJSON` — `Date`
+ * included — has already been resolved to its serialized form and walked in
+ * its place. What reaches this check is a non-plain object with no `toJSON`:
+ * a `Map`, a `Set`, a `RegExp`, or a class instance that never opted into a
+ * serialization. Those are rejected rather than silently coerced —
+ * `JSON.stringify` would quietly turn most of them into `{}`, discarding
+ * their contents with no signal that anything was lost.
  */
 const isPlainObject = (value: object): boolean => {
   const prototype = Object.getPrototypeOf(value);
@@ -150,6 +153,25 @@ const walk = (
     );
     ancestors.delete(value);
     return Object.freeze(result) as JSONArray;
+  }
+
+  const toJSON = (value as { toJSON?: unknown }).toJSON;
+  if (typeof toJSON === 'function') {
+    ancestors.add(value);
+    let serialized: unknown;
+    try {
+      serialized = toJSON.call(value);
+    } catch (error) {
+      ancestors.delete(value);
+      issues.push({
+        path,
+        message: `toJSON() threw: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      return null;
+    }
+    const result = walk(serialized, path, issues, ancestors);
+    ancestors.delete(value);
+    return result;
   }
 
   if (!isPlainObject(value)) {
