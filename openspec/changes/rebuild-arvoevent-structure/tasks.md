@@ -73,20 +73,20 @@
 
 ## 9. Tests
 
-- [ ] 9.1 **REPLACE** `tests/ArvoEvent/index.spec.ts` wholesale — its 542 lines target the superseded shape
-- [ ] 9.2 A block per field's rules
-- [ ] 9.3 Root constraint, covering the permitted cases as well as the forbidden ones — a caused event at depth zero, and a caused event whose `executionid` equals `subject`. An implementation rejecting these has recreated the biconditional ADR-001 argues against
-- [ ] 9.4 Correlation constraint, including the permitted case of a non-null `initid` with no `category`
-- [ ] 9.5 Strictness — unrecognised keys, removed fields, camelCase typos
-- [ ] 9.6 Payload validity, one test per rejected value class rather than a representative sample — `NaN` and `Infinity` at the top level, nested in an object, and nested in an array; a function, a symbol, and a bigint as an object property and as an array element; a `Date`, a `Map`, a `Set`, a `RegExp`, and a class instance; a non-map top level (array, string, number)
-- [ ] 9.7 Cycle detection — a self-referential object, a self-referential array, mutual reference between two objects, and a value legitimately repeated in two branches without a cycle, which must be accepted
-- [ ] 9.8 Undefined handling — an omitted map key, an array element becoming null with every other position preserved, equivalence between the constructed payload and serializing the original input
-- [ ] 9.9 Deeply nested valid structures accepted without false rejection, exercising the walk's recursion in both directions
-- [ ] 9.10 Path reporting — a failure several levels deep in `data` names the exact path, including array indices and non-identifier keys
-- [ ] 9.11 Immutability — field assignment and nested payload mutation both ineffective
-- [ ] 9.12 Trusted input — the payload walk is skipped, field and cross-field rules still enforced
-- [ ] 9.13 Diagnostics — messages name field, value, and rule, and several field failures aggregate
-- [ ] 9.14 Acceptance test — an event built from only the required fields, taking every default, is a well-formed root event
+- [x] 9.1 **REPLACE** `tests/ArvoEvent/index.spec.ts` wholesale — its 542 lines target the superseded shape
+- [x] 9.2 A block per field's rules
+- [x] 9.3 Root constraint, covering the permitted cases as well as the forbidden ones — a caused event at depth zero, and a caused event whose `executionid` equals `subject`. An implementation rejecting these has recreated the biconditional ADR-001 argues against
+- [x] 9.4 Correlation constraint, including the permitted case of a non-null `initid` with no `category`
+- [x] 9.5 Strictness — unrecognised keys, removed fields, camelCase typos
+- [x] 9.6 Payload validity, one test per rejected value class rather than a representative sample — `NaN` and `Infinity` at the top level, nested in an object, and nested in an array; a function, a symbol, and a bigint as an object property and as an array element; a `Date`, a `Map`, a `Set`, a `RegExp`, and a class instance; a non-map top level (array, string, number)
+- [x] 9.7 Cycle detection — a self-referential object, a self-referential array, mutual reference between two objects, and a value legitimately repeated in two branches without a cycle, which must be accepted
+- [x] 9.8 Undefined handling — an omitted map key, an array element becoming null with every other position preserved, equivalence between the constructed payload and serializing the original input
+- [x] 9.9 Deeply nested valid structures accepted without false rejection, exercising the walk's recursion in both directions
+- [x] 9.10 Path reporting — a failure several levels deep in `data` names the exact path, including array indices and non-identifier keys
+- [x] 9.11 Immutability — field assignment and nested payload mutation both ineffective
+- [x] 9.12 Trusted input — the payload walk is skipped, field and cross-field rules still enforced
+- [x] 9.13 Diagnostics — messages name field, value, and rule, and several field failures aggregate
+- [x] 9.14 Acceptance test — an event built from only the required fields, taking every default, is a well-formed root event
 
 ## 10. Close out
 
