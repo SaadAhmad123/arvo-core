@@ -57,6 +57,24 @@ Rules that follow:
 
 Biome-enforced. Run `pnpm lint` before finishing any change.
 
+### Dependencies and reuse
+
+Before writing non-trivial logic, check whether something already in the dependency tree does it. Zod and the OpenTelemetry API are already peer dependencies, so using them costs consumers nothing they are not already paying.
+
+The heuristic: **if the code you are about to write would make sense in a package that knows nothing about Arvo, it probably already exists in one.** Recursive JSON validation, path reporting, date parsing, deep equality — none of these are Arvo's problem to solve. A rule that comes from an ADR is.
+
+*Minimal dependencies* is a rule against gratuitous ones, not a licence to reinvent. Bespoke code is a standing cost: its own tests, its own edge cases, its own maintenance, and it is where subtle bugs live.
+
+Three counterweights, so this does not become an argument for adding packages freely:
+
+- A **new** dependency is a cost borne by every consumer. Introducing one needs materially more justification than using one already present.
+- Do not add a dependency for something trivial. A ten-line helper is not worth a supply-chain entry.
+- Bespoke is right when the semantics are genuinely Arvo's, or when the library cannot express what is needed.
+
+Two mechanisms doing the same job is worse than either alone — two idioms, two error shapes, and no guarantee they agree.
+
+When bespoke wins, `design.md` records why, so the next person does not re-litigate it.
+
 ### Documentation in source
 
 TSDoc is written for the **package consumer**, not the contributor. Someone who installed `arvo-core` from npm and is hovering a symbol in their editor is the audience — they do not have this repository open, and they did not ask about how it is built.
