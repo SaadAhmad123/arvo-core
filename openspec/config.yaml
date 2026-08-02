@@ -12,7 +12,7 @@ rules:
     - Never contradict an accepted ADR. If a change requires it, that ADR must be superseded first — accepted ADRs are not amended in place.
     - Where an ADR defers a decision, keep it deferred and out of scope rather than settling it in passing.
     - State what is deliberately not in scope, especially anything a reader would otherwise assume is covered.
-  spec:
+  specs:
     - Requirement text uses SHALL, and every requirement carries at least one scenario.
     - Write scenarios for behaviour an ADR explicitly permits, not only for what it forbids. Several rules here are deliberately one-directional, and an over-strict implementation is as wrong as a missing one.
     - State the obligation, not the reasoning. Cite the ADR for the why.
