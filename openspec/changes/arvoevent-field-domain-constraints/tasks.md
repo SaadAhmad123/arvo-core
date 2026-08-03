@@ -33,7 +33,7 @@
 
 ## 6. Close out
 
-- [ ] 6.1 `pnpm lint` clean
-- [ ] 6.2 `pnpm test` and `pnpm build` clean, including `src/factory/` and its tests — do not reintroduce the pre-existing `src/factory/` breakage the ADR-001 rebuild change already documented as a separate, prerequisite concern; if this change's new rules newly break `src/factory/` fixtures, fix the fixtures, not the rules
-- [ ] 6.3 `pnpm exec openspec validate arvoevent-field-domain-constraints --strict`
-- [ ] 6.4 No changeset added — this change merges into `v4`, which is not being released imminently; see `design.md`
+- [x] 6.1 `pnpm lint` clean (25 files, no fixes needed beyond what was already applied per-file during implementation)
+- [x] 6.2 **NOT fully clean project-wide, by design.** `pnpm test`: 6/7 files, 381/399 tests pass; the 18 failures in `tests/factory/index.spec.ts` are all `dataschema: is required`. `pnpm build`: `src/factory/index.ts` references the removed `rootsubject` field, and `src/factory/types.ts` imports `JSONPrimitive`/`NoKnownKeys`, neither exported since the ADR-001 rebuild. Identical error set before and after this change's edits — confirmed by running both prior to touching any file. This is the same pre-existing, separately-tracked `src/factory/` breakage the ADR-001 rebuild change's own tasks.md (§10.1) already documented as a release prerequisite outside that change's scope, not a regression introduced here. Everything this change touches — `src/ArvoEvent/validator.ts` and its tests — is clean in isolation (`pnpm exec vitest run tests/ArvoEvent tests/utils.spec.ts`: 6/6 files, 381/381 pass)
+- [x] 6.3 `pnpm exec openspec validate arvoevent-field-domain-constraints --strict` — passes
+- [x] 6.4 No changeset added — this change merges into `v4`, which is not being released imminently; see `design.md`
