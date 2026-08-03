@@ -81,7 +81,16 @@ export type ArvoEventParam<
    * non-negative integer. Defaults to `0` when omitted.
    */
   depth?: number;
-  /** Identifies the producer of this event. Required. */
+  /**
+   * Identifies the producer of this event. Required.
+   *
+   * Must be a non-empty RFC 3986 URI-reference. A hierarchical path
+   * (`api/users`), a bare token (`order-service`), and an absolute URI are
+   * all valid; whitespace and raw non-ASCII characters are not — percent-encode
+   * them first if your identifier needs to carry either. This is stricter
+   * than every other string field on ArvoEvent, which otherwise accept any
+   * Unicode text outside a narrow set of control characters.
+   */
   source: string;
   /** The intended recipient of this event. Defaults to `null` when omitted. */
   to?: string;
@@ -97,6 +106,9 @@ export type ArvoEventParam<
   data: D;
   /**
    * The exact contract URI and version this event relates to. Required.
+   *
+   * Must be a non-empty RFC 3986 URI-reference — the same rule `source`
+   * follows, including a fragment-only reference such as `#/contracts/user`.
    *
    * Where no contract governs the event yet, use `unknown/0.0.0` rather than
    * inventing a URI. It is greppable and cannot be mistaken for a real
