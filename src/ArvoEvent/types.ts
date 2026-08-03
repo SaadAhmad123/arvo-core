@@ -90,6 +90,15 @@ export type ArvoEventParam<
    * them first if your identifier needs to carry either. This is stricter
    * than every other string field on ArvoEvent, which otherwise accept any
    * Unicode text outside a narrow set of control characters.
+   *
+   * Must also already be in canonical form: a lowercase scheme/host, no
+   * unresolved `.`/`..` path segment, and no percent-encoding that could be
+   * un-encoded or uppercased instead. A value that is technically a valid
+   * URI-reference but not yet canonical — `HTTPS://...`, `a/./b` — is
+   * rejected rather than normalized for you. Checked via the
+   * [`fast-uri`](https://www.npmjs.com/package/fast-uri) package: a value
+   * round-trips through its `parse`/`serialize` unchanged only if it was
+   * already canonical.
    */
   source: string;
   /** The intended recipient of this event. Defaults to `null` when omitted. */
@@ -107,8 +116,9 @@ export type ArvoEventParam<
   /**
    * The exact contract URI and version this event relates to. Required.
    *
-   * Must be a non-empty RFC 3986 URI-reference — the same rule `source`
-   * follows, including a fragment-only reference such as `#/contracts/user`.
+   * Must be a non-empty RFC 3986 URI-reference in canonical form — the same
+   * rule `source` follows (see its TSDoc for what "canonical" requires),
+   * including a fragment-only reference such as `#/contracts/user`.
    *
    * Where no contract governs the event yet, use `unknown/0.0.0` rather than
    * inventing a URI. It is greppable and cannot be mistaken for a real
