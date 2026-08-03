@@ -57,6 +57,8 @@ This isn't an oversight so much as a harder problem than it looks: the character
 
 **Recorded, not resolved.** The existing Diagnostic Quality requirement ("a reader can correct the input without consulting the source") is met in the weak sense — the rule name is right there — but not in the strong sense the character-domain check happens to deliver. Worth a decision next time `validator.ts`'s URI-reference check is touched: whether it's worth a cheap heuristic (report the first character outside a "definitely safe" set as a likely culprit, without claiming full precision) or whether "must be a valid RFC 3986 URI-reference" is judged sufficient on its own.
 
+**Decision: skip it.** A "first suspicious character" heuristic only covers rejections that already have an obvious bad character in them — it says nothing for the other rejection class the URI-reference check now also produces (a case-differing scheme/host, or an unresolved dot-segment, once the check moved to `fast-uri` round-trip equality — see `design.md`), since every character in those strings is individually legal; the string only fails because `serialize` canonicalized it into something different. Covering that class for real means diffing the input against `serialize(parse(input))`, which has to reason about percent-encoding normalization, case-folding, and dot-segment resolution shifting string positions — real logic to keep correct, and exactly the kind of grammar-adjacent maintenance this change already chose to hand to `fast-uri` instead of owning. Not worth it for a diagnostic-only gap; "must be a valid RFC 3986 URI-reference" plus the field name stays sufficient.
+
 ## Finding 4 — `executionunits` normalization is exactly as invisible as it should be
 
 ```ts
