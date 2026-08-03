@@ -1,12 +1,12 @@
 ## 1. Character-domain check
 
-- [x] 1.1 In `src/ArvoEvent/validator.ts`, add a helper that checks a non-empty string for the forbidden code points: C0 controls (U+0000–U+001F), `DEL` (U+007F), C1 controls (U+0080–U+009F), Unicode noncharacters (U+FDD0–U+FDEF and the last two code points of every plane), and unpaired UTF-16 surrogates — iterating by code point (`for...of` / `Array.from`), not by UTF-16 code unit, per `design.md`
+- [x] 1.1 In `src/ArvoEvent/validator.ts`, add a helper that checks a non-empty string for the forbidden code points: C0 controls (U+0000–U+001F), `DEL` (U+007F), C1 controls (U+0080–U+009F), Unicode noncharacters (U+FDD0–U+FDEF and the last two code points of every plane), and unpaired UTF-16 surrogates. **Superseded post-close-out:** originally a manual `for...of` code-point walk against hand-maintained ranges; replaced with the native `RegExp` Unicode property escape `/[\p{Cc}\p{Noncharacter_Code_Point}\uD800-\uDFFF]/u` once verified equivalent (13 boundary cases) — same behavior, no hand-maintained range table. See `design.md`
 - [x] 1.2 Return enough detail from the helper (the offending code point, or an indication of which class it violates) for the diagnostic message in step 3.2 to name it specifically
 
 ## 2. URI-reference check
 
-- [x] 2.1 In `src/ArvoEvent/validator.ts`, add a helper that checks a non-empty string against RFC 3986's `URI-reference` grammar, accepting a hierarchical path, a bare relative token, a fragment-only reference, and an absolute URI, and rejecting whitespace and raw non-ASCII byte sequences — do not use the platform `URL` constructor for this check; see `design.md` for why
-- [x] 2.2 No normalization or rewriting: a value that satisfies the grammar passes through unchanged, and a value that does not fails construction rather than being percent-encoded into validity
+- [x] 2.1 In `src/ArvoEvent/validator.ts`, add a helper that checks a non-empty string against RFC 3986's `URI-reference` grammar, accepting a hierarchical path, a bare relative token, a fragment-only reference, and an absolute URI, and rejecting whitespace and raw non-ASCII byte sequences — do not use the platform `URL` constructor for this check; see `design.md` for why. **Superseded post-close-out:** originally a hand-rolled ABNF-based regex; replaced with the `fast-uri` package's `parse`/`serialize` round-tripped for exact equality, after empirically confirming `fast-uri` alone is a lenient parser (percent-encodes rather than rejects) and that round-trip equality closes that gap at the cost of also rejecting non-canonical-but-grammatically-valid input (case-differing scheme/host, unresolved dot-segments) — see `design.md` and the new spec requirement scenarios
+- [x] 2.2 No normalization or rewriting: a value that satisfies the grammar passes through unchanged, and a value that does not fails construction rather than being percent-encoded into validity — still holds under the `fast-uri` round-trip approach: a value already in canonical form always round-trips unchanged
 
 ## 3. Validator integration
 

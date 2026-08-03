@@ -231,7 +231,37 @@ describe('validateArvoEvent', () => {
         }).issues.find((i) => i.path === field);
         expect(issue?.message).toContain('URI-reference');
       });
+
+      it(`rejects a case-differing scheme for ${field}, stricter than the bare grammar`, () => {
+        // RFC 3986 makes the scheme case-insensitive, so this is grammatically
+        // valid — rejected anyway, a deliberate, documented cost of verifying
+        // via round-trip serialization rather than grammar alone. See design.md.
+        expect(
+          pathsOf({
+            ...required(),
+            [field]: 'HTTPS://arvo.land/contracts/user',
+          }),
+        ).toContain(field);
+      });
+
+      it(`rejects an unresolved dot-segment for ${field}, stricter than the bare grammar`, () => {
+        // "." and ".." are ordinary, grammatically legal path segments whether
+        // or not they have been resolved — rejected anyway, for the same
+        // canonicalization reason as the case-sensitivity check above.
+        expect(pathsOf({ ...required(), [field]: 'a/./b/../c' })).toContain(
+          field,
+        );
+      });
     }
+
+    it('accepts an npm-style scoped specifier, since "@" is a legal path character', () => {
+      expect(
+        validateArvoEvent({
+          ...required(),
+          dataschema: '@acme/order-contract@1.0.0',
+        }).issues,
+      ).toEqual([]);
+    });
   });
 
   describe('character domain', () => {

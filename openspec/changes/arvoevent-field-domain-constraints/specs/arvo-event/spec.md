@@ -38,6 +38,8 @@ The system SHALL require `source` and `dataschema` to satisfy the URI-reference 
 
 The system SHALL NOT require either value to be dereferenceable, resolvable, or backed by any real resource.
 
+The system SHALL reject a value that satisfies the grammar but is not already in canonical form, specifically a scheme or host differing in case from its canonical lowercase form, or a path containing an unresolved `.` or `..` segment.
+
 #### Scenario: Hierarchical path accepted
 - **WHEN** `source` or `dataschema` is a hierarchical path such as `api/users`
 - **THEN** construction succeeds
@@ -58,6 +60,14 @@ The system SHALL NOT require either value to be dereferenceable, resolvable, or 
 - **WHEN** `source` or `dataschema` contains whitespace or a raw non-ASCII byte sequence
 - **THEN** construction fails
 - **AND** the failure names the field and the URI-reference rule it violates
+
+#### Scenario: Grammatically valid but non-canonical scheme or host casing rejected
+- **WHEN** `source` or `dataschema` has a scheme or host differing in case from its canonical lowercase form
+- **THEN** construction fails, even though the value satisfies the URI-reference grammar
+
+#### Scenario: Grammatically valid but unresolved dot-segment rejected
+- **WHEN** `source` or `dataschema` contains a `.` or `..` path segment that has not been resolved
+- **THEN** construction fails, even though the value satisfies the URI-reference grammar
 
 ### Requirement: String Field Character Domain
 

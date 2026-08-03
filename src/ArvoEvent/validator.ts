@@ -1,3 +1,4 @@
+import fastUri from 'fast-uri';
 import { z } from 'zod';
 import type { FlatMap, JSONObject } from '../types.js';
 import { createTimestamp } from '../utils.js';
@@ -143,6 +144,7 @@ const checkExecutionUnits = (
 const normalizeExecutionUnits = (value: unknown): unknown =>
   typeof value === 'number' && Object.is(value, -0) ? 0 : value;
 
+/** Every top-level string field subject to the character-domain restriction — see {@link findForbiddenCodePoint}. */
 const CHARACTER_DOMAIN_FIELDS = [
   'id',
   'parentid',
@@ -160,43 +162,26 @@ const CHARACTER_DOMAIN_FIELDS = [
 ] as const satisfies readonly (keyof ArvoEventFields)[];
 
 /**
- * Finds the first code point in `value` that ArvoEvent's top-level string
- * fields forbid: a C0 or C1 control character, `DEL`, a Unicode
- * noncharacter, or an unpaired UTF-16 surrogate.
+ * C0/C1 controls, `DEL`, and Unicode noncharacters are exactly the standard
+ * Unicode categories `\p{Cc}` and `\p{Noncharacter_Code_Point}` — native
+ * `RegExp` Unicode property escapes, tied to the engine's own Unicode
+ * Character Database rather than a hand-maintained range table.
  *
- * Iterates by code point (`for...of`), not by UTF-16 code unit. JavaScript's
- * string iterator combines a valid surrogate pair into the one supplementary
- * code point it represents, and — critically — does not repair or replace a
- * lone surrogate; it yields it as itself. So a single pass already
- * distinguishes a valid pair from an unpaired half without any separate
- * pairing logic.
+ * Unpaired surrogates need no property escape of their own: under the `u`
+ * flag the engine already matches by code point, combining a valid
+ * high/low pair into the one supplementary-plane token it represents. A
+ * bare `[\uD800-\uDFFF]` class therefore only ever matches a surrogate that
+ * arrived without its other half — a valid pair is never tokenized down to
+ * one of its individual code units for this class to see.
  */
+const FORBIDDEN_CODE_POINT =
+  /[\p{Cc}\p{Noncharacter_Code_Point}\uD800-\uDFFF]/u;
+
 const findForbiddenCodePoint = (
   value: string,
 ): { codePoint: number } | null => {
-  for (const char of value) {
-    const codePoint = char.codePointAt(0) as number;
-    const isC0Control = codePoint <= 0x1f;
-    const isDelOrC1Control = codePoint >= 0x7f && codePoint <= 0x9f;
-    // U+FDD0–U+FDEF, plus the last two code points of every plane
-    // (U+xFFFE/U+xFFFF) — the low 16 bits being 0xFFFE or 0xFFFF is exactly
-    // that second set, regardless of which plane's high bits sit above them.
-    const isNoncharacter =
-      (codePoint >= 0xfdd0 && codePoint <= 0xfdef) ||
-      (codePoint & 0xfffe) === 0xfffe;
-    // A valid pair already combined into a supplementary code point above;
-    // anything still in this range arrived unpaired.
-    const isUnpairedSurrogate = codePoint >= 0xd800 && codePoint <= 0xdfff;
-    if (
-      isC0Control ||
-      isDelOrC1Control ||
-      isNoncharacter ||
-      isUnpairedSurrogate
-    ) {
-      return { codePoint };
-    }
-  }
-  return null;
+  const match = FORBIDDEN_CODE_POINT.exec(value);
+  return match ? { codePoint: match[0].codePointAt(0) as number } : null;
 };
 
 const checkCharacterDomain = (
@@ -219,33 +204,34 @@ const checkCharacterDomain = (
   }
 };
 
-// RFC 3986 URI-reference, built from the grammar's own productions rather
-// than a WHATWG URL check: the platform URL parser requires a base to
-// resolve a relative reference at all, and percent-encodes characters this
-// rule must reject instead of silently rewriting. IP-literal authorities
-// (bracketed IPv6 hosts) are not modeled — reg-name's character set already
-// covers every realistic Arvo source/dataschema identifier.
-const UNRESERVED = 'A-Za-z0-9\\-._~';
-const SUB_DELIMS = "!$&'()*+,;=";
-const PCT_ENCODED = '%[0-9A-Fa-f]{2}';
-const PCHAR = `(?:[${UNRESERVED}${SUB_DELIMS}:@]|${PCT_ENCODED})`;
-const USERINFO = `(?:[${UNRESERVED}${SUB_DELIMS}:]|${PCT_ENCODED})*`;
-const REG_NAME = `(?:[${UNRESERVED}${SUB_DELIMS}]|${PCT_ENCODED})*`;
-const AUTHORITY = `(?:${USERINFO}@)?${REG_NAME}(?::[0-9]*)?`;
-const SEGMENT = `${PCHAR}*`;
-const SEGMENT_NZ = `${PCHAR}+`;
-const SEGMENT_NZ_NC = `(?:[${UNRESERVED}${SUB_DELIMS}@]|${PCT_ENCODED})+`;
-const PATH_ABEMPTY = `(?:/${SEGMENT})*`;
-const PATH_ABSOLUTE = `/(?:${SEGMENT_NZ}(?:/${SEGMENT})*)?`;
-const PATH_NOSCHEME = `${SEGMENT_NZ_NC}(?:/${SEGMENT})*`;
-const PATH_ROOTLESS = `${SEGMENT_NZ}(?:/${SEGMENT})*`;
-const QUERY_OR_FRAGMENT = `(?:${PCHAR}|[/?])*`;
-const SCHEME = '[A-Za-z][A-Za-z0-9+\\-.]*';
-const HIER_PART = `(?://${AUTHORITY}${PATH_ABEMPTY}|${PATH_ABSOLUTE}|${PATH_ROOTLESS}|)`;
-const RELATIVE_PART = `(?://${AUTHORITY}${PATH_ABEMPTY}|${PATH_ABSOLUTE}|${PATH_NOSCHEME}|)`;
-const URI = `${SCHEME}:${HIER_PART}(?:\\?${QUERY_OR_FRAGMENT})?(?:#${QUERY_OR_FRAGMENT})?`;
-const RELATIVE_REF = `${RELATIVE_PART}(?:\\?${QUERY_OR_FRAGMENT})?(?:#${QUERY_OR_FRAGMENT})?`;
-const URI_REFERENCE = new RegExp(`^(?:${URI}|${RELATIVE_REF})$`);
+/**
+ * RFC 3986 URI-reference, delegated to `fast-uri` rather than hand-rolled:
+ * writing and maintaining a correct grammar is exactly the kind of general,
+ * non-Arvo-specific parsing concern this package's dependency conventions
+ * favor reusing over reimplementing.
+ *
+ * `fast-uri`'s own `parse`/`serialize` are lenient by design — malformed
+ * input is percent-encoded into validity rather than rejected, which is
+ * the opposite of what this rule needs (a producer's invalid value must
+ * fail construction, not be silently rewritten). Round-tripping through
+ * both and requiring an exact match turns that leniency into a rejection:
+ * anything `serialize(parse(value))` had to change to make valid was not
+ * already valid.
+ *
+ * The one accepted cost: `serialize` also canonicalizes case-insensitive
+ * components (scheme, host) and resolves dot-segments, so a small set of
+ * inputs that are grammatically valid but not already in canonical form —
+ * an uppercase scheme, an unresolved `./`/`../` segment — are rejected
+ * too, stricter than the bare grammar requires. Neither is a shape a
+ * producer chooses deliberately for a `source` or `dataschema` identifier,
+ * and the rejection is reported with the same diagnostic quality as any
+ * other rule, so it is correctable rather than silently wrong.
+ */
+const isUriReference = (value: string): boolean => {
+  const parsed = fastUri.parse(value);
+  if ('error' in parsed) return false;
+  return fastUri.serialize(parsed) === value;
+};
 
 const checkUriReference = (
   value: unknown,
@@ -253,7 +239,7 @@ const checkUriReference = (
   issues: ArvoEventValidationIssue[],
 ): void => {
   if (typeof value !== 'string' || value.length === 0) return;
-  if (!URI_REFERENCE.test(value)) {
+  if (!isUriReference(value)) {
     issues.push({
       path,
       message: 'must be a valid RFC 3986 URI-reference',
