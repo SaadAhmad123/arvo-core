@@ -182,6 +182,131 @@ describe('validateArvoEvent', () => {
     });
   });
 
+  describe('URI-reference format', () => {
+    const fields = ['source', 'dataschema'] as const;
+
+    for (const field of fields) {
+      it(`accepts a hierarchical path for ${field}`, () => {
+        expect(
+          validateArvoEvent({ ...required(), [field]: 'api/users' }).issues,
+        ).toEqual([]);
+      });
+
+      it(`accepts a bare token for ${field}`, () => {
+        expect(
+          validateArvoEvent({ ...required(), [field]: 'order-service' }).issues,
+        ).toEqual([]);
+      });
+
+      it(`accepts a fragment-only reference for ${field}`, () => {
+        expect(
+          validateArvoEvent({ ...required(), [field]: '#/contracts/user' })
+            .issues,
+        ).toEqual([]);
+      });
+
+      it(`accepts an absolute URI for ${field}`, () => {
+        expect(
+          validateArvoEvent({
+            ...required(),
+            [field]: 'https://arvo.land/contracts/user',
+          }).issues,
+        ).toEqual([]);
+      });
+
+      it(`rejects whitespace in ${field}`, () => {
+        expect(pathsOf({ ...required(), [field]: 'order service' })).toContain(
+          field,
+        );
+      });
+
+      it(`rejects a raw non-ASCII byte sequence in ${field}`, () => {
+        expect(pathsOf({ ...required(), [field]: 'café' })).toContain(field);
+      });
+
+      it(`names the URI-reference rule for ${field}`, () => {
+        const issue = validateArvoEvent({
+          ...required(),
+          [field]: 'bad value',
+        }).issues.find((i) => i.path === field);
+        expect(issue?.message).toContain('URI-reference');
+      });
+    }
+  });
+
+  describe('character domain', () => {
+    const restrictedFields = [
+      'id',
+      'parentid',
+      'initid',
+      'subject',
+      'executionid',
+      'category',
+      'source',
+      'to',
+      'domain',
+      'type',
+      'dataschema',
+      'traceparent',
+      'tracestate',
+    ] as const;
+
+    describe.each([
+      ['a C0 control character', '\u0007'],
+      ['DEL', '\u007f'],
+      ['a C1 control character', '\u0085'],
+      ['a BMP noncharacter', '\ufdd0'],
+      ['a noncharacter outside the BMP', String.fromCodePoint(0x1fffe)],
+      ['an unpaired high surrogate', '\ud800'],
+      ['an unpaired low surrogate', '\udc00'],
+    ])('%s', (_label, badChar) => {
+      it('rejects it on a required string field', () => {
+        expect(
+          pathsOf({ ...required(), subject: `order${badChar}1` }),
+        ).toContain('subject');
+      });
+
+      it('rejects it on a nullable string field', () => {
+        expect(
+          pathsOf({ ...required(), category: `cat${badChar}egory` }),
+        ).toContain('category');
+      });
+    });
+
+    it('is skipped for a null nullable field', () => {
+      expect(
+        validateArvoEvent({ ...required(), category: null }).issues,
+      ).toEqual([]);
+    });
+
+    it('does not apply to strings nested inside data', () => {
+      expect(
+        validateArvoEvent({ ...required(), data: { note: 'x\u0007y' } }).issues,
+      ).toEqual([]);
+    });
+
+    it('does not apply to strings nested inside baggage', () => {
+      expect(
+        validateArvoEvent({ ...required(), baggage: { note: 'x\u0007y' } })
+          .issues,
+      ).toEqual([]);
+    });
+
+    it('applies across every restricted top-level field', () => {
+      for (const field of restrictedFields) {
+        expect(pathsOf({ ...required(), [field]: '\u0007' })).toContain(field);
+      }
+    });
+
+    it('names the offending code point', () => {
+      const issue = validateArvoEvent({
+        ...required(),
+        subject: 'order\u0007',
+      }).issues.find((i) => i.path === 'subject');
+      expect(issue?.message).toContain('U+0007');
+    });
+  });
+
   describe('nullable non-empty string fields', () => {
     const fields = ['parentid', 'initid', 'category', 'to', 'domain'] as const;
 
@@ -314,9 +439,35 @@ describe('validateArvoEvent', () => {
         'executionunits',
       );
     });
+
+    it('accepts a large finite magnitude', () => {
+      expect(
+        validateArvoEvent({
+          ...required(),
+          executionunits: Number.MAX_VALUE,
+        }).issues,
+      ).toEqual([]);
+    });
+
+    it('normalizes negative zero to zero', () => {
+      const { value } = validateArvoEvent({
+        ...required(),
+        executionunits: -0,
+      });
+      expect(value.executionunits).toBe(0);
+      expect(Object.is(value.executionunits, -0)).toBe(false);
+    });
+
+    it('normalizes negative zero to zero when admitted as plain data', () => {
+      const { value } = validateArvoEvent(
+        { ...required(), executionunits: -0 },
+        { skipPayloadValidation: true },
+      );
+      expect(Object.is(value.executionunits, -0)).toBe(false);
+    });
   });
 
-  describe('trace fields are deliberately unvalidated', () => {
+  describe('trace fields are unvalidated beyond the character domain', () => {
     it('accepts any string, including an empty one', () => {
       expect(
         validateArvoEvent({ ...required(), traceparent: '', tracestate: '' })
@@ -335,6 +486,12 @@ describe('validateArvoEvent', () => {
       expect(
         validateArvoEvent({ ...required(), tracestate: 'vendor=x' }).issues,
       ).toEqual([]);
+    });
+
+    it('still rejects a forbidden code point', () => {
+      expect(
+        pathsOf({ ...required(), traceparent: 'bad\u0007value' }),
+      ).toContain('traceparent');
     });
   });
 

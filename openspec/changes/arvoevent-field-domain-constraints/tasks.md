@@ -23,13 +23,13 @@
 
 ## 5. Tests
 
-- [ ] 5.1 In `tests/ArvoEvent/validator.spec.ts`, add cases for the character-domain check: one per forbidden class (C0 control, `DEL`, C1 control, BMP noncharacter, a noncharacter in a non-BMP plane, an unpaired high surrogate, an unpaired low surrogate) against at least one nullable and one required field, not a representative sample
-- [ ] 5.2 Add a case confirming the character-domain check is skipped for a null nullable field, and is not applied to strings nested inside `data` or `baggage`
-- [ ] 5.3 Add cases for the URI-reference check: a hierarchical path, a bare token, a fragment-only reference, and an absolute URI all accepted for both `source` and `dataschema`; whitespace and a raw non-ASCII sequence rejected for both
-- [ ] 5.4 Add cases for `traceparent`/`tracestate`: an arbitrary non-empty value with no forbidden code points still accepted without further format validation; a forbidden code point rejected
-- [ ] 5.5 Add cases for `executionunits`: `-0` normalized to `0` on both the direct-construction and admit-as-data paths; a large finite magnitude still accepted; existing finite/non-finite cases unchanged
-- [ ] 5.6 In `tests/ArvoEvent/index.spec.ts`, add at least one end-to-end construction case per new rule, confirming `ArvoEventValidationError` names the field and the violated rule per the existing Diagnostic Quality convention
-- [ ] 5.7 Audit existing fixtures across `tests/ArvoEvent/` and `tests/factory/` for `source`/`dataschema`/other string-field values that are no longer valid (non-URI-reference, containing a control character), and update them — this is expected fallout from the breaking change, not a regression to work around
+- [x] 5.1 In `tests/ArvoEvent/validator.spec.ts`, add cases for the character-domain check: one per forbidden class (C0 control, `DEL`, C1 control, BMP noncharacter, a noncharacter in a non-BMP plane, an unpaired high surrogate, an unpaired low surrogate) against at least one nullable and one required field, not a representative sample
+- [x] 5.2 Add a case confirming the character-domain check is skipped for a null nullable field, and is not applied to strings nested inside `data` or `baggage`
+- [x] 5.3 Add cases for the URI-reference check: a hierarchical path, a bare token, a fragment-only reference, and an absolute URI all accepted for both `source` and `dataschema`; whitespace and a raw non-ASCII sequence rejected for both
+- [x] 5.4 Add cases for `traceparent`/`tracestate`: an arbitrary non-empty value with no forbidden code points still accepted without further format validation; a forbidden code point rejected
+- [x] 5.5 Add cases for `executionunits`: `-0` normalized to `0` on both the direct-construction and admit-as-data paths; a large finite magnitude still accepted; existing finite/non-finite cases unchanged
+- [x] 5.6 In `tests/ArvoEvent/index.spec.ts`, add at least one end-to-end construction case per new rule, confirming `ArvoEventValidationError` names the field and the violated rule per the existing Diagnostic Quality convention
+- [x] 5.7 **NOT DONE — found unnecessary.** Audited `tests/ArvoEvent/` (no fixture needed a change — every existing value already satisfied the new rules; the full suite passed unmodified before any test was added) and `tests/factory/` (all 18 failures are `dataschema: is required`, the pre-existing breakage the ADR-001 rebuild change already documented as separate and out of scope — unrelated to URI-reference or character-domain rules, so nothing here to fix under this change)
 
 ## 6. Close out
 
