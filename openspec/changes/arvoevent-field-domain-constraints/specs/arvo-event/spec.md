@@ -38,7 +38,9 @@ The system SHALL require `source` and `dataschema` to satisfy the URI-reference 
 
 The system SHALL NOT require either value to be dereferenceable, resolvable, or backed by any real resource.
 
-The system SHALL reject a value that satisfies the grammar but is not already in canonical form, specifically a scheme or host differing in case from its canonical lowercase form, or a path containing an unresolved `.` or `..` segment.
+The system SHALL reject a value that satisfies the grammar but is not already in the canonical form RFC 3986 §6.2.2 ("Syntax-Based Normalization") defines: a scheme or host differing in case from its canonical lowercase form, a percent-encoded octet using lowercase hex digits or unnecessarily encoding an unreserved character, or a path containing an unresolved `.` or `..` segment.
+
+The system is NOT REQUIRED to reject a value solely for carrying non-canonical scheme-based normalization (RFC 3986 §6.2.3, e.g. an explicit default port) — RFC 3986 states this class of normalization is optional and scheme-specific, not a property every URI-reference shares.
 
 #### Scenario: Hierarchical path accepted
 - **WHEN** `source` or `dataschema` is a hierarchical path such as `api/users`
@@ -67,6 +69,10 @@ The system SHALL reject a value that satisfies the grammar but is not already in
 
 #### Scenario: Grammatically valid but unresolved dot-segment rejected
 - **WHEN** `source` or `dataschema` contains a `.` or `..` path segment that has not been resolved
+- **THEN** construction fails, even though the value satisfies the URI-reference grammar
+
+#### Scenario: Grammatically valid but non-canonical percent-encoding rejected
+- **WHEN** `source` or `dataschema` contains a percent-encoded octet using lowercase hex digits, or a percent-encoded octet that unnecessarily encodes an unreserved character
 - **THEN** construction fails, even though the value satisfies the URI-reference grammar
 
 ### Requirement: String Field Character Domain

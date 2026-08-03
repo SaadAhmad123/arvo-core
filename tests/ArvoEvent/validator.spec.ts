@@ -252,6 +252,24 @@ describe('validateArvoEvent', () => {
           field,
         );
       });
+
+      it(`rejects lowercase percent-encoding hex digits for ${field}, stricter than the bare grammar`, () => {
+        // RFC 3986 treats "%2f" and "%2F" as the same octet — grammatically
+        // valid either way — rejected anyway, since canonical form requires
+        // uppercase hex digits. See design.md.
+        expect(pathsOf({ ...required(), [field]: 'api/%2fusers' })).toContain(
+          field,
+        );
+      });
+
+      it(`rejects a percent-encoded unreserved character for ${field}, stricter than the bare grammar`, () => {
+        // "%41" decodes to "A", an unreserved character that never needed
+        // encoding — grammatically valid, rejected anyway for the same
+        // canonicalization reason.
+        expect(pathsOf({ ...required(), [field]: 'api/%41users' })).toContain(
+          field,
+        );
+      });
     }
 
     it('accepts an npm-style scoped specifier, since "@" is a legal path character', () => {
