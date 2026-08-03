@@ -84,21 +84,15 @@ export type ArvoEventParam<
   /**
    * Identifies the producer of this event. Required.
    *
-   * Must be a non-empty RFC 3986 URI-reference. A hierarchical path
-   * (`api/users`), a bare token (`order-service`), and an absolute URI are
-   * all valid; whitespace and raw non-ASCII characters are not — percent-encode
-   * them first if your identifier needs to carry either. This is stricter
-   * than every other string field on ArvoEvent, which otherwise accept any
-   * Unicode text outside a narrow set of control characters.
-   *
-   * Must also already be in canonical form: a lowercase scheme/host, no
-   * unresolved `.`/`..` path segment, and no percent-encoding that could be
-   * un-encoded or uppercased instead. A value that is technically a valid
-   * URI-reference but not yet canonical — `HTTPS://...`, `a/./b` — is
-   * rejected rather than normalized for you. Checked via the
-   * [`fast-uri`](https://www.npmjs.com/package/fast-uri) package: a value
-   * round-trips through its `parse`/`serialize` unchanged only if it was
-   * already canonical.
+   * Must be a non-empty, canonical RFC 3986 URI-reference: a hierarchical
+   * path (`api/users`), bare token (`order-service`), or absolute URI all
+   * work, but whitespace, raw non-ASCII bytes, a differently-cased
+   * scheme/host, an unresolved `.`/`..` segment, or non-canonical
+   * percent-encoding are all rejected rather than normalized for you —
+   * checked via [`fast-uri`](https://www.npmjs.com/package/fast-uri)'s
+   * `parse`/`serialize` round-trip. Stricter than every other ArvoEvent
+   * string field, which otherwise accepts any Unicode text outside a narrow
+   * set of control characters.
    */
   source: string;
   /** The intended recipient of this event. Defaults to `null` when omitted. */
