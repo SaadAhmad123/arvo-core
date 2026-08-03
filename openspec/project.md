@@ -1,12 +1,12 @@
 # Project Context
 
+> Everything here must pass one test: **will this still be true in two years?** If it will not, it is not project context. Work that is only true now belongs in an OpenSpec change, which is archived when it lands; an architectural fact belongs in an ADR. A stale line in this file is worse than a missing one, because every proposal and every cold-starting agent reads it as authoritative.
+
 ## Purpose
 
 `arvo-core` is the reference TypeScript implementation of the **Arvo Application Model (AAM)** — a portable, language-independent application model for event-driven systems. It provides the application-tier primitives (`ArvoEvent`, `ArvoContract`, `ArvoEventHandler`) through which independently built participants compose.
 
 Arvo does not execute the model; infrastructure adapters do. This package is deliberately lightweight and opinionated.
-
-The current major line, v4, is a deliberate rebuild unconstrained by earlier majors. It is the first implementation of AAM 1.
 
 ## Where decisions live
 
@@ -25,8 +25,10 @@ The distinction that matters most: an ADR describes what Arvo *is*, in terms any
 
 **Accepted ADRs are authoritative over specs and code.** This repository is their canonical source.
 
-- [ADR-000](../docs/adr/000-arvo-system-identity-and-architectural-principles.md) — Arvo System Identity and Architectural Invariants. Defines AAM 1, its invariants, and what is inside versus outside the model. **Accepted.**
-- [ADR-001](../docs/adr/001-arvoevent-structure.md) — ArvoEvent Structure. Defines the event's eighteen fields, their types, defaults, structural constraints, and propagation. **Accepted.**
+- [ADR-000](../docs/adr/000-arvo-system-identity-and-architectural-principles.md) — Arvo System Identity and Architectural Invariants. Defines AAM 1, its invariants, and what is inside versus outside the model.
+- [ADR-001](../docs/adr/001-arvoevent-structure.md) — ArvoEvent Structure. Defines the event's fields, their types, defaults, structural constraints, and propagation.
+
+[`docs/adr/README.md`](../docs/adr/README.md) is the index and the source of truth for which ADRs exist and what status each holds. Check it rather than trusting this list to be current.
 
 Rules that follow:
 
@@ -55,6 +57,38 @@ Rules that follow:
 
 Biome-enforced. Run `pnpm lint` before finishing any change.
 
+### Dependencies and reuse
+
+Before writing non-trivial logic, check whether something already in the dependency tree does it — see `package.json` for what is currently there. An existing dependency costs consumers nothing they are not already paying; a new one does.
+
+The heuristic: **if the code you are about to write would make sense in a package that knows nothing about Arvo, it probably already exists in one.** A rule that comes from an ADR is Arvo's problem; a general-purpose data or validation concern usually is not.
+
+*Minimal dependencies* is a rule against gratuitous ones, not a licence to reinvent. Bespoke code is a standing cost: its own tests, its own edge cases, its own maintenance, and it is where subtle bugs live.
+
+Three counterweights, so this does not become an argument for adding packages freely:
+
+- A **new** dependency is a cost borne by every consumer. Introducing one needs materially more justification than using one already present.
+- Do not add a dependency for something trivial. A ten-line helper is not worth a supply-chain entry.
+- Bespoke is right when the semantics are genuinely Arvo's, or when the library cannot express what is needed.
+
+Two mechanisms doing the same job is worse than either alone — two idioms, two error shapes, and no guarantee they agree.
+
+When bespoke wins, `design.md` records why, so the next person does not re-litigate it.
+
+### Documentation in source
+
+TSDoc is written for the **package consumer**, not the contributor. Someone who installed `arvo-core` from npm and is hovering a symbol in their editor is the audience — they do not have this repository open, and they did not ask about how it is built.
+
+- **State rules and constraints, not provenance.** What is this, what may I pass, what will happen. Not why the design is this way, what was rejected, or which record decided it.
+- **Keep it short.** A hover tooltip is a small box. Every sentence that does not change what the caller writes or expects buries the one that does.
+- **Cite `docs/` paths, never `openspec/` paths.** ADRs and the vision document are durable, are the architecture, and change only by supersession, so a reader can follow them. OpenSpec paths move when a change is archived, so a shipped comment pointing at one rots by design.
+- **A citation supplements the rule, never replaces stating it.** Being pointed at an ADR is not a substitute for being told what the constraint is.
+- **Document a constraint where a caller meets it**, not on the type that models it. A rule enforced when an event is constructed belongs on that field, not on the type alias its value happens to use.
+
+The reasoning is not lost by keeping it out of source — it is recorded in the ADRs and in `openspec/`. Duplicating it into shipped comments creates a second copy that drifts and can only be corrected by cutting a release.
+
+This governs the package's **public export surface** — what `src/index.ts` re-exports, and therefore what a consumer's editor can ever surface. An internal module that is never exported may carry full contributor-facing reasoning at its top, in the same register as `design.md`, because no consumer's tooling will ever show it to them. Point to `design.md` for the canonical record rather than duplicating it — the same cite-don't-copy rule that governs everything else here.
+
 ### Errors
 
 Errors are human-facing. Every thrown error names what failed, the value involved, and the rule violated, and preserves the underlying cause. Generic messages such as "invalid input" are not acceptable — a reader should be able to correct the problem from the message alone without opening the source.
@@ -67,9 +101,19 @@ Runtime validation is not optional, and compile-time types do not substitute for
 
 Vitest, in `tests/` mirroring `src/`. Tests must cover the cases an ADR calls out as **legal** as well as those it forbids. Several structural rules are deliberately one-directional, and a suite that only checks rejections will not notice an implementation that has quietly made them biconditional.
 
+**Bespoke code — anything that won out over a dependency under *Dependencies and reuse* — is held to a higher bar than code that delegates to one.** It carries none of a library's track record. This package is public: a missed edge case here does not surface as a caught exception, it surfaces as silently wrong data in a consumer's event. Test every failure mode the code exists to catch individually, not a representative sample, and check the coverage against the reasoning recorded in `design.md` for why the code is bespoke in the first place.
+
 ### Git
 
-Trunk is `main`; the v4 rebuild line is `v4`. Work happens on topic branches.
+Trunk is `main`. Work happens on topic branches.
+
+**Commit each task group as it completes, then move on.** Do not batch a whole change into one commit. A rebuild touches many files for many different reasons, and a single commit spanning all of them cannot be reviewed, bisected, or partially reverted.
+
+Tick the task in `tasks.md` in the same commit that does the work, so the checklist and the tree never disagree about what is finished.
+
+A mid-sequence commit may legitimately not typecheck. Deleting a type in one group and removing its last consumer in a later one leaves the tree broken in between, and that is preferable to one commit large enough to hide a mistake. The final group in a change is what has to be green.
+
+Commit messages explain why the change was made, not what the diff already shows.
 
 ## Domain Glossary
 

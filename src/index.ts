@@ -1,9 +1,16 @@
+export type { ArvoEventValidationIssue } from './ArvoEvent/errors.js';
 export { ArvoEventValidationError } from './ArvoEvent/errors.js';
+export type { ArvoEventParseResult } from './ArvoEvent/index.js';
 export { ArvoEvent } from './ArvoEvent/index.js';
-export type { ArvoEventParam } from './ArvoEvent/types.js';
 export type {
+  ArvoEventFields,
+  ArvoEventParam,
+  ArvoEventValidationOptions,
+} from './ArvoEvent/types.js';
+export type {
+  FlatMap,
   JSONArray,
-  JSONPrimitive,
-  JSONRecord,
+  JSONObject,
+  JSONScalar,
   JSONValue,
 } from './types.js';
