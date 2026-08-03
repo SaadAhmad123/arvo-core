@@ -69,7 +69,7 @@ A nullable extension-mapped field — `parentid`, `initid`, `category`, `to`, `d
 }
 ```
 
-The wrapper MUST be an object with exactly these three keys. `arvoeventdata` MUST be an object of JSON values, `arvoeventdataschema` MUST be a non-empty string, and `arvoeventbaggage` MUST be a flat map under ADR-001's definitions. The fixed CloudEvents `dataschema` URI identifies this wrapper shape; the nested `arvoeventdataschema` continues to identify the Arvo contract that applies specifically to `arvoeventdata`. A machine-readable representation of the wrapper schema SHOULD be developed alongside this ADR's implementation and published at that URI before the feature is released.
+The wrapper MUST be an object with exactly these three keys. `arvoeventdata` MUST be an object of JSON values, `arvoeventdataschema` MUST be a non-empty string, and `arvoeventbaggage` MUST be a flat map under ADR-001's definitions. The fixed CloudEvents `dataschema` URI identifies this wrapper shape; the nested `arvoeventdataschema` continues to identify the Arvo contract that applies specifically to `arvoeventdata`. A machine-readable representation of the wrapper schema SHOULD be developed alongside this ADR's implementation and published at `https://www.arvo.land/schemas/cloudevent-data/v1` before the feature is released.
 
 `baggage` is carried as a nested object, not a JSON-encoded string. String-encoding a value that already lives inside `data` — itself already an arbitrary JSON container — adds a second encoding step for no benefit; nothing about `data`'s type constrains its values to scalars the way an extension attribute does.
 
