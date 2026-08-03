@@ -110,9 +110,9 @@ export type ArvoEventParam<
   /**
    * The exact contract URI and version this event relates to. Required.
    *
-   * Must be a non-empty RFC 3986 URI-reference in canonical form — the same
-   * rule `source` follows (see its TSDoc for what "canonical" requires),
-   * including a fragment-only reference such as `#/contracts/user`.
+   * Same non-empty, canonical RFC 3986 URI-reference rule as `source` (see
+   * its TSDoc), including a fragment-only reference such as
+   * `#/contracts/user`.
    *
    * Where no contract governs the event yet, use `unknown/0.0.0` rather than
    * inventing a URI. It is greppable and cannot be mistaken for a real
