@@ -12,11 +12,15 @@ Nothing in the package points this out. `new ArvoEvent(...)` accepts a self-cons
 
 This isn't a defect in this change — `src/factory/` existing and eventually being fixed is exactly the mitigation, and the proposal already scopes propagation as a separate change. It's recorded here because it was the single largest source of friction in actually using the class, and because it sharpens what the propagation change needs to deliver: not just correct field values, but a shape that makes the wrong values hard to reach for. A factory that takes a parent event and computes `parentid`/`depth` from it, hiding these rules entirely, would remove nearly everything in this finding.
 
+**Accepted, and by design.** The factory methods are where this is fixed. `ArvoEvent` is a datatype: it validates its own domain and its own structure, and that is the whole of its scope. A data structure holds data; it holds no opinion about how it came to be constructed upstream. The friction described here is real and is the factory's problem to remove, not a signal that `ArvoEvent` should grow role-awareness.
+
 ## Finding 2 — Baggage divergence between a root and its child is not caught
 
 Constructed a root event with `baggage: { tenantId: 'acme', locale: 'en-US' }`, then a "child" event with `baggage: { tenantId: 'WRONG-TENANT' }`. Accepted without complaint.
 
 ADR-001 requires baggage to be written once, at the root, and copied forward unchanged by everything else — "no two branches can diverge" is stated as a direct consequence of the design. This capability's spec correctly does not enforce that (baggage *equality across events* is a propagation concern, not a structural one — a single event's baggage is valid in isolation regardless of what any other event in the workflow carries), so this is not a gap in `arvo-event`. It is exactly the shape of thing the propagation change needs to close, and it's worth that change explicitly listing "baggage on a non-root event must equal the root's" as a requirement, since it's the kind of rule that's easy to state and easy to forget to implement.
+
+**Accepted, and upstream.** This follows from `ArvoEvent` being a self-contained datatype: an event cannot know what any other event carries, so cross-event agreement cannot be its concern. It is also less exposed in practice than the finding implies. A developer using this package directly is creating and injecting the *root* event in the overwhelming majority of cases; child events are constructed by handlers, which own the propagation rules and are where baggage inheritance will actually be enforced. Hand-building a child event with divergent baggage is a shape that barely occurs outside a test.
 
 ## Finding 3 — A value with its own `toJSON()` is rejected, unlike `JSON.stringify`
 
@@ -55,6 +59,8 @@ ADR-001 describes the field as "the exact contract URI and version this event re
 
 Worth a clarifying line in ADR-001 (or its next revision) settling whether `dataschema` needs to parse as a URI, and if so, by which grammar (RFC 3986 is the obvious candidate, but even that has a permissive local-identifier reading). Until settled, this capability correctly implements the more permissive reading, since inventing a stricter rule the ADR didn't state would be settling a deferred decision in passing — exactly what `openspec/project.md`'s governance rules warn against.
 
+**Permissive reading confirmed, deliberately.** `ArvoEvent` must not be stricter than it already is, because this is not the layer that knows what a valid `dataschema` looks like. Correctness here comes from the factory being supplied a real `ArvoContract`, which can produce the value rather than merely check it — a contract-derived `dataschema` is right by construction, where a grammar check could only ever confirm it is URI-shaped. Both the factory and `ArvoContract` are outside this branch and outside `ArvoEvent`'s scope, so the non-emptiness rule stands as the correct behaviour for this layer rather than as a placeholder for a stricter one.
+
 ## Finding 5 — A TypeScript-optional property and a genuinely absent key look the same in types, not in the payload
 
 ```
@@ -65,6 +71,12 @@ new ArvoEvent<'t', Payload>({ ..., data: { orderId: '1' } }); // note omitted
 `'note' in event.data` is `false`. TypeScript's own type for `note` is `string | undefined` — a shape that, in ordinary TypeScript, is equally satisfied by the key being *present* with value `undefined` or *absent* entirely, and most code written against `note?: string` doesn't distinguish the two. The undefined-handling decision (D8 in `design.md`) is correct and deliberate — it exists specifically so payloads built from optional properties construct without friction — but it also means `'key' in data` and `data.key === undefined` are no longer interchangeable the way they usually are for an ordinary object literal a TypeScript developer just wrote by hand.
 
 Not a defect — this is exactly what D8 was for, verified working as designed. Recorded because it's a real, previously-undocumented edge of that decision's actual shape: `design.md` states *that* undefined is treated as absent, but doesn't mention this specific downstream consequence for a caller doing an existence check rather than an equality check. Worth a line in `design.md` or the TSDoc on `data` if this surprises someone in practice.
+
+**Accepted as low-risk.** The audience is TypeScript developers, who should anticipate this: the behaviour is `JSON.stringify`'s, and an event exists to be JSON. No change made.
+
+Two refinements from discussing it, neither altering that disposition. First, the finding slightly overstates its own case — for an ordinary object literal with a key simply omitted, `'k' in obj` is already `false` while `obj.k === undefined` is already `true`, so the two were never interchangeable in plain JavaScript either. The behaviour only diverges from an unwalked object when a caller writes `k: undefined` *explicitly* and then performs an `in` check, which is narrow.
+
+Second, and not raised by the original finding: the same input produces different payloads depending on `skipPayloadValidation`. With the walk, `{ note: undefined }` loses the key; with the walk skipped, `data` passes through untouched and keeps it. Both are defensible — trusted input is by definition already well formed — but it means the flag is not purely a performance switch, and a caller comparing a trusted event against a validated one built from identical input can see a key-set difference. Worth a line wherever `skipPayloadValidation` is documented.
 
 ## What worked without friction
 
