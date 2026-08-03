@@ -10,6 +10,7 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 
 - **Proposed**: Under review and not yet binding.
 - **Accepted**: Governs the architecture until superseded.
+- **Partially Superseded**: Some rules within this ADR have been replaced by a later ADR; the rest remains governing. The record itself states which.
 - **Superseded**: Replaced by a later ADR.
 - **Rejected**: Considered but not adopted.
 
@@ -18,5 +19,6 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | ADR | Title | Status |
 | --- | --- | --- |
 | [ADR-000](./000-arvo-system-identity-and-architectural-principles.md) | Arvo System Identity and Architectural Invariants | Accepted |
-| [ADR-001](./001-arvoevent-structure.md) | ArvoEvent Structure | Accepted |
-| [ADR-002](./002-arvoevent-cloudevent-transformation.md) | ArvoEvent–CloudEvent Transformation | Proposed |
+| [ADR-001](./001-arvoevent-structure.md) | ArvoEvent Structure | Partially Superseded |
+| [ADR-002](./002-arvoevent-field-domain-constraints.md) | ArvoEvent Field Domain Constraints | Proposed |
+| [ADR-003](./003-arvoevent-cloudevent-transformation.md) | ArvoEvent–CloudEvent Transformation | Proposed |

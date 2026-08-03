@@ -1,9 +1,11 @@
 # ADR-001: ArvoEvent Structure
 
-- **Status:** Accepted
+- **Status:** Partially Superseded
 - **Date:** 2026-08-01
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)
+
+> **Partially superseded.** [ADR-002](./002-arvoevent-field-domain-constraints.md) (2026-08-03) supersedes three rules in this ADR's Structural Validity section: `source`'s format is no longer unconstrained, string-valued fields now exclude a set of code points, and `executionunits`' number domain is now finite binary64 rather than unbounded. Every other rule below — the eighteen-field set, their types, defaults, remaining structural-validity rules, and propagation — remains exactly as accepted.
 
 Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-architectural-principles.md).
 
