@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  type ArvoEventValidationIssue,
   ArvoEventValidationError,
+  type ArvoEventValidationIssue,
 } from '../../src/ArvoEvent/errors.js';
 
 /**
@@ -201,7 +201,11 @@ describe('ArvoEventValidationError', () => {
     it('exposes every issue individually, not only in the message', () => {
       const issues: ArvoEventValidationIssue[] = [
         { path: 'subject', message: 'is required' },
-        { path: 'depth', message: 'must be a non-negative integer', received: -1 },
+        {
+          path: 'depth',
+          message: 'must be a non-negative integer',
+          received: -1,
+        },
       ];
       const error = new ArvoEventValidationError(issues);
       expect(error.issues).toHaveLength(2);

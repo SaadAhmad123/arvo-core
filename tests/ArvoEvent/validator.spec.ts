@@ -10,8 +10,10 @@ const required = () => ({
   dataschema: '#/contracts/test/1.0.0',
 });
 
-const pathsOf = (input: unknown, options?: { skipPayloadValidation?: boolean }) =>
-  validateArvoEvent(input, options).issues.map((issue) => issue.path);
+const pathsOf = (
+  input: unknown,
+  options?: { skipPayloadValidation?: boolean },
+) => validateArvoEvent(input, options).issues.map((issue) => issue.path);
 
 const messagesOf = (input: unknown) =>
   validateArvoEvent(input).issues.map((issue) => issue.message);
@@ -61,7 +63,9 @@ describe('validateArvoEvent', () => {
       expect(pathsOf({ ...required(), rootsubject: 'x' })).toContain(
         'rootsubject',
       );
-      expect(pathsOf({ ...required(), extensions: {} })).toContain('extensions');
+      expect(pathsOf({ ...required(), extensions: {} })).toContain(
+        'extensions',
+      );
     });
 
     it('rejects a casing typo rather than treating it as omitted', () => {
@@ -140,7 +144,14 @@ describe('validateArvoEvent', () => {
   });
 
   describe('required non-empty string fields', () => {
-    const fields = ['id', 'subject', 'executionid', 'source', 'type', 'dataschema'] as const;
+    const fields = [
+      'id',
+      'subject',
+      'executionid',
+      'source',
+      'type',
+      'dataschema',
+    ] as const;
 
     for (const field of fields) {
       it(`rejects ${field} when empty`, () => {
@@ -162,9 +173,10 @@ describe('validateArvoEvent', () => {
     });
 
     it('reports a present but wrong value with what was received', () => {
-      const issue = validateArvoEvent({ ...required(), subject: 42 }).issues.find(
-        (i) => i.path === 'subject',
-      );
+      const issue = validateArvoEvent({
+        ...required(),
+        subject: 42,
+      }).issues.find((i) => i.path === 'subject');
       expect(issue?.message).toContain('non-empty string');
       expect(issue?.received).toBe(42);
     });
@@ -175,9 +187,9 @@ describe('validateArvoEvent', () => {
 
     for (const field of fields) {
       it(`accepts ${field} as null`, () => {
-        expect(validateArvoEvent({ ...required(), [field]: null }).issues).toEqual(
-          [],
-        );
+        expect(
+          validateArvoEvent({ ...required(), [field]: null }).issues,
+        ).toEqual([]);
       });
 
       it(`rejects ${field} when empty`, () => {
@@ -292,9 +304,9 @@ describe('validateArvoEvent', () => {
       expect(
         pathsOf({ ...required(), executionunits: Number.POSITIVE_INFINITY }),
       ).toContain('executionunits');
-      expect(
-        pathsOf({ ...required(), executionunits: Number.NaN }),
-      ).toContain('executionunits');
+      expect(pathsOf({ ...required(), executionunits: Number.NaN })).toContain(
+        'executionunits',
+      );
     });
 
     it('rejects a non-number', () => {
@@ -417,7 +429,8 @@ describe('validateArvoEvent', () => {
 
     it('PERMITS initid on an event that is not a completion', () => {
       expect(
-        validateArvoEvent({ ...required(), parentid: 'p', initid: 'i1' }).issues,
+        validateArvoEvent({ ...required(), parentid: 'p', initid: 'i1' })
+          .issues,
       ).toEqual([]);
     });
 
@@ -445,9 +458,9 @@ describe('validateArvoEvent', () => {
 
   describe('payload delegation', () => {
     it('reports a payload failure at its path within data', () => {
-      expect(
-        pathsOf({ ...required(), data: { n: Number.NaN } }),
-      ).toEqual(['data.n']);
+      expect(pathsOf({ ...required(), data: { n: Number.NaN } })).toEqual([
+        'data.n',
+      ]);
     });
 
     it('reports a baggage failure at its path within baggage', () => {
@@ -514,13 +527,19 @@ describe('validateArvoEvent', () => {
 
     it('still enforces field rules', () => {
       expect(
-        pathsOf({ ...required(), subject: '' }, { skipPayloadValidation: true }),
+        pathsOf(
+          { ...required(), subject: '' },
+          { skipPayloadValidation: true },
+        ),
       ).toContain('subject');
     });
 
     it('still enforces unrecognised-key rejection', () => {
       expect(
-        pathsOf({ ...required(), nonsense: 1 }, { skipPayloadValidation: true }),
+        pathsOf(
+          { ...required(), nonsense: 1 },
+          { skipPayloadValidation: true },
+        ),
       ).toContain('nonsense');
     });
 
@@ -547,7 +566,9 @@ describe('validateArvoEvent', () => {
     });
 
     it('behaves as if unset when options are omitted entirely', () => {
-      expect(validateArvoEvent({ ...required(), data: { n: 1n } }).issues).toHaveLength(1);
+      expect(
+        validateArvoEvent({ ...required(), data: { n: 1n } }).issues,
+      ).toHaveLength(1);
     });
   });
 
@@ -584,7 +605,11 @@ describe('validateArvoEvent', () => {
     });
 
     it('names the rule and the value for every issue it reports', () => {
-      for (const issue of messagesOf({ ...required(), subject: 42, depth: -1 })) {
+      for (const issue of messagesOf({
+        ...required(),
+        subject: 42,
+        depth: -1,
+      })) {
         expect(issue.length).toBeGreaterThan(0);
       }
     });

@@ -12,7 +12,9 @@ describe('walkPayload', () => {
     it('rejects null', () => {
       const result = walkPayload(null, 'data');
       expect(pathsOf(result)).toEqual(['data']);
-      expect(messagesOf(result)[0]).toContain('must be an object of JSON values');
+      expect(messagesOf(result)[0]).toContain(
+        'must be an object of JSON values',
+      );
     });
 
     it('rejects undefined', () => {
@@ -63,11 +65,15 @@ describe('walkPayload', () => {
     });
 
     it('rejects Infinity', () => {
-      expect(walkPayload({ n: Number.POSITIVE_INFINITY }, 'data').issues).toHaveLength(1);
+      expect(
+        walkPayload({ n: Number.POSITIVE_INFINITY }, 'data').issues,
+      ).toHaveLength(1);
     });
 
     it('rejects -Infinity', () => {
-      expect(walkPayload({ n: Number.NEGATIVE_INFINITY }, 'data').issues).toHaveLength(1);
+      expect(
+        walkPayload({ n: Number.NEGATIVE_INFINITY }, 'data').issues,
+      ).toHaveLength(1);
     });
 
     it('rejects a bigint as a map value', () => {
@@ -117,7 +123,10 @@ describe('walkPayload', () => {
     });
 
     it('falls back to a generic name for an object with no constructor', () => {
-      const result = walkPayload({ o: Object.create(Object.create(null)) }, 'data');
+      const result = walkPayload(
+        { o: Object.create(Object.create(null)) },
+        'data',
+      );
       expect(messagesOf(result)[0]).toContain('object');
     });
 
@@ -324,7 +333,9 @@ describe('walkPayload', () => {
 
     it('freezes a nested array', () => {
       const result = walkPayload({ xs: [1, 2] }, 'data');
-      expect(Object.isFrozen((result.value as { xs: unknown[] }).xs)).toBe(true);
+      expect(Object.isFrozen((result.value as { xs: unknown[] }).xs)).toBe(
+        true,
+      );
     });
 
     it('freezes an object inside an array', () => {
