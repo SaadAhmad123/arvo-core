@@ -20,5 +20,5 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | --- | --- | --- |
 | [ADR-000](./000-arvo-system-identity-and-architectural-principles.md) | Arvo System Identity and Architectural Invariants | Accepted |
 | [ADR-001](./001-arvoevent-structure.md) | ArvoEvent Structure | Partially Superseded |
-| [ADR-002](./002-arvoevent-field-domain-constraints.md) | ArvoEvent Field Domain Constraints | Proposed |
+| [ADR-002](./002-arvoevent-field-domain-constraints.md) | ArvoEvent Field Domain Constraints | Accepted |
 | [ADR-003](./003-arvoevent-cloudevent-transformation.md) | ArvoEvent–CloudEvent Transformation | Proposed |

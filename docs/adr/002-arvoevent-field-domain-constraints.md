@@ -1,6 +1,6 @@
 # ADR-002: ArvoEvent Field Domain Constraints
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-03
 - **Scope:** Arvo ecosystem
 - **Supersedes in part:** ADR-001 — `source` and `dataschema` format; string-field character domain; `executionunits` number domain
