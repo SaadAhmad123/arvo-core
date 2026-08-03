@@ -23,6 +23,22 @@ export type ArvoEventFields = {
   executionunits: number | null;
 };
 
+/** Options accepted when constructing an {@link ArvoEvent} or parsing one. */
+export type ArvoEventValidationOptions = {
+  /**
+   * Skips the recursive walk of `data` and `baggage` — and the freeze that
+   * rides with it — for input already known to be well formed. Field and
+   * cross-field rules still run regardless.
+   *
+   * Two consequences. A payload holding something the walk would have
+   * rejected, such as a non-finite number, is admitted here and fails later
+   * at serialization instead. And `data` is passed through as given rather
+   * than normalized, so a key whose value is `undefined` survives, where the
+   * walk would have dropped it.
+   */
+  skipPayloadValidation?: boolean;
+};
+
 /**
  * Input shape for constructing an {@link ArvoEvent}. `subject`, `source`,
  * `type`, `data`, and `dataschema` are required; every other field is

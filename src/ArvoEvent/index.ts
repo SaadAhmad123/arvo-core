@@ -3,11 +3,8 @@ import type { FlatMap } from '../types.js';
 import type { ArvoEventValidationIssue } from './errors.js';
 import { ArvoEventValidationError } from './errors.js';
 import { traceContextFromSpan } from './opentelemetry.js';
-import type { ArvoEventParam } from './types.js';
-import {
-  type ArvoEventValidationOptions,
-  validateArvoEvent,
-} from './validator.js';
+import type { ArvoEventParam, ArvoEventValidationOptions } from './types.js';
+import { validateArvoEvent } from './validator.js';
 
 /**
  * The outcome of {@link ArvoEvent.safeParse}: the event on success, or every

@@ -3,7 +3,7 @@ import type { FlatMap, JSONObject } from '../types.js';
 import { createTimestamp } from '../utils.js';
 import type { ArvoEventValidationIssue } from './errors.js';
 import { walkFlatMap, walkPayload } from './json.js';
-import type { ArvoEventFields } from './types.js';
+import type { ArvoEventFields, ArvoEventValidationOptions } from './types.js';
 
 const KNOWN_FIELDS = [
   'id',
@@ -182,18 +182,6 @@ const checkCorrelationConstraint = (
         'an event whose category is io.arvo.complete must carry initid, naming the request it answers',
     });
   }
-};
-
-export type ArvoEventValidationOptions = {
-  /**
-   * Skips the recursive walk of `data` and `baggage` — and the freeze that
-   * rides with it — for input already known to be well formed. Field and
-   * cross-field rules still run regardless. A trusted event whose payload
-   * turns out to hold something the walk would have rejected, such as a
-   * non-finite number, is structurally invalid and will fail later, at
-   * serialization, rather than here.
-   */
-  skipPayloadValidation?: boolean;
 };
 
 /**
