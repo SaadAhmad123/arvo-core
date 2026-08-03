@@ -95,7 +95,13 @@ export type ArvoEventParam<
   type: T;
   /** This event's JSON-serializable payload. Required. */
   data: D;
-  /** The exact contract URI and version this event relates to. Required. */
+  /**
+   * The exact contract URI and version this event relates to. Required.
+   *
+   * Where no contract governs the event yet, use `unknown/0.0.0` rather than
+   * inventing a URI. It is greppable and cannot be mistaken for a real
+   * contract reference.
+   */
   dataschema: string;
   /**
    * Ambient context carried unchanged across the entire workflow: a flat map
