@@ -1,25 +1,25 @@
 ## 1. Character-domain check
 
-- [ ] 1.1 In `src/ArvoEvent/validator.ts`, add a helper that checks a non-empty string for the forbidden code points: C0 controls (U+0000–U+001F), `DEL` (U+007F), C1 controls (U+0080–U+009F), Unicode noncharacters (U+FDD0–U+FDEF and the last two code points of every plane), and unpaired UTF-16 surrogates — iterating by code point (`for...of` / `Array.from`), not by UTF-16 code unit, per `design.md`
-- [ ] 1.2 Return enough detail from the helper (the offending code point, or an indication of which class it violates) for the diagnostic message in step 3.2 to name it specifically
+- [x] 1.1 In `src/ArvoEvent/validator.ts`, add a helper that checks a non-empty string for the forbidden code points: C0 controls (U+0000–U+001F), `DEL` (U+007F), C1 controls (U+0080–U+009F), Unicode noncharacters (U+FDD0–U+FDEF and the last two code points of every plane), and unpaired UTF-16 surrogates — iterating by code point (`for...of` / `Array.from`), not by UTF-16 code unit, per `design.md`
+- [x] 1.2 Return enough detail from the helper (the offending code point, or an indication of which class it violates) for the diagnostic message in step 3.2 to name it specifically
 
 ## 2. URI-reference check
 
-- [ ] 2.1 In `src/ArvoEvent/validator.ts`, add a helper that checks a non-empty string against RFC 3986's `URI-reference` grammar, accepting a hierarchical path, a bare relative token, a fragment-only reference, and an absolute URI, and rejecting whitespace and raw non-ASCII byte sequences — do not use the platform `URL` constructor for this check; see `design.md` for why
-- [ ] 2.2 No normalization or rewriting: a value that satisfies the grammar passes through unchanged, and a value that does not fails construction rather than being percent-encoded into validity
+- [x] 2.1 In `src/ArvoEvent/validator.ts`, add a helper that checks a non-empty string against RFC 3986's `URI-reference` grammar, accepting a hierarchical path, a bare relative token, a fragment-only reference, and an absolute URI, and rejecting whitespace and raw non-ASCII byte sequences — do not use the platform `URL` constructor for this check; see `design.md` for why
+- [x] 2.2 No normalization or rewriting: a value that satisfies the grammar passes through unchanged, and a value that does not fails construction rather than being percent-encoded into validity
 
 ## 3. Validator integration
 
-- [ ] 3.1 In `src/ArvoEvent/validator.ts`, apply the character-domain check (task 1) to `id`, `parentid`, `initid`, `subject`, `executionid`, `category`, `source`, `to`, `domain`, `type`, `dataschema`, `traceparent`, and `tracestate`, skipping null values for the nullable fields among them
-- [ ] 3.2 **REPLACE** the comment `// traceparent and tracestate are deliberately unvalidated — no check here.` — they are no longer fully unvalidated; state precisely what's still unvalidated (format and content) versus what now applies (the character-domain check)
-- [ ] 3.3 Apply the URI-reference check (task 2) to `source` and `dataschema`, in addition to their existing non-empty-string check
-- [ ] 3.4 Confirm field-level failures still aggregate rather than stopping at the first one — both new checks report through the same `issues` array the existing checks already use
+- [x] 3.1 In `src/ArvoEvent/validator.ts`, apply the character-domain check (task 1) to `id`, `parentid`, `initid`, `subject`, `executionid`, `category`, `source`, `to`, `domain`, `type`, `dataschema`, `traceparent`, and `tracestate`, skipping null values for the nullable fields among them
+- [x] 3.2 **REPLACE** the comment `// traceparent and tracestate are deliberately unvalidated — no check here.` — they are no longer fully unvalidated; state precisely what's still unvalidated (format and content) versus what now applies (the character-domain check)
+- [x] 3.3 Apply the URI-reference check (task 2) to `source` and `dataschema`, in addition to their existing non-empty-string check
+- [x] 3.4 Confirm field-level failures still aggregate rather than stopping at the first one — both new checks report through the same `issues` array the existing checks already use
 
 ## 4. Execution units normalization
 
-- [ ] 4.1 In `src/ArvoEvent/validator.ts` (or wherever defaults are applied — see `design.md`), normalize a supplied `executionunits` of `-0` to `0` before the value is returned from `validateArvoEvent`
-- [ ] 4.2 Confirm this runs whether the event is constructed directly or admitted as plain data, since both paths share `validateArvoEvent`
-- [ ] 4.3 Update the doc comment on `checkExecutionUnits` (or wherever the domain is documented) to state the domain as finite IEEE 754 binary64, not merely "a finite number" — no new rejection behavior follows from this in a JavaScript runtime, only the documentation and the normalization in 4.1
+- [x] 4.1 In `src/ArvoEvent/validator.ts` (or wherever defaults are applied — see `design.md`), normalize a supplied `executionunits` of `-0` to `0` before the value is returned from `validateArvoEvent`
+- [x] 4.2 Confirm this runs whether the event is constructed directly or admitted as plain data, since both paths share `validateArvoEvent`
+- [x] 4.3 Update the doc comment on `checkExecutionUnits` (or wherever the domain is documented) to state the domain as finite IEEE 754 binary64, not merely "a finite number" — no new rejection behavior follows from this in a JavaScript runtime, only the documentation and the normalization in 4.1
 
 ## 5. Tests
 

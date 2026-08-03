@@ -52,7 +52,7 @@ const applyDefaults = (
   time: input.time ?? createTimestamp(),
   traceparent: input.traceparent ?? null,
   tracestate: input.tracestate ?? null,
-  executionunits: input.executionunits ?? null,
+  executionunits: normalizeExecutionUnits(input.executionunits ?? null),
 });
 
 const requireNonEmptyString = (
@@ -119,6 +119,12 @@ const checkTime = (
   }
 };
 
+/**
+ * Every finite JavaScript `number` is already IEEE 754 binary64, so this
+ * check is identical to plain finiteness in this runtime — the domain is
+ * stated explicitly for conformance across a future non-JS implementation,
+ * not because anything finite here could fail it.
+ */
 const checkExecutionUnits = (
   value: unknown,
   issues: ArvoEventValidationIssue[],
@@ -127,7 +133,130 @@ const checkExecutionUnits = (
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     issues.push({
       path: 'executionunits',
-      message: 'must be null or a finite number',
+      message: 'must be null or a finite IEEE 754 binary64 number',
+      received: value,
+    });
+  }
+};
+
+/** `-0` and `0` are never distinguished by ArvoEvent; normalize at the door. */
+const normalizeExecutionUnits = (value: unknown): unknown =>
+  typeof value === 'number' && Object.is(value, -0) ? 0 : value;
+
+const CHARACTER_DOMAIN_FIELDS = [
+  'id',
+  'parentid',
+  'initid',
+  'subject',
+  'executionid',
+  'category',
+  'source',
+  'to',
+  'domain',
+  'type',
+  'dataschema',
+  'traceparent',
+  'tracestate',
+] as const satisfies readonly (keyof ArvoEventFields)[];
+
+/**
+ * Finds the first code point in `value` that ArvoEvent's top-level string
+ * fields forbid: a C0 or C1 control character, `DEL`, a Unicode
+ * noncharacter, or an unpaired UTF-16 surrogate.
+ *
+ * Iterates by code point (`for...of`), not by UTF-16 code unit. JavaScript's
+ * string iterator combines a valid surrogate pair into the one supplementary
+ * code point it represents, and — critically — does not repair or replace a
+ * lone surrogate; it yields it as itself. So a single pass already
+ * distinguishes a valid pair from an unpaired half without any separate
+ * pairing logic.
+ */
+const findForbiddenCodePoint = (
+  value: string,
+): { codePoint: number } | null => {
+  for (const char of value) {
+    const codePoint = char.codePointAt(0) as number;
+    const isC0Control = codePoint <= 0x1f;
+    const isDelOrC1Control = codePoint >= 0x7f && codePoint <= 0x9f;
+    // U+FDD0–U+FDEF, plus the last two code points of every plane
+    // (U+xFFFE/U+xFFFF) — the low 16 bits being 0xFFFE or 0xFFFF is exactly
+    // that second set, regardless of which plane's high bits sit above them.
+    const isNoncharacter =
+      (codePoint >= 0xfdd0 && codePoint <= 0xfdef) ||
+      (codePoint & 0xfffe) === 0xfffe;
+    // A valid pair already combined into a supplementary code point above;
+    // anything still in this range arrived unpaired.
+    const isUnpairedSurrogate = codePoint >= 0xd800 && codePoint <= 0xdfff;
+    if (
+      isC0Control ||
+      isDelOrC1Control ||
+      isNoncharacter ||
+      isUnpairedSurrogate
+    ) {
+      return { codePoint };
+    }
+  }
+  return null;
+};
+
+const checkCharacterDomain = (
+  value: unknown,
+  path: string,
+  issues: ArvoEventValidationIssue[],
+): void => {
+  if (typeof value !== 'string' || value.length === 0) return;
+  const violation = findForbiddenCodePoint(value);
+  if (violation) {
+    const codePointHex = violation.codePoint
+      .toString(16)
+      .toUpperCase()
+      .padStart(4, '0');
+    issues.push({
+      path,
+      message: `must not contain U+${codePointHex} — control characters, Unicode noncharacters, and unpaired surrogates are forbidden`,
+      received: value,
+    });
+  }
+};
+
+// RFC 3986 URI-reference, built from the grammar's own productions rather
+// than a WHATWG URL check: the platform URL parser requires a base to
+// resolve a relative reference at all, and percent-encodes characters this
+// rule must reject instead of silently rewriting. IP-literal authorities
+// (bracketed IPv6 hosts) are not modeled — reg-name's character set already
+// covers every realistic Arvo source/dataschema identifier.
+const UNRESERVED = 'A-Za-z0-9\\-._~';
+const SUB_DELIMS = "!$&'()*+,;=";
+const PCT_ENCODED = '%[0-9A-Fa-f]{2}';
+const PCHAR = `(?:[${UNRESERVED}${SUB_DELIMS}:@]|${PCT_ENCODED})`;
+const USERINFO = `(?:[${UNRESERVED}${SUB_DELIMS}:]|${PCT_ENCODED})*`;
+const REG_NAME = `(?:[${UNRESERVED}${SUB_DELIMS}]|${PCT_ENCODED})*`;
+const AUTHORITY = `(?:${USERINFO}@)?${REG_NAME}(?::[0-9]*)?`;
+const SEGMENT = `${PCHAR}*`;
+const SEGMENT_NZ = `${PCHAR}+`;
+const SEGMENT_NZ_NC = `(?:[${UNRESERVED}${SUB_DELIMS}@]|${PCT_ENCODED})+`;
+const PATH_ABEMPTY = `(?:/${SEGMENT})*`;
+const PATH_ABSOLUTE = `/(?:${SEGMENT_NZ}(?:/${SEGMENT})*)?`;
+const PATH_NOSCHEME = `${SEGMENT_NZ_NC}(?:/${SEGMENT})*`;
+const PATH_ROOTLESS = `${SEGMENT_NZ}(?:/${SEGMENT})*`;
+const QUERY_OR_FRAGMENT = `(?:${PCHAR}|[/?])*`;
+const SCHEME = '[A-Za-z][A-Za-z0-9+\\-.]*';
+const HIER_PART = `(?://${AUTHORITY}${PATH_ABEMPTY}|${PATH_ABSOLUTE}|${PATH_ROOTLESS}|)`;
+const RELATIVE_PART = `(?://${AUTHORITY}${PATH_ABEMPTY}|${PATH_ABSOLUTE}|${PATH_NOSCHEME}|)`;
+const URI = `${SCHEME}:${HIER_PART}(?:\\?${QUERY_OR_FRAGMENT})?(?:#${QUERY_OR_FRAGMENT})?`;
+const RELATIVE_REF = `${RELATIVE_PART}(?:\\?${QUERY_OR_FRAGMENT})?(?:#${QUERY_OR_FRAGMENT})?`;
+const URI_REFERENCE = new RegExp(`^(?:${URI}|${RELATIVE_REF})$`);
+
+const checkUriReference = (
+  value: unknown,
+  path: string,
+  issues: ArvoEventValidationIssue[],
+): void => {
+  if (typeof value !== 'string' || value.length === 0) return;
+  if (!URI_REFERENCE.test(value)) {
+    issues.push({
+      path,
+      message: 'must be a valid RFC 3986 URI-reference',
       received: value,
     });
   }
@@ -235,7 +364,14 @@ export const validateArvoEvent = (
   requireNonEmptyString(candidate.dataschema, 'dataschema', issues);
   checkTime(candidate.time, issues);
   checkExecutionUnits(candidate.executionunits, issues);
-  // traceparent and tracestate are deliberately unvalidated — no check here.
+  checkUriReference(candidate.source, 'source', issues);
+  checkUriReference(candidate.dataschema, 'dataschema', issues);
+  // traceparent and tracestate remain unvalidated for format and content —
+  // only the character-domain check below, shared with every other
+  // top-level string field, applies to them.
+  for (const field of CHARACTER_DOMAIN_FIELDS) {
+    checkCharacterDomain(candidate[field], field, issues);
+  }
 
   checkRootConstraint(candidate, issues);
   checkCorrelationConstraint(candidate, issues);
