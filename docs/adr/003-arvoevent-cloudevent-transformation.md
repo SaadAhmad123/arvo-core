@@ -1,6 +1,6 @@
 # ADR-003: ArvoEvent–CloudEvent Transformation
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-03
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)
