@@ -81,7 +81,19 @@ export type ArvoEventParam<
    * non-negative integer. Defaults to `0` when omitted.
    */
   depth?: number;
-  /** Identifies the producer of this event. Required. */
+  /**
+   * Identifies the producer of this event. Required.
+   *
+   * Must be a non-empty, canonical RFC 3986 URI-reference: a hierarchical
+   * path (`api/users`), bare token (`order-service`), or absolute URI all
+   * work, but whitespace, raw non-ASCII bytes, a differently-cased
+   * scheme/host, an unresolved `.`/`..` segment, or non-canonical
+   * percent-encoding are all rejected rather than normalized for you —
+   * checked via [`fast-uri`](https://www.npmjs.com/package/fast-uri)'s
+   * `parse`/`serialize` round-trip. Stricter than every other ArvoEvent
+   * string field, which otherwise accepts any Unicode text outside a narrow
+   * set of control characters.
+   */
   source: string;
   /** The intended recipient of this event. Defaults to `null` when omitted. */
   to?: string;
@@ -97,6 +109,10 @@ export type ArvoEventParam<
   data: D;
   /**
    * The exact contract URI and version this event relates to. Required.
+   *
+   * Same non-empty, canonical RFC 3986 URI-reference rule as `source` (see
+   * its TSDoc), including a fragment-only reference such as
+   * `#/contracts/user`.
    *
    * Where no contract governs the event yet, use `unknown/0.0.0` rather than
    * inventing a URI. It is greppable and cannot be mistaken for a real

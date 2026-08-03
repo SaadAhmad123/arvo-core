@@ -127,6 +127,47 @@ describe('ArvoEvent', () => {
     });
   });
 
+  describe('URI-reference format', () => {
+    it.each(['source', 'dataschema'] as const)(
+      'accepts a hierarchical path for %s',
+      (field) => {
+        const param = { ...baseParam(), [field]: 'api/users' };
+        expect(() => new ArvoEvent(param)).not.toThrow();
+      },
+    );
+
+    it.each(['source', 'dataschema'] as const)(
+      'rejects whitespace in %s, naming the URI-reference rule',
+      (field) => {
+        const param = { ...baseParam(), [field]: 'not a uri reference' };
+        const issue = issuesOf(() => new ArvoEvent(param)).find(
+          (i) => i.path === field,
+        );
+        expect(issue?.message).toContain('URI-reference');
+      },
+    );
+  });
+
+  describe('character domain', () => {
+    it('rejects a control character in a required field, naming the offending code point', () => {
+      const param = { ...baseParam(), subject: 'order\u00071' };
+      const issue = issuesOf(() => new ArvoEvent(param)).find(
+        (i) => i.path === 'subject',
+      );
+      expect(issue?.message).toContain('U+0007');
+    });
+
+    it('rejects a control character in a nullable field', () => {
+      const param = { ...baseParam(), category: 'cat\u0007egory' };
+      expect(pathsOf(() => new ArvoEvent(param))).toContain('category');
+    });
+
+    it('does not apply to strings nested inside data', () => {
+      const param = { ...baseParam(), data: { note: 'x\u0007y' } };
+      expect(() => new ArvoEvent(param)).not.toThrow();
+    });
+  });
+
   describe('nullable string fields', () => {
     it.each(['parentid', 'initid', 'category', 'to', 'domain'] as const)(
       'accepts null for %s',
@@ -215,12 +256,23 @@ describe('ArvoEvent', () => {
         expect(pathsOf(() => new ArvoEvent(param))).toContain('executionunits');
       },
     );
+
+    it('normalizes negative zero to zero', () => {
+      const event = new ArvoEvent({ ...baseParam(), executionunits: -0 });
+      expect(event.executionunits).toBe(0);
+      expect(Object.is(event.executionunits, -0)).toBe(false);
+    });
   });
 
-  describe('trace fields are deliberately unvalidated', () => {
+  describe('trace fields are unvalidated beyond the character domain', () => {
     it('accepts any string for traceparent and tracestate, including an empty one', () => {
       const param = { ...baseParam(), traceparent: 'anything', tracestate: '' };
       expect(() => new ArvoEvent(param)).not.toThrow();
+    });
+
+    it('still rejects a forbidden code point in traceparent', () => {
+      const param = { ...baseParam(), traceparent: 'bad\u0007value' };
+      expect(pathsOf(() => new ArvoEvent(param))).toContain('traceparent');
     });
   });
 

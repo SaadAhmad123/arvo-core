@@ -1,3 +1,4 @@
+import fastUri from 'fast-uri';
 import { z } from 'zod';
 import type { FlatMap, JSONObject } from '../types.js';
 import { createTimestamp } from '../utils.js';
@@ -52,7 +53,7 @@ const applyDefaults = (
   time: input.time ?? createTimestamp(),
   traceparent: input.traceparent ?? null,
   tracestate: input.tracestate ?? null,
-  executionunits: input.executionunits ?? null,
+  executionunits: normalizeExecutionUnits(input.executionunits ?? null),
 });
 
 const requireNonEmptyString = (
@@ -119,6 +120,12 @@ const checkTime = (
   }
 };
 
+/**
+ * Every finite JavaScript `number` is already IEEE 754 binary64, so this
+ * check is identical to plain finiteness in this runtime — the domain is
+ * stated explicitly for conformance across a future non-JS implementation,
+ * not because anything finite here could fail it.
+ */
 const checkExecutionUnits = (
   value: unknown,
   issues: ArvoEventValidationIssue[],
@@ -127,7 +134,115 @@ const checkExecutionUnits = (
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     issues.push({
       path: 'executionunits',
-      message: 'must be null or a finite number',
+      message: 'must be null or a finite IEEE 754 binary64 number',
+      received: value,
+    });
+  }
+};
+
+/** `-0` and `0` are never distinguished by ArvoEvent; normalize at the door. */
+const normalizeExecutionUnits = (value: unknown): unknown =>
+  typeof value === 'number' && Object.is(value, -0) ? 0 : value;
+
+/** Every top-level string field subject to the character-domain restriction — see {@link findForbiddenCodePoint}. */
+const CHARACTER_DOMAIN_FIELDS = [
+  'id',
+  'parentid',
+  'initid',
+  'subject',
+  'executionid',
+  'category',
+  'source',
+  'to',
+  'domain',
+  'type',
+  'dataschema',
+  'traceparent',
+  'tracestate',
+] as const satisfies readonly (keyof ArvoEventFields)[];
+
+/**
+ * C0/C1 controls, `DEL`, and Unicode noncharacters are exactly the standard
+ * Unicode categories `\p{Cc}` and `\p{Noncharacter_Code_Point}` — native
+ * `RegExp` Unicode property escapes, tied to the engine's own Unicode
+ * Character Database rather than a hand-maintained range table.
+ *
+ * Unpaired surrogates need no property escape of their own: under the `u`
+ * flag the engine already matches by code point, combining a valid
+ * high/low pair into the one supplementary-plane token it represents. A
+ * bare `[\uD800-\uDFFF]` class therefore only ever matches a surrogate that
+ * arrived without its other half — a valid pair is never tokenized down to
+ * one of its individual code units for this class to see.
+ */
+const FORBIDDEN_CODE_POINT =
+  /[\p{Cc}\p{Noncharacter_Code_Point}\uD800-\uDFFF]/u;
+
+const findForbiddenCodePoint = (
+  value: string,
+): { codePoint: number } | null => {
+  const match = FORBIDDEN_CODE_POINT.exec(value);
+  return match ? { codePoint: match[0].codePointAt(0) as number } : null;
+};
+
+const checkCharacterDomain = (
+  value: unknown,
+  path: string,
+  issues: ArvoEventValidationIssue[],
+): void => {
+  if (typeof value !== 'string' || value.length === 0) return;
+  const violation = findForbiddenCodePoint(value);
+  if (violation) {
+    const codePointHex = violation.codePoint
+      .toString(16)
+      .toUpperCase()
+      .padStart(4, '0');
+    issues.push({
+      path,
+      message: `must not contain U+${codePointHex} — control characters, Unicode noncharacters, and unpaired surrogates are forbidden`,
+      received: value,
+    });
+  }
+};
+
+/**
+ * RFC 3986 URI-reference, delegated to `fast-uri` rather than hand-rolled:
+ * writing and maintaining a correct grammar is exactly the kind of general,
+ * non-Arvo-specific parsing concern this package's dependency conventions
+ * favor reusing over reimplementing.
+ *
+ * `fast-uri`'s own `parse`/`serialize` are lenient by design — malformed
+ * input is percent-encoded into validity rather than rejected, which is
+ * the opposite of what this rule needs (a producer's invalid value must
+ * fail construction, not be silently rewritten). Round-tripping through
+ * both and requiring an exact match turns that leniency into a rejection:
+ * anything `serialize(parse(value))` had to change to make valid was not
+ * already valid.
+ *
+ * The one accepted cost: `serialize` also canonicalizes case-insensitive
+ * components (scheme, host) and resolves dot-segments, so a small set of
+ * inputs that are grammatically valid but not already in canonical form —
+ * an uppercase scheme, an unresolved `./`/`../` segment — are rejected
+ * too, stricter than the bare grammar requires. Neither is a shape a
+ * producer chooses deliberately for a `source` or `dataschema` identifier,
+ * and the rejection is reported with the same diagnostic quality as any
+ * other rule, so it is correctable rather than silently wrong.
+ */
+const isUriReference = (value: string): boolean => {
+  const parsed = fastUri.parse(value);
+  if ('error' in parsed) return false;
+  return fastUri.serialize(parsed) === value;
+};
+
+const checkUriReference = (
+  value: unknown,
+  path: string,
+  issues: ArvoEventValidationIssue[],
+): void => {
+  if (typeof value !== 'string' || value.length === 0) return;
+  if (!isUriReference(value)) {
+    issues.push({
+      path,
+      message: 'must be a valid RFC 3986 URI-reference',
       received: value,
     });
   }
@@ -235,7 +350,14 @@ export const validateArvoEvent = (
   requireNonEmptyString(candidate.dataschema, 'dataschema', issues);
   checkTime(candidate.time, issues);
   checkExecutionUnits(candidate.executionunits, issues);
-  // traceparent and tracestate are deliberately unvalidated — no check here.
+  checkUriReference(candidate.source, 'source', issues);
+  checkUriReference(candidate.dataschema, 'dataschema', issues);
+  // traceparent and tracestate remain unvalidated for format and content —
+  // only the character-domain check below, shared with every other
+  // top-level string field, applies to them.
+  for (const field of CHARACTER_DOMAIN_FIELDS) {
+    checkCharacterDomain(candidate[field], field, issues);
+  }
 
   checkRootConstraint(candidate, issues);
   checkCorrelationConstraint(candidate, issues);
