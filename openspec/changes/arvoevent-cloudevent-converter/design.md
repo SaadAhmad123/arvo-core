@@ -49,10 +49,18 @@ class CloudEventConverter {
   constructor(transformer?: IArvoEventTransformer, converters?: ICloudEventConverter[]);
   async tryConvert(data: ArvoEvent): AsyncResult<CloudEvent, CloudEventTransformationError>;
   async convert(data: ArvoEvent): Promise<CloudEvent>;
-  async tryRevert(data: CloudEvent, foreignFallback?: ForeignCloudEventFallback): AsyncResult<ArvoEvent, CloudEventTransformationError>;
-  async revert(data: CloudEvent, foreignFallback?: ForeignCloudEventFallback): Promise<ArvoEvent>;
+  async tryRevert<T extends string = string, D extends Record<string, any> = Record<string, any>>(
+    data: CloudEvent,
+    foreignFallback?: ForeignCloudEventFallback,
+  ): AsyncResult<ArvoEvent<T, D>, CloudEventTransformationError>;
+  async revert<T extends string = string, D extends Record<string, any> = Record<string, any>>(
+    data: CloudEvent,
+    foreignFallback?: ForeignCloudEventFallback,
+  ): Promise<ArvoEvent<T, D>>;
 }
 ```
+
+`tryRevert`/`revert` take `T`/`D` type parameters, exactly matching `ArvoEvent.parse`/`ArvoEvent.tryParse`'s own shape — a caller who already knows which contract a CloudEvent belongs to asserts it at the call site (`converter.revert<'order.created', OrderPayload>(ce, fallback)`) rather than always getting back the unnarrowable default `ArvoEvent<string, Record<string, any>>`. This is a compile-time assertion only, identical in kind to `ArvoEvent.parse<T, D>()`'s own — nothing here validates that the resulting event's `data` actually matches `D`; a caller asserting the wrong type gets a wrongly-typed but still structurally-valid `ArvoEvent`, the same trade-off `ArvoEvent.parse` already makes. Real, contract-backed validation of `data` against `D` remains `ArvoContract`'s job, applied after `revert` returns — this only removes the friction of the default being unnarrowable even when the caller already knows better. `convert`/`tryConvert` stay non-generic: their input is already a caller-typed `ArvoEvent`, and their output type is `CloudEvent`, which has no equivalent `T`/`D` to narrow.
 
 `new CloudEventConverter()` with no arguments wires in the base field-placement mapping as `transformer` and an empty enrichment list — most consumers never need to know the extensibility exists. A consumer who wants to append a CloudEvent-to-CloudEvent enrichment stage supplies `converters`; `tryConvert` runs `transformer.convert` first, then every appended stage forward, in order; `tryRevert` unwinds appended stages in reverse order, then runs `transformer.revert` last.
 

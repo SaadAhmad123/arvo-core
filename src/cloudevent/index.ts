@@ -94,11 +94,9 @@ export class CloudEventConverter {
    * Converts an ArvoEvent to a CloudEvent, reporting the outcome as a value
    * rather than throwing.
    *
-   * The standard mapping itself cannot fail. If you supplied your own
-   * `converters` and one of them throws, that failure is reported as
-   * `result.error.detail.kind === 'stage'`, naming which stage
-   * (`stageIndex`, counting `transformer` as `0` and each `converters`
-   * entry from `1`) and carrying whatever it threw as `cause`.
+   * The standard mapping can't fail; a `converters` stage throwing reports
+   * as `result.error.detail.kind === 'stage'`, naming `stageIndex`
+   * (`transformer` is `0`, `converters` entries from `1`) and `cause`.
    *
    * @example
    * ```typescript
@@ -152,27 +150,24 @@ export class CloudEventConverter {
    * Reverts a CloudEvent to an ArvoEvent, reporting the outcome as a value
    * rather than throwing.
    *
-   * A CloudEvent produced by this converter (or claiming to be one) is
-   * reversed strictly: every field must decode correctly, or the whole
-   * CloudEvent is rejected as `result.error.detail.kind === 'strict'`. A
-   * CloudEvent claiming no ArvoEvent shape at all is instead adapted as a
-   * foreign event (`result.error.detail.kind === 'foreign'` on failure),
-   * using `foreignFallback` to supply whatever it can't recover from the
-   * CloudEvent itself. If you supplied your own `converters` and one of
-   * them throws while unwinding, that failure is reported as
-   * `result.error.detail.kind === 'stage'`.
+   * An Arvo-shaped CloudEvent is reversed strictly (`'strict'` on failure);
+   * one claiming no ArvoEvent shape is adapted as foreign instead, using
+   * `foreignFallback` for whatever it can't recover (`'foreign'` on
+   * failure). A `converters` stage throwing while unwinding reports as
+   * `'stage'` — check `result.error.detail.kind`.
    *
-   * @param foreignFallback - Values to use for a foreign CloudEvent's
-   * missing fields — `dataschema` is always required, since it can never be
-   * recovered from the foreign CloudEvent itself. Ignored when reverting a
-   * CloudEvent that already carries ArvoEvent shape, whose own fields are
-   * always authoritative.
+   * @param foreignFallback - Values for a foreign CloudEvent's missing
+   * fields; `dataschema` is always required, since it's never recoverable
+   * from the CloudEvent itself. Ignored once a CloudEvent already carries
+   * ArvoEvent shape. `source`/`dataschema` — from the CloudEvent or here —
+   * must already be in `ArvoEvent`'s own exact RFC 3986 canonical form; a
+   * valid but non-canonical URI (e.g. `https://example.com`, no trailing
+   * path) is rejected, not normalized.
    *
    * @example
-   * `data` must be a real `CloudEvent` instance, not a plain object — if
-   * you have one (say, parsed from an HTTP body or a queue message),
-   * construct it with `strict: false` first so its own conformance check
-   * doesn't reject a foreign shape this method is about to adapt anyway:
+   * A plain object needs wrapping first — `new CloudEvent(data, false)`
+   * skips conformance checking, which would otherwise reject the very
+   * foreign shape this method is about to adapt:
    * ```typescript
    * const cloudEvent = new CloudEvent(plainObjectFromWire, false);
    * const result = await converter.tryRevert(cloudEvent, { dataschema: 'my-contract/1.0.0' });
@@ -183,10 +178,13 @@ export class CloudEventConverter {
    * }
    * ```
    */
-  async tryRevert(
+  async tryRevert<
+    T extends string = string,
+    D extends Record<string, any> = Record<string, any>,
+  >(
     data: CloudEvent,
     foreignFallback?: ForeignCloudEventFallback,
-  ): AsyncResult<ArvoEvent, CloudEventTransformationError> {
+  ): AsyncResult<ArvoEvent<T, D>, CloudEventTransformationError> {
     const stages: readonly AnyStage[] = [this.transformer, ...this.converters];
     const chain = stages.reduceRight<
       ResultAsync<unknown, CloudEventTransformationError>
@@ -203,7 +201,7 @@ export class CloudEventConverter {
       okAsync<unknown, CloudEventTransformationError>(data),
     );
     return fromNeverthrowAsync(
-      chain as ResultAsync<ArvoEvent, CloudEventTransformationError>,
+      chain as ResultAsync<ArvoEvent<T, D>, CloudEventTransformationError>,
     );
   }
 
@@ -211,21 +209,24 @@ export class CloudEventConverter {
    * Reverts a CloudEvent to an ArvoEvent, throwing on failure.
    *
    * @param foreignFallback - See {@link tryRevert}.
-   * @throws {CloudEventTransformationError} If the CloudEvent cannot be
-   * reverted — see {@link tryRevert} for the distinct failure cases.
+   * @throws {CloudEventTransformationError} See {@link tryRevert} for the
+   * distinct failure cases.
    *
    * @example
-   * As with {@link tryRevert}, a plain object needs wrapping first:
+   * A plain object needs wrapping first, as in {@link tryRevert}:
    * ```typescript
    * const cloudEvent = new CloudEvent(plainObjectFromWire, false);
    * const arvoEvent = await converter.revert(cloudEvent, { dataschema: 'my-contract/1.0.0' });
    * ```
    */
-  async revert(
+  async revert<
+    T extends string = string,
+    D extends Record<string, any> = Record<string, any>,
+  >(
     data: CloudEvent,
     foreignFallback?: ForeignCloudEventFallback,
-  ): Promise<ArvoEvent> {
-    const result = await this.tryRevert(data, foreignFallback);
+  ): Promise<ArvoEvent<T, D>> {
+    const result = await this.tryRevert<T, D>(data, foreignFallback);
     if (result.ok) return result.value;
     throw result.error;
   }
