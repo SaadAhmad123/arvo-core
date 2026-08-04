@@ -93,6 +93,18 @@ This governs the package's **public export surface** — what `src/index.ts` re-
 
 Errors are human-facing. Every thrown error names what failed, the value involved, and the rule violated, and preserves the underlying cause. Generic messages such as "invalid input" are not acceptable — a reader should be able to correct the problem from the message alone without opening the source.
 
+### Result types and the `try`-prefix convention
+
+Every fallible operation is implemented exactly once, as `tryX`, returning a `Result<R, E>` — or `AsyncResult<R, E>`, an alias for `Promise<Result<R, E>>`, for an asynchronous one. `tryX` is the primitive. Every branch, every case, every piece of validation or failure logic lives there and nowhere else.
+
+`X` — the same name without the prefix — is a thin wrapper with no logic of its own: it calls `tryX` and unwraps the result, returning the success value or throwing the failure. It exists for a caller who wants ordinary throw/catch and does not want to reason about `Result`. Two names, one implementation. `X` is derived from `tryX`; `tryX` is never derived from `X`.
+
+This governs the whole of `arvo-core`'s public surface, not any one function. Before writing something that can fail, decide which of the two it is — there is no third shape. A bespoke `{ success, value } | { success: false, error }` object, hand-rolled per function, is the two-mechanisms-doing-the-same-job problem *Dependencies and reuse* already warns against, recreated at the API-shape level instead of the implementation level.
+
+A constructor cannot be `tryX` — it cannot return a `Result`, only build the instance or throw. A class's throwing entry point is therefore a static `X` method delegating to a static `tryX`, not `new`. Where a constructor is kept for ergonomics, it holds no logic of its own either, for the same reason `X` does not: it is `tryX` unwrapped, or it is called only internally once `tryX` has already succeeded.
+
+Which library supplies `Result`/`AsyncResult` is an implementation detail, decided and recorded per change under *Dependencies and reuse* — not fixed here. The aliases themselves live in `src/types.ts`, alongside the package's other shared value types.
+
 ### Validation
 
 Runtime validation is not optional, and compile-time types do not substitute for it. ADR-000 is explicit that types cannot establish validity across independently deployed, external, or cross-language participants.
