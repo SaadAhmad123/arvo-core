@@ -54,18 +54,10 @@ const readWrapperObject = (
   return value as Record<string, unknown>;
 };
 
-/** Strict Arvo-shaped decoding: every condition is checked individually, and all of them, not just the first failure, are reported together. */
-export const decodeStrict = (data: CloudEvent): Decoded => {
-  const issues: ArvoEventValidationIssue[] = [];
-  const raw = data as unknown as Record<string, unknown>;
-  const candidate: Record<string, unknown> = {
-    id: data.id,
-    source: data.source,
-    type: data.type,
-  };
-  const depthCodec = new DepthCodec();
-  const executionUnitsCodec = new ExecutionUnitsCodec();
-
+const checkSpecVersion = (
+  data: CloudEvent,
+  issues: ArvoEventValidationIssue[],
+): void => {
   if (data.specversion !== SPEC_VERSION) {
     issues.push({
       path: 'specversion',
@@ -73,29 +65,39 @@ export const decodeStrict = (data: CloudEvent): Decoded => {
       received: data.specversion,
     });
   }
+};
 
-  const parsedContentType = parseDataContentType(data.datacontenttype);
-  if (parsedContentType?.mediaType !== ARVO_MEDIA_TYPE) {
+const checkDataContentType = (
+  data: CloudEvent,
+  issues: ArvoEventValidationIssue[],
+): void => {
+  const parsed = parseDataContentType(data.datacontenttype);
+  if (parsed?.mediaType !== ARVO_MEDIA_TYPE) {
     issues.push({
       path: 'datacontenttype',
       message: `must have media type "${ARVO_MEDIA_TYPE}"`,
       received: data.datacontenttype,
     });
-  } else {
-    const paramNames = Object.keys(parsedContentType.params);
-    const carriesOnlyVersion1 =
-      paramNames.length === 1 &&
-      paramNames[0] === 'version' &&
-      parsedContentType.params.version === '1';
-    if (!carriesOnlyVersion1) {
-      issues.push({
-        path: 'datacontenttype',
-        message: 'must carry exactly one parameter, version=1, and no others',
-        received: data.datacontenttype,
-      });
-    }
+    return;
   }
+  const paramNames = Object.keys(parsed.params);
+  const carriesOnlyVersion1 =
+    paramNames.length === 1 &&
+    paramNames[0] === 'version' &&
+    parsed.params.version === '1';
+  if (!carriesOnlyVersion1) {
+    issues.push({
+      path: 'datacontenttype',
+      message: 'must carry exactly one parameter, version=1, and no others',
+      received: data.datacontenttype,
+    });
+  }
+};
 
+const checkDataSchema = (
+  data: CloudEvent,
+  issues: ArvoEventValidationIssue[],
+): void => {
   if (data.dataschema !== DATA_SCHEMA) {
     issues.push({
       path: 'dataschema',
@@ -103,52 +105,73 @@ export const decodeStrict = (data: CloudEvent): Decoded => {
       received: data.dataschema,
     });
   }
+};
 
-  candidate.subject = readString(raw, 'subject', true, issues);
-  candidate.time = readString(raw, 'time', true, issues);
-  candidate.traceparent = readString(raw, 'traceparent', false, issues);
-  candidate.tracestate = readString(raw, 'tracestate', false, issues);
-  candidate.parentid = readString(raw, 'arvoparentid', false, issues);
-  candidate.initid = readString(raw, 'arvoinitid', false, issues);
-  candidate.executionid = readString(raw, 'arvoexecutionid', true, issues);
-  candidate.category = readString(raw, 'arvocategory', false, issues);
-  candidate.to = readString(raw, 'arvoto', false, issues);
-  candidate.domain = readString(raw, 'arvodomain', false, issues);
+/** Every scalar Arvo/tracing extension, decoded via the shared `readString` rule — one field each, in the same order the strict path has always checked them in. */
+const decodeScalarFields = (
+  raw: Record<string, unknown>,
+  issues: ArvoEventValidationIssue[],
+): Record<string, unknown> => ({
+  subject: readString(raw, 'subject', true, issues),
+  time: readString(raw, 'time', true, issues),
+  traceparent: readString(raw, 'traceparent', false, issues),
+  tracestate: readString(raw, 'tracestate', false, issues),
+  parentid: readString(raw, 'arvoparentid', false, issues),
+  initid: readString(raw, 'arvoinitid', false, issues),
+  executionid: readString(raw, 'arvoexecutionid', true, issues),
+  category: readString(raw, 'arvocategory', false, issues),
+  to: readString(raw, 'arvoto', false, issues),
+  domain: readString(raw, 'arvodomain', false, issues),
+});
 
-  if ('arvodepth' in raw) {
-    const encoded = raw.arvodepth;
-    const decoded =
-      typeof encoded === 'string' ? depthCodec.decode(encoded) : null;
-    if (decoded === null) {
-      issues.push({
-        path: 'arvodepth',
-        message:
-          'must be the canonical unsigned-decimal encoding of a non-negative integer',
-        received: encoded,
-      });
-    } else {
-      candidate.depth = decoded;
-    }
-  } else {
+const decodeDepth = (
+  raw: Record<string, unknown>,
+  issues: ArvoEventValidationIssue[],
+  codec: DepthCodec,
+): number | undefined => {
+  if (!('arvodepth' in raw)) {
     issues.push({ path: 'arvodepth', message: 'is required' });
+    return undefined;
   }
-
-  if ('arvoexecutionunits' in raw) {
-    const encoded = raw.arvoexecutionunits;
-    const decoded =
-      typeof encoded === 'string' ? executionUnitsCodec.decode(encoded) : null;
-    if (decoded === null) {
-      issues.push({
-        path: 'arvoexecutionunits',
-        message:
-          'must be the canonical numeric-string encoding of a finite binary64 value',
-        received: encoded,
-      });
-    } else {
-      candidate.executionunits = decoded;
-    }
+  const encoded = raw.arvodepth;
+  const decoded = typeof encoded === 'string' ? codec.decode(encoded) : null;
+  if (decoded === null) {
+    issues.push({
+      path: 'arvodepth',
+      message:
+        'must be the canonical unsigned-decimal encoding of a non-negative integer',
+      received: encoded,
+    });
+    return undefined;
   }
+  return decoded;
+};
 
+const decodeExecutionUnits = (
+  raw: Record<string, unknown>,
+  issues: ArvoEventValidationIssue[],
+  codec: ExecutionUnitsCodec,
+): number | undefined => {
+  if (!('arvoexecutionunits' in raw)) return undefined;
+  const encoded = raw.arvoexecutionunits;
+  const decoded = typeof encoded === 'string' ? codec.decode(encoded) : null;
+  if (decoded === null) {
+    issues.push({
+      path: 'arvoexecutionunits',
+      message:
+        'must be the canonical numeric-string encoding of a finite binary64 value',
+      received: encoded,
+    });
+    return undefined;
+  }
+  return decoded;
+};
+
+/** Unwraps `data`'s three members, reporting the wrapper's own shape violations (not an object, wrong key set) plus each member's own via `readString`/`readWrapperObject`. */
+const decodeWrapper = (
+  data: CloudEvent,
+  issues: ArvoEventValidationIssue[],
+): Record<string, unknown> => {
   const wrapper = data.data;
   if (
     wrapper === null ||
@@ -160,32 +183,56 @@ export const decodeStrict = (data: CloudEvent): Decoded => {
       message: `must be an object carrying exactly ${WRAPPER_KEYS.join(', ')}`,
       received: wrapper,
     });
-  } else {
-    const wrapperRecord = wrapper as Record<string, unknown>;
-    const extraKeys = Object.keys(wrapperRecord).filter(
-      (key) => !(WRAPPER_KEYS as readonly string[]).includes(key),
-    );
-    if (extraKeys.length > 0) {
-      issues.push({
-        path: 'data',
-        message: `must not carry keys other than ${WRAPPER_KEYS.join(', ')} (found: ${extraKeys.join(', ')})`,
-        received: extraKeys,
-      });
-    }
-    candidate.data = readWrapperObject(wrapperRecord, 'arvoeventdata', issues);
-    candidate.dataschema = readString(
+    return {};
+  }
+
+  const wrapperRecord = wrapper as Record<string, unknown>;
+  const extraKeys = Object.keys(wrapperRecord).filter(
+    (key) => !(WRAPPER_KEYS as readonly string[]).includes(key),
+  );
+  if (extraKeys.length > 0) {
+    issues.push({
+      path: 'data',
+      message: `must not carry keys other than ${WRAPPER_KEYS.join(', ')} (found: ${extraKeys.join(', ')})`,
+      received: extraKeys,
+    });
+  }
+
+  return {
+    data: readWrapperObject(wrapperRecord, 'arvoeventdata', issues),
+    dataschema: readString(
       wrapperRecord,
       'arvoeventdataschema',
       true,
       issues,
       'data.arvoeventdataschema',
-    );
-    candidate.baggage = readWrapperObject(
-      wrapperRecord,
-      'arvoeventbaggage',
+    ),
+    baggage: readWrapperObject(wrapperRecord, 'arvoeventbaggage', issues),
+  };
+};
+
+/** Strict Arvo-shaped decoding: every condition is checked individually, and all of them, not just the first failure, are reported together. */
+export const decodeStrict = (data: CloudEvent): Decoded => {
+  const issues: ArvoEventValidationIssue[] = [];
+  const raw = data as unknown as Record<string, unknown>;
+
+  checkSpecVersion(data, issues);
+  checkDataContentType(data, issues);
+  checkDataSchema(data, issues);
+
+  const candidate: Record<string, unknown> = {
+    id: data.id,
+    source: data.source,
+    type: data.type,
+    ...decodeScalarFields(raw, issues),
+    depth: decodeDepth(raw, issues, new DepthCodec()),
+    executionunits: decodeExecutionUnits(
+      raw,
       issues,
-    );
-  }
+      new ExecutionUnitsCodec(),
+    ),
+    ...decodeWrapper(data, issues),
+  };
 
   return { candidate, issues };
 };

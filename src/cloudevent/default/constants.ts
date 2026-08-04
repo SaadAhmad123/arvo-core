@@ -12,4 +12,4 @@ export const WRAPPER_KEYS = [
 ] as const;
 
 /** `arvodepth`'s canonical unsigned-decimal grammar: no sign, leading zero, decimal point, or exponent. */
-export const DEPTH_GRAMMAR = /^(0|[1-9][0-9]*)$/;
+export const DEPTH_GRAMMAR = /^(0|[1-9]\d*)$/;
