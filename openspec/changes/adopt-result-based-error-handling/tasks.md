@@ -36,5 +36,5 @@
 
 ## 6. Close out
 
-- [ ] 6.1 `pnpm lint`, `pnpm test`, `pnpm build` — `src/factory/`'s pre-existing, out-of-scope failure is the only expected non-clean result, same as the prior change
-- [ ] 6.2 `openspec validate adopt-result-based-error-handling --strict`
+- [x] 6.1 `pnpm lint` clean (27 files). `pnpm test`: 414 pass, the same 18 pre-existing `src/factory/` tests fail (`rootsubject`/missing `dataschema`), unrelated to and unaffected by this change. `pnpm build` fails only on the same 4 pre-existing `src/factory/` type errors. No new failures anywhere.
+- [x] 6.2 `openspec validate adopt-result-based-error-handling --strict` passes
