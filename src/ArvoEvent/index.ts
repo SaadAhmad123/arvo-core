@@ -117,21 +117,17 @@ export class ArvoEvent<
   }
 
   /**
-   * Constructs an event, throwing on structural failure. A one-line delegate
-   * to `new ArvoEvent(...)`, kept alongside {@link tryParse} for symmetry —
-   * scanning this class's static methods finds both without needing to
-   * already know `new` is the throwing entry point.
+   * Constructs an event, throwing on structural failure.
    *
    * @throws {ArvoEventValidationError} If `param` fails structural validation.
    */
   static parse<
     T extends string = string,
     D extends Record<string, any> = Record<string, any>,
-  >(
-    param: ArvoEventParam<T, D>,
-    options?: ArvoEventValidationOptions,
-  ): ArvoEvent<T, D> {
-    return new ArvoEvent<T, D>(param, options);
+  >(param: unknown, options?: ArvoEventValidationOptions): ArvoEvent<T, D> {
+    const result = ArvoEvent.tryParse<T, D>(param, options);
+    if (result.ok) return result.value;
+    throw result.error;
   }
 
   /**

@@ -18,15 +18,11 @@ The constraint that shapes this change: the convention states a constructor cann
 
 ## Decisions
 
-### The constructor keeps the logic; `tryParse` wraps it
+### The constructor keeps the logic; `tryParse` wraps it; `parse` wraps `tryParse`
 
-`new ArvoEvent(param, options)` is unchanged: it still calls `validateArvoEvent` directly and throws `ArvoEventValidationError` on failure. It is not touched by this change at all beyond its call sites gaining two static siblings.
+`new ArvoEvent(param, options)` keeps the real logic: it still calls `validateArvoEvent` directly and throws `ArvoEventValidationError` on failure. `tryParse` wraps the constructor directly — it remains the one primitive both static methods ultimately rest on.
 
 ```
-static parse(param, options) {
-  return new ArvoEvent(param, options);
-}
-
 static tryParse(input, options) {
   try {
     return ok(new ArvoEvent(input, options));
@@ -35,13 +31,23 @@ static tryParse(input, options) {
     throw error;
   }
 }
+
+static parse(param, options) {
+  const result = tryParse(param, options);
+  if (result.ok) return result.value;
+  throw result.error;
+}
 ```
 
-`parse` is a one-line delegate, kept only so a consumer scanning `ArvoEvent`'s static methods finds `parse`/`tryParse` as a matched pair without needing to already know `new` is the real throwing entry point.
+`parse` wraps `tryParse`, not the constructor, so the two are an exact matched pair — identical `(input: unknown, options?)` signature, `parse` carrying no logic beyond the unwrap. It also inherits `tryParse`'s non-`ArvoEventValidationError` re-throw for free, below, rather than needing its own copy of that check.
+
+This costs something real: `parse`'s parameter was `ArvoEventParam<T, D>` in the first draft, giving compile-time field-name checking at the call site — the common case, a developer constructing an event whose shape they already know. `unknown` gives that up; every call now leans on the same runtime validation `tryParse` already required for its genuinely-untyped use case (replay, foreign producers). Accepted because the convention's point is that `parse` and `tryParse` are one operation exposed two ways, and two different parameter types only half delivered on that.
 
 The non-`ArvoEventValidationError` re-throw in `tryParse` is deliberate: a `Result`'s error channel represents an expected, typed failure mode — a malformed event — not an arbitrary bug. Swallowing every exception into `Err` would make `tryParse` lie about what kind of failure occurred, and would hide a real defect (a `TypeError` from a caller's own broken `toJSON`, for instance) behind the same channel as an ordinary validation failure.
 
-**Alternative rejected:** making `tryParse` the primitive, with the constructor calling it internally and throwing on `Err`, `parse` degraded to an unwrap around `tryParse`. This was the first draft. Rejected because it requires either a second, non-validating constructor path (added complexity for no behavioral gain) or a validation pass structured to run before the constructor can use it, when the constructor already validates perfectly well on its own. It also fights the shape of what a constructor already is, rather than using it.
+**Alternative rejected, and still rejected:** the constructor calling `tryParse` internally and throwing on `Err`. This is the one piece of the original first draft that still doesn't hold — it requires either a second, non-validating constructor path or a validation pass structured to run before the constructor can use it, when the constructor already validates perfectly well on its own. It fights the shape of what a constructor already is, rather than using it. The constructor remains untouched and is still where `validateArvoEvent` actually runs.
+
+**Reconsidered, and adopted:** `parse` built as an unwrap around `tryParse`, rather than an independent direct wrapper around the constructor. The first draft rejected this bundled with the constructor question above, but the reasoning that rejects the constructor question doesn't apply here — the constructor is untouched either way, and `parse`/`tryParse` were already behaviorally identical, both ultimately just constructing and observing whether it throws. The only real question was which of the two thin wrappers depends on the other, and exact signature symmetry settled it in favor of `parse` depending on `tryParse`.
 
 ### `Result`/`AsyncResult` are `arvo-core`'s own types; `neverthrow` is used internally, never exported
 
@@ -74,7 +80,8 @@ Adopted now rather than deferred until a genuinely multi-step pipeline needs it,
 
 - **A new runtime dependency** → `neverthrow` has zero dependencies of its own and is small; the cost is one entry in the dependency tree, accepted per the reuse convention's own counterweight that a *new* dependency needs real justification, which the "generic, non-Arvo, solved problem" test above provides.
 - **`tryParse` has nothing to chain — one `try`/`catch` around one constructor call — so routing it through `neverthrow` internally exercises the library without gaining anything from its combinators here.** Accepted deliberately: the point of adopting now is proving `fromNeverthrow` and the internal-`neverthrow`/public-plain-type split work end-to-end on a genuinely simple case, before the next change leans on it for something that actually chains. If a future change never arrives to justify it, this is the one place the dependency is used for less than it costs — a known, bounded cost, not an open-ended one.
-- **Two static methods that are easy to assume are more than they are** → `parse` looks like it could diverge from `new ArvoEvent(...)` over time if someone adds logic to it later without realizing the convention forbids that. Mitigated by the convention's own text in `project.md` stating this plainly, and by `parse`'s test coverage asserting field-for-field equality with a direct construction, not just "does not throw."
+- **Two static methods that are easy to assume are more than they are** → `parse` looks like it could grow its own logic over time if someone forgets it is meant to be an unwrap around `tryParse` and nothing more. Mitigated by the convention's own text in `project.md` stating this plainly, and by test coverage asserting `parse` and `tryParse` agree on the same input — success and failure alike, not just "does not throw."
+- **`parse` now takes `unknown`, matching `tryParse`, instead of the compile-time-checked `ArvoEventParam<T, D>` it started with** → the common case — constructing an event whose shape a developer already knows — loses field-name checking at the call site. Accepted for exact signature symmetry between the two; see the Decisions section above.
 
 ## Migration Plan
 
