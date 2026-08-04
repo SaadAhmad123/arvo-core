@@ -16,3 +16,26 @@ export type JSONValue = JSONScalar | JSONArray | JSONObject;
  * The shape of an ArvoEvent's `baggage`.
  */
 export type FlatMap = { [key: string]: JSONScalar };
+
+/** The outcome of an operation that succeeded, carrying its value. */
+export type Ok<R> = { readonly ok: true; readonly value: R };
+
+/** The outcome of an operation that failed, carrying its error. */
+export type Err<E> = { readonly ok: false; readonly error: E };
+
+/**
+ * The outcome of a fallible operation: either success, carrying a value, or
+ * failure, carrying an error. Narrows on `ok`:
+ *
+ * ```typescript
+ * if (result.ok) {
+ *   result.value;
+ * } else {
+ *   result.error;
+ * }
+ * ```
+ */
+export type Result<R, E> = Ok<R> | Err<E>;
+
+/** A {@link Result} produced by an asynchronous operation. */
+export type AsyncResult<R, E> = Promise<Result<R, E>>;

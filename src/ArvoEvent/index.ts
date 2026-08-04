@@ -1,21 +1,11 @@
 import type { Span, SpanContext } from '@opentelemetry/api';
-import type { FlatMap } from '../types.js';
-import type { ArvoEventValidationIssue } from './errors.js';
+import { err, ok } from 'neverthrow';
+import { fromNeverthrow } from '../result.js';
+import type { FlatMap, Result } from '../types.js';
 import { ArvoEventValidationError } from './errors.js';
 import { traceContextFromSpan } from './opentelemetry.js';
 import type { ArvoEventParam, ArvoEventValidationOptions } from './types.js';
 import { validateArvoEvent } from './validator.js';
-
-/**
- * The outcome of {@link ArvoEvent.safeParse}: the event on success, or every
- * structural rule broken on failure.
- */
-export type ArvoEventParseResult<
-  T extends string = string,
-  D extends Record<string, any> = Record<string, any>,
-> =
-  | { success: true; event: ArvoEvent<T, D> }
-  | { success: false; issues: readonly ArvoEventValidationIssue[] };
 
 /**
  * An immutable, structurally valid event exchanged between Arvo nodes.
@@ -74,16 +64,27 @@ export class ArvoEvent<
     param: ArvoEventParam<T, D>,
     options?: ArvoEventValidationOptions,
   ) {
-    const traceInput = param as ArvoEventParam<T, D> & {
-      span?: Span | SpanContext;
-    };
-    const { span, ...rest } = traceInput;
+    // Destructuring a non-object — a string, an array, a number — spreads
+    // its indexed characters/elements as if they were field names rather
+    // than producing anything meaningful. Only extract `span` when `param`
+    // is genuinely a plain-enough object; anything else is passed through
+    // unchanged so validateArvoEvent's own top-level guard rejects it
+    // cleanly, with one issue naming what it actually is.
+    let raw: unknown = param;
 
-    const raw: Record<string, unknown> = { ...rest };
-    if (span) {
-      const trace = traceContextFromSpan(span);
-      raw.traceparent = trace.traceparent;
-      raw.tracestate = trace.tracestate;
+    if (param !== null && typeof param === 'object' && !Array.isArray(param)) {
+      const traceInput = param as ArvoEventParam<T, D> & {
+        span?: Span | SpanContext;
+      };
+      const { span, ...rest } = traceInput;
+
+      const withTrace: Record<string, unknown> = { ...rest };
+      if (span) {
+        const trace = traceContextFromSpan(span);
+        withTrace.traceparent = trace.traceparent;
+        withTrace.tracestate = trace.tracestate;
+      }
+      raw = withTrace;
     }
 
     const result = validateArvoEvent(raw, options);
@@ -116,29 +117,43 @@ export class ArvoEvent<
   }
 
   /**
-   * Validates plain data against every structural rule and reports the
-   * outcome rather than throwing — for an event arriving from replay, a
-   * fixture, or a foreign producer, where an exception is the wrong control
-   * flow.
+   * Constructs an event, throwing on structural failure.
+   *
+   * @throws {ArvoEventValidationError} If `param` fails structural validation.
+   */
+  static parse<
+    T extends string = string,
+    D extends Record<string, any> = Record<string, any>,
+  >(param: unknown, options?: ArvoEventValidationOptions): ArvoEvent<T, D> {
+    const result = ArvoEvent.tryParse<T, D>(param, options);
+    if (result.ok) return result.value;
+    throw result.error;
+  }
+
+  /**
+   * Constructs an event and reports the outcome as a value rather than
+   * throwing — for an event arriving from replay, a fixture, or a foreign
+   * producer, where an exception is the wrong control flow.
    *
    * This checks structure only. It is not a wire-format or CloudEvent
    * decoder.
    */
-  static safeParse<
+  static tryParse<
     T extends string = string,
     D extends Record<string, any> = Record<string, any>,
-  >(input: unknown): ArvoEventParseResult<T, D> {
-    const result = validateArvoEvent(input);
-
-    if (result.issues.length > 0) {
-      return { success: false, issues: Object.freeze([...result.issues]) };
+  >(
+    input: unknown,
+    options?: ArvoEventValidationOptions,
+  ): Result<ArvoEvent<T, D>, ArvoEventValidationError> {
+    try {
+      return fromNeverthrow(
+        ok(new ArvoEvent<T, D>(input as ArvoEventParam<T, D>, options)),
+      );
+    } catch (error) {
+      if (error instanceof ArvoEventValidationError) {
+        return fromNeverthrow(err(error));
+      }
+      throw error;
     }
-
-    const event = new ArvoEvent<T, D>(
-      result.value as unknown as ArvoEventParam<T, D>,
-      { skipPayloadValidation: true },
-    );
-
-    return { success: true, event };
   }
 }

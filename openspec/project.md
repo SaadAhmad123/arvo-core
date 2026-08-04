@@ -93,6 +93,22 @@ This governs the package's **public export surface** — what `src/index.ts` re-
 
 Errors are human-facing. Every thrown error names what failed, the value involved, and the rule violated, and preserves the underlying cause. Generic messages such as "invalid input" are not acceptable — a reader should be able to correct the problem from the message alone without opening the source.
 
+### Result types and the `try`-prefix convention
+
+Every fallible operation is implemented exactly once, as `tryX`, returning a `Result<R, E>` — or `AsyncResult<R, E>`, an alias for `Promise<Result<R, E>>`, for an asynchronous one. `tryX` is the primitive. Every branch, every case, every piece of validation or failure logic lives there and nowhere else.
+
+`X` — the same name without the prefix — is a thin wrapper with no logic of its own: it calls `tryX` and unwraps the result, returning the success value or throwing the failure. It exists for a caller who wants ordinary throw/catch and does not want to reason about `Result`. Two names, one implementation. `X` is derived from `tryX`; `tryX` is never derived from `X`.
+
+This governs the whole of `arvo-core`'s public surface, not any one function. Before writing something that can fail, decide which of the two it is — there is no third shape. A bespoke `{ success, value } | { success: false, error }` object, hand-rolled per function, is the two-mechanisms-doing-the-same-job problem *Dependencies and reuse* already warns against, recreated at the API-shape level instead of the implementation level.
+
+A constructor cannot be `tryX` — it cannot return a `Result`, only build the instance or throw. That makes a constructor the natural `X`: throw-or-succeed is already its shape, and it is free to hold the real logic directly, exactly as it would if there were no `Result`-returning sibling at all. `tryX`, for a class, is what gets built on top — a thin wrapper calling the constructor inside a try/catch, turning a thrown failure into `Err` and a built instance into `Ok`. The direction does not reverse for a class the way it does for a plain function: the constructor is not derived from `tryX`; `tryX` is derived from the constructor.
+
+A static `X` may still exist alongside `new`, but it wraps `tryX`, not the constructor directly — `const result = tryX(...); if (result.ok) return result.value; throw result.error;` — so `X` and `tryX` are an exact matched pair: identical parameters, `X` carrying no logic beyond the unwrap, inheriting whatever `tryX` decides about which failures become `Err` and which propagate unconverted (see below) for free rather than duplicating that decision. Two consequences worth deciding deliberately rather than by accident: `X`'s parameter type becomes whatever `tryX`'s is, typically the same loosely-typed `unknown` a `tryX` needs for input with no compile-time shape — trading away compile-time checking on `X`'s call sites for the symmetry, a real cost worth naming when it's paid, not just accepting silently. And there are now three levels — constructor, `tryX`, `X` — not two; keep the constructor itself as the only one holding real logic, or the same duplication *Dependencies and reuse* warns against reappears one level up.
+
+Not every `tryX` needs a failure channel that swallows everything indiscriminately. Where an operation can fail for more than one reason and only some are the `Result`'s concern — a class's constructor throwing a specific validation error, say, versus an unrelated bug elsewhere in the call path — `tryX` converts the expected failure into `Err` and re-throws anything else. A `Result`'s error type is a claim about what kind of failure occurred; swallowing an arbitrary exception into it makes that claim false.
+
+Which library supplies `Result`/`AsyncResult` is an implementation detail, decided and recorded per change under *Dependencies and reuse* — not fixed here. The aliases themselves live in `src/types.ts`, alongside the package's other shared value types.
+
 ### Validation
 
 Runtime validation is not optional, and compile-time types do not substitute for it. ADR-000 is explicit that types cannot establish validity across independently deployed, external, or cross-language participants.
