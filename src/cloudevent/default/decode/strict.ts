@@ -105,7 +105,7 @@ export const decodeStrict = (data: CloudEvent): Decoded => {
   }
 
   candidate.subject = readString(raw, 'subject', true, issues);
-  candidate.time = readString(raw, 'time', false, issues);
+  candidate.time = readString(raw, 'time', true, issues);
   candidate.traceparent = readString(raw, 'traceparent', false, issues);
   candidate.tracestate = readString(raw, 'tracestate', false, issues);
   candidate.parentid = readString(raw, 'arvoparentid', false, issues);

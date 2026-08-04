@@ -9,7 +9,10 @@ export type {
 export type { CloudEventTransformationErrorDetail } from './cloudevent/errors.js';
 export { CloudEventTransformationError } from './cloudevent/errors.js';
 export { CloudEventConverter } from './cloudevent/index.js';
-export type { IConverter } from './cloudevent/interface.js';
+export type {
+  IArvoEventTransformer,
+  ICloudEventConverter,
+} from './cloudevent/interface.js';
 export type {
   CloudEventTransformationKind,
   ForeignCloudEventFallback,

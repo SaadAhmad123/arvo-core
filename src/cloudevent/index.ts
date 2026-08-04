@@ -4,31 +4,28 @@ import { fromNeverthrowAsync } from '../result.js';
 import type { AsyncResult } from '../types.js';
 import { ArvoToCloudEventConverter } from './default/index.js';
 import { CloudEventTransformationError } from './errors.js';
-import type { IConverter } from './interface.js';
+import type {
+  IArvoEventTransformer,
+  ICloudEventConverter,
+} from './interface.js';
 import type { CloudEvent, ForeignCloudEventFallback } from './types.js';
-
-type Stages = [
-  IConverter<ArvoEvent, CloudEvent>,
-  ...IConverter<CloudEvent, CloudEvent>[],
-];
 
 /**
  * Every stage's `convert`/`revert`, viewed uniformly as `unknown -> unknown`.
- * A pipeline's stages are genuinely heterogeneous — stage 0 is
- * `ArvoEvent <-> CloudEvent`, every stage after it is `CloudEvent <->
- * CloudEvent` — and TypeScript has no way to track that chain of types
- * through a dynamic-length array at compile time. This module's own public
- * methods stay precisely typed; only this internal loop drops to `unknown`,
- * the same trade-off any pipeline runner over a heterogeneous stage list
- * makes.
+ * `transformer` and each entry of `converters` are genuinely
+ * different-shaped contracts — TypeScript has no way to track that chain of
+ * types through a dynamic-length array at compile time. This module's own
+ * public methods stay precisely typed; only this internal loop drops to
+ * `unknown`, the same trade-off any pipeline runner over a heterogeneous
+ * stage list makes.
  */
-type AnyConverter = {
+type AnyStage = {
   convert(data: unknown): Promise<unknown>;
   revert(data: unknown): Promise<unknown>;
 };
 
-/** The base stage's own `revert`, extended with the `foreignFallback` no other stage in the pipeline understands or needs. */
-type BaseRevert = (
+/** `transformer.revert`, viewed with the `foreignFallback` no `ICloudEventConverter` understands or needs. */
+type TransformerRevert = (
   data: unknown,
   foreignFallback?: ForeignCloudEventFallback,
 ) => Promise<unknown>;
@@ -36,7 +33,7 @@ type BaseRevert = (
 /**
  * A stage's own thrown value is preserved verbatim as `cause` — unless it
  * is already a {@link CloudEventTransformationError}, in which case it is
- * passed through unchanged rather than double-wrapped. The base stage's own
+ * passed through unchanged rather than double-wrapped. `transformer`'s own
  * `revert` throws exactly this shape for a structural rejection; only a
  * genuinely unexpected throw (a consumer-appended stage's own failure, or a
  * bug) becomes a `'stage'` failure.
@@ -56,28 +53,57 @@ const toStageError = (
       });
 
 /**
- * The public entry point: an ordered list of paired, reversible stages,
- * with the base field-placement mapping wired in as stage 0 by default.
- * Both directions run every stage in sequence and stop at the first one
- * that throws — a stage's input depends on the one before it, so there is
- * at most one failure per call, never a batch to aggregate.
+ * Transforms between {@link ArvoEvent} and CloudEvent.
+ *
+ * `new CloudEventConverter()` with no arguments is what most consumers
+ * want: it converts and reverts using the standard ArvoEvent↔CloudEvent
+ * mapping alone. If you need to enrich the produced CloudEvent — attach a
+ * schema-registry reference, a routing header, or any other
+ * CloudEvent-to-CloudEvent transformation — supply your own `converters`;
+ * each one runs forward on `convert`/`tryConvert` and unwinds in reverse on
+ * `revert`/`tryRevert`.
+ *
+ * @example
+ * ```typescript
+ * const converter = new CloudEventConverter();
+ * const cloudEvent = await converter.convert(arvoEvent);
+ * const roundTripped = await converter.revert(cloudEvent);
+ * ```
  */
 export class CloudEventConverter {
-  private readonly stages: Stages;
+  private readonly transformer: IArvoEventTransformer;
+  private readonly converters: readonly ICloudEventConverter[];
 
-  constructor(converters?: Stages) {
-    this.stages = converters ?? [new ArvoToCloudEventConverter()];
+  /**
+   * @param transformer - The ArvoEvent↔CloudEvent mapping. Defaults to the
+   * standard mapping; supply your own only if you need to replace it
+   * entirely, not merely extend it — see `converters` for that.
+   * @param converters - Additional CloudEvent-to-CloudEvent stages, applied
+   * in order after `transformer` on `convert`, and unwound in reverse
+   * before it on `revert`.
+   */
+  constructor(
+    transformer?: IArvoEventTransformer,
+    converters?: ICloudEventConverter[],
+  ) {
+    this.transformer = transformer ?? new ArvoToCloudEventConverter();
+    this.converters = converters ?? [];
   }
 
   /**
-   * Runs every stage forward, starting with the base mapping's own
-   * `convert`. Never throws — the primitive; {@link convert} is the
-   * throwing convenience built on top of it.
+   * Converts an ArvoEvent to a CloudEvent, reporting the outcome as a value
+   * rather than throwing.
+   *
+   * The standard mapping itself cannot fail. If you supplied your own
+   * `converters` and one of them throws, that failure is reported as
+   * `result.error.detail.kind === 'stage'`, naming which stage
+   * (`stageIndex`, counting `transformer` as `0` and each `converters`
+   * entry from `1`) and carrying whatever it threw as `cause`.
    */
   async tryConvert(
     data: ArvoEvent,
   ): AsyncResult<CloudEvent, CloudEventTransformationError> {
-    const stages = this.stages as unknown as readonly AnyConverter[];
+    const stages: readonly AnyStage[] = [this.transformer, ...this.converters];
     const chain = stages.reduce<
       ResultAsync<unknown, CloudEventTransformationError>
     >(
@@ -94,7 +120,12 @@ export class CloudEventConverter {
     );
   }
 
-  /** A throwing convenience with no logic of its own beyond unwrapping {@link tryConvert}. */
+  /**
+   * Converts an ArvoEvent to a CloudEvent, throwing on failure.
+   *
+   * @throws {CloudEventTransformationError} If a `converters` stage you
+   * supplied fails. The standard mapping itself never fails.
+   */
   async convert(data: ArvoEvent): Promise<CloudEvent> {
     const result = await this.tryConvert(data);
     if (result.ok) return result.value;
@@ -102,16 +133,30 @@ export class CloudEventConverter {
   }
 
   /**
-   * Unwinds any consumer-appended stages in reverse order, then runs the
-   * base mapping's own `revert`, which alone receives `foreignFallback`.
-   * Never throws — the primitive; {@link revert} is the throwing
-   * convenience built on top of it.
+   * Reverts a CloudEvent to an ArvoEvent, reporting the outcome as a value
+   * rather than throwing.
+   *
+   * A CloudEvent produced by this converter (or claiming to be one) is
+   * reversed strictly: every field must decode correctly, or the whole
+   * CloudEvent is rejected as `result.error.detail.kind === 'strict'`. A
+   * CloudEvent claiming no ArvoEvent shape at all is instead adapted as a
+   * foreign event (`result.error.detail.kind === 'foreign'` on failure),
+   * using `foreignFallback` to supply whatever it can't recover from the
+   * CloudEvent itself. If you supplied your own `converters` and one of
+   * them throws while unwinding, that failure is reported as
+   * `result.error.detail.kind === 'stage'`.
+   *
+   * @param foreignFallback - Values to use for a foreign CloudEvent's
+   * missing fields — `dataschema` is always required, since it can never be
+   * recovered from the foreign CloudEvent itself. Ignored when reverting a
+   * CloudEvent that already carries ArvoEvent shape, whose own fields are
+   * always authoritative.
    */
   async tryRevert(
     data: CloudEvent,
     foreignFallback?: ForeignCloudEventFallback,
   ): AsyncResult<ArvoEvent, CloudEventTransformationError> {
-    const stages = this.stages as unknown as readonly AnyConverter[];
+    const stages: readonly AnyStage[] = [this.transformer, ...this.converters];
     const chain = stages.reduceRight<
       ResultAsync<unknown, CloudEventTransformationError>
     >(
@@ -119,7 +164,7 @@ export class CloudEventConverter {
         acc.andThen((value) =>
           ResultAsync.fromPromise(
             stageIndex === 0
-              ? (stage.revert as BaseRevert)(value, foreignFallback)
+              ? (stage.revert as TransformerRevert)(value, foreignFallback)
               : stage.revert(value),
             (cause) => toStageError(cause, 'revert', stageIndex),
           ),
@@ -131,7 +176,13 @@ export class CloudEventConverter {
     );
   }
 
-  /** A throwing convenience with no logic of its own beyond unwrapping {@link tryRevert}. */
+  /**
+   * Reverts a CloudEvent to an ArvoEvent, throwing on failure.
+   *
+   * @param foreignFallback - See {@link tryRevert}.
+   * @throws {CloudEventTransformationError} If the CloudEvent cannot be
+   * reverted — see {@link tryRevert} for the distinct failure cases.
+   */
   async revert(
     data: CloudEvent,
     foreignFallback?: ForeignCloudEventFallback,

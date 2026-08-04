@@ -2,7 +2,7 @@ import { ArvoEventValidationError } from '../../ArvoEvent/errors.js';
 import { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { ArvoEventParam } from '../../ArvoEvent/types.js';
 import { CloudEventTransformationError } from '../errors.js';
-import type { IConverter } from '../interface.js';
+import type { IArvoEventTransformer } from '../interface.js';
 import type { CloudEvent, ForeignCloudEventFallback } from '../types.js';
 import type { Decoded } from './decode/index.js';
 import {
@@ -13,9 +13,7 @@ import {
 import { encode } from './encode.js';
 
 /** The base field-placement mapping — the always-present stage every `CloudEventConverter` wires in by default. */
-export class ArvoToCloudEventConverter
-  implements IConverter<ArvoEvent, CloudEvent>
-{
+export class ArvoToCloudEventConverter implements IArvoEventTransformer {
   async convert(event: ArvoEvent): Promise<CloudEvent> {
     return encode(event);
   }
