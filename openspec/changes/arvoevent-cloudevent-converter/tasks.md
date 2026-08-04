@@ -36,7 +36,7 @@
 
 ## 6. Errors
 
-- [ ] 6.1 `src/cloudevent/errors.ts` — `CloudEventTransformationError extends Error`, representing two distinct failure shapes discriminated by `kind`: `'strict' | 'foreign'` carrying `issues: readonly ArvoEventValidationIssue[]` (imported from `ArvoEvent/errors.ts`, not redefined) for the base mapping's own structural rejections, and `'stage'` carrying `direction: 'convert' | 'revert'`, `stageIndex: number`, and `cause: unknown` for a pipeline stage's own thrown failure; matching the message-formatting depth of `ArvoEvent/errors.ts`
+- [ ] 6.1 `src/cloudevent/errors.ts` — `CloudEventTransformationError extends Error`, a single class carrying a `detail: CloudEventTransformationErrorDetail` field, itself a real discriminated union (not flattened onto the class as optional properties, which would lose TypeScript narrowing): `{ kind: 'strict' | 'foreign'; issues: readonly ArvoEventValidationIssue[] }` (issues imported from `ArvoEvent/errors.ts`, not redefined) for the base mapping's own structural rejections, or `{ kind: 'stage'; direction: 'convert' | 'revert'; stageIndex: number; cause: unknown }` for a pipeline stage's own thrown failure; matching the message-formatting depth of `ArvoEvent/errors.ts`
 - [ ] 6.2 Confirm every failure path in `default.ts`'s reverse mapping (tasks 3–5) reports through `ArvoEventValidationIssue`'s existing shape under the `'strict'`/`'foreign'` kinds — no parallel issue type introduced anywhere in this module
 - [ ] 6.3 Confirm `tryConvert`/`tryRevert` catch every stage's thrown value unconditionally (not filtered by type, unlike `ArvoEvent.tryParse`'s narrow re-throw rule) and preserve it verbatim as `cause` on the `'stage'` failure, per `design.md`'s Errors section
 

@@ -87,19 +87,26 @@ A boolean predicate cannot represent the difference between the second and third
 
 ADR-003 states plainly: *"Deserialization MUST NOT define a second ArvoEvent validity rule set."* Taken to its natural conclusion for diagnostics: a structural problem produced by arvo-core's own base mapping (a missing `arvoexecutionid` extension, a malformed `arvodepth` encoding, a foreign `data` that isn't an object, a missing caller-supplied `dataschema` fallback) is reported through the exact same `{ path, message, received }` shape as an ordinary ArvoEvent structural-validity issue — imported from `ArvoEvent/errors.ts`, not redefined.
 
-A consumer-appended stage failing is a different shape entirely — not a validation issue at all, but whatever that stage's own code threw, which this boundary cannot know in advance. `CloudEventTransformationError` therefore carries one of two distinct failure shapes, discriminated by `kind`:
+A consumer-appended stage failing is a different shape entirely — not a validation issue at all, but whatever that stage's own code threw, which this boundary cannot know in advance. `CloudEventTransformationError` stays a single `Error` subclass — one thing to `throw`, one `instanceof` check, matching `ArvoEventValidationError`'s own precedent — but the two distinct failure shapes live in a nested `detail` field typed as a real discriminated union, not flattened onto the class's own instance properties:
 
 ```ts
-type CloudEventTransformationError =
+type CloudEventTransformationErrorDetail =
   | { kind: 'strict' | 'foreign'; issues: readonly ArvoEventValidationIssue[] }
   | { kind: 'stage'; direction: 'convert' | 'revert'; stageIndex: number; cause: unknown };
+
+class CloudEventTransformationError extends Error {
+  readonly detail: CloudEventTransformationErrorDetail;
+  constructor(detail: CloudEventTransformationErrorDetail, options?: ErrorOptions);
+}
 ```
 
-(exact representation — class vs. discriminated union, field names — settled during implementation; the distinction itself is the design decision.) The first form is the base mapping's own structural rejection, exactly as before: a caller handling a failed `tryConvert`/`tryRevert`'s `result.error.issues` never needs to know or care which layer produced a given entry. The second is new: any stage in the pipeline throwing during `convert` or `revert` is captured with which stage index and which direction, and the thrown value itself preserved as `cause` rather than discarded or reshaped — this boundary has no way to know what a third-party stage's thrown value means, so it locates it rather than reinterpreting it.
+Flattening the union's fields directly onto the class instead (`kind`, `issues?`, `direction?`, `stageIndex?`, `cause?` all optional on the instance) was considered and rejected: TypeScript cannot narrow a class's own optional fields the way it narrows a genuine union value, so a caller checking `error.kind === 'stage'` would still see `error.issues` typed as possibly-present rather than correctly excluded. Nesting the union in `detail` keeps `CloudEventTransformationError` itself a single class while `error.detail.kind === 'stage'` narrows `error.detail` fully, giving real compile-time safety on which fields exist for which failure.
+
+The first variant is the base mapping's own structural rejection, exactly as before: a caller handling a failed `tryConvert`/`tryRevert`'s `result.error.detail.issues` (after narrowing on `kind`) never needs to know or care which layer produced a given entry. The second is new: any stage in the pipeline throwing during `convert` or `revert` is captured with which stage index and which direction, and the thrown value itself preserved as `cause` rather than discarded or reshaped — this boundary has no way to know what a third-party stage's thrown value means, so it locates it rather than reinterpreting it.
 
 This is a deliberate departure from `ArvoEvent.tryParse`'s catch-boundary rule (`project.md`: catch only the expected failure type, re-throw anything else). That rule works for `tryParse` because the constructor's failure modes are exhaustively known in advance — one class, one validator, one exception type. A pipeline stage is arbitrary, unknowable third-party code; there is no fixed exception type to filter for, so "a stage threw" is unconditionally the expected failure here — `tryConvert`/`tryRevert` catch every stage's thrown value, full stop, rather than type-checking it first. Worth stating explicitly rather than leaving a reader to assume the same re-throw rule applies uniformly across the package.
 
-There is no third `'malformed'` kind alongside `'strict'`/`'foreign'`: a malformed Arvo-shaped event is discovered *while attempting the strict path* (`kind: 'strict'`, with issues explaining exactly what was missing or wrong), not a separate code path with its own kind. `CloudEventTransformationError extends Error`, thrown by `convert`/`revert` and carried as `tryConvert`/`tryRevert`'s `Err` value.
+There is no third `'malformed'` kind alongside `'strict'`/`'foreign'`: a malformed Arvo-shaped event is discovered *while attempting the strict path* (`kind: 'strict'`, with issues explaining exactly what was missing or wrong), not a separate code path with its own kind. `CloudEventTransformationError` is thrown by `convert`/`revert` and carried as `tryConvert`/`tryRevert`'s `Err` value.
 
 Deliberately not added: a `source: 'mapping' | 'structural'` tag on individual issues within the `'strict'`/`'foreign'` branch. A reader can already tell which layer an issue came from by its `path` — `arvoexecutionid` or `data.arvoeventbaggage` reads as a CloudEvent-boundary problem, `subject` or `dataschema` reads as ArvoEvent's own field rule — so a redundant tag would duplicate information the path already carries.
 
@@ -123,4 +130,3 @@ Per ADR-003's explicit mandate — *"Validation is delegated, not reimplemented.
 
 - Does `src/cloudevent/types.ts` re-export the `cloudevents` SDK's own `CloudEvent`-shaped type, or define its own structural interface? Resolve during implementation, once the SDK's actual TypeScript surface has been read and verified directly — this does not change the spec, the chosen approach, or the task breakdown, only which concrete type declaration task 1 produces.
 - Whether `cloudevents` exposes a validation/parsing entry point precise enough to satisfy ADR-003's "conformance delegated, not reimplemented" requirement directly, or whether it only offers a constructor that throws on invalid input, shapes how `default.ts` calls into it — again, empirical, and deferred to implementation rather than guessed here.
-- `CloudEventTransformationError`'s exact representation of its two failure shapes (discriminated union vs. a single class with optional fields) is not yet settled — resolve during implementation against how `ArvoEventValidationError` itself is shaped, so the two stay consistent rather than diverging on a stylistic choice that doesn't affect behavior.
