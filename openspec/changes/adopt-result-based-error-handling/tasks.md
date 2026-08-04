@@ -4,10 +4,10 @@
 
 ## 2. Shared types and the `neverthrow` boundary
 
-- [ ] 2.1 In `src/types.ts`, add `Result<R, E>` and `AsyncResult<R, E>` as `arvo-core`'s own plain, structural types — `{ ok: true; value: R } | { ok: false; error: E }` and `Promise<Result<R, E>>`. No import from `neverthrow` in this file.
-- [ ] 2.2 Consumer-facing TSDoc on both, per the Documentation in source convention — state the shape, no provenance
-- [ ] 2.3 Add `src/result.ts`: internal only, not exported from `src/index.ts`. Exports `fromNeverthrow`, converting a `neverthrow` `Result`/`ResultAsync` into `arvo-core`'s plain `Result`/`AsyncResult`. The only file besides itself permitted to import `neverthrow`.
-- [ ] 2.4 Confirm `neverthrow` does not appear in `src/types.ts`, `src/index.ts`, or any TSDoc on a publicly exported symbol
+- [x] 2.1 In `src/types.ts`, add `Result<R, E>` and `AsyncResult<R, E>` as `arvo-core`'s own plain, structural types — `{ ok: true; value: R } | { ok: false; error: E }` and `Promise<Result<R, E>>`. No import from `neverthrow` in this file.
+- [x] 2.2 Consumer-facing TSDoc on both, per the Documentation in source convention — state the shape, no provenance
+- [x] 2.3 Add `src/result.ts`: internal only, not exported from `src/index.ts`. Exports `fromNeverthrow`, converting a `neverthrow` `Result`/`ResultAsync` into `arvo-core`'s plain `Result`/`AsyncResult`. The only file besides itself permitted to import `neverthrow`.
+- [x] 2.4 Confirm `neverthrow` does not appear in `src/types.ts`, `src/index.ts`, or any TSDoc on a publicly exported symbol
 
 ## 3. `ArvoEvent.parse` and `ArvoEvent.tryParse`
 
