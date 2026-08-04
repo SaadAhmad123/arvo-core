@@ -2,7 +2,7 @@ import { okAsync, ResultAsync } from 'neverthrow';
 import type { ArvoEvent } from '../ArvoEvent/index.js';
 import { fromNeverthrowAsync } from '../result.js';
 import type { AsyncResult } from '../types.js';
-import { defaultConverter } from './default/index.js';
+import { ArvoToCloudEventConverter } from './default/index.js';
 import { CloudEventTransformationError } from './errors.js';
 import type { IConverter } from './interface.js';
 import type { CloudEvent, ForeignCloudEventFallback } from './types.js';
@@ -66,7 +66,7 @@ export class CloudEventConverter {
   private readonly stages: Stages;
 
   constructor(converters?: Stages) {
-    this.stages = converters ?? [defaultConverter];
+    this.stages = converters ?? [new ArvoToCloudEventConverter()];
   }
 
   /**

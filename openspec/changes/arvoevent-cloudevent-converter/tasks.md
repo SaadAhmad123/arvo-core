@@ -52,7 +52,7 @@
 
 ## 8. Public exports
 
-- [ ] 8.1 `src/index.ts` — export `CloudEventConverter`, `IConverter`, `ForeignCloudEventFallback`, `CloudEventTransformationKind`, `CloudEventTransformationError`, and the `CloudEvent` type
+- [x] 8.1 `src/index.ts` — export `CloudEventConverter`, `IConverter`, `ForeignCloudEventFallback`, `CloudEventTransformationKind`, `CloudEventTransformationError`, and the `CloudEvent` type
 
 ## 9. Tests — forward mapping correctness
 

@@ -6,6 +6,15 @@ export type {
   ArvoEventParam,
   ArvoEventValidationOptions,
 } from './ArvoEvent/types.js';
+export type { CloudEventTransformationErrorDetail } from './cloudevent/errors.js';
+export { CloudEventTransformationError } from './cloudevent/errors.js';
+export { CloudEventConverter } from './cloudevent/index.js';
+export type { IConverter } from './cloudevent/interface.js';
+export type {
+  CloudEventTransformationKind,
+  ForeignCloudEventFallback,
+} from './cloudevent/types.js';
+export { CloudEvent } from './cloudevent/types.js';
 export type {
   AsyncResult,
   FlatMap,

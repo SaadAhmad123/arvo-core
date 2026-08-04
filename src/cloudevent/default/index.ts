@@ -58,6 +58,3 @@ export class ArvoToCloudEventConverter
     }
   }
 }
-
-export const defaultConverter: IConverter<ArvoEvent, CloudEvent> =
-  new ArvoToCloudEventConverter();
