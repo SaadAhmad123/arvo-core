@@ -19,9 +19,9 @@
 
 ## 4. Exports
 
-- [ ] 4.1 In `src/index.ts`, export `Result` and `AsyncResult` type-only
-- [ ] 4.2 **REMOVE** the `ArvoEventParseResult` export
-- [ ] 4.3 Confirm the public surface has no remaining reference to `safeParse` or `ArvoEventParseResult`
+- [x] 4.1 In `src/index.ts`, export `Result` and `AsyncResult` type-only
+- [x] 4.2 **REMOVE** the `ArvoEventParseResult` export
+- [x] 4.3 Confirm the public surface has no remaining reference to `safeParse` or `ArvoEventParseResult`
 
 ## 5. Tests
 
