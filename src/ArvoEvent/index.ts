@@ -1,21 +1,11 @@
 import type { Span, SpanContext } from '@opentelemetry/api';
-import type { FlatMap } from '../types.js';
-import type { ArvoEventValidationIssue } from './errors.js';
+import { err, ok } from 'neverthrow';
+import { fromNeverthrow } from '../result.js';
+import type { FlatMap, Result } from '../types.js';
 import { ArvoEventValidationError } from './errors.js';
 import { traceContextFromSpan } from './opentelemetry.js';
 import type { ArvoEventParam, ArvoEventValidationOptions } from './types.js';
 import { validateArvoEvent } from './validator.js';
-
-/**
- * The outcome of {@link ArvoEvent.safeParse}: the event on success, or every
- * structural rule broken on failure.
- */
-export type ArvoEventParseResult<
-  T extends string = string,
-  D extends Record<string, any> = Record<string, any>,
-> =
-  | { success: true; event: ArvoEvent<T, D> }
-  | { success: false; issues: readonly ArvoEventValidationIssue[] };
 
 /**
  * An immutable, structurally valid event exchanged between Arvo nodes.
@@ -116,29 +106,47 @@ export class ArvoEvent<
   }
 
   /**
-   * Validates plain data against every structural rule and reports the
-   * outcome rather than throwing — for an event arriving from replay, a
-   * fixture, or a foreign producer, where an exception is the wrong control
-   * flow.
+   * Constructs an event, throwing on structural failure. A one-line delegate
+   * to `new ArvoEvent(...)`, kept alongside {@link tryParse} for symmetry —
+   * scanning this class's static methods finds both without needing to
+   * already know `new` is the throwing entry point.
+   *
+   * @throws {ArvoEventValidationError} If `param` fails structural validation.
+   */
+  static parse<
+    T extends string = string,
+    D extends Record<string, any> = Record<string, any>,
+  >(
+    param: ArvoEventParam<T, D>,
+    options?: ArvoEventValidationOptions,
+  ): ArvoEvent<T, D> {
+    return new ArvoEvent<T, D>(param, options);
+  }
+
+  /**
+   * Constructs an event and reports the outcome as a value rather than
+   * throwing — for an event arriving from replay, a fixture, or a foreign
+   * producer, where an exception is the wrong control flow.
    *
    * This checks structure only. It is not a wire-format or CloudEvent
    * decoder.
    */
-  static safeParse<
+  static tryParse<
     T extends string = string,
     D extends Record<string, any> = Record<string, any>,
-  >(input: unknown): ArvoEventParseResult<T, D> {
-    const result = validateArvoEvent(input);
-
-    if (result.issues.length > 0) {
-      return { success: false, issues: Object.freeze([...result.issues]) };
+  >(
+    input: unknown,
+    options?: ArvoEventValidationOptions,
+  ): Result<ArvoEvent<T, D>, ArvoEventValidationError> {
+    try {
+      return fromNeverthrow(
+        ok(new ArvoEvent<T, D>(input as ArvoEventParam<T, D>, options)),
+      );
+    } catch (error) {
+      if (error instanceof ArvoEventValidationError) {
+        return fromNeverthrow(err(error));
+      }
+      throw error;
     }
-
-    const event = new ArvoEvent<T, D>(
-      result.value as unknown as ArvoEventParam<T, D>,
-      { skipPayloadValidation: true },
-    );
-
-    return { success: true, event };
   }
 }

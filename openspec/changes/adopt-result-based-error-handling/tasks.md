@@ -11,11 +11,11 @@
 
 ## 3. `ArvoEvent.parse` and `ArvoEvent.tryParse`
 
-- [ ] 3.1 In `src/ArvoEvent/index.ts`, add `static parse<T, D>(param, options): ArvoEvent<T, D>` — a one-line delegate to `new ArvoEvent(param, options)`, no logic of its own
-- [ ] 3.2 Add `static tryParse<T, D>(input, options): Result<ArvoEvent<T, D>, ArvoEventValidationError>` — internally builds a `neverthrow` `Result` from a try/catch around `new ArvoEvent(input, options)` (`Ok` on success, `Err` when the thrown error is `ArvoEventValidationError`, re-throws anything else), then converts it to the public shape through `fromNeverthrow` before returning
-- [ ] 3.3 **DELETE** `static safeParse` and the `ArvoEventParseResult` type — fully superseded by `tryParse`'s `Result`
-- [ ] 3.4 Confirm the constructor itself is untouched — no diff inside `constructor(...)` beyond what's already there
-- [ ] 3.5 TSDoc for `parse`/`tryParse`, consumer-facing, describing the throw/`Result` relationship without restating the design rationale (that stays in `design.md`) and without naming `neverthrow`
+- [x] 3.1 In `src/ArvoEvent/index.ts`, add `static parse<T, D>(param, options): ArvoEvent<T, D>` — a one-line delegate to `new ArvoEvent(param, options)`, no logic of its own
+- [x] 3.2 Add `static tryParse<T, D>(input, options): Result<ArvoEvent<T, D>, ArvoEventValidationError>` — internally builds a `neverthrow` `Result` from a try/catch around `new ArvoEvent(input, options)` (`Ok` on success, `Err` when the thrown error is `ArvoEventValidationError`, re-throws anything else), then converts it to the public shape through `fromNeverthrow` before returning
+- [x] 3.3 **DELETE** `static safeParse` and the `ArvoEventParseResult` type — fully superseded by `tryParse`'s `Result`
+- [x] 3.4 Confirm the constructor itself is untouched — no diff inside `constructor(...)` beyond what's already there
+- [x] 3.5 TSDoc for `parse`/`tryParse`, consumer-facing, describing the throw/`Result` relationship without restating the design rationale (that stays in `design.md`) and without naming `neverthrow`
 
 ## 4. Exports
 
