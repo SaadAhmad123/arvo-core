@@ -44,8 +44,8 @@
 - [ ] 7.1 `src/cloudevent/index.ts` — `CloudEventConverter` class; a no-argument constructor wires in the single default converter from `default.ts` as the only stage
 - [ ] 7.2 Constructor overload/parameter accepting a caller-supplied converter list `[IConverter<ArvoEvent, CloudEvent>, ...IConverter<CloudEvent, CloudEvent>[]]`
 - [ ] 7.3 `convert(data: ArvoEvent): Promise<CloudEvent>` applies every stage forward, in order
-- [ ] 7.4 `revert(data: CloudEvent, foreignFallback?: ForeignCloudEventFallback): Promise<ArvoEventParseResult>` unwinds any consumer-appended stages in reverse order, then runs the base mapping's own revert; never throws
-- [ ] 7.5 A throwing convenience counterpart (e.g. `revertOrThrow`) that throws `CloudEventTransformationError` on failure, mirroring `ArvoEvent`'s constructor-throws/`safeParse`-returns-result duality
+- [ ] 7.4 `tryRevert(data: CloudEvent, foreignFallback?: ForeignCloudEventFallback): AsyncResult<ArvoEvent, CloudEventTransformationError>` unwinds any consumer-appended stages in reverse order, then runs the base mapping's own `revert`; never throws — the primitive, per `project.md`'s `tryX`/`X` convention
+- [ ] 7.5 `revert(data: CloudEvent, foreignFallback?: ForeignCloudEventFallback): Promise<ArvoEvent>` — a throwing convenience with no logic of its own beyond unwrapping `tryRevert`, throwing `CloudEventTransformationError` on failure, mirroring `ArvoEvent.parse`'s relationship to `ArvoEvent.tryParse` exactly
 
 ## 8. Public exports
 
@@ -62,7 +62,7 @@
 - [ ] 10.2 A fully-conforming CloudEvent is recognized as strict and reverses successfully
 - [ ] 10.3 A partial-marker-match (only `datacontenttype` or only `dataschema` claims Arvo shape, another condition fails) is rejected as malformed, with an explicit assertion that this outcome is distinguishable from attempting foreign adaptation
 - [ ] 10.4 A CloudEvent passing every discriminator condition but whose assembled candidate violates an existing ArvoEvent structural rule (e.g. ADR-001's Root Event Constraint, or ADR-002's canonical-form requirement on `source`) fails at the shared-validation step
-- [ ] 10.5 `revert` never throws for any case in 10.1–10.4 — every one reports through the returned result
+- [ ] 10.5 `tryRevert` never throws for any case in 10.1–10.4 — every one reports through the returned `Result`
 
 ## 11. Tests — foreign adaptation
 
@@ -79,7 +79,7 @@
 
 - [ ] 12.1 The no-argument constructor's behavior is identical to calling the default converter from `default.ts` directly
 - [ ] 12.2 A custom converter list appends a CloudEvent-to-CloudEvent stage correctly on `convert`
-- [ ] 12.3 `revert` unwinds a custom appended stage in reverse order before the base `revert` runs
+- [ ] 12.3 `tryRevert` unwinds a custom appended stage in reverse order before the base mapping's own `revert` runs
 - [ ] 12.4 `IConverter`'s mandatory pair is enforced at the type level — a stage object missing either `convert` or `revert` fails to type-check (a compile-time check, e.g. a `// @ts-expect-error` fixture, not a runtime test)
 
 ## 13. Close out
