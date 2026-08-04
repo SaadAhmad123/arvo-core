@@ -67,7 +67,11 @@ const toStageError = (
  * ```typescript
  * const converter = new CloudEventConverter();
  * const cloudEvent = await converter.convert(arvoEvent);
- * const roundTripped = await converter.revert(cloudEvent);
+ *
+ * // what actually crosses a network — CloudEvent's own toJSON() runs here
+ * const wireBody = JSON.stringify(cloudEvent);
+ * const received = new CloudEvent(JSON.parse(wireBody), false);
+ * const roundTripped = await converter.revert(received);
  * ```
  */
 export class CloudEventConverter {
