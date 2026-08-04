@@ -2,19 +2,25 @@
 
 See `proposal.md` — Why, for motivation, and `openspec/project.md`'s "Result types and the `try`-prefix convention" for the standing rule this change is the first to apply.
 
-The constraint that shapes this change: the convention states a constructor cannot be `tryX`, since it cannot return a `Result` — but that does not mean its logic moves elsewhere. Throw-or-succeed is already exactly `X`'s shape, so the constructor is the natural `X` and keeps the real logic. `tryParse` is what gets built on top of it, not the reverse. An earlier draft of this proposal had this backwards — treated the constructor as a stripped internal primitive `tryParse` called after validating independently, with `parse` reduced to an unwrap around `tryParse`. Corrected before any code was written; see the corresponding fix in `project.md` and this change's own history.
+`ArvoEvent` did not exist when that convention was written in the abstract; this change is where its shape for a class with a validating constructor was worked out for real, and `project.md` was updated in step as each piece was settled here. Nothing below is `ArvoEvent`-specific in intent — it is the general pattern, exercised on the first class that needed it. The general statement is canonical in `project.md`; what follows is why it says what it now says.
+
+Two things were corrected during that process, at different points, and they should not be conflated:
+
+- **The constructor holds the logic; it is never derived from `tryX`.** A constructor cannot be `tryX` — it cannot return a `Result`, only build the instance or throw — but that does not mean its logic moves elsewhere. Throw-or-succeed is already exactly `X`'s shape, so the constructor is the natural `X` and keeps the real logic; `tryParse` is what gets built on top of it. An early draft had this backwards, treating the constructor as a stripped internal primitive that `tryParse` called after validating independently. Corrected before any code was written. This part has not moved since.
+- **`parse` wraps `tryParse`, not the constructor.** That same early draft also had `parse` reduced to an unwrap around `tryParse`, rejected at the time alongside the constructor point above — but on its own, this one doesn't share that point's problem, and was later reconsidered and adopted. See "Reconsidered, and adopted" under Decisions, below, for why revisiting it doesn't reopen the first point.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - `ArvoEvent`'s public surface follows the `tryX`/`X` convention without duplicating validation logic between the two names
+- Settle the convention's shape for a class with a validating constructor precisely enough that `project.md` states it generally and correctly, so the next class (`ArvoContract`, `ArvoEventHandler`, whatever needs it next) applies a finished rule rather than re-deriving one
 - Zero behavior change to any structural rule — this is an API-surface addition, not a revalidation of ADR-001/ADR-002
 
 **Non-Goals:**
 
 - Converting `validator.ts` or `json.ts` internals to `Result`. Neither is called from more than one place today (both feed the constructor alone), so there is nothing for a `Result` type to unify there yet. Revisit if that stops being true.
-- Applying this convention anywhere outside `ArvoEvent`. No other public class exists in this rebuild yet.
+- Applying this convention to another class in this change. None exists yet to apply it to — but the pattern below is written, and `project.md` states it, as the general rule, not as something scoped to `ArvoEvent`.
 
 ## Decisions
 
