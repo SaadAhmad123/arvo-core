@@ -46,6 +46,20 @@ const rawCloudEvent = (fields: Record<string, unknown>): CloudEvent =>
 const looseCloudEvent = (fields: Record<string, unknown>): CloudEvent =>
   fields as never as CloudEvent;
 
+/**
+ * The real wire path — `JSON.stringify`/`JSON.parse`, not the in-memory
+ * object passed directly — because `CloudEvent.prototype.toJSON()` (which
+ * only `JSON.stringify` ever triggers) mutates `time` on the way out.
+ * `converter().revert(await converter().convert(event))` alone never
+ * exercises that method at all.
+ */
+const wireRoundTrip = async (event: ArvoEvent): Promise<ArvoEvent> => {
+  const ce = await converter().convert(event);
+  const wireBody = JSON.stringify(ce);
+  const received = new CloudEvent(JSON.parse(wireBody), false);
+  return converter().revert(received);
+};
+
 const conformingArvoShapedFields = (): Record<string, unknown> => ({
   id: 'id-1',
   source: 'test/source',
@@ -218,6 +232,53 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
       const event = new ArvoEvent({ ...minimalParam(), executionunits: -0 });
       const back = await converter().revert(await converter().convert(event));
       expect(Object.is(back.executionunits, 0)).toBe(true);
+    });
+
+    describe('through the real wire (JSON.stringify/JSON.parse, not the in-memory object)', () => {
+      it('round-trips a fully populated event field for field, time omitted (default)', async () => {
+        const event = new ArvoEvent({ ...fullParam(), time: undefined });
+        const back = await wireRoundTrip(event);
+        expect(JSON.parse(JSON.stringify(back))).toEqual(
+          JSON.parse(JSON.stringify(event)),
+        );
+      });
+
+      it('round-trips a minimal (all-null) event field for field', async () => {
+        const event = new ArvoEvent(minimalParam());
+        const back = await wireRoundTrip(event);
+        expect(JSON.parse(JSON.stringify(back))).toEqual(
+          JSON.parse(JSON.stringify(event)),
+        );
+      });
+
+      it('round-trips a supplied -0 executionunits as 0', async () => {
+        const event = new ArvoEvent({ ...minimalParam(), executionunits: -0 });
+        const back = await wireRoundTrip(event);
+        expect(Object.is(back.executionunits, 0)).toBe(true);
+      });
+
+      it('is idempotent across two wire round trips', async () => {
+        const event = new ArvoEvent({ ...fullParam(), time: undefined });
+        const once = await wireRoundTrip(event);
+        const twice = await wireRoundTrip(once);
+        expect(JSON.parse(JSON.stringify(twice))).toEqual(
+          JSON.parse(JSON.stringify(event)),
+        );
+      });
+
+      it('does NOT preserve an explicit non-UTC time — known, documented residual gap', async () => {
+        const event = new ArvoEvent({
+          ...minimalParam(),
+          time: '2026-08-04T19:52:45.042+05:00',
+        });
+        const back = await wireRoundTrip(event);
+        // This assertion is the regression guard in the other direction: if
+        // this ever starts passing, either the gap was silently closed (say
+        // so in tryRevert/revert's TSDoc and developer-usage-findings.md
+        // Finding 6) or something is now silently swallowing a real
+        // mismatch that should be visible.
+        expect(back.time).not.toBe(event.time);
+      });
     });
   });
 
