@@ -91,7 +91,7 @@
 
 ## 13. Close out
 
-- [ ] 13.1 `pnpm lint` clean
-- [ ] 13.2 `pnpm test` — full suite green apart from any pre-existing, separately-tracked failures already documented by prior changes (confirm the failure set is identical before and after this change's edits)
-- [ ] 13.3 `pnpm exec openspec validate arvoevent-cloudevent-converter --strict` passes
-- [ ] 13.4 Decide whether a changeset is needed, following the same reasoning already applied to the ADR-002 change (no changeset while `v4` is not being released imminently), and record the decision
+- [x] 13.1 `pnpm lint` clean
+- [x] 13.2 `pnpm test` — full suite green apart from any pre-existing, separately-tracked failures already documented by prior changes (confirm the failure set is identical before and after this change's edits) — confirmed identical: the same 18 pre-existing `tests/factory/index.spec.ts` failures (unrelated, predate this change), 587 passing including this change's new suite (100% statement/branch/function/line coverage of `src/cloudevent/**`)
+- [x] 13.3 `pnpm exec openspec validate arvoevent-cloudevent-converter --strict` passes
+- [x] 13.4 No changeset — same reasoning as the `rebuild-arvoevent-structure` change (commit `3c4eaeb`): this merges into `v4`, which is not being released imminently, so a changeset now would falsely imply one. Write the real changeset once `v4` approaches release, covering everything merged into it by then
