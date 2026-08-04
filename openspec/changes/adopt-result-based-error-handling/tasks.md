@@ -1,6 +1,6 @@
 ## 1. Dependency
 
-- [ ] 1.1 Add `neverthrow` to `package.json` (dependency, not peer — internal to how `arvo-core` is implemented, not something a consumer needs to install themselves unless they use `Result`-typed exports directly)
+- [x] 1.1 Add `neverthrow` to `package.json` (dependency, not peer — internal to how `arvo-core` is implemented, not something a consumer needs to install themselves unless they use `Result`-typed exports directly)
 
 ## 2. Shared types and the `neverthrow` boundary
 
