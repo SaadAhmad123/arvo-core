@@ -1,8 +1,8 @@
 ## 1. Dependency and shared types
 
-- [ ] 1.1 Add `cloudevents` to `package.json` as a peer dependency (and a dev dependency for this package's own tests/build), per `design.md`. Before writing any code against it, verify its actual TypeScript exports and runtime behavior directly (parsing, constructing, validating a CloudEvent) rather than assuming from its README — resolves `design.md`'s Open Questions about which validation entry point to call and what type to build on
+- [ ] 1.1 Add `cloudevents` to `package.json` as a peer dependency (and a dev dependency for this package's own tests/build), pinned per `design.md`'s verified v10.0.0 findings. If the installed version differs materially, re-verify its exports and constructor/`.validate()` throwing behavior directly before relying on `design.md`'s findings as-is
 - [ ] 1.2 `src/cloudevent/interface.ts` — define `IConverter<I, O>` with both `convert(data: I): Promise<O>` and `revert(data: O): Promise<I>` mandatory, per `design.md`
-- [ ] 1.3 `src/cloudevent/types.ts` — define the `CloudEvent` type used throughout this module (informed by 1.1's findings), `ForeignCloudEventFallback` (requires `dataschema`; other ArvoEvent fields optional), and `CloudEventTransformationKind = 'strict' | 'foreign' | 'stage'`
+- [ ] 1.3 `src/cloudevent/types.ts` — re-export `cloudevents`' own `CloudEvent` class and `CloudEventV1` interface directly (no hand-written structural interface, per `design.md`'s verified findings); define `ForeignCloudEventFallback` (requires `dataschema`; other ArvoEvent fields optional), and `CloudEventTransformationKind = 'strict' | 'foreign' | 'stage'`
 
 ## 2. Forward mapping (default converter)
 

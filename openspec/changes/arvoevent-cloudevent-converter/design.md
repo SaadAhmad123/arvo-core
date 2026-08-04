@@ -29,7 +29,7 @@ File layout, mirroring `ArvoEvent/`'s existing split-by-concern pattern (thin cl
 - `src/cloudevent/index.ts` — the public class, thin, matching `ArvoEvent/index.ts`'s relationship to `validator.ts`.
 - `src/cloudevent/interface.ts` — the per-stage converter contract.
 - `src/cloudevent/default.ts` — ADR-003's actual field-placement mapping: the Mapping Table, the wrapper, the canonical encodings, the discriminator logic. The substantial file, analogous to `validator.ts`.
-- `src/cloudevent/types.ts` — supporting types: the foreign-adaptation fallback shape, the strict/foreign discriminant, and whatever type represents a CloudEvent in this boundary (see **Open Questions**).
+- `src/cloudevent/types.ts` — supporting types: the foreign-adaptation fallback shape, the strict/foreign discriminant, and re-exports of `cloudevents`' own `CloudEvent`/`CloudEventV1` (see **`cloudevents`'s actual TypeScript surface**, below).
 - `src/cloudevent/errors.ts` — mirrors `ArvoEvent/errors.ts`'s depth; see its own decision below.
 
 ### The transformation is a class taking an ordered list of paired converters, not a pair of plain functions
@@ -110,6 +110,17 @@ There is no third `'malformed'` kind alongside `'strict'`/`'foreign'`: a malform
 
 Deliberately not added: a `source: 'mapping' | 'structural'` tag on individual issues within the `'strict'`/`'foreign'` branch. A reader can already tell which layer an issue came from by its `path` — `arvoexecutionid` or `data.arvoeventbaggage` reads as a CloudEvent-boundary problem, `subject` or `dataschema` reads as ArvoEvent's own field rule — so a redundant tag would duplicate information the path already carries.
 
+### `cloudevents`'s actual TypeScript surface, verified directly against v10.0.0
+
+Both remaining Open Questions from an earlier draft of this design were resolved by reading the package's own `.d.ts`/`.js` output directly (`npm pack cloudevents`, inspected at v10.0.0), rather than assumed from its README, per this package's own discipline for adopting a new dependency:
+
+- **The type.** `cloudevents` exports both a concrete `CloudEvent<T>` class and a plain `CloudEventV1<T>` structural interface (the class implements the interface). Both carry a `[key: string]: unknown` index signature — extension attributes are just ordinary properties, there is no separate extensions bag to unwrap. `src/cloudevent/types.ts` re-exports both directly rather than hand-writing a structural interface: `CloudEvent` (the class) is the forward direction's output type — constructing one is literally how CloudEvents conformance gets delegated, per ADR-003's mandate — and `CloudEventV1<T>` (the interface) is the reverse direction's input type, since it accepts any object satisfying the shape, not only a real class instance, which matters for a caller handing this boundary an already-deserialized plain object (e.g. from a message transport's own `Deserializer`).
+- **The validation entry point.** `cloudevents` exposes no non-throwing conformance check at all. `new CloudEvent(data, strict = true)` validates by default and throws `ValidationError extends TypeError` (carrying `.errors: string[] | ErrorObject[]`, from its internal `ajv`-based schema) on nonconformance; `strict = false` skips validation entirely with no partial feedback. The instance method `.validate()` does not offer a boolean-only failure path either — despite its doc comment claiming to `@return boolean`, reading its implementation shows it only ever returns `true`; on failure it throws the identical `ValidationError`. There is no fourth option to reach for.
+
+This settles how `default.ts` calls into the SDK: conformance delegation on both directions goes through a throwing constructor call wrapped in the same catch boundary already designed for pipeline stages (see **Pipeline execution...**, above) — not a separate mechanism. It also resolves a case the earlier error-shape design didn't yet consider: the base mapping's own `convert` is stage 0 of `CloudEventConverter`'s pipeline, so if `new CloudEvent(...)` inside it ever threw a `ValidationError` — which ADR-003's Forward Transformation Totality requirement and ADR-002's field-domain narrowing together guarantee it will not, for any structurally valid ArvoEvent — it would surface as an ordinary `kind: 'stage'` failure (`stageIndex: 0`, `direction: 'convert'`, `cause` the `ValidationError`), not a new fourth failure kind. The three-shape error design already covers this without modification.
+
+(This finding is pinned to `cloudevents` v10.0.0's actual behavior; re-verify directly, the same way, before adopting a materially different major version.)
+
 ### `cloudevents` is a peer dependency, not a plain dependency
 
 Its type flows through this transformation's own public API — the converter's input/output types on the reverse direction, and whatever type represents `CloudEvent` throughout `src/cloudevent/`. This is the same reasoning that makes `zod` and `@opentelemetry/api` peer dependencies rather than plain ones: a plain dependency would risk a consumer's own separately-installed copy of `cloudevents` diverging in version from arvo-core's, which matters for a package whose conformance checks and `instanceof`-style behavior depend on structural or nominal identity. `fast-uri` remains exactly as it is (internal, plain dependency, not re-exported) — nothing about this change touches that decision; nothing in this transformation's public API takes or returns a `fast-uri` value.
@@ -118,15 +129,8 @@ Per ADR-003's explicit mandate — *"Validation is delegated, not reimplemented.
 
 ## Risks / Trade-offs
 
-**The exact type this boundary uses to represent a CloudEvent is not yet settled** (the `cloudevents` SDK's own type, or a hand-written structural interface) → deferred to `tasks.md` as real, empirical work: the SDK's actual exports and behavior must be verified directly (parsing, serialization, validation surface), not assumed from its documentation, the same discipline this package already applied when adopting `fast-uri` for URI-reference validation. See **Open Questions**.
-
 **A consumer-supplied stage could be non-lossless, silently weakening the combined pipeline's round-trip guarantee** → accepted, not mitigated: the mandatory-pair interface guarantees a reverse exists, and arvo-core's own default stage is independently guaranteed lossless by ADR-003; a consumer's own stage being correct is the consumer's responsibility, the same boundary any pluggable-middleware design draws.
 
 **Getting the three-way discriminator wrong (treating "malformed" as either "strict success" or "foreign") is a correctness-critical mistake ADR-003 explicitly forbids** → mitigated by exhaustive, individual test coverage of every condition in the Arvo-Shaped Discrimination requirement, plus explicit tests asserting a partial-marker-match case is rejected and is distinguishable from a genuine foreign-adaptation attempt — not a representative sample, matching the bar this package already holds bespoke, correctness-critical logic to.
 
 **`arvoexecutionunits`' RFC 8785 round-trip check and `arvodepth`'s grammar check are new, bespoke parsing/encoding logic** → held to the same higher bar as any other bespoke code in this package: every boundary case (canonical vs. non-canonical percent-case-of-hex-digit-style variations, leading zeros, signs, exponents for depth; non-canonical numeric spellings for execution units) gets its own individual test, following the same round-trip-equality technique this package already uses and has already proven out for `source`/`dataschema`'s canonical-form check.
-
-## Open Questions
-
-- Does `src/cloudevent/types.ts` re-export the `cloudevents` SDK's own `CloudEvent`-shaped type, or define its own structural interface? Resolve during implementation, once the SDK's actual TypeScript surface has been read and verified directly — this does not change the spec, the chosen approach, or the task breakdown, only which concrete type declaration task 1 produces.
-- Whether `cloudevents` exposes a validation/parsing entry point precise enough to satisfy ADR-003's "conformance delegated, not reimplemented" requirement directly, or whether it only offers a constructor that throws on invalid input, shapes how `default.ts` calls into it — again, empirical, and deferred to implementation rather than guessed here.
