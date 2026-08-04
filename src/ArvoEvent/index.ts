@@ -64,16 +64,27 @@ export class ArvoEvent<
     param: ArvoEventParam<T, D>,
     options?: ArvoEventValidationOptions,
   ) {
-    const traceInput = param as ArvoEventParam<T, D> & {
-      span?: Span | SpanContext;
-    };
-    const { span, ...rest } = traceInput;
+    // Destructuring a non-object — a string, an array, a number — spreads
+    // its indexed characters/elements as if they were field names rather
+    // than producing anything meaningful. Only extract `span` when `param`
+    // is genuinely a plain-enough object; anything else is passed through
+    // unchanged so validateArvoEvent's own top-level guard rejects it
+    // cleanly, with one issue naming what it actually is.
+    let raw: unknown = param;
 
-    const raw: Record<string, unknown> = { ...rest };
-    if (span) {
-      const trace = traceContextFromSpan(span);
-      raw.traceparent = trace.traceparent;
-      raw.tracestate = trace.tracestate;
+    if (param !== null && typeof param === 'object' && !Array.isArray(param)) {
+      const traceInput = param as ArvoEventParam<T, D> & {
+        span?: Span | SpanContext;
+      };
+      const { span, ...rest } = traceInput;
+
+      const withTrace: Record<string, unknown> = { ...rest };
+      if (span) {
+        const trace = traceContextFromSpan(span);
+        withTrace.traceparent = trace.traceparent;
+        withTrace.tracestate = trace.tracestate;
+      }
+      raw = withTrace;
     }
 
     const result = validateArvoEvent(raw, options);

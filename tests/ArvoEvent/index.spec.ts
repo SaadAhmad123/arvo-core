@@ -317,6 +317,29 @@ describe('ArvoEvent', () => {
     });
   });
 
+  describe('malformed top-level input', () => {
+    // Regression: the constructor used to destructure `param` unconditionally
+    // before validating it. Destructuring a string or an array spreads its
+    // characters/elements as if they were field names (`{...'abc'}` becomes
+    // `{0:'a',1:'b',2:'c'}`), producing a flood of spurious "unrecognised
+    // key" issues instead of one clean "must be an object" — found when
+    // tryParse started routing this kind of input through the real
+    // constructor for the first time, rather than pre-filtering it.
+    it.each([
+      ['a string', 'not an object'],
+      ['an array', [1, 2, 3]],
+      ['a number', 42],
+      ['null', null],
+    ] as const)(
+      'rejects %s with exactly one clean issue, not one per character or element',
+      (_label, input) => {
+        const issues = issuesOf(() => new ArvoEvent(input as never));
+        expect(issues).toHaveLength(1);
+        expect(issues[0]?.path).toBe('event');
+      },
+    );
+  });
+
   describe('root constraint', () => {
     it('accepts a root event: parentid null, executionid equal to subject, depth 0', () => {
       expect(() => new ArvoEvent(baseParam())).not.toThrow();
@@ -867,41 +890,128 @@ describe('ArvoEvent', () => {
   });
 });
 
-describe('ArvoEvent.safeParse', () => {
+describe('ArvoEvent.parse', () => {
+  it('succeeds identically to new ArvoEvent(...), field for field', () => {
+    const param = baseParam();
+    const viaNew = new ArvoEvent(param);
+    const viaParse = ArvoEvent.parse(param);
+    expect(viaParse).toBeInstanceOf(ArvoEvent);
+    expect(viaParse.subject).toBe(viaNew.subject);
+    expect(viaParse.source).toBe(viaNew.source);
+    expect(viaParse.dataschema).toBe(viaNew.dataschema);
+    expect(viaParse.executionid).toBe(viaParse.subject);
+    expect(Object.isFrozen(viaParse)).toBe(true);
+  });
+
+  it('throws ArvoEventValidationError on invalid input, with the same issues a direct construction would produce', () => {
+    const bad = { source: 'a' };
+    let fromParse: ArvoEventValidationError | undefined;
+    let fromNew: ArvoEventValidationError | undefined;
+    try {
+      ArvoEvent.parse(bad as never);
+    } catch (e) {
+      fromParse = e as ArvoEventValidationError;
+    }
+    try {
+      new ArvoEvent(bad as never);
+    } catch (e) {
+      fromNew = e as ArvoEventValidationError;
+    }
+    expect(fromParse).toBeInstanceOf(ArvoEventValidationError);
+    expect(fromParse?.message).toBe(fromNew?.message);
+  });
+});
+
+describe('ArvoEvent.tryParse', () => {
   it('returns a genuine ArvoEvent instance on success', () => {
-    const result = ArvoEvent.safeParse(baseParam());
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.event).toBeInstanceOf(ArvoEvent);
-      expect(result.event.executionid).toBe(result.event.subject);
+    const result = ArvoEvent.tryParse(baseParam());
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toBeInstanceOf(ArvoEvent);
+      expect(result.value.executionid).toBe(result.value.subject);
     }
   });
 
-  it('reports issues rather than throwing on invalid input', () => {
-    const result = ArvoEvent.safeParse({ source: 'a' });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.issues.some((i) => i.path === 'subject')).toBe(true);
+  it('reports failure as a value rather than throwing on invalid input', () => {
+    const result = ArvoEvent.tryParse({ source: 'a' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBeInstanceOf(ArvoEventValidationError);
+      expect(result.error.issues.some((i) => i.path === 'subject')).toBe(true);
     }
   });
 
   it('fails cleanly on input that is not even an object', () => {
-    const result = ArvoEvent.safeParse('not an object');
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.issues).toHaveLength(1);
-      expect(result.issues[0]?.path).toBe('event');
+    const result = ArvoEvent.tryParse('not an object');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.issues).toHaveLength(1);
+      expect(result.error.issues[0]?.path).toBe('event');
     }
   });
 
   it('still enforces structural rules, not bypassing them', () => {
-    const result = ArvoEvent.safeParse({
+    const result = ArvoEvent.tryParse({
       ...baseParam(),
       data: { a: Number.POSITIVE_INFINITY },
     });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.issues.some((i) => i.path === 'data.a')).toBe(true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.issues.some((i) => i.path === 'data.a')).toBe(true);
     }
+  });
+
+  it("returns arvo-core's own plain Result shape, not a leaked neverthrow instance", () => {
+    const success = ArvoEvent.tryParse(baseParam());
+    expect(success.constructor).toBe(Object);
+    expect('isOk' in success).toBe(false);
+    expect('match' in success).toBe(false);
+    expect('_unsafeUnwrap' in success).toBe(false);
+
+    const failure = ArvoEvent.tryParse({ source: 'a' });
+    expect(failure.constructor).toBe(Object);
+    expect('isOk' in failure).toBe(false);
+  });
+
+  it('agrees with parse on the same input, success and failure alike', () => {
+    const param = baseParam();
+    const viaParse = ArvoEvent.parse(param);
+    const tried = ArvoEvent.tryParse(param);
+    expect(tried.ok).toBe(true);
+    if (tried.ok) {
+      expect(tried.value.subject).toBe(viaParse.subject);
+      expect(tried.value.dataschema).toBe(viaParse.dataschema);
+    }
+
+    const bad = { source: 'a' };
+    let thrown: ArvoEventValidationError | undefined;
+    try {
+      ArvoEvent.parse(bad as never);
+    } catch (e) {
+      thrown = e as ArvoEventValidationError;
+    }
+    const failed = ArvoEvent.tryParse(bad);
+    expect(thrown).toBeInstanceOf(ArvoEventValidationError);
+    expect(!failed.ok && failed.error.message).toBe(thrown?.message);
+  });
+
+  it('re-throws a non-ArvoEventValidationError rather than wrapping it in an error result', () => {
+    // The constructor spreads `param` before validation ever runs, which
+    // invokes a getter if present. A throwing getter produces a genuine
+    // non-validation exception straight out of the constructor.
+    const pathological = {
+      get subject(): string {
+        throw new RangeError('boom-from-getter');
+      },
+      source: 'a',
+      type: 't',
+      dataschema: 'd',
+      data: {},
+    };
+
+    expect(() => ArvoEvent.tryParse(pathological)).toThrow(RangeError);
+    expect(() => ArvoEvent.tryParse(pathological)).not.toThrow(
+      ArvoEventValidationError,
+    );
   });
 });
