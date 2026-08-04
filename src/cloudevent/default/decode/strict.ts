@@ -1,27 +1,15 @@
-import type { ArvoEventValidationIssue } from '../../ArvoEvent/errors.js';
-import type { CloudEvent, ForeignCloudEventFallback } from '../types.js';
-import { DepthCodec } from './codecs/depth.js';
-import { ExecutionUnitsCodec } from './codecs/execution-units.js';
+import type { ArvoEventValidationIssue } from '../../../ArvoEvent/errors.js';
+import type { CloudEvent } from '../../types.js';
+import { DepthCodec } from '../codecs/depth.js';
+import { ExecutionUnitsCodec } from '../codecs/execution-units.js';
 import {
   ARVO_MEDIA_TYPE,
   DATA_SCHEMA,
   SPEC_VERSION,
   WRAPPER_KEYS,
-} from './constants.js';
-import { parseDataContentType } from './content-type.js';
-
-export type Decoded = {
-  candidate: Record<string, unknown>;
-  issues: ArvoEventValidationIssue[];
-};
-
-/** Whether `data` claims Arvo shape at all, via either marker — the branch point between attempting strict decoding and foreign adaptation. */
-export const claimsArvoShape = (data: CloudEvent): boolean => {
-  const parsed = parseDataContentType(data.datacontenttype);
-  return (
-    parsed?.mediaType === ARVO_MEDIA_TYPE || data.dataschema === DATA_SCHEMA
-  );
-};
+} from '../constants.js';
+import { parseDataContentType } from '../content-type.js';
+import type { Decoded } from './index.js';
 
 /** Reads `source[key]` as a required or optional string, reporting exactly one issue on absence or the wrong type. Shared by every scalar extension and wrapper-string field this module decodes. */
 const readString = (
@@ -45,15 +33,6 @@ const readString = (
     return undefined;
   }
   return value;
-};
-
-/** `source[key]` if it is present and a string, otherwise `undefined` — no issue reported either way. */
-const asString = (
-  source: Record<string, unknown>,
-  key: string,
-): string | undefined => {
-  const value = source[key];
-  return typeof value === 'string' ? value : undefined;
 };
 
 /** Reads `wrapper[key]` as a required plain object, reporting exactly one issue on absence or the wrong type. Shared by `arvoeventdata`/`arvoeventbaggage`. */
@@ -206,64 +185,6 @@ export const decodeStrict = (data: CloudEvent): Decoded => {
       'arvoeventbaggage',
       issues,
     );
-  }
-
-  return { candidate, issues };
-};
-
-/** Foreign-event adaptation: only `id`/`source`/`type` are unconditional; every other field is mapped when the foreign CloudEvent provides it, otherwise left to `fallback` — a present foreign value always wins over its fallback. */
-export const decodeForeign = (
-  data: CloudEvent,
-  fallback?: ForeignCloudEventFallback,
-): Decoded => {
-  const issues: ArvoEventValidationIssue[] = [];
-  const raw = data as unknown as Record<string, unknown>;
-  const candidate: Record<string, unknown> = {
-    id: data.id,
-    source: data.source,
-    type: data.type,
-    subject:
-      typeof data.subject === 'string' ? data.subject : fallback?.subject,
-    time: typeof data.time === 'string' ? data.time : fallback?.time,
-    traceparent: asString(raw, 'traceparent'),
-    tracestate: asString(raw, 'tracestate'),
-    parentid: fallback?.parentid,
-    initid: fallback?.initid,
-    executionid: fallback?.executionid,
-    category: fallback?.category,
-    depth: fallback?.depth,
-    to: fallback?.to,
-    domain: fallback?.domain,
-    baggage: fallback?.baggage,
-    executionunits: fallback?.executionunits,
-  };
-
-  if (data.data !== undefined) {
-    if (
-      data.data === null ||
-      typeof data.data !== 'object' ||
-      Array.isArray(data.data)
-    ) {
-      issues.push({
-        path: 'data',
-        message: 'must be an object to be adapted from a foreign CloudEvent',
-        received: data.data,
-      });
-    } else {
-      candidate.data = data.data;
-    }
-  } else {
-    candidate.data = fallback?.data;
-  }
-
-  candidate.dataschema = fallback?.dataschema;
-  if (!fallback?.dataschema) {
-    issues.push({
-      path: 'dataschema',
-      message:
-        'is required as a caller-supplied fallback when adapting a foreign CloudEvent',
-      received: fallback?.dataschema,
-    });
   }
 
   return { candidate, issues };

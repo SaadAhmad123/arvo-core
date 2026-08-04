@@ -4,16 +4,20 @@ import type { ArvoEventParam } from '../../ArvoEvent/types.js';
 import { CloudEventTransformationError } from '../errors.js';
 import type { IConverter } from '../interface.js';
 import type { CloudEvent, ForeignCloudEventFallback } from '../types.js';
-import type { Decoded } from './decode.js';
-import { claimsArvoShape, decodeForeign, decodeStrict } from './decode.js';
-import { convertArvoEventToCloudEvent } from './forward.js';
+import type { Decoded } from './decode/index.js';
+import {
+  claimsArvoShape,
+  decodeForeign,
+  decodeStrict,
+} from './decode/index.js';
+import { encode } from './encode.js';
 
 /** The base field-placement mapping — the always-present stage every `CloudEventConverter` wires in by default. */
 export class ArvoToCloudEventConverter
   implements IConverter<ArvoEvent, CloudEvent>
 {
   async convert(event: ArvoEvent): Promise<CloudEvent> {
-    return convertArvoEventToCloudEvent(event);
+    return encode(event);
   }
 
   /** Strict Arvo-shaped deserialization or foreign-event adaptation, chosen by whichever marker `data` claims — never both, never a silent fallback between them. */

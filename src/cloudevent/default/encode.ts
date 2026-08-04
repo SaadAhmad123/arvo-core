@@ -10,9 +10,7 @@ import { DATA_CONTENT_TYPE, DATA_SCHEMA, SPEC_VERSION } from './constants.js';
  * `null`. Conformance to CloudEvents itself is delegated to the
  * `cloudevents` package's own constructor below, not reimplemented here.
  */
-export const convertArvoEventToCloudEvent = async (
-  event: ArvoEvent,
-): Promise<CloudEvent> => {
+export const encode = async (event: ArvoEvent): Promise<CloudEvent> => {
   const depthCodec = new DepthCodec();
   const executionUnitsCodec = new ExecutionUnitsCodec();
 
