@@ -43,7 +43,7 @@ export const truncate = (text: string, maxLength: number): string =>
     : text;
 
 /** Longest rendering of a value in an error message before it is truncated. */
-export const MAX_RECEIVED_LENGTH = 80;
+export const MAX_DESCRIBED_VALUE_LENGTH = 80;
 
 /**
  * Renders a value for an error message: readable, bounded, and unambiguous
@@ -59,7 +59,7 @@ export const describeValue = (value: unknown): string => {
   if (value === undefined) return 'undefined';
   if (value === null) return 'null';
   if (typeof value === 'string') {
-    return truncate(JSON.stringify(value), MAX_RECEIVED_LENGTH);
+    return truncate(JSON.stringify(value), MAX_DESCRIBED_VALUE_LENGTH);
   }
   if (typeof value === 'number' || typeof value === 'boolean')
     return String(value);
@@ -72,7 +72,7 @@ export const describeValue = (value: unknown): string => {
   try {
     const serialized = JSON.stringify(value);
     if (serialized === undefined) return 'an object';
-    return truncate(serialized, MAX_RECEIVED_LENGTH);
+    return truncate(serialized, MAX_DESCRIBED_VALUE_LENGTH);
   } catch {
     // Cyclic or otherwise unserializable — the shape is what matters here.
     return 'an object';
