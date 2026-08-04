@@ -99,6 +99,16 @@ export class CloudEventConverter {
    * `result.error.detail.kind === 'stage'`, naming which stage
    * (`stageIndex`, counting `transformer` as `0` and each `converters`
    * entry from `1`) and carrying whatever it threw as `cause`.
+   *
+   * @example
+   * ```typescript
+   * const result = await converter.tryConvert(arvoEvent);
+   * if (result.ok) {
+   *   sendToBroker(result.value); // a CloudEvent
+   * } else if (result.error.detail.kind === 'stage') {
+   *   log(`stage ${result.error.detail.stageIndex} failed`, result.error.detail.cause);
+   * }
+   * ```
    */
   async tryConvert(
     data: ArvoEvent,
@@ -125,6 +135,12 @@ export class CloudEventConverter {
    *
    * @throws {CloudEventTransformationError} If a `converters` stage you
    * supplied fails. The standard mapping itself never fails.
+   *
+   * @example
+   * ```typescript
+   * const cloudEvent = await converter.convert(arvoEvent);
+   * sendToBroker(cloudEvent);
+   * ```
    */
   async convert(data: ArvoEvent): Promise<CloudEvent> {
     const result = await this.tryConvert(data);
@@ -151,6 +167,21 @@ export class CloudEventConverter {
    * recovered from the foreign CloudEvent itself. Ignored when reverting a
    * CloudEvent that already carries ArvoEvent shape, whose own fields are
    * always authoritative.
+   *
+   * @example
+   * `data` must be a real `CloudEvent` instance, not a plain object — if
+   * you have one (say, parsed from an HTTP body or a queue message),
+   * construct it with `strict: false` first so its own conformance check
+   * doesn't reject a foreign shape this method is about to adapt anyway:
+   * ```typescript
+   * const cloudEvent = new CloudEvent(plainObjectFromWire, false);
+   * const result = await converter.tryRevert(cloudEvent, { dataschema: 'my-contract/1.0.0' });
+   * if (result.ok) {
+   *   handle(result.value); // an ArvoEvent
+   * } else if (result.error.detail.kind === 'foreign') {
+   *   log('could not adapt foreign event', result.error.detail.issues);
+   * }
+   * ```
    */
   async tryRevert(
     data: CloudEvent,
@@ -182,6 +213,13 @@ export class CloudEventConverter {
    * @param foreignFallback - See {@link tryRevert}.
    * @throws {CloudEventTransformationError} If the CloudEvent cannot be
    * reverted — see {@link tryRevert} for the distinct failure cases.
+   *
+   * @example
+   * As with {@link tryRevert}, a plain object needs wrapping first:
+   * ```typescript
+   * const cloudEvent = new CloudEvent(plainObjectFromWire, false);
+   * const arvoEvent = await converter.revert(cloudEvent, { dataschema: 'my-contract/1.0.0' });
+   * ```
    */
   async revert(
     data: CloudEvent,
