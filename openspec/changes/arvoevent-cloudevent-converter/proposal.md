@@ -7,11 +7,12 @@ This change implements ADR-003: the forward mapping (always total), the reverse 
 ## What Changes
 
 - New capability: an ArvoEvent ↔ CloudEvent transformation, conforming to [CloudEvents 1.0.2](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md).
-- Forward direction (ArvoEvent → CloudEvent) is total: every structurally valid ArvoEvent produces a conforming CloudEvent, and the round trip ArvoEvent → CloudEvent → ArvoEvent is lossless, field for field.
+- Forward direction (ArvoEvent → CloudEvent) is total for arvo-core's own base mapping: every structurally valid ArvoEvent produces a conforming CloudEvent, and the round trip ArvoEvent → CloudEvent → ArvoEvent is lossless, field for field. The public `CloudEventConverter` class built on top of this mapping is extensible with consumer-supplied stages, so both directions expose a `tryX`/`X` pair (`tryConvert`/`convert`, `tryRevert`/`revert`) — a consumer-appended stage can fail even though the base mapping itself never does.
 - Reverse direction (CloudEvent → ArvoEvent) is partial and has two distinct, non-interchangeable cases:
   - **Strict Arvo-shaped deserialization**, for a CloudEvent produced by this transformation (or one claiming to be): decodes every native attribute, extension, and the `data` wrapper, and validates the assembled candidate. A CloudEvent that partially matches Arvo's markers but fails any other required condition is **malformed** and MUST be rejected — it MUST NOT silently fall back to foreign-event handling.
   - **Foreign-event adaptation**, for a CloudEvent that claims no Arvo shape at all: maps what CloudEvents' own native attributes and the established tracing extension provide, and requires the caller to supply `dataschema` (never inherited from the foreign CloudEvent's own `dataschema`, which describes a different schema) and any other field the mapping can't recover.
 - Both reverse cases pass their assembled candidate through the existing, unchanged `validateArvoEvent` entry point — no second ArvoEvent validity rule set is introduced.
+- A consumer-appended pipeline stage failing (in either direction) is reported as a third, distinct failure shape alongside the reverse direction's `strict`/`foreign` structural failures — see `design.md`'s Errors section.
 - Adds `cloudevents` (the CNCF-maintained CloudEvents JS SDK) as a new **peer dependency**, alongside the existing `zod` and `@opentelemetry/api` peers — its type flows through this transformation's own public API, and ADR-003 requires CloudEvents conformance to be delegated to a conformant implementation rather than reimplemented.
 - **BREAKING**: none. This is new code with no prior behavior to break; nothing existing changes shape.
 
@@ -29,7 +30,7 @@ None. `arvo-event`'s own structural-validity rules are unchanged; this change on
 
 **Affected code**
 
-- `src/cloudevent/` (new directory) — `index.ts` (the public transformation entry point), `interface.ts` (the per-stage converter contract), `default.ts` (ADR-003's actual field-placement mapping), `types.ts` (supporting types), `errors.ts` (reusing `ArvoEventValidationIssue` for every failure this boundary can produce, plus one new throwing error type)
+- `src/cloudevent/` (new directory) — `index.ts` (the public transformation entry point), `interface.ts` (the per-stage converter contract), `default.ts` (ADR-003's actual field-placement mapping), `types.ts` (supporting types), `errors.ts` (reusing `ArvoEventValidationIssue` for the reverse direction's structural failures, plus one new throwing error type also covering pipeline-stage failures in either direction)
 - `src/index.ts` — new public exports for this capability
 - `package.json` / `pnpm-lock.yaml` — `cloudevents` added as a peer dependency (and dev dependency, for the package's own tests)
 - `tests/cloudevent/` (new directory, mirroring `src/cloudevent/`) — exhaustive coverage of the forward mapping's correctness and every condition the reverse direction's strict and foreign cases can fail on, individually, not by representative sample

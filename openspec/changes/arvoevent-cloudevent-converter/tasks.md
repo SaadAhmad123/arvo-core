@@ -2,7 +2,7 @@
 
 - [ ] 1.1 Add `cloudevents` to `package.json` as a peer dependency (and a dev dependency for this package's own tests/build), per `design.md`. Before writing any code against it, verify its actual TypeScript exports and runtime behavior directly (parsing, constructing, validating a CloudEvent) rather than assuming from its README — resolves `design.md`'s Open Questions about which validation entry point to call and what type to build on
 - [ ] 1.2 `src/cloudevent/interface.ts` — define `IConverter<I, O>` with both `convert(data: I): Promise<O>` and `revert(data: O): Promise<I>` mandatory, per `design.md`
-- [ ] 1.3 `src/cloudevent/types.ts` — define the `CloudEvent` type used throughout this module (informed by 1.1's findings), `ForeignCloudEventFallback` (requires `dataschema`; other ArvoEvent fields optional), and `CloudEventTransformationKind = 'strict' | 'foreign'`
+- [ ] 1.3 `src/cloudevent/types.ts` — define the `CloudEvent` type used throughout this module (informed by 1.1's findings), `ForeignCloudEventFallback` (requires `dataschema`; other ArvoEvent fields optional), and `CloudEventTransformationKind = 'strict' | 'foreign' | 'stage'`
 
 ## 2. Forward mapping (default converter)
 
@@ -36,16 +36,19 @@
 
 ## 6. Errors
 
-- [ ] 6.1 `src/cloudevent/errors.ts` — `CloudEventTransformationError extends Error`, carrying `kind: CloudEventTransformationKind` and `issues: readonly ArvoEventValidationIssue[]` (imported from `ArvoEvent/errors.ts`, not redefined), matching the message-formatting depth of `ArvoEvent/errors.ts`
-- [ ] 6.2 Confirm every failure path in `default.ts`'s reverse mapping (tasks 3–5) reports through `ArvoEventValidationIssue`'s existing shape — no parallel issue type introduced anywhere in this module
+- [ ] 6.1 `src/cloudevent/errors.ts` — `CloudEventTransformationError extends Error`, representing two distinct failure shapes discriminated by `kind`: `'strict' | 'foreign'` carrying `issues: readonly ArvoEventValidationIssue[]` (imported from `ArvoEvent/errors.ts`, not redefined) for the base mapping's own structural rejections, and `'stage'` carrying `direction: 'convert' | 'revert'`, `stageIndex: number`, and `cause: unknown` for a pipeline stage's own thrown failure; matching the message-formatting depth of `ArvoEvent/errors.ts`
+- [ ] 6.2 Confirm every failure path in `default.ts`'s reverse mapping (tasks 3–5) reports through `ArvoEventValidationIssue`'s existing shape under the `'strict'`/`'foreign'` kinds — no parallel issue type introduced anywhere in this module
+- [ ] 6.3 Confirm `tryConvert`/`tryRevert` catch every stage's thrown value unconditionally (not filtered by type, unlike `ArvoEvent.tryParse`'s narrow re-throw rule) and preserve it verbatim as `cause` on the `'stage'` failure, per `design.md`'s Errors section
 
 ## 7. `CloudEventConverter` and extensibility
 
 - [ ] 7.1 `src/cloudevent/index.ts` — `CloudEventConverter` class; a no-argument constructor wires in the single default converter from `default.ts` as the only stage
 - [ ] 7.2 Constructor overload/parameter accepting a caller-supplied converter list `[IConverter<ArvoEvent, CloudEvent>, ...IConverter<CloudEvent, CloudEvent>[]]`
-- [ ] 7.3 `convert(data: ArvoEvent): Promise<CloudEvent>` applies every stage forward, in order
-- [ ] 7.4 `tryRevert(data: CloudEvent, foreignFallback?: ForeignCloudEventFallback): AsyncResult<ArvoEvent, CloudEventTransformationError>` unwinds any consumer-appended stages in reverse order, then runs the base mapping's own `revert`; never throws — the primitive, per `project.md`'s `tryX`/`X` convention
-- [ ] 7.5 `revert(data: CloudEvent, foreignFallback?: ForeignCloudEventFallback): Promise<ArvoEvent>` — a throwing convenience with no logic of its own beyond unwrapping `tryRevert`, throwing `CloudEventTransformationError` on failure, mirroring `ArvoEvent.parse`'s relationship to `ArvoEvent.tryParse` exactly
+- [ ] 7.3 `tryConvert(data: ArvoEvent): AsyncResult<CloudEvent, CloudEventTransformationError>` applies every stage forward, in order, starting with the base mapping's own `convert`; stops at the first stage that throws and reports it as a `kind: 'stage'` failure carrying that stage's index and `cause`; never throws itself — the primitive, per `project.md`'s `tryX`/`X` convention
+- [ ] 7.4 `convert(data: ArvoEvent): Promise<CloudEvent>` — a throwing convenience with no logic of its own beyond unwrapping `tryConvert`, throwing `CloudEventTransformationError` on failure, mirroring `ArvoEvent.parse`'s relationship to `ArvoEvent.tryParse` exactly
+- [ ] 7.5 `tryRevert(data: CloudEvent, foreignFallback?: ForeignCloudEventFallback): AsyncResult<ArvoEvent, CloudEventTransformationError>` unwinds any consumer-appended stages in reverse order, then runs the base mapping's own `revert`; stops at the first stage that throws and reports it as a `kind: 'stage'` failure carrying that stage's index and `cause`, distinct from the base mapping's own `kind: 'strict' | 'foreign'` structural failure; never throws itself — the primitive, per `project.md`'s `tryX`/`X` convention
+- [ ] 7.6 `revert(data: CloudEvent, foreignFallback?: ForeignCloudEventFallback): Promise<ArvoEvent>` — a throwing convenience with no logic of its own beyond unwrapping `tryRevert`, throwing `CloudEventTransformationError` on failure, mirroring `ArvoEvent.parse`'s relationship to `ArvoEvent.tryParse` exactly
+- [ ] 7.7 `tryConvert` and `tryRevert`'s stage-running logic built with `neverthrow`'s `ResultAsync.fromPromise` per stage, chained with `.andThen(...)` for fail-fast short-circuiting — not a hand-rolled loop with manual try/catch — converted to arvo-core's plain `AsyncResult` only at the return boundary via `fromNeverthrowAsync` from `src/result.ts`
 
 ## 8. Public exports
 
@@ -78,9 +81,13 @@
 ## 12. Tests — `CloudEventConverter` extensibility
 
 - [ ] 12.1 The no-argument constructor's behavior is identical to calling the default converter from `default.ts` directly
-- [ ] 12.2 A custom converter list appends a CloudEvent-to-CloudEvent stage correctly on `convert`
+- [ ] 12.2 A custom converter list appends a CloudEvent-to-CloudEvent stage correctly on `tryConvert`/`convert`
 - [ ] 12.3 `tryRevert` unwinds a custom appended stage in reverse order before the base mapping's own `revert` runs
 - [ ] 12.4 `IConverter`'s mandatory pair is enforced at the type level — a stage object missing either `convert` or `revert` fails to type-check (a compile-time check, e.g. a `// @ts-expect-error` fixture, not a runtime test)
+- [ ] 12.5 A custom appended stage that throws during `convert` is reported by `tryConvert` as a `kind: 'stage'` failure naming that stage's index and `direction: 'convert'`, with the thrown value preserved as `cause`; `convert` throws the same `CloudEventTransformationError`
+- [ ] 12.6 A custom appended stage that throws during `revert` is reported by `tryRevert` as a `kind: 'stage'` failure naming that stage's index and `direction: 'revert'`, with the thrown value preserved as `cause`; `revert` throws the same `CloudEventTransformationError`
+- [ ] 12.7 With multiple appended stages, a failure in an earlier stage of the run order stops the pipeline before any later stage executes — assert the later stage is never invoked, for both `tryConvert` and `tryRevert`
+- [ ] 12.8 A stage failure's `stageIndex` correctly identifies which stage failed when more than one stage is appended, for both directions
 
 ## 13. Close out
 
