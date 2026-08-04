@@ -1,7 +1,21 @@
+import { CloudEvent as CloudEventClass } from 'cloudevents';
 import type { FlatMap } from '../types.js';
 
 export type { CloudEventV1 } from 'cloudevents';
-export { CloudEvent } from 'cloudevents';
+
+/**
+ * `cloudevents`' own `CloudEvent` class, re-exported directly rather than
+ * hand-written: constructing one is how this module delegates
+ * CloudEvents-conformance checking to a conformant implementation instead
+ * of reimplementing it.
+ *
+ * Re-exported as both a value (the constructor) and a type fixed to a JSON
+ * object `data` — every CloudEvent this module produces or consumes carries
+ * the `data` wrapper object, never `undefined`, which is the class's own
+ * default type parameter.
+ */
+export const CloudEvent = CloudEventClass;
+export type CloudEvent = CloudEventClass<Record<string, unknown>>;
 
 /**
  * Which reverse-mapping case, or which pipeline direction, a

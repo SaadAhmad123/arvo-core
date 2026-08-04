@@ -6,33 +6,33 @@
 
 ## 2. Forward mapping (default converter)
 
-- [ ] 2.1 `src/cloudevent/default.ts` — native attribute placement: `id`, `source`, `type`, `subject`, `time` carried unchanged onto the CloudEvent's context attributes of the same name
-- [ ] 2.2 Protocol-level constants: `specversion` fixed `1.0`, `datacontenttype` fixed `application/vnd.arvo.event+json;version=1`, `dataschema` fixed `https://www.arvo.land/schemas/cloudevent-data/v1`; `data_base64` never used
-- [ ] 2.3 Established tracing extension placement: `traceparent`/`tracestate` carried as CloudEvents extensions under those exact names, omitted when null
-- [ ] 2.4 Arvo-defined scalar extension placement: `parentid`→`arvoparentid`, `initid`→`arvoinitid`, `executionid`→`arvoexecutionid`, `category`→`arvocategory`, `to`→`arvoto`, `domain`→`arvodomain`, each omitted from the CloudEvent when the ArvoEvent value is null (except `executionid`, which is never null)
-- [ ] 2.5 `arvodepth` canonical unsigned-decimal encoding of `depth`, matching `0|[1-9][0-9]*` exactly
-- [ ] 2.6 `arvoexecutionunits` canonical RFC 8785 numeric string encoding of non-null `executionunits`, omitted when null
-- [ ] 2.7 The `data` wrapper: `data.arvoeventdata` (= `ArvoEvent.data`), `data.arvoeventdataschema` (= `ArvoEvent.dataschema`), `data.arvoeventbaggage` (= `ArvoEvent.baggage`), and no other key
-- [ ] 2.8 Wire 2.1–2.7 into `convert(data: ArvoEvent): Promise<CloudEvent>`; delegate final CloudEvents-conformance validation of the assembled value to the `cloudevents` package rather than reimplementing it, per ADR-003's delegation requirement
+- [x] 2.1 `src/cloudevent/default.ts` — native attribute placement: `id`, `source`, `type`, `subject`, `time` carried unchanged onto the CloudEvent's context attributes of the same name
+- [x] 2.2 Protocol-level constants: `specversion` fixed `1.0`, `datacontenttype` fixed `application/vnd.arvo.event+json;version=1`, `dataschema` fixed `https://www.arvo.land/schemas/cloudevent-data/v1`; `data_base64` never used
+- [x] 2.3 Established tracing extension placement: `traceparent`/`tracestate` carried as CloudEvents extensions under those exact names, omitted when null
+- [x] 2.4 Arvo-defined scalar extension placement: `parentid`→`arvoparentid`, `initid`→`arvoinitid`, `executionid`→`arvoexecutionid`, `category`→`arvocategory`, `to`→`arvoto`, `domain`→`arvodomain`, each omitted from the CloudEvent when the ArvoEvent value is null (except `executionid`, which is never null)
+- [x] 2.5 `arvodepth` canonical unsigned-decimal encoding of `depth`, matching `0|[1-9][0-9]*` exactly
+- [x] 2.6 `arvoexecutionunits` canonical RFC 8785 numeric string encoding of non-null `executionunits`, omitted when null
+- [x] 2.7 The `data` wrapper: `data.arvoeventdata` (= `ArvoEvent.data`), `data.arvoeventdataschema` (= `ArvoEvent.dataschema`), `data.arvoeventbaggage` (= `ArvoEvent.baggage`), and no other key
+- [x] 2.8 Wire 2.1–2.7 into `convert(data: ArvoEvent): Promise<CloudEvent>`; delegate final CloudEvents-conformance validation of the assembled value to the `cloudevents` package rather than reimplementing it, per ADR-003's delegation requirement
 
 ## 3. Reverse mapping — discriminator
 
-- [ ] 3.1 Implement the three-way discrimination `default.ts` uses internally before choosing strict vs. foreign handling: neither `datacontenttype` matching the Arvo media type nor `dataschema` matching the Arvo wrapper-schema URI ⇒ foreign; either marker present ⇒ attempt strict, and any other condition failing is a rejection that must not fall back to foreign
-- [ ] 3.2 Implement each strict-path condition check individually: `specversion` equals `1.0`; `datacontenttype` parses to media type `application/vnd.arvo.event+json` with exactly one `version` parameter equal to `1` and no others (media type/subtype/param-name comparison case-insensitive, `version` value case-sensitive); `dataschema` equals the wrapper URI exactly; `subject` and `time` present with correct types; the data wrapper has exactly its three correctly-typed keys; `arvoexecutionid` present; `arvodepth` present and matching its grammar; every other recognized extension present has its assigned type/encoding
+- [x] 3.1 Implement the three-way discrimination `default.ts` uses internally before choosing strict vs. foreign handling: neither `datacontenttype` matching the Arvo media type nor `dataschema` matching the Arvo wrapper-schema URI ⇒ foreign; either marker present ⇒ attempt strict, and any other condition failing is a rejection that must not fall back to foreign
+- [x] 3.2 Implement each strict-path condition check individually: `specversion` equals `1.0`; `datacontenttype` parses to media type `application/vnd.arvo.event+json` with exactly one `version` parameter equal to `1` and no others (media type/subtype/param-name comparison case-insensitive, `version` value case-sensitive); `dataschema` equals the wrapper URI exactly; `subject` and `time` present with correct types; the data wrapper has exactly its three correctly-typed keys; `arvoexecutionid` present; `arvodepth` present and matching its grammar; every other recognized extension present has its assigned type/encoding
 
 ## 4. Reverse mapping — strict path
 
-- [ ] 4.1 On a CloudEvent discriminated as strict, decode the five native attributes, every present Arvo and tracing extension, and unwrap the three data-wrapper members; restore an omitted nullable extension as `null`
-- [ ] 4.2 Assemble the candidate and pass it through the existing, unmodified `validateArvoEvent` — no second ArvoEvent validity rule set
-- [ ] 4.3 Aggregate any mapping-level issues found during 3.2/4.1 together with any structural issues from 4.2 into one flat `ArvoEventValidationIssue[]`, reporting all of them rather than only the first
+- [x] 4.1 On a CloudEvent discriminated as strict, decode the five native attributes, every present Arvo and tracing extension, and unwrap the three data-wrapper members; restore an omitted nullable extension as `null`
+- [x] 4.2 Assemble the candidate and pass it through the existing, unmodified `validateArvoEvent` — no second ArvoEvent validity rule set
+- [x] 4.3 Aggregate any mapping-level issues found during 3.2/4.1 together with any structural issues from 4.2 into one flat `ArvoEventValidationIssue[]`, reporting all of them rather than only the first
 
 ## 5. Reverse mapping — foreign path
 
-- [ ] 5.1 On a CloudEvent discriminated as foreign, map `id`, `source`, `type` unconditionally; map `subject`, `time`, and object-valued `data` when present
-- [ ] 5.2 Map `traceparent`/`tracestate` extensions when present; do not interpret any `arvo`-prefixed extension or the data-wrapper convention
-- [ ] 5.3 Accept `ForeignCloudEventFallback`; require `dataschema` from it (never inherited from the foreign CloudEvent's own `dataschema`); apply other supplied fallback values only for fields the foreign mapping does not itself provide — a present foreign value always wins
-- [ ] 5.4 Fail explicitly, rather than silently discarding the value, when foreign `data` is present and not an object
-- [ ] 5.5 Assemble the candidate and pass it through `validateArvoEvent`, same as the strict path
+- [x] 5.1 On a CloudEvent discriminated as foreign, map `id`, `source`, `type` unconditionally; map `subject`, `time`, and object-valued `data` when present
+- [x] 5.2 Map `traceparent`/`tracestate` extensions when present; do not interpret any `arvo`-prefixed extension or the data-wrapper convention
+- [x] 5.3 Accept `ForeignCloudEventFallback`; require `dataschema` from it (never inherited from the foreign CloudEvent's own `dataschema`); apply other supplied fallback values only for fields the foreign mapping does not itself provide — a present foreign value always wins
+- [x] 5.4 Fail explicitly, rather than silently discarding the value, when foreign `data` is present and not an object
+- [x] 5.5 Assemble the candidate and pass it through `validateArvoEvent`, same as the strict path
 
 ## 6. Errors
 
