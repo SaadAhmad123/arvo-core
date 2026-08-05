@@ -1,8 +1,8 @@
 ## 1. Dependencies and verification
 
-- [ ] 1.1 Add `cloudevents` (2.x) to `pyproject.toml`'s `[project.dependencies]`
-- [ ] 1.2 Verify (short script, not assumed from docs) that `cloudevents.v1.pydantic.v2.event.CloudEvent` is a genuine `pydantic.BaseModel` and accepts arbitrary extension attributes
-- [ ] 1.3 Identify and empirically verify a library implementing RFC 8785 canonical number serialization (test against a handful of known RFC 8785 number-serialization test vectors, not assumed from the library's own docs); if none is adequate, hand-roll the specific number-to-string algorithm RFC 8785 requires, recording why in `design.md`
+- [x] 1.1 Add `cloudevents` (2.x) to `pyproject.toml`'s `[project.dependencies]`
+- [x] 1.2 Verify (short script, not assumed from docs) that `cloudevents.v1.pydantic.v2.event.CloudEvent` is a genuine `pydantic.BaseModel` and accepts arbitrary extension attributes
+- [x] 1.3 Identify and empirically verify a library implementing RFC 8785 canonical number serialization (test against a handful of known RFC 8785 number-serialization test vectors, not assumed from the library's own docs); if none is adequate, hand-roll the specific number-to-string algorithm RFC 8785 requires, recording why in `design.md`
 
 ## 2. `CloudEventTransformationError`
 
