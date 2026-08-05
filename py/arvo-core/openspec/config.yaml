@@ -1,0 +1,26 @@
+schema: spec-driven
+
+# Full project context — purpose, governance, capability conventions, glossary —
+# lives in ./project.md. Read it before authoring any artifact.
+
+# Per-artifact rules. Kept deliberately small: these encode the few conventions
+# that are structural to this repository and unlikely to change. Workflow habits
+# that might still shift are left to project.md rather than enforced here.
+rules:
+  proposal:
+    - Name the ADR this change implements, or state explicitly that no ADR governs it.
+    - Never contradict an accepted ADR. If a change requires it, that ADR must be superseded first — accepted ADRs are not amended in place.
+    - Where an ADR defers a decision, keep it deferred and out of scope rather than settling it in passing.
+    - State what is deliberately not in scope, especially anything a reader would otherwise assume is covered.
+  specs:
+    - Requirement text uses SHALL, and every requirement carries at least one scenario.
+    - Write scenarios for behaviour an ADR explicitly permits, not only for what it forbids. Several rules here are deliberately one-directional, and an over-strict implementation is as wrong as a missing one.
+    - State the obligation, not the reasoning. Cite the ADR for the why.
+  tasks:
+    - Sequence so that each stage compiles against the one before it.
+    - Name the file each task touches.
+    - Mark tasks that delete or replace existing behaviour as such, rather than describing them as additions.
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# Left unset until real changes reveal a pattern worth encoding.

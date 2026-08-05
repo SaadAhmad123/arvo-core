@@ -1,9 +1,12 @@
-name: CI
+name: CI (TypeScript)
 
 on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'ts/arvo-core/**'
+      - '.github/workflows/ci-ts.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

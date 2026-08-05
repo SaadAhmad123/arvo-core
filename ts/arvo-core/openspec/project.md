@@ -14,10 +14,10 @@ This repository is written to be read by both humans and agents, and the reasoni
 
 | Record | Scope | Normative? | Changes by |
 |---|---|---|---|
-| [`docs/vision.md`](../docs/vision.md) | Why Arvo exists, and how the bet could fail | No | Editing |
-| [`docs/adr/`](../docs/adr/) | Architectural decisions about the **model** — ecosystem-wide, cross-language | **Yes** | Superseding ADR only |
+| [`docs/vision.md`](../../docs/vision.md) | Why Arvo exists, and how the bet could fail | No | Editing |
+| [`docs/adr/`](../../docs/adr/) | Architectural decisions about the **model** — ecosystem-wide, cross-language | **Yes** | Superseding ADR only |
 | `openspec/` | Capability specifications and proposed changes to **this package** | Yes, once archived | The OpenSpec workflow |
-| [`docs/why-agent-native-development.md`](../docs/why-agent-native-development.md) | Why the repository is structured this way | No | Editing |
+| [`docs/why-agent-native-development.md`](../../docs/why-agent-native-development.md) | Why the repository is structured this way | No | Editing |
 
 The distinction that matters most: an ADR describes what Arvo *is*, in terms any implementation in any language must honour. An OpenSpec capability describes what *this package* does. A decision that would bind a Go implementation belongs in an ADR; a decision about how the TypeScript reaches that outcome belongs in `openspec/`.
 
@@ -25,10 +25,10 @@ The distinction that matters most: an ADR describes what Arvo *is*, in terms any
 
 **Accepted ADRs are authoritative over specs and code.** This repository is their canonical source.
 
-- [ADR-000](../docs/adr/000-arvo-system-identity-and-architectural-principles.md) — Arvo System Identity and Architectural Invariants. Defines AAM 1, its invariants, and what is inside versus outside the model.
-- [ADR-001](../docs/adr/001-arvoevent-structure.md) — ArvoEvent Structure. Defines the event's fields, their types, defaults, structural constraints, and propagation.
+- [ADR-000](../../docs/adr/000-arvo-system-identity-and-architectural-principles.md) — Arvo System Identity and Architectural Invariants. Defines AAM 1, its invariants, and what is inside versus outside the model.
+- [ADR-001](../../docs/adr/001-arvoevent-structure.md) — ArvoEvent Structure. Defines the event's fields, their types, defaults, structural constraints, and propagation.
 
-[`docs/adr/README.md`](../docs/adr/README.md) is the index and the source of truth for which ADRs exist and what status each holds. Check it rather than trusting this list to be current.
+[`docs/adr/README.md`](../../docs/adr/README.md) is the index and the source of truth for which ADRs exist and what status each holds. Check it rather than trusting this list to be current.
 
 Rules that follow:
 

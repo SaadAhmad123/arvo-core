@@ -1,0 +1,45 @@
+name: CI (Python)
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'py/arvo-core/**'
+      - '.github/workflows/ci-py.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint_typecheck_test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: py/arvo-core
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'py/arvo-core/uv.lock'
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run pyrefly check
+
+      - name: Test
+        run: uv run pytest --cov --cov-report=term-missing

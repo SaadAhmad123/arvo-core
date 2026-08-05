@@ -1,9 +1,12 @@
-name: Publish
+name: Publish (TypeScript)
 
 on:
   push:
     branches:
       - main
+    paths:
+      - 'ts/arvo-core/**'
+      - '.github/workflows/publish-ts.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
