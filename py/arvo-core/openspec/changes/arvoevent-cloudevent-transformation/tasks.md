@@ -86,8 +86,8 @@
 
 ## 14. Close out
 
-- [ ] 14.1 `uv run ruff check .` and `uv run ruff format --check .` clean
-- [ ] 14.2 `uv run pyrefly check` clean
-- [ ] 14.3 `uv run pytest --cov --cov-report=term-missing` — full suite green, 100% coverage of `src/arvo_core/cloudevent/**`
-- [ ] 14.4 `openspec validate arvoevent-cloudevent-transformation --strict` passes
-- [ ] 14.5 A developer-usage pass, matching the discipline `arvo-event` established — actually convert and revert events as a consumer would (Arvo-produced, foreign, malformed) before considering this change done, recording findings in a `developer-usage-findings.md`
+- [x] 14.1 `uv run ruff check .` and `uv run ruff format --check .` clean
+- [x] 14.2 `uv run pyrefly check` clean
+- [x] 14.3 `uv run pytest --cov --cov-report=term-missing` — full suite green, 100% coverage of `src/arvo_core/cloudevent/**`
+- [x] 14.4 `openspec validate arvoevent-cloudevent-transformation --strict` passes
+- [x] 14.5 A developer-usage pass, matching the discipline `arvo-event` established — actually convert and revert events as a consumer would (Arvo-produced, foreign, malformed) before considering this change done, recording findings in a `developer-usage-findings.md`
