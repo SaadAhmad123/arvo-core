@@ -9,7 +9,15 @@ authors = [
     { name = "Saad Ahmad", email = "saadkwi12@hotmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "hyperlink>=21.0.0",
+    "pydantic>=2.13.4",
+]
+
+[project.optional-dependencies]
+otel = [
+    "opentelemetry-api>=1.44.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.1,<0.13.0"]

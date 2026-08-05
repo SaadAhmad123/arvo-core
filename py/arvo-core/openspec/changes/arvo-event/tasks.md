@@ -1,8 +1,8 @@
 ## 1. Dependencies and project setup
 
-- [ ] 1.1 Add `pydantic` (v2) to `pyproject.toml`'s `[project.dependencies]` (a real runtime dependency, not `dependency-groups.dev`)
-- [ ] 1.2 Verify the `rfc3986` PyPI package (or an alternative, if verification under 1.3 finds it unsuitable) actually canonicalizes rather than merely validates, and that it rejects the same class of malformed input `fast-uri` was verified to reject in `ts/arvo-core` — a short verification script, not assumed from documentation alone
-- [ ] 1.3 If `rfc3986` fails verification, evaluate an alternative (e.g. `hyperlink`, `uritools`) against the same criteria before adding it as a dependency
+- [x] 1.1 Add `pydantic` (v2) to `pyproject.toml`'s `[project.dependencies]` (a real runtime dependency, not `dependency-groups.dev`)
+- [x] 1.2 Verified `rfc3986` and `hyperlink` against the same test cases `fast-uri` was checked against. `rfc3986` silently accepts `'::::garbage::::'` as canonical (a real gap); `hyperlink` correctly rejects it, matching `fast-uri`'s behavior exactly. Chose `hyperlink`. One narrow residual gap in both libraries (a colon in a schemeless reference's first path segment) is documented in `design.md`, not hand-patched.
+- [x] 1.3 (superseded by 1.2's outcome — `hyperlink` is the chosen alternative)
 
 ## 2. `ArvoEventValidationError`
 

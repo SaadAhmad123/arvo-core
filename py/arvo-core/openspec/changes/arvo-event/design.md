@@ -48,9 +48,16 @@ Pydantic validates field-by-field before any cross-field logic runs, so a defaul
 
 `ts/arvo-core`'s own `createTimestamp()` was originally `+00:00`-suffixed and was found, during that package's own development, to lose wire fidelity: the `cloudevents` npm package's `toJSON()` unconditionally normalizes `time` to `new Date(value).toISOString()` — always `Z`, never `+00:00` — so a `+00:00`-suffixed default silently changed on its first real wire round trip, even though the represented instant was identical. Python's `datetime.now(timezone.utc).isoformat()` defaults to `+00:00`, the same trap. This capability's default-`time` implementation must produce a `Z`-suffixed string directly (`datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"`, or equivalent) rather than using `.isoformat()`'s own output unmodified — decided now, before any CloudEvent-transformation capability exists to discover the same bug the hard way a second time.
 
-### The ADR-002 URI-canonical-form check for `source`/`dataschema`: candidate library `rfc3986`, verification deferred to implementation, not assumed
+### The ADR-002 URI-canonical-form check for `source`/`dataschema`: `hyperlink`, verified empirically, not assumed from documentation
 
-`ts/arvo-core` uses `fast-uri`'s `parse`/`serialize` round-trip specifically because it was empirically verified to canonicalize (not just validate) — critical, since ADR-002 requires *rejecting* a grammatically valid but non-canonical value, not normalizing it. The Python PyPI package `rfc3986` is the leading candidate for the same role (RFC 3986-conformant parsing and normalization), but per `project.md`'s *Dependencies and reuse* and *Testing* conventions, it must be empirically verified the same way `fast-uri` was — including the specific failure mode that made TS's own attempted fix dangerous (leniency that silently accepts malformed input by mangling it into something technically parseable, discovered and reverted during `ts/arvo-core`'s own `arvoevent-cloudevent-converter` work). This verification is implementation work for `tasks.md`, not a decision this design.md can make in the abstract — if `rfc3986` doesn't hold up, the task is to find one that does, not to hand-roll RFC 3986 canonicalization from scratch.
+`ts/arvo-core` uses `fast-uri`'s `parse`/`serialize` round-trip specifically because it was empirically verified to canonicalize (not just validate) — critical, since ADR-002 requires *rejecting* a grammatically valid but non-canonical value, not normalizing it. Two Python candidates were run against the same test cases `fast-uri` was checked against (case-folding, percent-encoding normalization, dot-segment resolution, and the specific "garbage input gets mangled into something technically parseable" failure mode that made TS's own attempted fix dangerous):
+
+- **`rfc3986`** — correctly rejects (via round-trip inequality) case, percent-encoding, and dot-segment non-canonicality, and whitespace/control-character/non-ASCII input. But `'::::garbage::::'` parses as valid *and* normalizes to itself unchanged — silently accepted, exactly the failure mode being checked for.
+- **`hyperlink`** — passes every case `rfc3986` passes, *and* correctly rejects `'::::garbage::::'` (percent-encodes it, detected via the same round-trip-inequality check), matching `fast-uri`'s exact behavior on that input.
+
+Decision: **`hyperlink`**, not `rfc3986`.
+
+**One residual gap, shared by both libraries, accepted rather than hand-patched:** a schemeless reference whose first path segment itself contains a colon (`'a:b:c'`) parses as valid and normalizes to itself unchanged in both libraries, even though RFC 3986 §3.3 states a relative-path reference's first segment must not contain a colon, specifically to avoid ambiguity with `scheme:` syntax. Neither library enforces this narrow rule. Hand-rolling a supplementary check for this one grammar rule was considered and rejected here: it is a genuinely obscure edge case (a colon-containing first path segment with no scheme), catching it would be new bespoke parsing logic layered on top of a library chosen specifically to avoid hand-rolled URI parsing, and nothing in ADR-002 singles this case out as a concern the way the wholesale malformed-input leniency was. Documented, not silently accepted — the same disposition `ts/arvo-core`'s own Finding 3 (a bare-origin `source` rejection) received, for the same reason: a known, narrow, low-probability gap is better recorded than either ignored or over-engineered around.
 
 ### `executionunits`' binary64 requirement is automatically satisfied — Python's `float` has no other width
 
@@ -77,7 +84,7 @@ The derivation logic itself (W3C `traceparent` = `00-{trace_id:032x}-{span_id:01
 
 **Every future fallible operation in this package inherits the raises-not-returns idiom decided here**, on the strength of one capability's reasoning. Accepted: the reasoning (Pydantic already raises; EAFP is Python's own default) is general, not specific to `ArvoEvent`, and revisiting it per-capability would just be re-litigating the same argument repeatedly for no benefit.
 
-**`rfc3986` (or whichever URI library implementation settles on) has not yet been empirically verified** the way `fast-uri` was for TypeScript. This is named explicitly as implementation-phase work in `tasks.md`, not silently assumed — the exact failure mode to check for (silent malformed-input leniency) is already known from `ts/arvo-core`'s own history, which narrows the verification work considerably compared to starting from nothing.
+**A schemeless, colon-containing first-path-segment reference (`'a:b:c'`) is accepted by `hyperlink` when RFC 3986 §3.3 arguably says it shouldn't be** — accepted, documented above, not hand-patched. Narrow, low-probability, and not the failure mode ADR-002 was written to close.
 
 ## Considered Alternatives
 
@@ -90,4 +97,3 @@ The derivation logic itself (W3C `traceparent` = `00-{trace_id:032x}-{span_id:01
 ## Open Questions
 
 - Exact `@field_validator` composition and ordering (e.g., whether the URI canonical-form check and the character-domain exclusion run as separate validators on `source`/`dataschema` or one combined validator) — an implementation detail for `tasks.md`, not a design-level decision.
-- Whether `rfc3986` is actually the right library, pending the empirical verification named under Risks — `tasks.md` names this as a checked, not assumed, step.
