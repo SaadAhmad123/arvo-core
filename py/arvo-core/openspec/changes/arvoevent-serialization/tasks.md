@@ -1,0 +1,61 @@
+## 1. Verification
+
+- [ ] 1.1 Confirm (short script, not assumed) that `ArvoEvent.model_validate_json` does not wrap a JSON-syntax failure in `ArvoEventValidationError`, and that `deserialize` must therefore own `json.loads` itself
+- [ ] 1.2 Confirm that `CloudEvent.model_validate` accepts a plain parsed dict with no construction-time conformance gate to bypass
+- [ ] 1.3 Confirm `event.model_dump_json()` and `to_cloud_event(event).model_dump_json()` do not raise for a structurally valid `ArvoEvent`, including one with a non-JSON-native value inside `data`
+
+## 2. `ArvoEventSerializerError`
+
+- [ ] 2.1 `src/arvo_core/serializer/errors.py` -- `ArvoEventSerializerError(Exception)`, human-readable message, always raised via `raise ArvoEventSerializerError(...) from original_error`
+
+## 3. `serialize`
+
+- [ ] 3.1 `src/arvo_core/serializer/serialize.py` -- `serialize(event: ArvoEvent, *, mode: SerializationMode = "cloudevent") -> str`
+- [ ] 3.2 `"arvoevent"` mode: `event.model_dump_json()`, no CloudEvent involved
+- [ ] 3.3 `"cloudevent"` mode: `to_cloud_event(event).model_dump_json()`
+- [ ] 3.4 No error wrapping -- confirmed total per verification task 1.3
+
+## 4. `deserialize`
+
+- [ ] 4.1 `src/arvo_core/serializer/deserialize.py` -- `deserialize(wire: str, *, mode: SerializationMode = "cloudevent", **foreign_fallback: Any) -> ArvoEvent`
+- [ ] 4.2 Parses `wire` with `json.loads`; a `json.JSONDecodeError` is wrapped in `ArvoEventSerializerError`
+- [ ] 4.3 A parsed value that is not a `dict` (top-level JSON array or scalar) raises `ArvoEventSerializerError`, in either mode
+- [ ] 4.4 `"arvoevent"` mode: `ArvoEvent(**parsed)`; a resulting `ArvoEventValidationError` is wrapped in `ArvoEventSerializerError`; `foreign_fallback` is ignored even if supplied
+- [ ] 4.5 `"cloudevent"` mode: `CloudEvent.model_validate(parsed)` (a `pydantic.ValidationError` here is wrapped in `ArvoEventSerializerError`), then `from_cloud_event(ce, **foreign_fallback)`; a resulting `CloudEventTransformationError` propagates unwrapped
+
+## 5. Public exports
+
+- [ ] 5.1 `src/arvo_core/serializer/__init__.py` -- export `serialize`, `deserialize`, `ArvoEventSerializerError`
+- [ ] 5.2 `src/arvo_core/__init__.py` -- re-export the same three names
+
+## 6. Tests -- serialize
+
+- [ ] 6.1 A structurally valid `ArvoEvent` serializes without raising in both modes
+- [ ] 6.2 `"arvoevent"`-mode output is `ArvoEvent`'s own default JSON shape (round-trips via `ArvoEvent.model_validate_json` directly, independent of this capability)
+- [ ] 6.3 `"cloudevent"`-mode output is CloudEvent-shaped JSON matching `to_cloud_event`'s own field placement
+
+## 7. Tests -- deserialize, arvoevent mode
+
+- [ ] 7.1 Wire JSON from `serialize(event, mode="arvoevent")` deserializes back to the same event via `deserialize(wire, mode="arvoevent")`
+- [ ] 7.2 Non-JSON input raises `ArvoEventSerializerError` with the original `json.JSONDecodeError` as `.__cause__`
+- [ ] 7.3 A top-level JSON array or scalar raises `ArvoEventSerializerError`
+- [ ] 7.4 A structurally invalid parsed value raises `ArvoEventSerializerError` with the original `ArvoEventValidationError` as `.__cause__`
+- [ ] 7.5 A supplied fallback has no effect on the outcome
+
+## 8. Tests -- deserialize, cloudevent mode
+
+- [ ] 8.1 Wire JSON from `serialize(event, mode="cloudevent")` deserializes back to the same event (except `time`, per `arvoevent-cloudevent-transformation`'s own instant-equality guarantee) via `deserialize(wire)`
+- [ ] 8.2 Non-JSON input raises `ArvoEventSerializerError`
+- [ ] 8.3 A top-level JSON array or scalar raises `ArvoEventSerializerError`
+- [ ] 8.4 A parsed value that cannot become a `CloudEvent` at all (missing `source`/`type`) raises `ArvoEventSerializerError`
+- [ ] 8.5 JSON produced by `mode="arvoevent"`'s `serialize`, passed to `mode="cloudevent"`'s `deserialize`, fails clearly rather than silently misadapting
+- [ ] 8.6 A foreign (non-Arvo-shaped) CloudEvent's wire JSON adapts correctly with a supplied fallback
+- [ ] 8.7 A malformed Arvo-shaped CloudEvent's wire JSON raises the underlying `CloudEventTransformationError` unwrapped, not `ArvoEventSerializerError`
+
+## 9. Close out
+
+- [ ] 9.1 `uv run ruff check .` and `uv run ruff format --check .` clean
+- [ ] 9.2 `uv run pyrefly check` clean
+- [ ] 9.3 `uv run pytest --cov --cov-report=term-missing` -- full suite green, 100% coverage of `src/arvo_core/serializer/**`
+- [ ] 9.4 `openspec validate arvoevent-serialization --strict` passes
+- [ ] 9.5 A developer-usage pass: actually serialize and deserialize events as a consumer would (both modes, a foreign CloudEvent, malformed wire input), recording findings in `developer-usage-findings.md`
