@@ -30,27 +30,27 @@
 
 ## 6. Tests -- serialize
 
-- [ ] 6.1 A structurally valid `ArvoEvent` serializes without raising in both modes
-- [ ] 6.2 `"arvoevent"`-mode output is `ArvoEvent`'s own default JSON shape (round-trips via `ArvoEvent.model_validate_json` directly, independent of this capability)
-- [ ] 6.3 `"cloudevent"`-mode output is CloudEvent-shaped JSON matching `to_cloud_event`'s own field placement
+- [x] 6.1 A structurally valid `ArvoEvent` serializes without raising in both modes
+- [x] 6.2 `"arvoevent"`-mode output is `ArvoEvent`'s own default JSON shape (round-trips via `ArvoEvent.model_validate_json` directly, independent of this capability)
+- [x] 6.3 `"cloudevent"`-mode output is CloudEvent-shaped JSON matching `to_cloud_event`'s own field placement
 
 ## 7. Tests -- deserialize, arvoevent mode
 
-- [ ] 7.1 Wire JSON from `serialize(event, mode="arvoevent")` deserializes back to the same event via `deserialize(wire, mode="arvoevent")`
-- [ ] 7.2 Non-JSON input raises `ArvoEventSerializerError` with the original `json.JSONDecodeError` as `.__cause__`
-- [ ] 7.3 A top-level JSON array or scalar raises `ArvoEventSerializerError`
-- [ ] 7.4 A structurally invalid parsed value raises `ArvoEventSerializerError` with the original `ArvoEventValidationError` as `.__cause__`
-- [ ] 7.5 A supplied fallback has no effect on the outcome
+- [x] 7.1 Wire JSON from `serialize(event, mode="arvoevent")` deserializes back to the same event via `deserialize(wire, mode="arvoevent")`
+- [x] 7.2 Non-JSON input raises `ArvoEventSerializerError` with the original `json.JSONDecodeError` as `.__cause__`
+- [x] 7.3 A top-level JSON array or scalar raises `ArvoEventSerializerError`
+- [x] 7.4 A structurally invalid parsed value raises `ArvoEventSerializerError` with the original `ArvoEventValidationError` as `.__cause__`
+- [x] 7.5 A supplied fallback has no effect on the outcome
 
 ## 8. Tests -- deserialize, cloudevent mode
 
-- [ ] 8.1 Wire JSON from `serialize(event, mode="cloudevent")` deserializes back to the same event (except `time`, per `arvoevent-cloudevent-transformation`'s own instant-equality guarantee) via `deserialize(wire)`
-- [ ] 8.2 Non-JSON input raises `ArvoEventSerializerError`
-- [ ] 8.3 A top-level JSON array or scalar raises `ArvoEventSerializerError`
-- [ ] 8.4 A parsed value that cannot become a `CloudEvent` at all (missing `source`/`type`) raises `ArvoEventSerializerError`
-- [ ] 8.5 JSON produced by `mode="arvoevent"`'s `serialize`, passed to `mode="cloudevent"`'s `deserialize`, fails clearly rather than silently misadapting
-- [ ] 8.6 A foreign (non-Arvo-shaped) CloudEvent's wire JSON adapts correctly with a supplied fallback
-- [ ] 8.7 A malformed Arvo-shaped CloudEvent's wire JSON raises the underlying `CloudEventTransformationError` unwrapped, not `ArvoEventSerializerError`
+- [x] 8.1 Wire JSON from `serialize(event, mode="cloudevent")` deserializes back to the same event (except `time`, per `arvoevent-cloudevent-transformation`'s own instant-equality guarantee) via `deserialize(wire)`
+- [x] 8.2 Non-JSON input raises `ArvoEventSerializerError`
+- [x] 8.3 A top-level JSON array or scalar raises `ArvoEventSerializerError`
+- [x] 8.4 A parsed value that cannot become a `CloudEvent` at all (missing `source`/`type`) raises `ArvoEventSerializerError`
+- [x] 8.5 JSON produced by `mode="arvoevent"`'s `serialize`, passed to `mode="cloudevent"`'s `deserialize`, fails clearly rather than silently misadapting
+- [x] 8.6 A foreign (non-Arvo-shaped) CloudEvent's wire JSON adapts correctly with a supplied fallback
+- [x] 8.7 A malformed Arvo-shaped CloudEvent's wire JSON raises the underlying `CloudEventTransformationError` unwrapped, not `ArvoEventSerializerError`
 
 ## 9. Close out
 
