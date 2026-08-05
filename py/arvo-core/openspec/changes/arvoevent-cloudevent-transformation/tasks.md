@@ -46,43 +46,43 @@
 
 ## 9. Tests — forward transformation
 
-- [ ] 9.1 Any structurally valid ArvoEvent converts without raising
-- [ ] 9.2 Native fields map unchanged
-- [ ] 9.3 Protocol constants are always set, independent of the source event
-- [ ] 9.4 Every non-null extension-mapped field is present, correctly named
-- [ ] 9.5 `arvodepth` is a canonical unsigned-decimal string for a representative range of values, including `0` and a large value
-- [ ] 9.6 `arvoexecutionunits` is a canonical RFC 8785 number string for a representative range of finite values, including very small/large magnitudes
-- [ ] 9.7 A null nullable field is omitted from extensions entirely, not present as any null-like value
-- [ ] 9.8 The `data` wrapper has exactly the three required keys, correctly populated
+- [x] 9.1 Any structurally valid ArvoEvent converts without raising
+- [x] 9.2 Native fields map unchanged
+- [x] 9.3 Protocol constants are always set, independent of the source event
+- [x] 9.4 Every non-null extension-mapped field is present, correctly named
+- [x] 9.5 `arvodepth` is a canonical unsigned-decimal string for a representative range of values, including `0` and a large value
+- [x] 9.6 `arvoexecutionunits` is a canonical RFC 8785 number string for a representative range of finite values, including very small/large magnitudes
+- [x] 9.7 A null nullable field is omitted from extensions entirely, not present as any null-like value
+- [x] 9.8 The `data` wrapper has exactly the three required keys, correctly populated
 
 ## 10. Tests — discrimination and strict deserialization
 
-- [ ] 10.1 An Arvo-shaped CloudEvent (produced by `to_cloud_event`) is correctly recognized and reverses using only its own values, ignoring any fallback supplied alongside it
-- [ ] 10.2 A CloudEvent claiming the Arvo media type but missing a required extension is rejected with `kind="strict"`, not treated as foreign
-- [ ] 10.3 A CloudEvent claiming the Arvo wrapper schema but with a malformed `arvodepth` (leading zero, sign, non-digit) is rejected with `kind="strict"`
-- [ ] 10.4 A CloudEvent with an unexpected key in the `data` wrapper is rejected with `kind="strict"`
+- [x] 10.1 An Arvo-shaped CloudEvent (produced by `to_cloud_event`) is correctly recognized and reverses using only its own values, ignoring any fallback supplied alongside it
+- [x] 10.2 A CloudEvent claiming the Arvo media type but missing a required extension is rejected with `kind="strict"`, not treated as foreign
+- [x] 10.3 A CloudEvent claiming the Arvo wrapper schema but with a malformed `arvodepth` (leading zero, sign, non-digit) is rejected with `kind="strict"`
+- [x] 10.4 A CloudEvent with an unexpected key in the `data` wrapper is rejected with `kind="strict"`
 
 ## 11. Tests — foreign adaptation
 
-- [ ] 11.1 A foreign CloudEvent adapts correctly with a complete fallback
-- [ ] 11.2 The foreign CloudEvent's own `subject`/`time`/`data` win over a fallback supplying the same fields
-- [ ] 11.3 Missing `dataschema` in the fallback is rejected with `kind="foreign"`
-- [ ] 11.4 A present non-object `data` value fails adaptation with `kind="foreign"`, rather than being silently dropped
-- [ ] 11.5 `traceparent`/`tracestate` map when present on a foreign CloudEvent
+- [x] 11.1 A foreign CloudEvent adapts correctly with a complete fallback
+- [x] 11.2 The foreign CloudEvent's own `subject`/`time`/`data` win over a fallback supplying the same fields
+- [x] 11.3 Missing `dataschema` in the fallback is rejected with `kind="foreign"`
+- [x] 11.4 A present non-object `data` value fails adaptation with `kind="foreign"`, rather than being silently dropped
+- [x] 11.5 `traceparent`/`tracestate` map when present on a foreign CloudEvent
 
 ## 12. Tests — losslessness
 
-- [ ] 12.1 A fully-populated ArvoEvent round-trips through `to_cloud_event`/`from_cloud_event` identical, field for field, except `time` (see 12.3)
-- [ ] 12.2 A minimal (mostly-null) ArvoEvent round-trips identically, except `time`
-- [ ] 12.3 An ArvoEvent with an explicit, non-default, non-UTC-offset, non-millisecond-precision `time` round-trips to the same instant (parse both and compare) — not necessarily the same string; matches `ts/arvo-core`'s own guarantee for this field
-- [ ] 12.4 `depth` values at representative magnitudes (0, small, large) round-trip exactly
-- [ ] 12.5 `executionunits` values at representative magnitudes/precisions round-trip exactly
+- [x] 12.1 A fully-populated ArvoEvent round-trips through `to_cloud_event`/`from_cloud_event` identical, field for field, except `time` (see 12.3)
+- [x] 12.2 A minimal (mostly-null) ArvoEvent round-trips identically, except `time`
+- [x] 12.3 An ArvoEvent with an explicit, non-default, non-UTC-offset, non-millisecond-precision `time` round-trips to the same instant (parse both and compare) — not necessarily the same string; matches `ts/arvo-core`'s own guarantee for this field
+- [x] 12.4 `depth` values at representative magnitudes (0, small, large) round-trip exactly
+- [x] 12.5 `executionunits` values at representative magnitudes/precisions round-trip exactly
 
 ## 13. Tests — error reporting
 
-- [ ] 13.1 Every failure case above is asserted as `CloudEventTransformationError`, never a raw underlying exception
-- [ ] 13.2 `.__cause__` is set for at least one representative failure per path
-- [ ] 13.3 `.kind` is correctly `"strict"` or `"foreign"` for each respective failure case
+- [x] 13.1 Every failure case above is asserted as `CloudEventTransformationError`, never a raw underlying exception
+- [x] 13.2 `.__cause__` is set for at least one representative failure per path
+- [x] 13.3 `.kind` is correctly `"strict"` or `"foreign"` for each respective failure case
 
 ## 14. Close out
 
