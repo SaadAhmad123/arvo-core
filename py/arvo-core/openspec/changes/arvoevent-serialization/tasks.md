@@ -54,8 +54,8 @@
 
 ## 9. Close out
 
-- [ ] 9.1 `uv run ruff check .` and `uv run ruff format --check .` clean
-- [ ] 9.2 `uv run pyrefly check` clean
-- [ ] 9.3 `uv run pytest --cov --cov-report=term-missing` -- full suite green, 100% coverage of `src/arvo_core/serializer/**`
-- [ ] 9.4 `openspec validate arvoevent-serialization --strict` passes
-- [ ] 9.5 A developer-usage pass: actually serialize and deserialize events as a consumer would (both modes, a foreign CloudEvent, malformed wire input), recording findings in `developer-usage-findings.md`
+- [x] 9.1 `uv run ruff check .` and `uv run ruff format --check .` clean
+- [x] 9.2 `uv run pyrefly check` clean
+- [x] 9.3 `uv run pytest --cov --cov-report=term-missing` -- full suite green, 100% coverage of `src/arvo_core/serializer/**`
+- [x] 9.4 `openspec validate arvoevent-serialization --strict` passes
+- [x] 9.5 A developer-usage pass: actually serialize and deserialize events as a consumer would (both modes, a foreign CloudEvent, malformed wire input), recording findings in `developer-usage-findings.md`
