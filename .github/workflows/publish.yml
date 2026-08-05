@@ -17,6 +17,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: ts/arvo-core
 
     steps:
       - name: Checkout code
@@ -41,7 +44,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('ts/arvo-core/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
@@ -54,6 +57,7 @@ jobs:
       - name: Create Release Pull Request or Publish
         uses: changesets/action@v1
         with:
+          cwd: ts/arvo-core
           version: pnpm run version
           publish: pnpm run release
         env:
