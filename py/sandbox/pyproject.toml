@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "arvo-core[otel]",
+    "opentelemetry-sdk>=1.44.0",
 ]
 
 [project.scripts]
