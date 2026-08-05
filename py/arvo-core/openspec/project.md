@@ -76,13 +76,15 @@ Two mechanisms doing the same job is worse than either alone — two idioms, two
 
 When bespoke wins, `design.md` records why, so the next person does not re-litigate it.
 
-### Error handling — open decision, not yet settled
+### Error handling
 
-Unlike the TypeScript implementation's `tryX`/`X` convention, this package has **not yet decided** its own error-handling idiom — exceptions, a `Result`-like type, or something else entirely. Per ADR-004's **Idiomatic Freedom**, this is genuinely this package's own call, not a port of TypeScript's answer. It must be decided, and the decision recorded, in the `design.md` of whichever OpenSpec change first implements a fallible public operation — not assumed here, and not decided implicitly by whichever contributor happens to write that code first.
+Settled by the `arvo-event` change (see its `design.md` for the full reasoning): a fallible public operation **raises**, not a `tryX`/`Result` pair. Unlike the TypeScript implementation's `tryX`/`X` convention, this package has no non-raising twin — Pydantic already raises `pydantic.ValidationError` natively, and Python's own default is EAFP, so a bolted-on `Result` type would just be a second mechanism doing the same job. Per ADR-004's **Idiomatic Freedom**, this was this package's own call to make, not a port of TypeScript's answer, and it now governs every future fallible operation in this package, not only `ArvoEvent` construction — revisit only if a specific future operation finds a concrete reason EAFP is wrong for it, not by default.
+
+The error raised always preserves the original cause (`raise SomeError(...) from original_error`), and a package-specific error type wraps whatever underlying library actually failed (e.g. `ArvoEventValidationError` wraps `pydantic.ValidationError`) so a caller never needs to import that library themselves to handle the failure.
 
 ### Validation
 
-Runtime validation is not optional, and compile-time types do not substitute for it — ADR-000 is explicit that types cannot establish validity across independently deployed, external, or cross-language participants. This principle is settled; **which validation library** implements it (Pydantic v2 is the leading candidate, not yet chosen) is not, and is decided the same way as the error-handling idiom above: recorded in the `design.md` of the change that first needs it.
+Runtime validation is not optional, and compile-time types do not substitute for it — ADR-000 is explicit that types cannot establish validity across independently deployed, external, or cross-language participants. **Pydantic v2** is this package's validation library, decided by the `arvo-event` change. Lean on what it already provides natively (immutability via `frozen=True`, strict-extra-key rejection via `extra="forbid"`, type coercion and constraints) before writing a custom validator — several ADR-001/002 rules turned out to already be enforced by Pydantic's own type system with no bespoke code needed at all.
 
 ### Documentation in source
 

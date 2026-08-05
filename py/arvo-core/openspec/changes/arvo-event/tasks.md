@@ -79,9 +79,9 @@
 
 ## 12. Close out
 
-- [ ] 12.1 `uv run ruff check .` and `uv run ruff format --check .` clean
-- [ ] 12.2 `uv run pyrefly check` clean
-- [ ] 12.3 `uv run pytest --cov --cov-report=term-missing` — full suite green, 100% coverage of `src/arvo_core/event/**`
-- [ ] 12.4 `openspec validate arvo-event --strict` passes
-- [ ] 12.5 Update `openspec/project.md`: mark the "Error handling" and "Validation" sections as decided (per `design.md`), not open
-- [ ] 12.6 A developer-usage pass, matching the discipline `ts/arvo-core` established — actually construct `ArvoEvent`s as a consumer would (valid, invalid, edge cases) before considering this change done, recording findings in a `developer-usage-findings.md`
+- [x] 12.1 `uv run ruff check .` and `uv run ruff format --check .` clean
+- [x] 12.2 `uv run pyrefly check` clean
+- [x] 12.3 `uv run pytest --cov --cov-report=term-missing` — full suite green, 100% coverage of `src/arvo_core/event/**`
+- [x] 12.4 `openspec validate arvo-event --strict` passes
+- [x] 12.5 Update `openspec/project.md`: mark the "Error handling" and "Validation" sections as decided (per `design.md`), not open
+- [x] 12.6 A developer-usage pass, matching the discipline `ts/arvo-core` established — actually construct `ArvoEvent`s as a consumer would (valid, invalid, edge cases) before considering this change done, recording findings in a `developer-usage-findings.md`
