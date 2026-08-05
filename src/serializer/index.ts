@@ -68,13 +68,21 @@ export class ArvoEventSerializer {
   private readonly mode: NormalizedMode;
 
   constructor(mode?: ArvoEventSerializerMode) {
-    this.mode =
-      mode?.type === 'arvoevent'
-        ? mode
-        : {
-            type: 'cloudevent',
-            converter: mode?.converter ?? new CloudEventConverter(),
-          };
+    this.mode = {
+      type: 'cloudevent',
+      converter: new CloudEventConverter(),
+    };
+
+    if (mode?.type === 'cloudevent') {
+      this.mode = {
+        type: 'cloudevent',
+        converter: mode.converter ?? new CloudEventConverter(),
+      };
+    }
+
+    if (mode?.type === 'arvoevent') {
+      this.mode = mode;
+    }
   }
 
   /**
