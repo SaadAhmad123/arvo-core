@@ -6,43 +6,43 @@
 
 ## 2. `CloudEventTransformationError`
 
-- [ ] 2.1 `src/arvo_core/cloudevent/errors.py` — `CloudEventTransformationError(Exception)`, `kind: Literal["strict", "foreign"]`, human-readable message, always raised via `raise CloudEventTransformationError(...) from original_error`
+- [x] 2.1 `src/arvo_core/cloudevent/errors.py` — `CloudEventTransformationError(Exception)`, `kind: Literal["strict", "foreign"]`, human-readable message, always raised via `raise CloudEventTransformationError(...) from original_error`
 
 ## 3. Forward transformation (`to_cloud_event`)
 
-- [ ] 3.1 `src/arvo_core/cloudevent/convert.py` — `to_cloud_event(event: ArvoEvent) -> CloudEvent`: native attributes (`id`, `source`, `type`, `subject`, `time`), protocol constants (`specversion`, `datacontenttype`, `dataschema`)
-- [ ] 3.2 Arvo-defined extension attributes, correctly named and prefixed, omitted (not null) when the source field is `None`
-- [ ] 3.3 `depth` → `arvodepth`: canonical unsigned-decimal string
-- [ ] 3.4 `executionunits` → `arvoexecutionunits`: RFC 8785 canonical number string, omitted when `None`
-- [ ] 3.5 `data`/`dataschema`/`baggage` → the `data` wrapper, exactly `{arvoeventdata, arvoeventdataschema, arvoeventbaggage}`
-- [ ] 3.6 `time` written using whatever `cloudevents` does natively for a `datetime` — no custom wire handling, per `design.md`'s instant-equality decision
+- [x] 3.1 `src/arvo_core/cloudevent/convert.py` — `to_cloud_event(event: ArvoEvent) -> CloudEvent`: native attributes (`id`, `source`, `type`, `subject`, `time`), protocol constants (`specversion`, `datacontenttype`, `dataschema`)
+- [x] 3.2 Arvo-defined extension attributes, correctly named and prefixed, omitted (not null) when the source field is `None`
+- [x] 3.3 `depth` → `arvodepth`: canonical unsigned-decimal string
+- [x] 3.4 `executionunits` → `arvoexecutionunits`: RFC 8785 canonical number string, omitted when `None`
+- [x] 3.5 `data`/`dataschema`/`baggage` → the `data` wrapper, exactly `{arvoeventdata, arvoeventdataschema, arvoeventbaggage}`
+- [x] 3.6 `time` written using whatever `cloudevents` does natively for a `datetime` — no custom wire handling, per `design.md`'s instant-equality decision
 
 ## 4. Arvo-shaped discrimination
 
-- [ ] 4.1 `src/arvo_core/cloudevent/discriminate.py` (or co-located) — a private `_is_arvo_shaped(ce: CloudEvent) -> bool` (or an issues-returning variant, implementer's choice) checking every condition ADR-003's **Discriminating Arvo-shaped events** section lists: `specversion`, parsed `datacontenttype` (media type + exactly one `version=1` param), `dataschema`, required native attributes, required extensions with correct type/encoding, `data` wrapper shape
-- [ ] 4.2 A value that matches the media type or wrapper URI but fails some other condition is distinguished from a value that matches none of them at all — the malformed-vs-genuinely-foreign distinction `from_cloud_event` needs to route correctly
+- [x] 4.1 `src/arvo_core/cloudevent/discriminate.py` (or co-located) — a private `_is_arvo_shaped(ce: CloudEvent) -> bool` (or an issues-returning variant, implementer's choice) checking every condition ADR-003's **Discriminating Arvo-shaped events** section lists: `specversion`, parsed `datacontenttype` (media type + exactly one `version=1` param), `dataschema`, required native attributes, required extensions with correct type/encoding, `data` wrapper shape
+- [x] 4.2 A value that matches the media type or wrapper URI but fails some other condition is distinguished from a value that matches none of them at all — the malformed-vs-genuinely-foreign distinction `from_cloud_event` needs to route correctly
 
 ## 5. Reverse transformation — strict path
 
-- [ ] 5.1 `src/arvo_core/cloudevent/convert.py` — the strict path: maps every native attribute and extension back, decodes `arvodepth`/`arvoexecutionunits` (rejecting a non-canonical string per each field's own round-trip check), unwraps the `data` wrapper, restores omitted nullable extensions as `None`, ignores any caller-supplied fallback entirely
-- [ ] 5.2 Passes the assembled candidate through `ArvoEvent`'s own construction; a resulting `ArvoEventValidationError` becomes `CloudEventTransformationError(kind="strict")`, wrapping it as cause
-- [ ] 5.3 Any other malformed-Arvo-shaped condition (missing required extension, malformed canonical string, unexpected wrapper key) raises `CloudEventTransformationError(kind="strict")` directly, never falling through to foreign handling
+- [x] 5.1 `src/arvo_core/cloudevent/convert.py` — the strict path: maps every native attribute and extension back, decodes `arvodepth`/`arvoexecutionunits` (rejecting a non-canonical string per each field's own round-trip check), unwraps the `data` wrapper, restores omitted nullable extensions as `None`, ignores any caller-supplied fallback entirely
+- [x] 5.2 Passes the assembled candidate through `ArvoEvent`'s own construction; a resulting `ArvoEventValidationError` becomes `CloudEventTransformationError(kind="strict")`, wrapping it as cause
+- [x] 5.3 Any other malformed-Arvo-shaped condition (missing required extension, malformed canonical string, unexpected wrapper key) raises `CloudEventTransformationError(kind="strict")` directly, never falling through to foreign handling
 
 ## 6. Reverse transformation — foreign path
 
-- [ ] 6.1 Maps `id`, `source`, `type` natively; maps `subject`, `time`, and object-valued `data` when present; maps `traceparent`/`tracestate` when present
-- [ ] 6.2 Accepts `**foreign_fallback`, requires `dataschema` in it, uses fallback only for a field the mapping didn't provide — a value the CloudEvent itself provides always wins
-- [ ] 6.3 A present non-object `data` value fails adaptation rather than being silently discarded
-- [ ] 6.4 Passes the assembled candidate through `ArvoEvent`'s own construction; a resulting `ArvoEventValidationError` becomes `CloudEventTransformationError(kind="foreign")`
+- [x] 6.1 Maps `id`, `source`, `type` natively; maps `subject`, `time`, and object-valued `data` when present; maps `traceparent`/`tracestate` when present
+- [x] 6.2 Accepts `**foreign_fallback`, requires `dataschema` in it, uses fallback only for a field the mapping didn't provide — a value the CloudEvent itself provides always wins
+- [x] 6.3 A present non-object `data` value fails adaptation rather than being silently discarded
+- [x] 6.4 Passes the assembled candidate through `ArvoEvent`'s own construction; a resulting `ArvoEventValidationError` becomes `CloudEventTransformationError(kind="foreign")`
 
 ## 7. `from_cloud_event` dispatcher
 
-- [ ] 7.1 `from_cloud_event(ce: CloudEvent, **foreign_fallback: Any) -> ArvoEvent` — runs the discrimination check from group 4 once, then branches to the strict path (group 5) or the foreign path (group 6); the branch decision itself cannot be bypassed by calling internal strict/foreign logic directly out of order (keep that logic private, not separately exported)
+- [x] 7.1 `from_cloud_event(ce: CloudEvent, **foreign_fallback: Any) -> ArvoEvent` — runs the discrimination check from group 4 once, then branches to the strict path (group 5) or the foreign path (group 6); the branch decision itself cannot be bypassed by calling internal strict/foreign logic directly out of order (keep that logic private, not separately exported)
 
 ## 8. Public exports
 
-- [ ] 8.1 `src/arvo_core/cloudevent/__init__.py` — export `to_cloud_event`, `from_cloud_event`, `CloudEventTransformationError`
-- [ ] 8.2 `src/arvo_core/__init__.py` — re-export the same three names
+- [x] 8.1 `src/arvo_core/cloudevent/__init__.py` — export `to_cloud_event`, `from_cloud_event`, `CloudEventTransformationError`
+- [x] 8.2 `src/arvo_core/__init__.py` — re-export the same three names
 
 ## 9. Tests — forward transformation
 
