@@ -50,15 +50,15 @@ The system SHALL set `specversion` to `"1.0"`, `datacontenttype` to `"applicatio
 
 ### Requirement: Lossless Round Trip for Arvo-Produced Events
 
-For any structurally valid `ArvoEvent`, `from_cloud_event(to_cloud_event(event))` SHALL yield an `ArvoEvent` identical, field for field, to the original — including `time`, exactly as the original string, for any valid RFC 3339-with-offset value, not only a package-generated default.
+For any structurally valid `ArvoEvent`, `from_cloud_event(to_cloud_event(event))` SHALL yield an `ArvoEvent` identical, field for field, to the original, with one exception: `time` SHALL represent the identical instant, not necessarily the identical string — matching the same guarantee `ts/arvo-core` provides for the same field, for consistency across language implementations of the same ADR.
 
 #### Scenario: A round trip reproduces every field exactly
 - **WHEN** an ArvoEvent is converted to a CloudEvent and back
-- **THEN** every one of the eighteen fields on the result equals the corresponding field on the original, including `time` as the identical string
+- **THEN** every one of the eighteen fields on the result equals the corresponding field on the original, except that `time` is compared as an instant, not as a string
 
-#### Scenario: A non-default, non-UTC time string survives the round trip unchanged
+#### Scenario: A non-default, non-UTC time string survives the round trip as the same instant
 - **WHEN** an ArvoEvent is constructed with an explicit `time` in a non-UTC offset and non-default precision (e.g. `"2026-01-01T12:00:00.5+05:30"`), then converted to a CloudEvent and back
-- **THEN** the result's `time` is the exact original string, not a reformatted equivalent instant
+- **THEN** the result's `time` names the identical instant as the original, even if its textual form differs
 
 ### Requirement: Strict Arvo-Shaped Deserialization
 

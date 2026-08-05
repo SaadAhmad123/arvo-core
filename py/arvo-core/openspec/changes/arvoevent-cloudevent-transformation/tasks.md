@@ -1,9 +1,8 @@
 ## 1. Dependencies and verification
 
 - [ ] 1.1 Add `cloudevents` (2.x) to `pyproject.toml`'s `[project.dependencies]`
-- [ ] 1.2 Verify (short script, not assumed from docs) that `cloudevents.v1.pydantic.v2.event.CloudEvent` is a genuine `pydantic.BaseModel`, accepts arbitrary extension attributes, and confirm the `time`-field lossiness finding from `design.md` still holds against the exact installed version
+- [ ] 1.2 Verify (short script, not assumed from docs) that `cloudevents.v1.pydantic.v2.event.CloudEvent` is a genuine `pydantic.BaseModel` and accepts arbitrary extension attributes
 - [ ] 1.3 Identify and empirically verify a library implementing RFC 8785 canonical number serialization (test against a handful of known RFC 8785 number-serialization test vectors, not assumed from the library's own docs); if none is adequate, hand-roll the specific number-to-string algorithm RFC 8785 requires, recording why in `design.md`
-- [ ] 1.4 Decide and verify the exact mechanism for `time`'s lossless wire handling (subclass field serializer vs. hand-built wire dict vs. another approach) against the non-default, non-UTC, non-millisecond-precision case specifically
 
 ## 2. `CloudEventTransformationError`
 
@@ -16,7 +15,7 @@
 - [ ] 3.3 `depth` → `arvodepth`: canonical unsigned-decimal string
 - [ ] 3.4 `executionunits` → `arvoexecutionunits`: RFC 8785 canonical number string, omitted when `None`
 - [ ] 3.5 `data`/`dataschema`/`baggage` → the `data` wrapper, exactly `{arvoeventdata, arvoeventdataschema, arvoeventbaggage}`
-- [ ] 3.6 `time` written using the lossless mechanism decided under 1.4, not the SDK's own default `datetime` serialization
+- [ ] 3.6 `time` written using whatever `cloudevents` does natively for a `datetime` — no custom wire handling, per `design.md`'s instant-equality decision
 
 ## 4. Arvo-shaped discrimination
 
@@ -73,9 +72,9 @@
 
 ## 12. Tests — losslessness
 
-- [ ] 12.1 A fully-populated ArvoEvent round-trips through `to_cloud_event`/`from_cloud_event` identical, field for field
-- [ ] 12.2 A minimal (mostly-null) ArvoEvent round-trips identically
-- [ ] 12.3 An ArvoEvent with an explicit, non-default, non-UTC-offset, non-millisecond-precision `time` round-trips with that exact string preserved — the specific case `design.md` names as the real risk found during design
+- [ ] 12.1 A fully-populated ArvoEvent round-trips through `to_cloud_event`/`from_cloud_event` identical, field for field, except `time` (see 12.3)
+- [ ] 12.2 A minimal (mostly-null) ArvoEvent round-trips identically, except `time`
+- [ ] 12.3 An ArvoEvent with an explicit, non-default, non-UTC-offset, non-millisecond-precision `time` round-trips to the same instant (parse both and compare) — not necessarily the same string; matches `ts/arvo-core`'s own guarantee for this field
 - [ ] 12.4 `depth` values at representative magnitudes (0, small, large) round-trip exactly
 - [ ] 12.5 `executionunits` values at representative magnitudes/precisions round-trip exactly
 

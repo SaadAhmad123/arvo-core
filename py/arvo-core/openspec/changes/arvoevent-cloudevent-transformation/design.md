@@ -31,21 +31,20 @@ Raises `CloudEventTransformationError` (see below) on any failure, per this pack
 
 `cloudevents.v1.pydantic.v2.event.CloudEvent` is a genuine `pydantic.BaseModel` (confirmed empirically): it accepts arbitrary extension attributes via `**kwargs`, has every CloudEvents 1.0.2 core attribute ADR-003 names, and delegates CloudEvents-conformance validation to a real, maintained implementation — the same reuse discipline `ts/arvo-core` applied to the `cloudevents` npm package, and consistent with `openspec/project.md`'s *Dependencies and reuse* convention.
 
-### `time` requires a hand-managed wire representation — the SDK's own `datetime` coercion is not lossless, verified empirically
+### `time` round-trips as the same instant, not necessarily the same string
 
-This is the one real correctness risk found while drafting this design, checked directly rather than assumed:
+`cloudevents`'s `CloudEvent` class types `time` as `datetime.datetime`, not `str`, in every variant checked (the Pydantic class and the non-Pydantic `cloudevents.core.v1.event` class alike). Constructing a CloudEvent from an ArvoEvent's `time` string and reading it back does not reproduce the original string — `Z` becomes `+00:00`, sub-second precision always pads to six digits:
 
 ```python
 ce = CloudEvent(..., time="2026-01-01T00:00:00.123Z")
-ce.time            # datetime.datetime(2026, 1, 1, 0, 0, 0, 123000, tzinfo=TzInfo(0))
 ce.model_dump_json()["time"]  # "2026-01-01T00:00:00.123000+00:00"
 ```
 
-The SDK's `time` field is typed `datetime.datetime`, not `str`, in **every** CloudEvent class the package offers (the Pydantic variant and the non-Pydantic `cloudevents.core.v1.event` class alike — both were checked). Constructing a CloudEvent from an ArvoEvent's `time` string round-trips it through a `datetime` object, and re-serializing that object does not reproduce the original string: `Z` becomes `+00:00`, and sub-second precision is always padded to six digits regardless of the source string's own precision. This is exactly the class of bug `ts/arvo-core` found in its own CloudEvents SDK (`toJSON()` there always forces UTC `Z`) — the same failure mode, a different mechanism.
+Same instant, different text. This is not treated as a losslessness violation. `time`'s entire meaning is the instant it names — ADR-001 itself calls it "descriptive, not authoritative" and forbids using it for ordering, i.e., nothing in the model depends on its exact textual form. Two RFC 3339 strings naming the same instant are the same value, the same way `1.0` and `1.00` are the same number; requiring byte-identical text for a field whose semantics are purely "which instant" would be holding a value type to an identifier's standard. ADR-003's own Losslessness clause already accepts this kind of equivalence for another field — `executionunits`' `-0`→`0` construction-time normalization is explicitly named as compatible with "identical, field for field," precisely because the two values are the same number.
 
-ADR-003's **Losslessness** clause is unconditional — "ArvoEvent → CloudEvent → ArvoEvent yields an ArvoEvent identical, field for field, to the original" — not scoped to only the package's own default-generated `time`. Unlike `ts/arvo-core`'s fix (aligning `createTimestamp()`'s default output with the CloudEvents SDK's own canonical form, which closed the gap for the overwhelmingly common case but left an explicitly-supplied non-default time only instant-equal, not string-equal, after a round trip — an accepted, documented limitation there), Python's SDK canonical form (`+00:00`, six-digit microseconds) doesn't even match `arvo_core.event.util.now_iso()`'s own default output (`Z`, three-digit milliseconds) — so aligning the default wouldn't close this gap the way it did for TS.
+`ts/arvo-core` already ships with exactly this same-instant (not same-string) guarantee for any non-default `time` — the CloudEvents npm SDK's own `toJSON()` forces UTC `Z` unconditionally, and the accepted fix there only aligned the *default* generator with that canonical form. Requiring stricter, byte-exact fidelity in Python than what's already accepted and shipped for the same field in TS would be inconsistent rigor for a field the model itself treats as non-authoritative — not a correctness requirement worth the added implementation complexity.
 
-**Decision:** the transformation manages `time`'s wire representation itself, rather than trusting the SDK's own `datetime`-based (de)serialization for this one field. The exact mechanism — a custom field serializer on a `CloudEvent` subclass, constructing/reading the wire JSON dict directly for this one key, or another approach — is implementation-phase work to verify empirically (see `tasks.md`), not decided here in the abstract; what's decided is the requirement itself: **the original `ArvoEvent.time` string MUST survive a round trip byte-for-byte, for any valid RFC 3339-with-offset input, not only the package's own default.** This is a stronger guarantee than `ts/arvo-core` ended up providing for this same field, made possible because the loss here is a Python object-model artifact this package's own code can route around, not an external dependency's `toJSON()` running at the one place JS serialization is triggered automatically.
+**Decision:** no custom wire handling for `time`. It's read from and written to the CloudEvent using whatever `cloudevents` does natively; the round-trip guarantee is instant-equality (parsing both strings yields the same instant), not string-equality.
 
 ### `depth`: canonical unsigned-decimal string — bespoke, justified
 
@@ -65,7 +64,7 @@ Mirroring `ArvoEventValidationError`'s already-established shape: a small except
 
 ## Risks / Trade-offs
 
-**The `time` fidelity fix adds real implementation complexity** (bypassing/overriding the SDK's own field serialization for one field) that a simpler "trust the SDK" implementation wouldn't need. Accepted: the alternative is silently violating ADR-003's unconditional losslessness guarantee for any ArvoEvent whose `time` isn't already in the SDK's own canonical string form — a correctness bug, not a simplification worth making.
+**`time` is instant-equal but not always string-equal after a round trip** — accepted, deliberately, not a bug. See the decision above; a consumer that needs the exact original string for some reason outside this transformation's own scope (logging the raw producer input, say) should retain it separately before conversion, the same expectation `ts/arvo-core` already sets for the same field.
 
 **No enrichment-stage extensibility** — accepted, see `proposal.md`. Revisit if a concrete need for CloudEvent-to-CloudEvent enrichment actually surfaces; nothing here forecloses adding it later.
 
@@ -75,9 +74,8 @@ Mirroring `ArvoEventValidationError`'s already-established shape: a small except
 
 **A class mirroring `CloudEventConverter`, with an empty/unused stages list held for future extensibility** — considered, not chosen. Holding state for a feature that doesn't exist yet is speculative generality, not preparation — the exact pattern this repository's own conventions warn against. Adding a class later, if enrichment stages become a real need, is a small, backward-compatible change; carrying the unused ceremony now is not free in the meantime.
 
-**Accepting only instant-equality for `time`, matching `ts/arvo-core`'s own final disposition** — considered, not chosen. That was an accepted limitation there because the loss happens inside a third-party library's own automatic serialization hook (`cloudevents` npm's `toJSON()`), triggered the moment `JSON.stringify` runs, with no seam this package's own code could intercept without patching that library. Python's version of the same problem is a `datetime` object-model artifact inside code this package fully controls the construction and serialization of — a strictly stronger guarantee is achievable here at a real but bounded implementation cost, so weakening the guarantee to match a different language's different constraint isn't the right trade in this case.
+**A custom wire-serialization mechanism preserving `time`'s exact original string** — considered, drafted, then not chosen. Technically achievable (this package fully controls its own CloudEvent construction, unlike `ts/arvo-core`'s dependency-internal `toJSON()` hook), but the wrong trade: `time` is a value type whose meaning is the instant it names, not an identifier, and matching TS's own already-accepted instant-equality guarantee for the same field is more consistent than adding real implementation complexity to guarantee something ADR-001 itself says nothing depends on.
 
 ## Open Questions
 
-- The exact mechanism for `time`'s custom wire handling (subclass field serializer vs. hand-built wire dict) — implementation-phase, verified empirically, not decided here.
-- Which RFC 8785 library (if any adequate one exists) implements `executionunits`' canonical number serialization — same treatment.
+- Which RFC 8785 library (if any adequate one exists) implements `executionunits`' canonical number serialization — implementation-phase, verified empirically, not decided here.
