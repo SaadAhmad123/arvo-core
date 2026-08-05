@@ -18,6 +18,9 @@ export type {
   ForeignCloudEventFallback,
 } from './cloudevent/types.js';
 export { CloudEvent } from './cloudevent/types.js';
+export { ArvoEventSerializerError } from './serializer/errors.js';
+export type { ArvoEventSerializerMode } from './serializer/index.js';
+export { ArvoEventSerializer } from './serializer/index.js';
 export type {
   AsyncResult,
   FlatMap,
