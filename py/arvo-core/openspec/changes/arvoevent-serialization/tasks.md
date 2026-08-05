@@ -1,32 +1,32 @@
 ## 1. Verification
 
-- [ ] 1.1 Confirm (short script, not assumed) that `ArvoEvent.model_validate_json` does not wrap a JSON-syntax failure in `ArvoEventValidationError`, and that `deserialize` must therefore own `json.loads` itself
-- [ ] 1.2 Confirm that `CloudEvent.model_validate` accepts a plain parsed dict with no construction-time conformance gate to bypass
-- [ ] 1.3 Confirm `event.model_dump_json()` and `to_cloud_event(event).model_dump_json()` do not raise for a structurally valid `ArvoEvent`, including one with a non-JSON-native value inside `data`
+- [x] 1.1 Confirm (short script, not assumed) that `ArvoEvent.model_validate_json` does not wrap a JSON-syntax failure in `ArvoEventValidationError`, and that `deserialize` must therefore own `json.loads` itself
+- [x] 1.2 Confirm that `CloudEvent.model_validate` accepts a plain parsed dict with no construction-time conformance gate to bypass
+- [x] 1.3 Confirm `event.model_dump_json()` and `to_cloud_event(event).model_dump_json()` do not raise for a structurally valid `ArvoEvent`, including one with a non-JSON-native value inside `data`
 
 ## 2. `ArvoEventSerializerError`
 
-- [ ] 2.1 `src/arvo_core/serializer/errors.py` -- `ArvoEventSerializerError(Exception)`, human-readable message, always raised via `raise ArvoEventSerializerError(...) from original_error`
+- [x] 2.1 `src/arvo_core/serializer/errors.py` -- `ArvoEventSerializerError(Exception)`, human-readable message, always raised via `raise ArvoEventSerializerError(...) from original_error`
 
 ## 3. `serialize`
 
-- [ ] 3.1 `src/arvo_core/serializer/serialize.py` -- `serialize(event: ArvoEvent, *, mode: SerializationMode = "cloudevent") -> str`
-- [ ] 3.2 `"arvoevent"` mode: `event.model_dump_json()`, no CloudEvent involved
-- [ ] 3.3 `"cloudevent"` mode: `to_cloud_event(event).model_dump_json()`
-- [ ] 3.4 No error wrapping -- confirmed total per verification task 1.3
+- [x] 3.1 `src/arvo_core/serializer/serialize.py` -- `serialize(event: ArvoEvent, *, mode: SerializationMode = "cloudevent") -> str`
+- [x] 3.2 `"arvoevent"` mode: `event.model_dump_json()`, no CloudEvent involved
+- [x] 3.3 `"cloudevent"` mode: `to_cloud_event(event).model_dump_json()`
+- [x] 3.4 No error wrapping -- confirmed total per verification task 1.3
 
 ## 4. `deserialize`
 
-- [ ] 4.1 `src/arvo_core/serializer/deserialize.py` -- `deserialize(wire: str, *, mode: SerializationMode = "cloudevent", **foreign_fallback: Any) -> ArvoEvent`
-- [ ] 4.2 Parses `wire` with `json.loads`; a `json.JSONDecodeError` is wrapped in `ArvoEventSerializerError`
-- [ ] 4.3 A parsed value that is not a `dict` (top-level JSON array or scalar) raises `ArvoEventSerializerError`, in either mode
-- [ ] 4.4 `"arvoevent"` mode: `ArvoEvent(**parsed)`; a resulting `ArvoEventValidationError` is wrapped in `ArvoEventSerializerError`; `foreign_fallback` is ignored even if supplied
-- [ ] 4.5 `"cloudevent"` mode: `CloudEvent.model_validate(parsed)` (a `pydantic.ValidationError` here is wrapped in `ArvoEventSerializerError`), then `from_cloud_event(ce, **foreign_fallback)`; a resulting `CloudEventTransformationError` propagates unwrapped
+- [x] 4.1 `src/arvo_core/serializer/deserialize.py` -- `deserialize(wire: str, *, mode: SerializationMode = "cloudevent", **foreign_fallback: Any) -> ArvoEvent`
+- [x] 4.2 Parses `wire` with `json.loads`; a `json.JSONDecodeError` is wrapped in `ArvoEventSerializerError`
+- [x] 4.3 A parsed value that is not a `dict` (top-level JSON array or scalar) raises `ArvoEventSerializerError`, in either mode
+- [x] 4.4 `"arvoevent"` mode: `ArvoEvent(**parsed)`; a resulting `ArvoEventValidationError` is wrapped in `ArvoEventSerializerError`; `foreign_fallback` is ignored even if supplied
+- [x] 4.5 `"cloudevent"` mode: `CloudEvent.model_validate(parsed)` (a `pydantic.ValidationError` here is wrapped in `ArvoEventSerializerError`), then `from_cloud_event(ce, **foreign_fallback)`; a resulting `CloudEventTransformationError` propagates unwrapped
 
 ## 5. Public exports
 
-- [ ] 5.1 `src/arvo_core/serializer/__init__.py` -- export `serialize`, `deserialize`, `ArvoEventSerializerError`
-- [ ] 5.2 `src/arvo_core/__init__.py` -- re-export the same three names
+- [x] 5.1 `src/arvo_core/serializer/__init__.py` -- export `serialize`, `deserialize`, `ArvoEventSerializerError`
+- [x] 5.2 `src/arvo_core/__init__.py` -- re-export the same three names
 
 ## 6. Tests -- serialize
 
