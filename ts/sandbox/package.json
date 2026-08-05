@@ -1,0 +1,16 @@
+{
+  "name": "sandbox",
+  "private": true,
+  "type": "module",
+  "description": "A local playground for exercising arvo-core (ts) without publishing it. Not part of the published package.",
+  "scripts": {
+    "play": "tsx src/playground.ts"
+  },
+  "dependencies": {
+    "arvo-core": "file:../arvo-core"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "7.0.2"
+  }
+}
