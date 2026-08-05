@@ -6,39 +6,39 @@
 
 ## 2. `ArvoEventValidationError`
 
-- [ ] 2.1 `src/arvo_core/event/errors.py` — `ArvoEventValidationError(Exception)`, constructed from a Pydantic `ValidationError` (or a directly-raised structural issue), formatting a human-readable message naming the failing field(s) and the rule violated, always raised via `raise ArvoEventValidationError(...) from original_error` so `.__cause__` is preserved
-- [ ] 2.2 No `pydantic` import required in any code that only catches and handles `ArvoEventValidationError` — confirm by writing the first test file's imports before implementing the model itself
+- [x] 2.1 `src/arvo_core/event/errors.py` — `ArvoEventValidationError(Exception)`, constructed from a Pydantic `ValidationError` (or a directly-raised structural issue), formatting a human-readable message naming the failing field(s) and the rule violated, always raised via `raise ArvoEventValidationError(...) from original_error` so `.__cause__` is preserved
+- [x] 2.2 No `pydantic` import required in any code that only catches and handles `ArvoEventValidationError` — confirm by writing the first test file's imports before implementing the model itself
 
 ## 3. `ArvoEvent` model — fields, config, defaults
 
-- [ ] 3.1 `src/arvo_core/event/model.py` — `ArvoEvent(BaseModel)` with `model_config = ConfigDict(frozen=True, extra="forbid")`, all eighteen ADR-001 fields with their ADR-001 types and `None`-ability
-- [ ] 3.2 `id`: `Field(default_factory=lambda: str(uuid4()))`
-- [ ] 3.3 `time`: `Field(default_factory=...)` producing a `Z`-suffixed RFC 3339 UTC timestamp — not `.isoformat()`'s own `+00:00`-suffixed output; see `design.md`'s wire-fidelity rationale, carried over from `ts/arvo-core`'s own fix
-- [ ] 3.4 `depth`: `Field(default=0)`, non-negative int
-- [ ] 3.5 `baggage`: `Field(default_factory=dict)`
-- [ ] 3.6 `parentid`, `initid`, `category`, `to`, `domain`, `traceparent`, `tracestate`, `executionunits`: default `None`
-- [ ] 3.7 `executionid`: `@model_validator(mode="before")` injecting `subject`'s value when `executionid` is absent from the raw input, before per-field validation runs
+- [x] 3.1 `src/arvo_core/event/model.py` — `ArvoEvent(BaseModel)` with `model_config = ConfigDict(frozen=True, extra="forbid")`, all eighteen ADR-001 fields with their ADR-001 types and `None`-ability
+- [x] 3.2 `id`: `Field(default_factory=lambda: str(uuid4()))`
+- [x] 3.3 `time`: `Field(default_factory=...)` producing a `Z`-suffixed RFC 3339 UTC timestamp — not `.isoformat()`'s own `+00:00`-suffixed output; see `design.md`'s wire-fidelity rationale, carried over from `ts/arvo-core`'s own fix
+- [x] 3.4 `depth`: `Field(default=0)`, non-negative int
+- [x] 3.5 `baggage`: `Field(default_factory=dict)`
+- [x] 3.6 `parentid`, `initid`, `category`, `to`, `domain`, `traceparent`, `tracestate`, `executionunits`: default `None`
+- [x] 3.7 `executionid`: `@model_validator(mode="before")` injecting `subject`'s value when `executionid` is absent from the raw input, before per-field validation runs
 
 ## 4. `ArvoEvent` model — validators
 
-- [ ] 4.1 `@field_validator` on `source`/`dataschema`: non-empty, RFC 3986 URI-reference, exact canonical form (reject, do not normalize, a grammatically valid but non-canonical value)
-- [ ] 4.2 `@field_validator` (or a shared helper applied to each) on every CloudEvents-`String`-domain field (`id`, `type`, `subject`, `traceparent`, `tracestate`, and this package's own Arvo-only string fields): reject control characters, Unicode noncharacters, unpaired UTF-16 surrogates
-- [ ] 4.3 `@field_validator` on `executionunits`: finite when not `None` (`math.isfinite`)
-- [ ] 4.4 `@field_validator` on `data`: recursive walk rejecting a non-finite number at any depth
-- [ ] 4.5 `@field_validator` on `baggage`: flat map — every value a scalar, reject any nested object/array at any depth
-- [ ] 4.6 `@model_validator(mode="after")` — root event rule: `parentid is None` implies `executionid == subject and depth == 0`
-- [ ] 4.7 `@model_validator(mode="after")` — completion correlation rule: `category == "io.arvo.complete"` implies `initid is not None`
+- [x] 4.1 `@field_validator` on `source`/`dataschema`: non-empty, RFC 3986 URI-reference, exact canonical form (reject, do not normalize, a grammatically valid but non-canonical value)
+- [x] 4.2 `@field_validator` (or a shared helper applied to each) on every CloudEvents-`String`-domain field (`id`, `type`, `subject`, `traceparent`, `tracestate`, and this package's own Arvo-only string fields): reject control characters, Unicode noncharacters, unpaired UTF-16 surrogates
+- [x] 4.3 `@field_validator` on `executionunits`: finite when not `None` (`math.isfinite`)
+- [x] 4.4 `@field_validator` on `data`: recursive walk rejecting a non-finite number at any depth
+- [x] 4.5 `@field_validator` on `baggage`: flat map — every value a scalar, reject any nested object/array at any depth
+- [x] 4.6 `@model_validator(mode="after")` — root event rule: `parentid is None` implies `executionid == subject and depth == 0`
+- [x] 4.7 `@model_validator(mode="after")` — completion correlation rule: `category == "io.arvo.complete"` implies `initid is not None`
 
 ## 5. OpenTelemetry span-derived trace context
 
-- [ ] 5.1 Add `opentelemetry-api` as an optional dependency in `pyproject.toml` (an `otel` extra, e.g. `[project.optional-dependencies] otel = ["opentelemetry-api"]`) — not an unconditional dependency
-- [ ] 5.2 `src/arvo_core/event/opentelemetry.py` — `ArvoEventTraceContext` (`NamedTuple` or `TypedDict`: `traceparent: str`, `tracestate: str | None`) and `trace_context_from_span(span_or_context: Span | SpanContext) -> ArvoEventTraceContext`, deriving W3C `traceparent` (`00-{trace_id:032x}-{span_id:016x}-{trace_flags:02x}`) and `tracestate` (via the span context's own `trace_state.to_header()`, or `None` if empty) from either a `Span` (call `.get_span_context()` first) or a `SpanContext` directly
-- [ ] 5.3 Confirm this module only imports `opentelemetry` under `TYPE_CHECKING` or lazily, so importing `arvo_core` itself does not require `opentelemetry-api` to be installed — only calling `trace_context_from_span` does
+- [x] 5.1 Add `opentelemetry-api` as an optional dependency in `pyproject.toml` (an `otel` extra, e.g. `[project.optional-dependencies] otel = ["opentelemetry-api"]`) — not an unconditional dependency
+- [x] 5.2 `src/arvo_core/event/opentelemetry.py` — `ArvoEventTraceContext` (`NamedTuple` or `TypedDict`: `traceparent: str`, `tracestate: str | None`) and `trace_context_from_span(span_or_context: Span | SpanContext) -> ArvoEventTraceContext`, deriving W3C `traceparent` (`00-{trace_id:032x}-{span_id:016x}-{trace_flags:02x}`) and `tracestate` (via the span context's own `trace_state.to_header()`, or `None` if empty) from either a `Span` (call `.get_span_context()` first) or a `SpanContext` directly
+- [x] 5.3 Confirm this module only imports `opentelemetry` under `TYPE_CHECKING` or lazily, so importing `arvo_core` itself does not require `opentelemetry-api` to be installed — only calling `trace_context_from_span` does
 
 ## 6. Public exports
 
-- [ ] 6.1 `src/arvo_core/__init__.py` — export `ArvoEvent` and `ArvoEventValidationError`
-- [ ] 6.2 `src/arvo_core/event/__init__.py` — re-export from `model.py`/`errors.py` for a clean `from arvo_core.event import ArvoEvent` path, matching the top-level export; `trace_context_from_span`/`ArvoEventTraceContext` exported alongside
+- [x] 6.1 `src/arvo_core/__init__.py` — export `ArvoEvent` and `ArvoEventValidationError`
+- [x] 6.2 `src/arvo_core/event/__init__.py` — re-export from `model.py`/`errors.py` for a clean `from arvo_core.event import ArvoEvent` path, matching the top-level export; `trace_context_from_span`/`ArvoEventTraceContext` exported alongside
 
 ## 7. Tests — field set, required inputs, defaults, immutability
 
