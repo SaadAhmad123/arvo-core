@@ -42,40 +42,40 @@
 
 ## 7. Tests — field set, required inputs, defaults, immutability
 
-- [ ] 7.1 Constructing from only required inputs succeeds and yields a well-formed root event
-- [ ] 7.2 Omitting any one required input raises `ArvoEventValidationError` naming that field
-- [ ] 7.3 An unrecognized key raises `ArvoEventValidationError` naming it (confirms `extra="forbid"` behaves as required, not just as configured)
-- [ ] 7.4 Two events constructed without an explicit `id` get distinct `id` values
-- [ ] 7.5 Default `time` ends in `Z`
-- [ ] 7.6 Attempting to assign to any field after construction raises
+- [x] 7.1 Constructing from only required inputs succeeds and yields a well-formed root event
+- [x] 7.2 Omitting any one required input raises `ArvoEventValidationError` naming that field
+- [x] 7.3 An unrecognized key raises `ArvoEventValidationError` naming it (confirms `extra="forbid"` behaves as required, not just as configured)
+- [x] 7.4 Two events constructed without an explicit `id` get distinct `id` values
+- [x] 7.5 Default `time` ends in `Z`
+- [x] 7.6 Attempting to assign to any field after construction raises
 
 ## 8. Tests — domain constraints
 
-- [ ] 8.1 `source`/`dataschema`: a canonical URI-reference (bare token, hierarchical path, absolute URI, fragment-only) is accepted unchanged
-- [ ] 8.2 `source`/`dataschema`: a grammatically valid but non-canonical value (mixed-case scheme, non-canonical percent-encoding, unresolved dot-segment) is rejected, not normalized
-- [ ] 8.3 `source`/`dataschema`: a malformed value is rejected
-- [ ] 8.4 A control character, a Unicode noncharacter, and an unpaired surrogate are each rejected in a CloudEvents-`String`-domain field
-- [ ] 8.5 `executionunits`: a finite value of arbitrary sign/magnitude is accepted; `NaN`/`inf`/`-inf` are each rejected
-- [ ] 8.6 `data`: a non-finite number nested at depth (inside a list inside a dict, etc.) is rejected, not only at the top level
-- [ ] 8.7 `baggage`: a nested object or array value is rejected
+- [x] 8.1 `source`/`dataschema`: a canonical URI-reference (bare token, hierarchical path, absolute URI, fragment-only) is accepted unchanged
+- [x] 8.2 `source`/`dataschema`: a grammatically valid but non-canonical value (mixed-case scheme, non-canonical percent-encoding, unresolved dot-segment) is rejected, not normalized
+- [x] 8.3 `source`/`dataschema`: a malformed value is rejected
+- [x] 8.4 A control character, a Unicode noncharacter, and an unpaired surrogate are each rejected in a CloudEvents-`String`-domain field
+- [x] 8.5 `executionunits`: a finite value of arbitrary sign/magnitude is accepted; `NaN`/`inf`/`-inf` are each rejected
+- [x] 8.6 `data`: a non-finite number nested at depth (inside a list inside a dict, etc.) is rejected, not only at the top level
+- [x] 8.7 `baggage`: a nested object or array value is rejected
 
 ## 9. Tests — cross-field rules
 
-- [ ] 9.1 Root event: default construction satisfies the rule; an explicit `executionid`/`depth` inconsistent with `parentid is None` is rejected
-- [ ] 9.2 Completion correlation: `category="io.arvo.complete"` with `initid=None` is rejected; with `initid` set, succeeds
+- [x] 9.1 Root event: default construction satisfies the rule; an explicit `executionid`/`depth` inconsistent with `parentid is None` is rejected
+- [x] 9.2 Completion correlation: `category="io.arvo.complete"` with `initid=None` is rejected; with `initid` set, succeeds
 
 ## 10. Tests — OpenTelemetry span-derived trace context
 
-- [ ] 10.1 `trace_context_from_span` called with a `SpanContext` directly returns a correctly W3C-formatted `traceparent` and the expected `tracestate`
-- [ ] 10.2 `trace_context_from_span` called with a `Span` (not a bare `SpanContext`) derives from `.get_span_context()` correctly
-- [ ] 10.3 A `SpanContext` with no trace state yields `tracestate=None`, not an empty string
-- [ ] 10.4 `traceparent`/`tracestate` supplied directly to `ArvoEvent` (no span involved) are accepted unvalidated in shape, subject only to the character-domain restriction
-- [ ] 10.5 Neither trace values nor a span supplied: both fields default to `None`
+- [x] 10.1 `trace_context_from_span` called with a `SpanContext` directly returns a correctly W3C-formatted `traceparent` and the expected `tracestate`
+- [x] 10.2 `trace_context_from_span` called with a `Span` (not a bare `SpanContext`) derives from `.get_span_context()` correctly
+- [x] 10.3 A `SpanContext` with no trace state yields `tracestate=None`, not an empty string
+- [x] 10.4 `traceparent`/`tracestate` supplied directly to `ArvoEvent` (no span involved) are accepted unvalidated in shape, subject only to the character-domain restriction
+- [x] 10.5 Neither trace values nor a span supplied: both fields default to `None`
 
 ## 11. Tests — error reporting
 
-- [ ] 11.1 Every failure case above is asserted as `ArvoEventValidationError`, never a raw `pydantic.ValidationError` escaping to the caller
-- [ ] 11.2 `.__cause__` is set and is the original Pydantic (or structural) error for at least one representative failure per validator
+- [x] 11.1 Every failure case above is asserted as `ArvoEventValidationError`, never a raw `pydantic.ValidationError` escaping to the caller
+- [x] 11.2 `.__cause__` is set and is the original Pydantic (or structural) error for at least one representative failure per validator
 
 ## 12. Close out
 

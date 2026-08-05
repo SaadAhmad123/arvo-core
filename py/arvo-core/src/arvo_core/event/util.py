@@ -125,14 +125,15 @@ def walk_finite(value: Any, path: str) -> None:
         return
 
 
-def check_flat_scalar_map(value: dict[str, Any], field_name: str) -> None:
+def check_flat_scalar_map(value: dict[str, JSONScalar], field_name: str) -> None:
+    """Rejects a non-finite float value.
+
+    Flatness and scalar-ness are already guaranteed by the field's own
+    `dict[str, JSONScalar]` type -- Pydantic rejects a nested dict/list
+    value before this function ever sees it. Finiteness is the one thing
+    that type declaration doesn't cover: NaN/Infinity are ordinary floats
+    as far as Pydantic's own type system is concerned.
+    """
     for key, item in value.items():
-        if isinstance(item, bool):
-            continue
-        if isinstance(item, str | int | float) or item is None:
-            if isinstance(item, float) and not math.isfinite(item):
-                raise ValueError(f"{field_name}.{key} must be a finite number")
-            continue
-        raise ValueError(
-            f"{field_name}.{key} must be a scalar; nesting is not permitted"
-        )
+        if isinstance(item, float) and not math.isfinite(item):
+            raise ValueError(f"{field_name}.{key} must be a finite number")

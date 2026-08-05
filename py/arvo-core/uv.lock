@@ -27,6 +27,7 @@ otel = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "opentelemetry-api" },
     { name = "pyrefly" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -44,6 +45,7 @@ provides-extras = ["otel"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "opentelemetry-api", specifier = ">=1.44.0" },
     { name = "pyrefly", specifier = ">=1.2.0" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
