@@ -17,6 +17,19 @@ export type ArvoEventSerializerMode =
   | { type: 'arvoevent' }
   | { type: 'cloudevent'; converter?: CloudEventConverter };
 
+/**
+ * {@link ArvoEventSerializerMode} as the constructor actually stores it:
+ * `converter` is optional on the public type because a caller need not
+ * supply one, but every stored `cloudevent`-mode instance always has one —
+ * the constructor's own default fills the gap. Typing `this.mode` as this
+ * narrower shape lets that invariant be enforced by the compiler at every
+ * use site, instead of by an `as CloudEventConverter` cast repeated at each
+ * one.
+ */
+type NormalizedMode =
+  | { type: 'arvoevent' }
+  | { type: 'cloudevent'; converter: CloudEventConverter };
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -52,7 +65,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * ```
  */
 export class ArvoEventSerializer {
-  private readonly mode: ArvoEventSerializerMode;
+  private readonly mode: NormalizedMode;
 
   constructor(mode?: ArvoEventSerializerMode) {
     this.mode =
@@ -84,7 +97,7 @@ export class ArvoEventSerializer {
     if (this.mode.type === 'arvoevent') {
       return fromNeverthrow(ok(JSON.stringify(event)));
     }
-    const converter = this.mode.converter as CloudEventConverter;
+    const converter = this.mode.converter;
     const result = await converter.tryConvert(event);
     if (!result.ok) return result;
     try {
@@ -161,7 +174,7 @@ export class ArvoEventSerializer {
       );
     }
 
-    const converter = this.mode.converter as CloudEventConverter;
+    const converter = this.mode.converter;
     const cloudEvent = new CloudEvent<Record<string, unknown>>(
       parsed as never,
       false,
