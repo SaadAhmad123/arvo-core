@@ -78,10 +78,10 @@ describe('ArvoEvent', () => {
       expect(new ArvoEvent(baseParam()).baggage).toEqual({});
     });
 
-    it('defaults time to a generated ISO timestamp with offset', () => {
+    it('defaults time to a generated ISO timestamp in UTC', () => {
       const event = new ArvoEvent(baseParam());
       expect(event.time).toMatch(
-        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/,
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
       );
     });
 

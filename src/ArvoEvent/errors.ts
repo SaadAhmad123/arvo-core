@@ -1,4 +1,4 @@
-import { truncate } from '../utils.js';
+import { describeValue } from '../utils.js';
 
 /** A single structural rule that an event failed. */
 export type ArvoEventValidationIssue = {
@@ -12,37 +12,6 @@ export type ArvoEventValidationIssue = {
   message: string;
   /** The offending value. Absent when showing it would not help. */
   received?: unknown;
-};
-
-/** Longest rendering of a received value before it is truncated. */
-const MAX_RECEIVED_LENGTH = 80;
-
-/**
- * Renders a value for an error message: readable, bounded, and unambiguous
- * about type. `"3"` and `3` must not look alike in a message explaining that
- * one of them is the wrong type.
- */
-const describeValue = (value: unknown): string => {
-  if (value === undefined) return 'undefined';
-  if (value === null) return 'null';
-  if (typeof value === 'string') {
-    return truncate(JSON.stringify(value), MAX_RECEIVED_LENGTH);
-  }
-  if (typeof value === 'number' || typeof value === 'boolean')
-    return String(value);
-  if (typeof value === 'bigint') return `${value}n (bigint)`;
-  if (typeof value === 'function') return 'a function';
-  if (typeof value === 'symbol') return value.toString();
-  if (Array.isArray(value)) return `an array of ${value.length}`;
-
-  try {
-    const serialized = JSON.stringify(value);
-    if (serialized === undefined) return 'an object';
-    return truncate(serialized, MAX_RECEIVED_LENGTH);
-  } catch {
-    // Cyclic or otherwise unserializable — the shape is what matters here.
-    return 'an object';
-  }
 };
 
 /** Renders one issue as a single line: where, what, and what was received. */
