@@ -1,6 +1,6 @@
 # ADR-004: Multi-Language Implementation Governance
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-05
 - **Scope:** Arvo ecosystem
 - **Addresses, in part:** ADR-000 Deferred Decision — "Cross-language protocol compatibility" (runtime interoperability deferred; see Scope)
@@ -45,7 +45,7 @@ Everything outside the conformance boundary above is each language package's own
 
 Each language package's release version is its own semantic-versioning line, governing only that package's own public-API stability, and is independent of every other language package's version and of AAM's own version. No mechanism in this repository requires or implies that language packages' version numbers correspond to one another.
 
-Separately, each language package's release MUST record — as metadata distinct from its own semver (a published constant, or a manifest field), the authoritative location for the pin required under **AAM Conformance Boundary** — which AAM version, the specific set of accepted ADRs or an ADR-acceptance cutoff date it was evaluated against, and any SHOULD-rule departures still in effect. This lets a reader determine exactly which model state a given release actually implements without that information being entangled in, inferred from, or contradicted by the package's own release number or its separately maintained documentation.
+Separately, each language package's release that claims conformance to an AAM version MUST record — as metadata distinct from its own semver (a published constant, or a manifest field), the authoritative location for the pin required under **AAM Conformance Boundary** — that AAM version, the specific set of accepted ADRs or an ADR-acceptance cutoff date it was evaluated against, and any SHOULD-rule departures still in effect. A release claiming no conformance has nothing to record here. This lets a reader determine exactly which model state a given release actually implements without that information being entangled in, inferred from, or contradicted by the package's own release number or its separately maintained documentation.
 
 ## OpenSpec Placement
 
