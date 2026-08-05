@@ -41,8 +41,6 @@ async function main(): Promise<void> {
     "round-tripped traceparent matches:",
     roundTripped.traceparent === event.traceparent,
   );
-
-  
 }
 
 await main();
