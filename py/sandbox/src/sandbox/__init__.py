@@ -12,6 +12,7 @@ from cloudevents.v1.pydantic.v2.event import CloudEvent
 
 from arvo_core.cloudevent import from_cloud_event, to_cloud_event
 from arvo_core.event import ArvoEvent, trace_context_from_span
+from arvo_core.serializer import deserialize, serialize
 
 from sandbox.otel import shutdown_otel, tracer
 
@@ -53,5 +54,13 @@ def main() -> None:
         foreign, subject="acme/repo", dataschema="#/contracts/github-push"
     )
     print("adapted foreign event:", adapted.model_dump_json())
+
+    wire_string = serialize(event)
+    print("serialized wire string:", wire_string[:80], "...")
+    deserialized = deserialize(wire_string)
+    print(
+        "serializer round trip matches (minus time):",
+        deserialized.model_dump(exclude={"time"}) == event.model_dump(exclude={"time"}),
+    )
 
     shutdown_otel()
