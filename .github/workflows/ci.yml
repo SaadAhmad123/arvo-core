@@ -12,6 +12,9 @@ concurrency:
 jobs:
   lint_build_test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ts/arvo-core
 
     steps:
       - name: Checkout code
@@ -33,7 +36,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('ts/arvo-core/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
