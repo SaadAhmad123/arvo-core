@@ -2,7 +2,15 @@
 
 The Python implementation of the [Arvo Application Model](../../docs/adr/000-arvo-system-identity-and-architectural-principles.md) — governed by the same Architecture Decision Records as every other language implementation in this repository, and free to be idiomatic Python rather than a port of any other implementation's API shape. See [ADR-004](../../docs/adr/004-multi-language-implementation-governance.md) for how language implementations relate to one another.
 
-**Status: early bootstrap.** This package is currently tooling scaffolding only — no part of the Arvo Application Model (ArvoEvent, CloudEvent transformation, etc.) is implemented yet. That work proceeds through this package's own `openspec/` directory, one governed change at a time, the same way the TypeScript implementation was built.
+**Status: paused, not at feature parity, unpublished.** Three capabilities have landed so far, each through this package's own `openspec/` directory, one governed change at a time, the same way the TypeScript implementation was built:
+
+- `arvo-event` — the `ArvoEvent` model, its validation rules, and OpenTelemetry propagation.
+- `arvoevent-cloudevent-transformation` — `ArvoEvent` ↔ CloudEvent conversion, with content-type discrimination and codecs.
+- `arvoevent-serialization` — canonical (RFC 8785) serialization and deserialization.
+
+That is deliberately where this implementation stops for now. It is **not** at parity with the TypeScript implementation, which remains the reference and the focus of active development. This package is not published to PyPI and will not be released until the TypeScript implementation is where it needs to be and Python becomes a deliberate focus. Treat what's here as a foundation to resume from rather than something to depend on: the API shape is unsettled and may change without regard for backwards compatibility.
+
+Everything that *is* implemented is fully specified in `openspec/specs/` and covered by tests, so picking the work back up means proposing the next capability, not reconstructing intent.
 
 ## Development
 
