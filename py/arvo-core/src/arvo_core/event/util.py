@@ -122,7 +122,6 @@ def walk_finite(value: Any, path: str) -> None:
     if isinstance(value, list):
         for index, item in enumerate(value):
             walk_finite(item, f"{path}[{index}]")
-        return
 
 
 def check_flat_scalar_map(value: dict[str, JSONScalar], field_name: str) -> None:

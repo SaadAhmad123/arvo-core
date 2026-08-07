@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import rfc8785
 
-_DEPTH_PATTERN = re.compile(r"^(0|[1-9][0-9]*)$")
+_DEPTH_PATTERN = re.compile(r"^(0|[1-9]\d*)$", re.ASCII)
 
 
 def encode_depth(value: int) -> str:
