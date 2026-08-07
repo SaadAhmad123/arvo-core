@@ -58,7 +58,7 @@ jobs:
         run: pnpm run build
 
       - name: Create Release Pull Request or Publish
-        uses: changesets/action@v1
+        uses: changesets/action@3841a0683d3cfa6dae0f9bb335290003010fe3f0 # v1.9.0
         with:
           cwd: ts/arvo-core
           version: pnpm run version
