@@ -35,92 +35,105 @@ def test_extract_succeeds_on_a_fully_valid_event() -> None:
 def test_wrong_specversion_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["specversion"] = "0.3"
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="specversion"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_datacontenttype_with_wrong_version_parameter_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["datacontenttype"] = "application/vnd.arvo.event+json;version=2"
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="version=1"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_dataschema_mismatch_with_correct_media_type_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["dataschema"] = "https://example.com/other"
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="dataschema"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_missing_subject_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["subject"] = None
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="subject"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_missing_time_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["time"] = None
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="time is required"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_non_object_arvoeventdata_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["data"] = {**kwargs["data"], "arvoeventdata": "not-an-object"}
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="arvoeventdata"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_empty_arvoeventdataschema_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["data"] = {**kwargs["data"], "arvoeventdataschema": ""}
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="arvoeventdataschema"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_non_object_arvoeventbaggage_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["data"] = {**kwargs["data"], "arvoeventbaggage": "not-an-object"}
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="arvoeventbaggage"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_non_string_arvoexecutionid_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["arvoexecutionid"] = 5
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="arvoexecutionid"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_non_string_arvodepth_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["arvodepth"] = 0
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="arvodepth"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_non_string_optional_extension_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["arvocategory"] = 5
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="arvocategory"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_non_string_arvoexecutionunits_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["arvoexecutionunits"] = 5
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="arvoexecutionunits"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_non_canonical_arvoexecutionunits_string_is_rejected() -> None:
     kwargs = _valid_kwargs()
     kwargs["arvoexecutionunits"] = "1.50"
+    ce = CloudEvent(**kwargs)
     with pytest.raises(ValueError, match="arvoexecutionunits"):
-        extract_arvo_fields(CloudEvent(**kwargs))
+        extract_arvo_fields(ce)
 
 
 def test_decode_execution_units_rejects_a_non_numeric_string() -> None:

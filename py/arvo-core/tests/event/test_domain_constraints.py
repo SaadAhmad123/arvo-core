@@ -97,8 +97,9 @@ def test_finite_executionunits_accepted(value: float) -> None:
 
 @pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
 def test_non_finite_executionunits_rejected(value: float) -> None:
+    kwargs = minimal_kwargs()
     with pytest.raises(ArvoEventValidationError, match="executionunits"):
-        ArvoEvent(**minimal_kwargs(), executionunits=value)
+        ArvoEvent(**kwargs, executionunits=value)
 
 
 # -- JSON validity of data / baggage -----------------------------------------
@@ -133,18 +134,21 @@ def test_non_numeric_scalars_in_data_are_left_untouched() -> None:
 
 
 def test_nested_object_value_in_baggage_is_rejected() -> None:
+    kwargs = minimal_kwargs()
     with pytest.raises(ArvoEventValidationError, match="baggage"):
-        ArvoEvent(**minimal_kwargs(), baggage={"tenant": {"nested": True}})
+        ArvoEvent(**kwargs, baggage={"tenant": {"nested": True}})
 
 
 def test_nested_array_value_in_baggage_is_rejected() -> None:
+    kwargs = minimal_kwargs()
     with pytest.raises(ArvoEventValidationError, match="baggage"):
-        ArvoEvent(**minimal_kwargs(), baggage={"tenant": [1, 2, 3]})
+        ArvoEvent(**kwargs, baggage={"tenant": [1, 2, 3]})
 
 
 def test_non_finite_scalar_value_in_baggage_is_rejected() -> None:
+    kwargs = minimal_kwargs()
     with pytest.raises(ArvoEventValidationError, match="baggage"):
-        ArvoEvent(**minimal_kwargs(), baggage={"score": math.nan})
+        ArvoEvent(**kwargs, baggage={"score": math.nan})
 
 
 def test_flat_scalar_baggage_is_accepted() -> None:
@@ -169,13 +173,15 @@ def test_explicit_time_with_numeric_offset_is_accepted() -> None:
 
 
 def test_time_that_is_not_a_valid_timestamp_at_all_is_rejected() -> None:
+    kwargs = minimal_kwargs()
     with pytest.raises(ArvoEventValidationError, match="time"):
-        ArvoEvent(**minimal_kwargs(), time="not a timestamp")
+        ArvoEvent(**kwargs, time="not a timestamp")
 
 
 def test_time_with_no_offset_is_rejected() -> None:
+    kwargs = minimal_kwargs()
     with pytest.raises(ArvoEventValidationError, match="UTC offset"):
-        ArvoEvent(**minimal_kwargs(), time="2026-01-01T00:00:00")
+        ArvoEvent(**kwargs, time="2026-01-01T00:00:00")
 
 
 # -- Explicit None on nullable optional-string fields ------------------------

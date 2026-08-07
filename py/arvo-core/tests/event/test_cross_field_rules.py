@@ -24,13 +24,15 @@ def test_default_construction_satisfies_the_root_event_rule() -> None:
 
 
 def test_inconsistent_executionid_on_root_event_is_rejected() -> None:
+    kwargs = minimal_kwargs()
     with pytest.raises(ArvoEventValidationError):
-        ArvoEvent(**minimal_kwargs(), executionid="not-the-subject")
+        ArvoEvent(**kwargs, executionid="not-the-subject")
 
 
 def test_inconsistent_depth_on_root_event_is_rejected() -> None:
+    kwargs = minimal_kwargs()
     with pytest.raises(ArvoEventValidationError):
-        ArvoEvent(**minimal_kwargs(), depth=1)
+        ArvoEvent(**kwargs, depth=1)
 
 
 def test_non_root_event_may_have_any_consistent_executionid_and_depth() -> None:
@@ -48,8 +50,9 @@ def test_non_root_event_may_have_any_consistent_executionid_and_depth() -> None:
 
 
 def test_completion_without_initid_is_rejected() -> None:
+    kwargs = minimal_kwargs()
     with pytest.raises(ArvoEventValidationError, match="initid"):
-        ArvoEvent(**minimal_kwargs(), category="io.arvo.complete")
+        ArvoEvent(**kwargs, category="io.arvo.complete")
 
 
 def test_completion_with_initid_succeeds() -> None:

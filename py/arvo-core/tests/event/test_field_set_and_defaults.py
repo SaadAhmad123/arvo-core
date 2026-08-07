@@ -1,3 +1,4 @@
+import pydantic
 import pytest
 
 from arvo_core.event import ArvoEvent, ArvoEventValidationError
@@ -40,8 +41,9 @@ def test_event_exposes_exactly_the_defined_fields() -> None:
 
 
 def test_unrecognized_key_is_rejected() -> None:
+    kwargs = minimal_kwargs()
     with pytest.raises(ArvoEventValidationError, match="bogus"):
-        ArvoEvent(**minimal_kwargs(), bogus="nope")
+        ArvoEvent(**kwargs, bogus="nope")
 
 
 @pytest.mark.parametrize("missing", ["subject", "source", "type", "data", "dataschema"])
@@ -86,6 +88,9 @@ def test_default_time_is_z_suffixed() -> None:
 
 def test_field_assignment_after_construction_raises() -> None:
     event = ArvoEvent(**minimal_kwargs())
-    with pytest.raises(Exception):  # noqa: B017 -- pydantic's own frozen-instance error
+    # Mutation isn't wrapped in ArvoEventValidationError -- that guarantee is
+    # scoped to construction only (see ArvoEvent's own module docs) -- so
+    # this is pydantic's own frozen-instance error, not this package's.
+    with pytest.raises(pydantic.ValidationError):
         event.subject = "changed"  # pyrefly: ignore  # deliberately testing the frozen guard
     assert event.subject == "order-42"

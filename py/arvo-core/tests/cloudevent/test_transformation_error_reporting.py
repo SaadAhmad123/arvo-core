@@ -41,28 +41,33 @@ def _foreign_ce_missing_dataschema() -> CloudEvent:
 def test_failures_are_always_reported_as_cloud_event_transformation_error(
     build_ce, call_kwargs: dict, expected_kind: str
 ) -> None:
+    ce = build_ce()
     with pytest.raises(CloudEventTransformationError) as exc_info:
-        from_cloud_event(build_ce(), **call_kwargs)
+        from_cloud_event(ce, **call_kwargs)
     assert exc_info.value.kind == expected_kind
 
 
 def test_cause_is_preserved_for_a_strict_failure() -> None:
+    ce = _malformed_strict_ce()
     with pytest.raises(CloudEventTransformationError) as exc_info:
-        from_cloud_event(_malformed_strict_ce())
+        from_cloud_event(ce)
     assert exc_info.value.__cause__ is not None
 
 
 def test_cause_is_preserved_for_a_foreign_failure() -> None:
+    ce = _foreign_ce_missing_dataschema()
     with pytest.raises(CloudEventTransformationError) as exc_info:
-        from_cloud_event(_foreign_ce_missing_dataschema())
+        from_cloud_event(ce)
     assert exc_info.value.__cause__ is not None
 
 
 def test_kind_is_correct_for_each_failure_case() -> None:
+    strict_ce = _malformed_strict_ce()
     with pytest.raises(CloudEventTransformationError) as strict_exc:
-        from_cloud_event(_malformed_strict_ce())
+        from_cloud_event(strict_ce)
     assert strict_exc.value.kind == "strict"
 
+    foreign_ce = _foreign_ce_missing_dataschema()
     with pytest.raises(CloudEventTransformationError) as foreign_exc:
-        from_cloud_event(_foreign_ce_missing_dataschema())
+        from_cloud_event(foreign_ce)
     assert foreign_exc.value.kind == "foreign"

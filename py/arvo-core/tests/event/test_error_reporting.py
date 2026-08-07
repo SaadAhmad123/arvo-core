@@ -42,9 +42,9 @@ def test_every_failure_is_arvo_event_validation_error_with_original_cause(
 
 
 def test_message_names_the_failing_field() -> None:
+    kwargs = minimal_kwargs()
+    del kwargs["dataschema"]
     with pytest.raises(ArvoEventValidationError, match="dataschema") as excinfo:
-        kwargs = minimal_kwargs()
-        del kwargs["dataschema"]
         ArvoEvent(**kwargs)
     assert "dataschema" in str(excinfo.value)
 
