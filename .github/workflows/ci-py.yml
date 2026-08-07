@@ -29,7 +29,10 @@ jobs:
           enable-cache: true
           cache-dependency-glob: 'py/arvo-core/uv.lock'
 
-      - name: Install dependencies
+      - name: Install dependencies (wheels only)
+        run: uv sync --locked --no-install-project --no-build
+
+      - name: Install project
         run: uv sync --locked
 
       - name: Lint
