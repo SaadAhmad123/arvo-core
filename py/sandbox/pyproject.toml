@@ -1,0 +1,23 @@
+[project]
+name = "sandbox"
+version = "0.1.0"
+description = "A local playground for exercising arvo-core (py) without publishing it. Not part of the published package."
+readme = "README.md"
+authors = [
+    { name = "Saad Ahmad", email = "saadkwi12@hotmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "arvo-core[otel]",
+    "opentelemetry-sdk>=1.44.0",
+]
+
+[project.scripts]
+sandbox = "sandbox:main"
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+arvo-core = { path = "../arvo-core", editable = true }

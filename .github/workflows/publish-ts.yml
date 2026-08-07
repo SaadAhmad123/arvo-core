@@ -1,17 +1,25 @@
-name: CI
+name: Publish (TypeScript)
 
 on:
-  pull_request:
+  push:
     branches:
       - main
+    paths:
+      - 'ts/arvo-core/**'
+      - '.github/workflows/publish-ts.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+
+permissions:
+  id-token: write  # Required for npm OIDC trusted publishing
+  contents: write  # Required for changesets to push the Version Packages PR
+  pull-requests: write
 
 jobs:
-  lint_build_test:
+  publish:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     defaults:
       run:
         working-directory: ts/arvo-core
@@ -19,11 +27,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22.23.1'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Enable Corepack
         run: corepack enable
@@ -41,13 +52,16 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm run lint
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build
         run: pnpm run build
 
-      - name: Test
-        run: pnpm run test
+      - name: Create Release Pull Request or Publish
+        uses: changesets/action@3841a0683d3cfa6dae0f9bb335290003010fe3f0 # v1.9.0
+        with:
+          cwd: ts/arvo-core
+          version: pnpm run version
+          publish: pnpm run release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

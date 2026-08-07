@@ -5,6 +5,7 @@
 ## Implementations
 
 - [`ts/arvo-core/`](ts/arvo-core/) — TypeScript, published as [`arvo-core`](https://www.npmjs.com/package/arvo-core) on npm.
+- [`py/arvo-core/`](py/arvo-core/) — Python, paused at an early foundation (ArvoEvent, CloudEvent transformation, and serialization). Not at parity with TypeScript, and not published while TypeScript remains the focus.
 
 Further language implementations are added here as they land, each in its own top-level directory. See [ADR-004](docs/adr/004-multi-language-implementation-governance.md) for how they're governed relative to one another.
 

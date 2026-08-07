@@ -1,0 +1,108 @@
+[project]
+name = "arvo-core"
+version = "0.1.0"
+description = "The foundational Python implementation of the Arvo Application Model."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE.md"]
+authors = [
+    { name = "Saad Ahmad", email = "saadkwi12@hotmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "cloudevents>=2.2.0",
+    "hyperlink>=21.0.0",
+    "pydantic>=2.13.4",
+    "rfc8785>=0.1.4",
+]
+
+[project.optional-dependencies]
+otel = [
+    "opentelemetry-api>=1.44.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "opentelemetry-api>=1.44.0",
+    "pyrefly>=1.2.0",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.1",
+    "towncrier>=25.8.0",
+]
+
+[tool.pyrefly]
+project-includes = [
+    "src/**/*.py",
+    "tests/**/*.py",
+]
+project-excludes = [
+    "**/.venv",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.towncrier]
+package = "arvo_core"
+package_dir = "src"
+directory = "changes.d"
+filename = "CHANGELOG.md"
+title_format = "## {version} ({project_date})"
+issue_format = "[#{issue}](https://github.com/SaadAhmad123/arvo-core/issues/{issue})"
+
+[[tool.towncrier.type]]
+directory = "breaking"
+name = "Breaking Changes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "feature"
+name = "Features"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fix"
+name = "Fixes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "doc"
+name = "Documentation"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "misc"
+name = "Miscellaneous"
+showcontent = true
