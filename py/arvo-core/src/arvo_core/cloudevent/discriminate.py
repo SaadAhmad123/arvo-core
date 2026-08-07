@@ -40,13 +40,7 @@ def claims_arvo_shape(ce: CloudEvent) -> bool:
     return media_match or schema_match
 
 
-def extract_arvo_fields(ce: CloudEvent) -> dict[str, Any]:
-    """Validates every Arvo-shaped condition and unpacks `ce`'s values.
-
-    Raises `ValueError`, naming every failing condition, if `ce` fails any
-    of them. On success, returns a dict of `ArvoEvent` constructor kwargs
-    assembled entirely from `ce`'s own values.
-    """
+def _check_protocol_and_native_fields(ce: CloudEvent) -> list[str]:
     errors: list[str] = []
 
     specversion = getattr(ce.specversion, "value", ce.specversion)
@@ -71,67 +65,104 @@ def extract_arvo_fields(ce: CloudEvent) -> dict[str, Any]:
     if ce.time is None:
         errors.append("time is required")
 
-    data = ce.data
-    wrapper_ok = isinstance(data, dict) and set(data.keys()) == DATA_WRAPPER_KEYS
-    if not wrapper_ok:
-        errors.append(
+    return errors
+
+
+def _check_data_wrapper(data: Any) -> list[str]:
+    if not (isinstance(data, dict) and set(data.keys()) == DATA_WRAPPER_KEYS):
+        return [
             "data must be an object with exactly arvoeventdata, "
             "arvoeventdataschema, and arvoeventbaggage"
-        )
-    else:
-        if not isinstance(data.get("arvoeventdata"), dict):
-            errors.append("data.arvoeventdata must be an object")
-        if (
-            not isinstance(data.get("arvoeventdataschema"), str)
-            or not data["arvoeventdataschema"]
-        ):
-            errors.append("data.arvoeventdataschema must be a non-empty string")
-        if not isinstance(data.get("arvoeventbaggage"), dict):
-            errors.append("data.arvoeventbaggage must be an object")
+        ]
 
-    extras: dict[str, Any] = ce.model_extra or {}
+    errors: list[str] = []
+    if not isinstance(data.get("arvoeventdata"), dict):
+        errors.append("data.arvoeventdata must be an object")
+    if (
+        not isinstance(data.get("arvoeventdataschema"), str)
+        or not data["arvoeventdataschema"]
+    ):
+        errors.append("data.arvoeventdataschema must be a non-empty string")
+    if not isinstance(data.get("arvoeventbaggage"), dict):
+        errors.append("data.arvoeventbaggage must be an object")
+    return errors
 
+
+def _extract_executionid(extras: dict[str, Any]) -> tuple[str | None, list[str]]:
     executionid = extras.get(EXECUTIONID_EXTENSION)
     if not isinstance(executionid, str) or not executionid:
-        errors.append(
+        return None, [
             f"{EXECUTIONID_EXTENSION} is required and must be a non-empty string"
-        )
+        ]
+    return executionid, []
 
+
+def _extract_depth(extras: dict[str, Any]) -> tuple[int | None, list[str]]:
     depth_raw = extras.get(DEPTH_EXTENSION)
-    depth: int | None = None
     if not isinstance(depth_raw, str):
-        errors.append(f"{DEPTH_EXTENSION} is required and must be a string")
-    else:
-        depth = decode_depth(depth_raw)
-        if depth is None:
-            errors.append(
-                f"{DEPTH_EXTENSION} is not a canonical unsigned-decimal "
-                f"string: {depth_raw!r}"
-            )
+        return None, [f"{DEPTH_EXTENSION} is required and must be a string"]
 
+    depth = decode_depth(depth_raw)
+    if depth is None:
+        return None, [
+            f"{DEPTH_EXTENSION} is not a canonical unsigned-decimal "
+            f"string: {depth_raw!r}"
+        ]
+    return depth, []
+
+
+def _check_optional_string_extensions(extras: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
     for ext_name in _OPTIONAL_STRING_EXTENSIONS:
         value = extras.get(ext_name)
         if value is not None and not isinstance(value, str):
             errors.append(f"{ext_name} must be a string when present")
+    return errors
 
-    executionunits_raw = extras.get(EXECUTIONUNITS_EXTENSION)
-    executionunits: float | None = None
-    if executionunits_raw is not None:
-        if not isinstance(executionunits_raw, str):
-            errors.append(f"{EXECUTIONUNITS_EXTENSION} must be a string when present")
-        else:
-            executionunits = decode_execution_units(executionunits_raw)
-            if executionunits is None:
-                errors.append(
-                    f"{EXECUTIONUNITS_EXTENSION} is not a canonical RFC 8785 "
-                    f"number string: {executionunits_raw!r}"
-                )
 
+def _extract_executionunits(extras: dict[str, Any]) -> tuple[float | None, list[str]]:
+    raw = extras.get(EXECUTIONUNITS_EXTENSION)
+    if raw is None:
+        return None, []
+    if not isinstance(raw, str):
+        return None, [f"{EXECUTIONUNITS_EXTENSION} must be a string when present"]
+
+    executionunits = decode_execution_units(raw)
+    if executionunits is None:
+        return None, [
+            f"{EXECUTIONUNITS_EXTENSION} is not a canonical RFC 8785 "
+            f"number string: {raw!r}"
+        ]
+    return executionunits, []
+
+
+def extract_arvo_fields(ce: CloudEvent) -> dict[str, Any]:
+    """Validates every Arvo-shaped condition and unpacks `ce`'s values.
+
+    Raises `ValueError`, naming every failing condition, if `ce` fails any
+    of them. On success, returns a dict of `ArvoEvent` constructor kwargs
+    assembled entirely from `ce`'s own values.
+    """
+    data = ce.data
+    extras: dict[str, Any] = ce.model_extra or {}
+
+    executionid, executionid_errors = _extract_executionid(extras)
+    depth, depth_errors = _extract_depth(extras)
+    executionunits, executionunits_errors = _extract_executionunits(extras)
+
+    errors = [
+        *_check_protocol_and_native_fields(ce),
+        *_check_data_wrapper(data),
+        *executionid_errors,
+        *depth_errors,
+        *_check_optional_string_extensions(extras),
+        *executionunits_errors,
+    ]
     if errors:
         raise ValueError("; ".join(errors))
 
-    assert isinstance(data, dict)  # narrowed by `wrapper_ok` above
-    assert ce.time is not None  # narrowed by the "time is required" check above
+    assert isinstance(data, dict)  # narrowed by `_check_data_wrapper` above
+    assert ce.time is not None  # narrowed by `_check_protocol_and_native_fields` above
     return {
         "id": ce.id,
         "parentid": extras.get("arvoparentid"),
