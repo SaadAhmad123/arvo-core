@@ -10,43 +10,6 @@ from arvo_core.cloudevent.constants import DATACONTENTTYPE, DATASCHEMA
 from arvo_core.event import ArvoEvent
 
 
-def minimal_kwargs() -> dict:
-    return {
-        "subject": "order-42",
-        "source": "order-service",
-        "type": "order.created",
-        "data": {"amount": 100},
-        "dataschema": "#/contracts/order",
-    }
-
-
-def full_kwargs() -> dict:
-    return {
-        **minimal_kwargs(),
-        "id": "evt-1",
-        "parentid": "parent-1",
-        "initid": "init-1",
-        "executionid": "exec-1",
-        "category": "io.arvo.custom",
-        "depth": 3,
-        "to": "downstream-service",
-        "domain": "special-domain",
-        "baggage": {"tenant": "acme", "attempt": 2, "retryable": True},
-        "time": "2026-01-01T00:00:00.000Z",
-        "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
-        "tracestate": "congo=t61rcWkgMzE",
-        "executionunits": 1.5,
-    }
-
-
-def minimal_event() -> ArvoEvent:
-    return ArvoEvent(**minimal_kwargs())
-
-
-def full_event() -> ArvoEvent:
-    return ArvoEvent(**full_kwargs())
-
-
 def _minimal_arvo_shaped_kwargs() -> dict:
     return {
         "id": "1",
@@ -67,8 +30,10 @@ def _minimal_arvo_shaped_kwargs() -> dict:
     }
 
 
-def test_arvo_shaped_event_reverses_using_only_its_own_values() -> None:
-    for event in (minimal_event(), full_event()):
+def test_arvo_shaped_event_reverses_using_only_its_own_values(
+    minimal_event: ArvoEvent, full_event: ArvoEvent
+) -> None:
+    for event in (minimal_event, full_event):
         ce = to_cloud_event(event)
         back = from_cloud_event(ce, subject="ignored", dataschema="ignored")
         assert back.model_dump(exclude={"time"}) == event.model_dump(exclude={"time"})
