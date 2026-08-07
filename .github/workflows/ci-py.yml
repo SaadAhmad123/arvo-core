@@ -33,13 +33,13 @@ jobs:
         run: uv sync --locked
 
       - name: Lint
-        run: uv run ruff check .
+        run: uv run --no-sync ruff check .
 
       - name: Format check
-        run: uv run ruff format --check .
+        run: uv run --no-sync ruff format --check .
 
       - name: Type check
-        run: uv run pyrefly check
+        run: uv run --no-sync pyrefly check
 
       - name: Test
-        run: uv run pytest --cov --cov-report=term-missing
+        run: uv run --no-sync pytest --cov --cov-report=term-missing
