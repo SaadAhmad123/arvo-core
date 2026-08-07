@@ -23,3 +23,4 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | [ADR-002](./002-arvoevent-field-domain-constraints.md) | ArvoEvent Field Domain Constraints | Accepted |
 | [ADR-003](./003-arvoevent-cloudevent-transformation.md) | ArvoEvent–CloudEvent Transformation | Accepted |
 | [ADR-004](./004-multi-language-implementation-governance.md) | Multi-Language Implementation Governance | Accepted |
+| [ADR-005](./005-arvocontract-structure.md) | ArvoContract Structure | Proposed |
