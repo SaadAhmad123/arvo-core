@@ -1,6 +1,6 @@
 # ADR-005: ArvoContract Structure
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-07
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)
