@@ -17,7 +17,7 @@ Several things are deliberately not defined here:
 - **Error taxonomy beyond handler failure.** This ADR fixes the shape and naming of exactly one standardized emit — the handler error, covering a handler's own code failing or being unable to fulfill its contract. It does not define any other kind of error or its handling mechanism; that belongs to a dedicated, future error-handling ADR.
 - **Handler and orchestration behavior.** How a handler declares which contracts it depends on, resolves and binds to a contract at runtime, or decides which permitted event to emit and when belongs to the handler-protocol ADR ADR-000 already names as a separate, dedicated decision. This ADR states what a contract permits; it does not state how a handler uses that permission.
 - **Domain resolution.** `domain`, as a field on this contract, is a static default value only (see **Domain**). Any inheritance, override, or context-dependent resolution strategy — including anything resembling per-emission domain-routing logic — is handler-execution behavior, not contract structure, and is left to the handler-protocol ADR.
-- **Automated compatibility checking.** This ADR states that each contract version is fully isolated (see **Versioning**). It does not define or mandate a tool that classifies a schema change as breaking or non-breaking; that remains implementation guidance, not an ADR-enforced mechanism.
+- **Automated compatibility checking.** This ADR states that each contract version is fully isolated (see **Isolation**, under **`versions`**). It does not define or mandate a tool that classifies a schema change as breaking or non-breaking; that remains implementation guidance, not an ADR-enforced mechanism.
 - **Dereferencing `dataschema` at runtime.** `ArvoEvent.dataschema` is already constructed from a contract's `uri` and version (ADR-001). Whether that value is ever mechanically fetched to retrieve a live schema is a transport and tooling question for a later decision, not something this ADR commits to.
 
 Once accepted, this structure changes only by a superseding ADR.
@@ -54,7 +54,7 @@ A machine-readable JSON Schema describing what a well-formed ArvoContract-as-JSO
 
 | Field | Type | Required | Default |
 |---|---|---|---|
-| `uri` | string | yes | derived from `type` — see **URI** |
+| `uri` | string | yes | derived from `type` — see **`uri`** |
 | `type` | string | yes | — |
 | `versions` | object (semantic version → version definition) | yes | — |
 | `description` | string or null | no | null |
@@ -71,7 +71,7 @@ The event type a handler bound to this contract accepts. The primary identity an
 
 ### `uri`
 
-Identifies this contract, forming the base of every `ArvoEvent.dataschema` this contract's versions produce (`{uri}/{version}`, per ADR-001). `uri` MUST be present as a concrete, resolved value in a contract's canonical form — it is never optional at the model level, whatever ergonomic omission a given language's authoring surface allows.
+Identifies this contract, forming the base of every `ArvoEvent.dataschema` this contract's versions produce. ADR-001 states only that `dataschema` "identifies the exact contract URI and version this event relates to," without fixing how the two combine; this ADR settles that concretely as `{uri}/{version}`. `uri` MUST be present as a concrete, resolved value in a contract's canonical form — it is never optional at the model level, whatever ergonomic omission a given language's authoring surface allows.
 
 `uri` MUST be a valid RFC 3986 URI-reference, in the same canonical form ADR-002 already requires of `dataschema` — non-canonical percent-encoding, wrong case, or an unresolved dot-segment is rejected, not normalized. This is necessary, not merely consistent: `dataschema` is built by appending `/{version}` to `uri`, and ADR-002 already requires `dataschema` to be canonical, so `uri` must be canonical for that guarantee to hold on every event a contract's versions produce.
 
