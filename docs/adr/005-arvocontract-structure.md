@@ -161,3 +161,147 @@ Anything richer — resolving a domain from the handler's own contract versus th
 **Required of infrastructure adapters.** None. This ADR governs contract authoring and structure, not adapters or transports.
 
 **Left deferred.** Simple- and orchestrator-contract presets. Dependency declaration, contract resolution, and binding — handler-protocol concerns. Domain resolution, inheritance, and any orchestration-context-dependent routing strategy — also handler-protocol. Automated compatibility/breaking-change classification tooling. Whether and how `dataschema` is ever mechanically dereferenced at runtime. The specific hosting location and version-management process for the published ArvoContract meta-schema — to be developed alongside implementation, per the same pattern ADR-003 left for the CloudEvent data-wrapper schema. The broader taxonomy of error kinds beyond handler failure, and their handling mechanisms, is left to a dedicated future ADR. Byte-level canonicalization of the canonical form itself — key ordering, number and string formatting, and any scheme (such as RFC 8785 JCS) for making two semantically identical contracts produce identical bytes — is not addressed here; **Canonical representation** settles only that optional fields are materialized, not that the result is byte-comparable.
+
+## Appendix: Illustrative canonical-form examples
+
+These examples are illustrative only. They do not replace the published, authoritative meta-schema **Canonical representation** and **Left deferred** require; they exist to make the rules above concrete, not to define them. Where prose and an example ever appear to disagree, the prose governs.
+
+### Example 1: Minimal contract
+
+Only `type` and `versions` are supplied. `uri` is derived (`com_payment_process` → `#/com/payment/process`), and both optional fields are materialized at their defaults rather than omitted.
+
+```json
+{
+  "uri": "#/com/payment/process",
+  "type": "com_payment_process",
+  "description": null,
+  "domain": null,
+  "metadata": {},
+  "versions": {
+    "1.0.0": {
+      "accepts": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "amount": { "type": "number", "exclusiveMinimum": 0 },
+          "currency": { "type": "string", "minLength": 3, "maxLength": 3 }
+        },
+        "required": ["amount", "currency"]
+      },
+      "emits": {
+        "com_payment_process_completed": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "transaction_id": { "type": "string" },
+            "status": { "enum": ["completed", "pending"] }
+          },
+          "required": ["transaction_id", "status"]
+        }
+      }
+    }
+  }
+}
+```
+
+### Example 2: Fully-populated contract with an explicit `uri` override
+
+`uri` is author-supplied and does not match what derivation from `type` would have produced (`#/com/user/register`) — an explicit value always wins. `description`, `domain`, and `metadata` are all set; `domain` follows the same `[0-9a-z_]` grammar as `type`.
+
+```json
+{
+  "uri": "#/services/identity/user/registration",
+  "type": "com_user_register",
+  "description": "Handles user registration for the identity service",
+  "domain": "identity_priority",
+  "metadata": {
+    "owner": "team_identity"
+  },
+  "versions": {
+    "1.0.0": {
+      "accepts": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "username": { "type": "string", "minLength": 3 }
+        },
+        "required": ["email", "username"]
+      },
+      "emits": {
+        "com_user_registered": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "user_id": { "type": "string" },
+            "email": { "type": "string" }
+          },
+          "required": ["user_id", "email"]
+        }
+      }
+    }
+  }
+}
+```
+
+### Example 3: Multi-version, isolated
+
+Two versions of the same contract, kept as two complete, independent definitions rather than one inheriting from the other — `1.1.0`'s `accepts` adds a new required field `1.0.0` doesn't have, and its `com_order_created` emit carries a different payload shape under the same event type name. Neither version's presence constrains or is derived from the other's.
+
+Note what is absent: no `handler_com_order_create_error` key appears anywhere, in either version. The handler error is never part of the stored canonical form (see **Handler error**) — every implementation computes it identically from `type` and the producing version, so it has no position to occupy here.
+
+```json
+{
+  "uri": "#/com/order/create",
+  "type": "com_order_create",
+  "description": null,
+  "domain": null,
+  "metadata": {},
+  "versions": {
+    "1.0.0": {
+      "accepts": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "type": "string" } },
+          "address": { "type": "string" }
+        },
+        "required": ["items", "address"]
+      },
+      "emits": {
+        "com_order_created": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "order_id": { "type": "string" }
+          },
+          "required": ["order_id"]
+        }
+      }
+    },
+    "1.1.0": {
+      "accepts": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "type": "string" } },
+          "address": { "type": "string" },
+          "shipping_tier": { "enum": ["standard", "express"] }
+        },
+        "required": ["items", "address", "shipping_tier"]
+      },
+      "emits": {
+        "com_order_created": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "order_id": { "type": "string" },
+            "estimated_delivery": { "type": "string", "format": "date-time" }
+          },
+          "required": ["order_id", "estimated_delivery"]
+        }
+      }
+    }
+  }
+}
+```
