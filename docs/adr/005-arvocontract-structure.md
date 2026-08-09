@@ -100,6 +100,10 @@ Isolation means semantic versioning's usual job — letting a consumer reason ab
 
 **Totality of `emits`.** A version's `emits` MUST enumerate every event type a handler bound to it may produce for that version — there is no wildcard emission. ADR-000 already requires that "every event type [a handler] may emit must be permitted by its own contract or a declared dependency"; an `emits` that did not enumerate its possibilities exhaustively would make that requirement unenforceable.
 
+**No collisions.** A version's `emits` MUST NOT use `type` as one of its own keys. It also MUST NOT use the handler error type (`handler_{type}_error`, see **Handler error**) as one of its own keys.
+
+The first is ambiguous by itself: an event carrying this contract's `type` could then mean either "the request this handler accepts" or "one of its own declared responses," and nothing about the event says which. The second is a real duplicate, not just confusing wording: the handler error's `dataschema` matches the same version that produced it, so an `emits` entry reusing that key would give one exact `type` + `dataschema` pair two different schemas — the version's own, and the fixed handler-error shape — with nothing left to tell them apart. Both MUST be rejected when a contract is declared, not discovered later at validation time.
+
 ### Contract-declared identifier grammar
 
 `type`, every key of a version's `emits`, the generated handler error type (see **Handler error**), and `domain` (when not `null`) MUST match `^[0-9a-z_]+$` — non-empty, lowercase ASCII letters, digits, and the underscore only. Uppercase is excluded, not merely unneeded: allowing it would just relocate the same casing-inconsistency problem this grammar exists to remove — two contracts could otherwise name what's meant to be the same style of identifier `Com_Payment_Process` and `com_payment_process` and be silently different strings.
