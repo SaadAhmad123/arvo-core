@@ -35,7 +35,9 @@ There is exactly one ArvoContract structure. A naming convention that pre-fills 
 
 ### Canonical representation
 
-An ArvoContract's canonical form is a plain object, representable as JSON, in which every schema-bearing position — a version's `accepts`, each entry in a version's `emits`, and the system error payload — is expressed as [JSON Schema](https://json-schema.org/), not as any language-specific validation library's native representation.
+An ArvoContract's canonical form is a plain object, representable as JSON, in which every schema-bearing position — a version's `accepts`, each entry in a version's `emits`, and the system error payload — is expressed as [JSON Schema, 2020-12](https://json-schema.org/draft/2020-12) specifically, not as any language-specific validation library's native representation.
+
+The dialect is pinned, not left as "JSON Schema" generically, for the same reason ADR-002 and ADR-003 pin CloudEvents to 1.0.2 rather than to whatever CloudEvents says at a given time: dialects are not interchangeable. Draft-07 and 2020-12 differ in ways that change validation outcomes for the identical document — `$ref` alongside sibling keywords, `items`/`prefixItems`, `dependencies` versus `dependentSchemas` — so a canonical form produced by one language against 2020-12 and read by another assuming draft-07 can validate differently even when the JSON bytes are identical, defeating the sameness this canonical form exists to guarantee. Every schema-bearing position in the canonical form MUST declare `"$schema": "https://json-schema.org/draft/2020-12/schema"` explicitly, so a reader never has to assume a dialect it cannot verify. This ADR's meaning does not move if a future JSON Schema release changes dialect semantics; adopting a newer dialect requires a superseding ADR, the same discipline governing any other change here.
 
 This is the form every language implementation MUST be able to produce from its own natively-authored contract, and MUST be able to construct a working contract object from, given a canonical form produced elsewhere — including one authored in a different language. A language's own idiomatic validation object — whatever native schema representation that language's own ecosystem favors — is a materialization of the canonical form for that language's own ergonomics. It is not the source of truth; the canonical JSON form is.
 
@@ -66,13 +68,15 @@ Identifies this contract, forming the base of every `ArvoEvent.dataschema` this 
 
 `uri` MUST be a valid RFC 3986 URI-reference, in the same canonical form ADR-002 already requires of `dataschema` — non-canonical percent-encoding, wrong case, or an unresolved dot-segment is rejected, not normalized. This is necessary, not merely consistent: `dataschema` is built by appending `/{version}` to `uri`, and ADR-002 already requires `dataschema` to be canonical, so `uri` must be canonical for that guarantee to hold on every event a contract's versions produce.
 
-**Derivation.** When a language's authoring surface allows `uri` to be omitted, it MUST be derived from `type` as:
+**Derivation.** When a language's authoring surface allows `uri` to be omitted, it MUST be derived from `type` by replacing **every** occurrence of `_` with `/`, then prepending `#/`:
 
 ```
-uri = "#/" + type.replace("_", "/")
+uri = "#/" + (type with every "_" replaced by "/")
 ```
 
-This is total and unambiguous given `type`'s own grammar (see **Contract-declared identifier grammar**): `type` contains no character other than `_`, letters, and digits, so replacing `_` with `/` cannot collide with any other separator. Every language implementation offering this convenience MUST implement exactly this algorithm, so that the same `type` yields the same `uri` regardless of which language authored the contract. An explicitly supplied `uri` always wins over derivation and is stored as given, subject only to the canonical-form requirement above.
+This is deliberately stated as "every occurrence," not as a call to a language's own `replace`-like function — `replace` alone is exactly the kind of notation that silently diverges between languages (some replace only the first match by default, some replace all), which is precisely the failure mode this algorithm exists to prevent. Given `com_payment_process`, the derived `uri` MUST be `#/com/payment/process` — every underscore becomes a slash, not just the first.
+
+This is total and unambiguous given `type`'s own grammar (see **Contract-declared identifier grammar**): `type` contains no character other than `_`, lowercase letters, and digits, so replacing every `_` with `/` cannot collide with any other separator. Every language implementation offering this convenience MUST implement exactly this algorithm, so that the same `type` yields the same `uri` regardless of which language authored the contract. An explicitly supplied `uri` always wins over derivation and is stored as given, subject only to the canonical-form requirement above.
 
 ### `versions`
 
