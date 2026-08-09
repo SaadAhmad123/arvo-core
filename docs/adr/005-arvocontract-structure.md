@@ -104,6 +104,8 @@ Isolation means semantic versioning's usual job — letting a consumer reason ab
 
 An empty `emits` (`{}`) is permitted, for a handler that produces no declared response of its own. This does not mean the handler can never emit anything at all: the handler error (**Handler error**) exists independent of `emits` and remains available to every version regardless of what it declares.
 
+**Object-shaped payloads.** A version's `accepts` schema, and every schema in its `emits`, MUST describe a JSON object at the top level — the schema's own `type` keyword MUST be `"object"`, or otherwise MUST NOT permit an instance that isn't one. `ArvoEvent.data` is always an object of JSON values, per ADR-001; a schema permitting anything else describes a shape `data` can never actually take, making the contract unsatisfiable by any real event. This MUST be rejected at declaration, not discovered later at validation time.
+
 **No collisions.** A version's `emits` MUST NOT use `type` as one of its own keys. It also MUST NOT use the handler error type (`handler_{type}_error`, see **Handler error**) as one of its own keys.
 
 The first is ambiguous by itself: an event carrying this contract's `type` could then mean either "the request this handler accepts" or "one of its own declared responses," and nothing about the event says which. The second is a real duplicate, not just confusing wording: the handler error's `dataschema` matches the same version that produced it, so an `emits` entry reusing that key would give one exact `type` + `dataschema` pair two different schemas — the version's own, and the fixed handler-error shape — with nothing left to tell them apart. Both MUST be rejected when a contract is declared, not discovered later at validation time.
