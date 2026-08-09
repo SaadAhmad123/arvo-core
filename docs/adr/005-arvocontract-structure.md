@@ -83,7 +83,7 @@ uri = "#/" + (type with every "_" replaced by "/")
 
 This is deliberately stated as "every occurrence," not as a call to a language's own `replace`-like function — `replace` alone is exactly the kind of notation that silently diverges between languages (some replace only the first match by default, some replace all), which is precisely the failure mode this algorithm exists to prevent. Given `com_payment_process`, the derived `uri` MUST be `#/com/payment/process` — every underscore becomes a slash, not just the first.
 
-This is total and unambiguous given `type`'s own grammar (see **Contract-declared identifier grammar**): `type` contains no character other than `_`, lowercase letters, and digits, so replacing every `_` with `/` cannot collide with any other separator. Every language implementation offering this convenience MUST implement exactly this algorithm, so that the same `type` yields the same `uri` regardless of which language authored the contract. An explicitly supplied `uri` always wins over derivation and is stored as given, subject only to the canonical-form requirement above.
+This is total and unambiguous given `type`'s own grammar (see **Contract-declared identifier grammar**): `type` contains no character other than `_`, lowercase letters, and digits, so replacing every `_` with `/` cannot collide with any other separator. That grammar also guarantees the derived `uri` is well-formed as a path: since `type` can never start or end with `_`, or contain two or more consecutive underscores, the derived `uri` can never end up with a leading, trailing, or doubled `/` beyond the single one `#/` itself contributes. Every language implementation offering this convenience MUST implement exactly this algorithm, so that the same `type` yields the same `uri` regardless of which language authored the contract. An explicitly supplied `uri` always wins over derivation and is stored as given, subject only to the canonical-form requirement above.
 
 ### `versions`
 
@@ -112,7 +112,9 @@ The first is ambiguous by itself: an event carrying this contract's `type` could
 
 ### Contract-declared identifier grammar
 
-`type`, every key of a version's `emits`, the generated handler error type (see **Handler error**), and `domain` (when not `null`) MUST match `^[0-9a-z_]+$` — non-empty, lowercase ASCII letters, digits, and the underscore only. Uppercase is excluded, not merely unneeded: allowing it would just relocate the same casing-inconsistency problem this grammar exists to remove — two contracts could otherwise name what's meant to be the same style of identifier `Com_Payment_Process` and `com_payment_process` and be silently different strings.
+`type`, every key of a version's `emits`, the generated handler error type (see **Handler error**), and `domain` (when not `null`) MUST match `^[a-z0-9]+(_[a-z0-9]+)*$` — one or more lowercase ASCII letters or digits, optionally followed by any number of further such groups, each separated by exactly one underscore. Concretely: the identifier MUST start and end with a lowercase letter or digit, never an underscore, and MUST NOT contain two or more consecutive underscores — an underscore is only ever a separator between two alphanumeric segments, never a character with meaning on its own. `com_payment_process` is valid; `_com_payment`, `com_payment_`, and `com__payment` are not.
+
+Uppercase is excluded, not merely unneeded: allowing it would just relocate the same casing-inconsistency problem this grammar exists to remove — two contracts could otherwise name what's meant to be the same style of identifier `Com_Payment_Process` and `com_payment_process` and be silently different strings.
 
 This is deliberately more restrictive than CloudEvents itself requires. A dotted identifier (`com.user.register`) is a natural CloudEvents `type` value but a poor one to use as a symbolic key — a state-machine transition name, a dispatch-table entry, a dict or object key — the way event-driven handlers, orchestrators, and agents routinely do. Every consumer that wants to use a contract-declared type value this way must otherwise sanitize or translate between dotted and identifier-safe form itself. Fixing the grammar once, at declaration time, removes the need for that translation layer to exist anywhere downstream.
 
@@ -126,7 +128,7 @@ Every version of a contract carries a standardized handler error event, in addit
 
 Because it is an ordinary emit like any other, a handler error can be caught and acted on at the workflow level — by an orchestrator, another node, or a human — the same as any other event this contract permits. It carries no privileged, out-of-band handling path, consistent with ADR-000's Event-Only Communication.
 
-- **Type:** `type` joined into the pattern `handler_{type}_error` — e.g. `type = com_payment_process` yields `handler_com_payment_process_error`. The joined result MUST itself satisfy the grammar in **Contract-declared identifier grammar**; since `type` already does and the literal segments `handler`/`error` are drawn from that same alphabet, this holds automatically.
+- **Type:** `type` joined into the pattern `handler_{type}_error` — e.g. `type = com_payment_process` yields `handler_com_payment_process_error`. The joined result MUST itself satisfy the grammar in **Contract-declared identifier grammar**; this holds automatically. `type`'s own grammar already guarantees it starts and ends with a lowercase letter or digit, never an underscore, so wrapping it in a single literal underscore on each side can never produce a leading, trailing, or doubled underscore — and `handler`/`error` themselves contain only lowercase letters, drawn from the same alphabet.
 - **`dataschema`:** the same version as whichever declared version's handler produced the error — `{uri}/{version}`, exactly as for any other event of that version. There is no separate reserved version for it; a handler error belonging to version `1.0.0` is versioned `1.0.0`, and one belonging to `1.1.0` is versioned `1.1.0`, preserving which declared version was actually in effect when the failure occurred.
 - **Payload:** an object with `error_name` (string), `error_message` (string), and `error_stack` (string or null) — this shape does not vary by version, even though `dataschema` does.
 
@@ -220,7 +222,7 @@ Only `type` and `versions` are supplied. `uri` is derived (`com_payment_process`
 
 ### Example 2: Fully-populated contract with an explicit `uri` override
 
-`uri` is author-supplied and does not match what derivation from `type` would have produced (`#/com/user/register`) — an explicit value always wins. `description`, `domain`, and `metadata` are all set; `domain` follows the same `[0-9a-z_]` grammar as `type`.
+`uri` is author-supplied and does not match what derivation from `type` would have produced (`#/com/user/register`) — an explicit value always wins. `description`, `domain`, and `metadata` are all set; `domain` follows the same identifier grammar as `type`.
 
 ```json
 {
