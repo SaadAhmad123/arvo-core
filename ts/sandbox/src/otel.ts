@@ -8,16 +8,19 @@
  * somewhere real while you play.
  */
 
+import {
+	ConsoleSpanExporter,
+	SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import { ConsoleSpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
 
 export const provider = new NodeTracerProvider({
-  spanProcessors: [new SimpleSpanProcessor(new ConsoleSpanExporter())],
+	spanProcessors: [new SimpleSpanProcessor(new ConsoleSpanExporter())],
 });
 
 export const tracer = provider.getTracer("sandbox");
 
 /** Call once, when the script is done, to flush and release the provider. */
 export async function shutdownOtel(): Promise<void> {
-  await provider.shutdown();
+	await provider.shutdown();
 }
