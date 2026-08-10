@@ -10,8 +10,8 @@
 
 ## 3. Handler error
 
-- [ ] 3.1 Create `src/ArvoContract/handler-error.ts` with the payload schema as a single module-level frozen constant and a function deriving `handler_{type}_error` from `type`.
-- [ ] 3.2 Add `tests/ArvoContract/handler-error.spec.ts`: type derivation for single- and multi-segment `type`, payload shape, and that the schema instance is shared rather than rebuilt per call.
+- [x] 3.1 Create `src/ArvoContract/handler-error.ts` with the payload schema as a single module-level frozen constant and a function deriving `handler_{type}_error` from `type`.
+- [x] 3.2 Add `tests/ArvoContract/handler-error.spec.ts`: type derivation for single- and multi-segment `type`, payload shape, and that the schema instance is shared rather than rebuilt per call.
 
 ## 4. Validator
 
