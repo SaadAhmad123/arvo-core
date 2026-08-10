@@ -45,6 +45,5 @@
 
 ## 8. Close out
 
-- [ ] 8.1 **Delete** `src/proposal/` — the sketch is superseded by this implementation.
-- [ ] 8.2 Run `pnpm test --coverage`, `pnpm lint`, and `tsc --noEmit`; bring `src/ArvoContract/` to the 100% line and function coverage the rest of the package holds.
-- [ ] 8.3 Add a changeset describing the new capability.
+- [x] 8.1 **Delete** `src/proposal/` — the sketch is superseded by this implementation.
+- [x] 8.2 Run `pnpm test --coverage`, `pnpm lint`, and `tsc --noEmit`; bring `src/ArvoContract/` to the 100% line and function coverage the rest of the package holds.
