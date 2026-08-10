@@ -16,12 +16,15 @@
 import {
 	ArvoEvent,
 	ArvoEventSerializer,
+	ArvoContract,
+	ArvoContractValidationError,
 	ArvoEventValidationError,
 	ArvoSemanticVersion,
 	CloudEvent,
 	CloudEventConverter,
 	CloudEventTransformationError,
 } from "arvo-core";
+import { z } from "zod";
 import { shutdownOtel, tracer } from "./otel.js";
 
 const section = (title: string): void =>
@@ -308,6 +311,85 @@ function semanticVersions(): void {
 	}
 }
 
+/**
+ * 9. Contracts.
+ *
+ * A contract declares what a handler accepts and everything it may emit,
+ * one complete interface per version. Versions are independent -- 1.1.0 is
+ * a separate interface from 1.0.0, not an extension of it.
+ */
+function contracts(): void {
+	section("9. Contracts");
+
+	const contract = new ArvoContract({
+		type: "com_order_create",
+		versions: {
+			"1.0.0": {
+				accepts: z.object({ items: z.array(z.string()) }),
+				emits: { com_order_created: z.object({ order_id: z.string() }) },
+			},
+			"1.1.0": {
+				accepts: z.object({
+					items: z.array(z.string()),
+					shipping_tier: z.enum(["standard", "express"]),
+				}),
+				emits: {
+					com_order_created: z.object({
+						order_id: z.string(),
+						estimated_delivery: z.string(),
+					}),
+				},
+			},
+		},
+	});
+
+	// uri is derived from type -- every underscore becomes a slash.
+	console.log("uri:     ", contract.uri);
+	console.log("versions:", Object.keys(contract.versions).join(", "));
+
+	// Each version is standalone: it knows its own dataschema without
+	// reaching back to the contract.
+	const v1 = contract.versions["1.0.0"];
+	const v11 = contract.versions["1.1.0"];
+	console.log("1.0.0 dataschema:", v1.dataschema);
+	console.log("1.1.0 dataschema:", v11.dataschema);
+
+	// Payload types differ per version, so this is a compile error on 1.1.0
+	// and fine on 1.0.0.
+	type OrderV1 = z.infer<typeof v1.accepts>;
+	type OrderV11 = z.infer<typeof v11.accepts>;
+	const orderV1: OrderV1 = { items: ["sku-1"] };
+	const orderV11: OrderV11 = { items: ["sku-1"], shipping_tier: "express" };
+	console.log("1.0.0 accepts:", JSON.stringify(orderV1));
+	console.log("1.1.0 accepts:", JSON.stringify(orderV11));
+
+	// Indexing a version you did not declare is a compile error:
+	// contract.versions["9.9.9"];
+
+	// Every version carries a handler error, whatever its emits declares.
+	console.log("handler error:  ", v1.handlerError.type);
+	console.log("declared emits: ", Object.keys(v1.emits).join(", "));
+
+	// A broken declaration reports every problem at once, not the first.
+	try {
+		new ArvoContract({
+			type: "Com_Order_Create", // must be lowercase_snake_case
+			versions: {
+				// biome-ignore lint/suspicious/noExplicitAny: deliberately wrong
+				"01.0.0": {
+					accepts: z.object({ a: z.string() }),
+					emits: { Bad_Key: z.object({ b: z.string() }) },
+					// biome-ignore lint/suspicious/noExplicitAny: deliberately wrong
+				} as any,
+				// biome-ignore lint/suspicious/noExplicitAny: deliberately wrong
+			} as any,
+		});
+	} catch (error) {
+		if (!(error instanceof ArvoContractValidationError)) throw error;
+		console.log(`\n${indent(error.message)}`);
+	}
+}
+
 const indent = (text: string): string =>
 	text
 		.split("\n")
@@ -323,6 +405,7 @@ async function main(): Promise<void> {
 	await foreignCloudEvents();
 	await arvoEventMode(event);
 	semanticVersions();
+	contracts();
 }
 
 await main();

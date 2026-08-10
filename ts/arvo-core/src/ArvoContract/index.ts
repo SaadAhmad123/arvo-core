@@ -11,7 +11,15 @@ import { VersionedArvoContract } from './versioned/index.js';
 /**
  * A versioned declaration of what a handler accepts and what it may emit.
  *
- * ```ts
+ * Reach a version by indexing `versions`. Only declared versions exist, and
+ * each keeps its own schema types, so `z.infer` differs between them.
+ * Versions are independent -- `1.1.0` is a separate interface from `1.0.0`,
+ * not an extension of it.
+ *
+ * Throws {@link ArvoContractValidationError} listing every problem at once,
+ * not just the first.
+ *
+ * @example Minimal -- uri, description, domain and metadata all default
  * const contract = new ArvoContract({
  *   type: 'com_order_create',
  *   versions: {
@@ -22,21 +30,54 @@ import { VersionedArvoContract } from './versioned/index.js';
  *   },
  * });
  *
- * contract.uri;                  // '#/com/order/create', derived from type
- * contract.versions['1.0.0'];    // a VersionedArvoContract
- * ```
+ * contract.uri;                       // '#/com/order/create'
+ * contract.versions['1.0.0'].dataschema;  // '#/com/order/create/1.0.0'
  *
- * Reach a version by indexing `versions`. Only versions you declared exist,
- * and each keeps its own schema types, so `z.infer` on one version's
- * `accepts` differs from another's. Indexing a version you did not declare
- * is a compile error.
+ * @example Two versions, each with its own payload type
+ * const contract = new ArvoContract({
+ *   type: 'com_order_create',
+ *   versions: {
+ *     '1.0.0': { accepts: z.object({ items: z.array(z.string()) }), emits: {} },
+ *     '1.1.0': {
+ *       accepts: z.object({
+ *         items: z.array(z.string()),
+ *         shipping_tier: z.enum(['standard', 'express']),
+ *       }),
+ *       emits: {},
+ *     },
+ *   },
+ * });
  *
- * Versions are independent. `1.1.0` is a separate interface from `1.0.0` —
- * it inherits nothing and need not be compatible.
+ * type V1 = z.infer<typeof contract.versions['1.0.0']['accepts']>;
+ * type V11 = z.infer<typeof contract.versions['1.1.0']['accepts']>;
+ * contract.versions['9.9.9'];  // compile error -- never declared
  *
- * Throws {@link ArvoContractValidationError} if anything is wrong,
- * reporting every problem across every version at once rather than the
- * first one found.
+ * @example Every field supplied, with an explicit uri
+ * const contract = new ArvoContract({
+ *   type: 'com_user_register',
+ *   uri: '#/services/identity/registration',  // wins over derivation
+ *   description: 'Handles user registration',
+ *   domain: 'identity_priority',
+ *   metadata: { owner: 'team_identity' },
+ *   versions: { '1.0.0': { accepts: z.object({ email: z.string() }), emits: {} } },
+ * });
+ *
+ * @example A handler emitting either a declared event or its error
+ * const v = contract.versions['1.0.0'];
+ * v.emits.com_order_created;  // declared
+ * v.handlerError;             // always present, even if emits is empty
+ *
+ * @example Every problem reported in one attempt
+ * new ArvoContract({
+ *   type: 'Com_Order_Create',      // not lowercase_snake_case
+ *   versions: {
+ *     '01.0.0': {                  // leading zero
+ *       accepts: z.string(),       // not an object schema
+ *       emits: { Bad_Key: z.object({}) },  // not lowercase_snake_case
+ *     },
+ *   },
+ * });
+ * // throws, naming all four with paths like versions["01.0.0"].emits["Bad_Key"]
  */
 export class ArvoContract<
   T extends string = string,

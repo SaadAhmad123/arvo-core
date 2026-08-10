@@ -40,8 +40,8 @@
 
 ## 7. Public surface
 
-- [ ] 7.1 Export `ArvoContract`, `VersionedArvoContract`, `ArvoContractValidationError`, and the parameter types from `src/index.ts`.
-- [ ] 7.2 Add a section to `ts/sandbox/src/playground.ts` declaring a contract, showing per-version `z.infer`, `dataschema`, the handler error, and a rejected declaration reporting several problems at once.
+- [x] 7.1 Export `ArvoContract`, `VersionedArvoContract`, `ArvoContractValidationError`, and the parameter types from `src/index.ts`.
+- [x] 7.2 Add a section to `ts/sandbox/src/playground.ts` declaring a contract, showing per-version `z.infer`, `dataschema`, the handler error, and a rejected declaration reporting several problems at once.
 
 ## 8. Close out
 

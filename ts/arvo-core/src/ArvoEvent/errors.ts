@@ -1,7 +1,7 @@
 import {
-	buildErrorIssueMessage,
-	type ErrorIssue,
-} from "../utils/error-issue.js";
+  buildErrorIssueMessage,
+  type ErrorIssue,
+} from '../utils/error-issue.js';
 
 /**
  * Thrown when an event is structurally invalid.
@@ -15,23 +15,23 @@ import {
  * individually for callers that would rather present it their own way.
  */
 export class ArvoEventValidationError extends Error {
-	/** Discriminant for identifying this error without an `instanceof` check. */
-	readonly _tag = "ArvoEventValidationError";
+  /** Discriminant for identifying this error without an `instanceof` check. */
+  readonly _tag = 'ArvoEventValidationError';
 
-	/** Every rule the event broke, not merely the first one found. */
-	readonly issues: readonly ErrorIssue[];
+  /** Every rule the event broke, not merely the first one found. */
+  readonly issues: readonly ErrorIssue[];
 
-	/**
-	 * @param issues - Every structural rule the event failed.
-	 * @param options - Standard `ErrorOptions`. Pass `cause` to preserve an
-	 * underlying error where one exists.
-	 */
-	constructor(issues: ErrorIssue[], options?: ErrorOptions) {
-		super(
-			buildErrorIssueMessage("ArvoEvent is not structurally valid.", issues),
-			options,
-		);
-		this.name = this._tag;
-		this.issues = Object.freeze([...issues]);
-	}
+  /**
+   * @param issues - Every structural rule the event failed.
+   * @param options - Standard `ErrorOptions`. Pass `cause` to preserve an
+   * underlying error where one exists.
+   */
+  constructor(issues: ErrorIssue[], options?: ErrorOptions) {
+    super(
+      buildErrorIssueMessage('ArvoEvent is not structurally valid.', issues),
+      options,
+    );
+    this.name = this._tag;
+    this.issues = Object.freeze([...issues]);
+  }
 }
