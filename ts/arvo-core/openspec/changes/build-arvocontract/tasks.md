@@ -15,13 +15,13 @@
 
 ## 4. Validator
 
-- [ ] 4.1 Create `src/ArvoContract/errors.ts` with `ArvoContractValidationError` — `_tag`, frozen `issues`, message via `buildErrorIssueMessage`.
-- [ ] 4.2 Create `src/ArvoContract/validator.ts` with the identifier-grammar check used by `type`, `emits` keys, and `domain`.
-- [ ] 4.3 Add the contract-level checks to `src/ArvoContract/validator.ts`: `uri` non-empty and canonical via `src/utils/uri.ts`, `versions` non-empty, and every version key validated through `ArvoSemanticVersion.tryCheck` with its issues re-anchored under `versions.<key>`.
-- [ ] 4.4 Add the version-level check function to `src/ArvoContract/validator.ts`: `emits` key grammar, structural object-shape check on `accepts` and every emit, and collision of an `emits` key with `type` or the handler error type. This is the single function both classes call.
-- [ ] 4.5 Add normalization to `src/ArvoContract/validator.ts` — derive `uri` from `type`, default `description`/`domain` to null and `metadata` to `{}` — running before any check, and expose the entry point returning `{ value, issues }`.
-- [ ] 4.6 Add `tests/ArvoContract/validator.spec.ts` covering every rejection condition individually: each grammar violation, each version-key violation, non-object schemas, both collision cases, empty `versions`, empty and non-canonical `uri`.
-- [ ] 4.7 Extend `tests/ArvoContract/validator.spec.ts` with the multi-failure cases: several problems in one declaration reported together, problems in two versions both reported, and issue paths naming the exact position.
+- [x] 4.1 Create `src/ArvoContract/errors.ts` with `ArvoContractValidationError` — `_tag`, frozen `issues`, message via `buildErrorIssueMessage`.
+- [x] 4.2 Create `src/ArvoContract/validator.ts` with the identifier-grammar check used by `type`, `emits` keys, and `domain`.
+- [x] 4.3 Add the contract-level checks to `src/ArvoContract/validator.ts`: `uri` non-empty and canonical via `src/utils/uri.ts`, `versions` non-empty, and every version key validated through `ArvoSemanticVersion.tryCheck` with its issues re-anchored under `versions.<key>`.
+- [x] 4.4 Add the version-level check function to `src/ArvoContract/validator.ts`: `emits` key grammar, structural object-shape check on `accepts` and every emit, and collision of an `emits` key with `type` or the handler error type. This is the single function both classes call.
+- [x] 4.5 Add normalization to `src/ArvoContract/validator.ts` — derive `uri` from `type`, default `description`/`domain` to null and `metadata` to `{}` — running before any check, and expose the entry point returning `{ value, issues }`.
+- [x] 4.6 Add `tests/ArvoContract/validator.spec.ts` covering every rejection condition individually: each grammar violation, each version-key violation, non-object schemas, both collision cases, empty `versions`, empty and non-canonical `uri`.
+- [x] 4.7 Extend `tests/ArvoContract/validator.spec.ts` with the multi-failure cases: several problems in one declaration reported together, problems in two versions both reported, and issue paths naming the exact position.
 
 ## 5. VersionedArvoContract
 
