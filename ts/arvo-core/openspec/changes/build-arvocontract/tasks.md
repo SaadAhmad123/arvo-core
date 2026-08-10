@@ -32,11 +32,11 @@
 
 ## 6. ArvoContract
 
-- [ ] 6.1 Create `src/ArvoContract/index.ts` with the class, its generics, and its fields — `type`, `uri`, `description`, `domain`, `metadata`, `versions`.
-- [ ] 6.2 Add constructor normalization and full validation across all versions before any `VersionedArvoContract` is constructed, throwing once with every issue.
-- [ ] 6.3 Materialize each version into a `VersionedArvoContract` carrying the container's identity fields, and freeze the instance, its `metadata`, and its `versions` map.
-- [ ] 6.4 Add `tests/ArvoContract/index.spec.ts`: minimal declaration and its defaults, `uri` derivation including multi-underscore and explicit override, per-version materialization and addressability, version isolation, and immutability.
-- [ ] 6.5 Add a test asserting a contract that declares successfully never produces a version that fails version-level validation.
+- [x] 6.1 Create `src/ArvoContract/index.ts` with the class, its generics, and its fields — `type`, `uri`, `description`, `domain`, `metadata`, `versions`.
+- [x] 6.2 Add constructor normalization and full validation across all versions before any `VersionedArvoContract` is constructed, throwing once with every issue.
+- [x] 6.3 Materialize each version into a `VersionedArvoContract` carrying the container's identity fields, and freeze the instance, its `metadata`, and its `versions` map.
+- [x] 6.4 Add `tests/ArvoContract/index.spec.ts`: minimal declaration and its defaults, `uri` derivation including multi-underscore and explicit override, per-version materialization and addressability, version isolation, and immutability.
+- [x] 6.5 Add a test asserting a contract that declares successfully never produces a version that fails version-level validation.
 
 ## 7. Public surface
 
