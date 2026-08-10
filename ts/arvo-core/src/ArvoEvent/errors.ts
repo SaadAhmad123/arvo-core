@@ -1,40 +1,7 @@
-import { describeValue } from '../utils.js';
-
-/** A single structural rule that an event failed. */
-export type ArvoEventValidationIssue = {
-  /**
-   * Where the problem is: a field name (`dataschema`), a dotted path into
-   * the payload (`data.items[2].price`), or the fields a combined rule spans
-   * (`parentid + depth`).
-   */
-  path: string;
-  /** What is wrong with the value at `path`. */
-  message: string;
-  /** The offending value. Absent when showing it would not help. */
-  received?: unknown;
-};
-
-/** Renders one issue as a single line: where, what, and what was received. */
-const formatIssue = (issue: ArvoEventValidationIssue): string => {
-  const received =
-    'received' in issue ? ` (received ${describeValue(issue.received)})` : '';
-  return `${issue.path}: ${issue.message}${received}`;
-};
-
-/**
- * Builds the message shown when construction fails.
- *
- * A single failure reads as one sentence. Several read as a list, because an
- * event has eighteen fields and being told about them one run at a time is a
- * poor way to find out that four are wrong.
- */
-const formatMessage = (issues: ArvoEventValidationIssue[]): string => {
-  if (issues.length === 0) return 'ArvoEvent is not structurally valid.';
-  if (issues.length === 1)
-    return `ArvoEvent is not structurally valid. ${formatIssue(issues[0] as ArvoEventValidationIssue)}`;
-  const lines = issues.map((issue) => `  - ${formatIssue(issue)}`).join('\n');
-  return `ArvoEvent is not structurally valid (${issues.length} problems):\n${lines}`;
-};
+import {
+  buildErrorIssueMessage,
+  type ErrorIssue,
+} from '../utils/error-issue.js';
 
 /**
  * Thrown when an event is structurally invalid.
@@ -55,15 +22,18 @@ export class ArvoEventValidationError extends Error {
   readonly _tag = 'ArvoEventValidationError';
 
   /** Every rule the event broke, not merely the first one found. */
-  readonly issues: readonly ArvoEventValidationIssue[];
+  readonly issues: readonly ErrorIssue[];
 
   /**
    * @param issues - Every structural rule the event failed.
    * @param options - Standard `ErrorOptions`. Pass `cause` to preserve an
    * underlying error where one exists.
    */
-  constructor(issues: ArvoEventValidationIssue[], options?: ErrorOptions) {
-    super(formatMessage(issues), options);
+  constructor(issues: ErrorIssue[], options?: ErrorOptions) {
+    super(
+      buildErrorIssueMessage('ArvoEvent is not structurally valid.', issues),
+      options,
+    );
     this.name = this._tag;
     this.issues = Object.freeze([...issues]);
   }

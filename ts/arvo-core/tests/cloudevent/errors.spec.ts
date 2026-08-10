@@ -1,29 +1,39 @@
 import { describe, expect, it } from 'vitest';
 import { CloudEventTransformationError } from '../../src/cloudevent/errors.js';
+import { ErrorIssue } from '../../src/utils/error-issue.js';
 
 describe('CloudEventTransformationError', () => {
   describe('kind: "strict"/"foreign"', () => {
-    it('formats a single issue as one sentence', () => {
+    it('formats a single issue under a singular preamble', () => {
       const error = new CloudEventTransformationError({
         kind: 'strict',
-        issues: [{ path: 'subject', message: 'is required' }],
+        issues: [new ErrorIssue({ path: 'subject', message: 'is required' })],
       });
       expect(error.message).toBe(
-        'CloudEvent is not strictly Arvo-shaped. subject: is required',
+        [
+          'CloudEvent is not strictly Arvo-shaped.',
+          'The following problem was found:',
+          '  - subject: is required',
+        ].join('\n'),
       );
     });
 
-    it('formats multiple issues as a list, with a count', () => {
+    it('formats multiple issues under a counted preamble', () => {
       const error = new CloudEventTransformationError({
         kind: 'strict',
         issues: [
-          { path: 'subject', message: 'is required' },
-          { path: 'time', message: 'is required' },
+          new ErrorIssue({ path: 'subject', message: 'is required' }),
+          new ErrorIssue({ path: 'time', message: 'is required' }),
         ],
       });
-      expect(error.message).toContain('(2 problems)');
-      expect(error.message).toContain('  - subject: is required');
-      expect(error.message).toContain('  - time: is required');
+      expect(error.message).toBe(
+        [
+          'CloudEvent is not strictly Arvo-shaped.',
+          'The following 2 problems were found:',
+          '  - subject: is required',
+          '  - time: is required',
+        ].join('\n'),
+      );
     });
 
     it('formats zero issues as a bare heading', () => {
@@ -37,7 +47,9 @@ describe('CloudEventTransformationError', () => {
     it('uses the foreign-specific heading for kind: "foreign"', () => {
       const error = new CloudEventTransformationError({
         kind: 'foreign',
-        issues: [{ path: 'dataschema', message: 'is required' }],
+        issues: [
+          new ErrorIssue({ path: 'dataschema', message: 'is required' }),
+        ],
       });
       expect(error.message).toContain(
         'Foreign CloudEvent could not be adapted into an ArvoEvent.',
@@ -48,11 +60,11 @@ describe('CloudEventTransformationError', () => {
       const error = new CloudEventTransformationError({
         kind: 'strict',
         issues: [
-          {
+          new ErrorIssue({
             path: 'specversion',
             message: 'must be exactly "1.0"',
             received: '0.3',
-          },
+          }),
         ],
       });
       expect(error.message).toContain('(received "0.3")');
@@ -61,7 +73,9 @@ describe('CloudEventTransformationError', () => {
     it('omits the received clause when the issue has none', () => {
       const error = new CloudEventTransformationError({
         kind: 'strict',
-        issues: [{ path: 'arvoexecutionid', message: 'is required' }],
+        issues: [
+          new ErrorIssue({ path: 'arvoexecutionid', message: 'is required' }),
+        ],
       });
       expect(error.message).not.toContain('received');
     });
@@ -69,7 +83,7 @@ describe('CloudEventTransformationError', () => {
     it('exposes issues via detail after narrowing on kind', () => {
       const error = new CloudEventTransformationError({
         kind: 'strict',
-        issues: [{ path: 'subject', message: 'is required' }],
+        issues: [new ErrorIssue({ path: 'subject', message: 'is required' })],
       });
       if (error.detail.kind === 'strict') {
         expect(error.detail.issues).toHaveLength(1);

@@ -169,7 +169,12 @@ describe('validateArvoEvent', () => {
         (i) => i.path === 'subject',
       );
       expect(issue?.message).toBe('is required');
-      expect(issue).not.toHaveProperty('received');
+      // ErrorIssue always defines `received`, so absence shows as undefined
+      // rather than as a missing key. What matters is that nothing is
+      // rendered for it, and that it stays out of the serialized form.
+      expect(issue?.received).toBeUndefined();
+      expect(issue?.toString()).toBe('subject: is required');
+      expect(JSON.stringify(issue)).not.toContain('received');
     });
 
     it('reports a present but wrong value with what was received', () => {
