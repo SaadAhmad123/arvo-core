@@ -25,10 +25,10 @@
 
 ## 5. VersionedArvoContract
 
-- [ ] 5.1 Create `src/ArvoContract/versioned.ts` with the class, its generics, and its fields — `type`, `version`, `uri`, `description`, `domain`, `metadata`, `accepts`, `emits`, and the handler error exposed in emit shape.
-- [ ] 5.2 Add the `dataschema` getter returning `` `${uri}/${version}` ``, deriving rather than storing.
-- [ ] 5.3 Add constructor validation calling the shared version-level function, throwing `ArvoContractValidationError` on any issue, and freeze the instance plus its `metadata` and `emits`.
-- [ ] 5.4 Add `tests/ArvoContract/versioned.spec.ts`: standalone construction accepted and rejected on the same rules as within a container, `dataschema` composition, handler error availability including when `emits` is empty, and immutability.
+- [x] 5.1 Create `src/ArvoContract/versioned/index.ts` with the class, its generics, and its fields — `type`, `version`, `uri`, `description`, `domain`, `metadata`, `accepts`, `emits`, and the handler error exposed in emit shape.
+- [x] 5.2 Add the `dataschema` getter returning `` `${uri}/${version}` ``, deriving rather than storing.
+- [x] 5.3 Add constructor validation calling the shared version-level function, throwing `ArvoContractValidationError` on any issue, and freeze the instance plus its `metadata` and `emits`.
+- [x] 5.4 Add `tests/ArvoContract/versioned.spec.ts`: standalone construction accepted and rejected on the same rules as within a container, `dataschema` composition, handler error availability including when `emits` is empty, and immutability.
 
 ## 6. ArvoContract
 
