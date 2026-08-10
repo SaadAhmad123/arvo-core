@@ -1,4 +1,4 @@
-import type { ArvoEventValidationIssue } from '../../../ArvoEvent/errors.js';
+import { ErrorIssue } from '../../../utils/error-issue.js';
 import type { CloudEvent, ForeignCloudEventFallback } from '../../types.js';
 import type { Decoded } from './index.js';
 
@@ -16,7 +16,7 @@ export const decodeForeign = (
   data: CloudEvent,
   fallback?: ForeignCloudEventFallback,
 ): Decoded => {
-  const issues: ArvoEventValidationIssue[] = [];
+  const issues: ErrorIssue[] = [];
   const raw = data as unknown as Record<string, unknown>;
   const candidate: Record<string, unknown> = {
     id: data.id,
@@ -44,11 +44,13 @@ export const decodeForeign = (
       typeof data.data !== 'object' ||
       Array.isArray(data.data)
     ) {
-      issues.push({
-        path: 'data',
-        message: 'must be an object to be adapted from a foreign CloudEvent',
-        received: data.data,
-      });
+      issues.push(
+        new ErrorIssue({
+          path: 'data',
+          message: 'must be an object to be adapted from a foreign CloudEvent',
+          received: data.data,
+        }),
+      );
     } else {
       candidate.data = data.data;
     }
@@ -58,12 +60,14 @@ export const decodeForeign = (
 
   candidate.dataschema = fallback?.dataschema;
   if (!fallback?.dataschema) {
-    issues.push({
-      path: 'dataschema',
-      message:
-        'is required as a caller-supplied fallback when adapting a foreign CloudEvent',
-      received: fallback?.dataschema,
-    });
+    issues.push(
+      new ErrorIssue({
+        path: 'dataschema',
+        message:
+          'is required as a caller-supplied fallback when adapting a foreign CloudEvent',
+        received: fallback?.dataschema,
+      }),
+    );
   }
 
   return { candidate, issues };

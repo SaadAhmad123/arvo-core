@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTimestamp, truncate } from '../src/utils.js';
+import { createTimestamp, truncate } from '../src/utils/index.js';
 
 describe('createTimestamp', () => {
   it('returns the current instant as an RFC 3339 timestamp in UTC, suffixed Z', () => {

@@ -1,4 +1,3 @@
-export type { ArvoEventValidationIssue } from './ArvoEvent/errors.js';
 export { ArvoEventValidationError } from './ArvoEvent/errors.js';
 export { ArvoEvent } from './ArvoEvent/index.js';
 export type {
@@ -30,3 +29,4 @@ export type {
   JSONValue,
   Result,
 } from './types.js';
+export { ErrorIssue } from './utils/error-issue.js';

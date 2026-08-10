@@ -5,7 +5,7 @@ import type {
   JSONScalar,
   JSONValue,
 } from '../types.js';
-import type { ArvoEventValidationIssue } from './errors.js';
+import { ErrorIssue } from '../utils/error-issue.js';
 
 /**
  * The outcome of walking a value: the normalized, frozen result and every
@@ -13,7 +13,7 @@ import type { ArvoEventValidationIssue } from './errors.js';
  */
 export type JSONWalkResult<T> = {
   value: T;
-  issues: ArvoEventValidationIssue[];
+  issues: ErrorIssue[];
 };
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
@@ -40,7 +40,7 @@ const NOT_SCALAR = Symbol('json.not-scalar');
 const classifyScalar = (
   value: unknown,
   path: string,
-  issues: ArvoEventValidationIssue[],
+  issues: ErrorIssue[],
 ): JSONScalar | typeof NOT_SCALAR => {
   if (value === null) return null;
 
@@ -51,38 +51,46 @@ const classifyScalar = (
 
     case 'number':
       if (!Number.isFinite(value)) {
-        issues.push({
-          path,
-          message:
-            'must be a finite number. NaN and Infinity have no JSON representation and would not survive transmission',
-          received: value,
-        });
+        issues.push(
+          new ErrorIssue({
+            path,
+            message:
+              'must be a finite number. NaN and Infinity have no JSON representation and would not survive transmission',
+            received: value,
+          }),
+        );
         return NOT_SCALAR;
       }
       return value;
 
     case 'bigint':
-      issues.push({
-        path,
-        message:
-          'is a bigint, which JSON cannot represent. Convert it to a number if it fits, or to a string if it does not',
-        received: value,
-      });
+      issues.push(
+        new ErrorIssue({
+          path,
+          message:
+            'is a bigint, which JSON cannot represent. Convert it to a number if it fits, or to a string if it does not',
+          received: value,
+        }),
+      );
       return NOT_SCALAR;
 
     case 'function':
-      issues.push({
-        path,
-        message: 'is a function, which cannot be carried in an event payload',
-      });
+      issues.push(
+        new ErrorIssue({
+          path,
+          message: 'is a function, which cannot be carried in an event payload',
+        }),
+      );
       return NOT_SCALAR;
 
     case 'symbol':
-      issues.push({
-        path,
-        message: 'is a symbol, which JSON cannot represent',
-        received: value,
-      });
+      issues.push(
+        new ErrorIssue({
+          path,
+          message: 'is a symbol, which JSON cannot represent',
+          received: value,
+        }),
+      );
       return NOT_SCALAR;
 
     default:
@@ -123,7 +131,7 @@ const constructorName = (value: object): string =>
 const walk = (
   input: unknown,
   path: string,
-  issues: ArvoEventValidationIssue[],
+  issues: ErrorIssue[],
   ancestors: Set<object>,
 ): JSONValue => {
   const scalar = classifyScalar(input, path, issues);
@@ -138,11 +146,13 @@ const walk = (
   const value = input;
 
   if (ancestors.has(value)) {
-    issues.push({
-      path,
-      message:
-        'is a circular reference. An event must be representable as JSON, and a cycle has no JSON form',
-    });
+    issues.push(
+      new ErrorIssue({
+        path,
+        message:
+          'is a circular reference. An event must be representable as JSON, and a cycle has no JSON form',
+      }),
+    );
     return null;
   }
 
@@ -163,10 +173,12 @@ const walk = (
       serialized = toJSON.call(value);
     } catch (error) {
       ancestors.delete(value);
-      issues.push({
-        path,
-        message: `toJSON() threw: ${error instanceof Error ? error.message : String(error)}`,
-      });
+      issues.push(
+        new ErrorIssue({
+          path,
+          message: `toJSON() threw: ${error instanceof Error ? error.message : String(error)}`,
+        }),
+      );
       return null;
     }
     const result = walk(serialized, path, issues, ancestors);
@@ -175,10 +187,12 @@ const walk = (
   }
 
   if (!isPlainObject(value)) {
-    issues.push({
-      path,
-      message: `is a ${constructorName(value)}, which has no JSON representation. Convert it to a plain object, array, or scalar first`,
-    });
+    issues.push(
+      new ErrorIssue({
+        path,
+        message: `is a ${constructorName(value)}, which has no JSON representation. Convert it to a plain object, array, or scalar first`,
+      }),
+    );
     return null;
   }
 
@@ -205,14 +219,16 @@ export const walkPayload = (
   input: unknown,
   path: string,
 ): JSONWalkResult<JSONObject> => {
-  const issues: ArvoEventValidationIssue[] = [];
+  const issues: ErrorIssue[] = [];
 
   if (input === null || typeof input !== 'object' || Array.isArray(input)) {
-    issues.push({
-      path,
-      message: 'must be an object of JSON values',
-      received: input,
-    });
+    issues.push(
+      new ErrorIssue({
+        path,
+        message: 'must be an object of JSON values',
+        received: input,
+      }),
+    );
     return { value: Object.freeze({}), issues };
   }
 
@@ -230,14 +246,16 @@ export const walkFlatMap = (
   input: unknown,
   path: string,
 ): JSONWalkResult<FlatMap> => {
-  const issues: ArvoEventValidationIssue[] = [];
+  const issues: ErrorIssue[] = [];
 
   if (input === null || typeof input !== 'object' || Array.isArray(input)) {
-    issues.push({
-      path,
-      message: 'must be an object whose values are all scalars',
-      received: input,
-    });
+    issues.push(
+      new ErrorIssue({
+        path,
+        message: 'must be an object whose values are all scalars',
+        received: input,
+      }),
+    );
     return { value: Object.freeze({}), issues };
   }
 
@@ -254,12 +272,14 @@ export const walkFlatMap = (
     }
 
     if (typeof element === 'object' && element !== null) {
-      issues.push({
-        path: entryPath,
-        message:
-          'must be a string, number, boolean, or null. Ambient context is flat, so it cannot nest — anything structured belongs in the payload',
-        received: element,
-      });
+      issues.push(
+        new ErrorIssue({
+          path: entryPath,
+          message:
+            'must be a string, number, boolean, or null. Ambient context is flat, so it cannot nest — anything structured belongs in the payload',
+          received: element,
+        }),
+      );
     }
     // else: bigint, function, or symbol — classifyScalar already reported it
   }

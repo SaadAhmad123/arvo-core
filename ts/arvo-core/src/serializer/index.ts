@@ -6,6 +6,7 @@ import type { ForeignCloudEventFallback } from '../cloudevent/types.js';
 import { CloudEvent } from '../cloudevent/types.js';
 import { fromNeverthrow } from '../result.js';
 import type { AsyncResult } from '../types.js';
+import { ErrorIssue } from '../utils/error-issue.js';
 import { ArvoEventSerializerError } from './errors.js';
 
 /**
@@ -175,7 +176,11 @@ export class ArvoEventSerializer {
           new CloudEventTransformationError({
             kind: 'foreign',
             issues: [
-              { path: 'specversion', message: 'is required', received: parsed },
+              new ErrorIssue({
+                path: 'specversion',
+                message: 'is required',
+                received: parsed,
+              }),
             ],
           }),
         ),

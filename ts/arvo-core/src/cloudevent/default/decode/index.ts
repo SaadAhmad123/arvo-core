@@ -1,11 +1,11 @@
-import type { ArvoEventValidationIssue } from '../../../ArvoEvent/errors.js';
+import type { ErrorIssue } from '../../../utils/error-issue.js';
 import type { CloudEvent } from '../../types.js';
 import { ARVO_MEDIA_TYPE, DATA_SCHEMA } from '../constants.js';
 import { parseDataContentType } from '../content-type.js';
 
 export type Decoded = {
   candidate: Record<string, unknown>;
-  issues: ArvoEventValidationIssue[];
+  issues: ErrorIssue[];
 };
 
 /** Whether `data` claims Arvo shape at all, via either marker — the branch point between attempting strict decoding and foreign adaptation. */

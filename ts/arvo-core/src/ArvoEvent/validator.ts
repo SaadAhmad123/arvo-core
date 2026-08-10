@@ -1,8 +1,8 @@
 import fastUri from 'fast-uri';
 import { z } from 'zod';
 import type { FlatMap, JSONObject } from '../types.js';
-import { createTimestamp } from '../utils.js';
-import type { ArvoEventValidationIssue } from './errors.js';
+import { ErrorIssue } from '../utils/error-issue.js';
+import { createTimestamp } from '../utils/index.js';
 import { walkFlatMap, walkPayload } from './json.js';
 import type { ArvoEventFields, ArvoEventValidationOptions } from './types.js';
 
@@ -59,64 +59,66 @@ const applyDefaults = (
 const requireNonEmptyString = (
   value: unknown,
   path: string,
-  issues: ArvoEventValidationIssue[],
+  issues: ErrorIssue[],
 ): void => {
   if (value === undefined) {
-    issues.push({ path, message: 'is required' });
+    issues.push(new ErrorIssue({ path, message: 'is required' }));
     return;
   }
   if (typeof value !== 'string' || value.length === 0) {
-    issues.push({
-      path,
-      message: 'must be a non-empty string',
-      received: value,
-    });
+    issues.push(
+      new ErrorIssue({
+        path,
+        message: 'must be a non-empty string',
+        received: value,
+      }),
+    );
   }
 };
 
 const checkNullableNonEmptyString = (
   value: unknown,
   path: string,
-  issues: ArvoEventValidationIssue[],
+  issues: ErrorIssue[],
 ): void => {
   if (value === null) return;
   if (typeof value !== 'string' || value.length === 0) {
-    issues.push({
-      path,
-      message: 'must be null or a non-empty string',
-      received: value,
-    });
+    issues.push(
+      new ErrorIssue({
+        path,
+        message: 'must be null or a non-empty string',
+        received: value,
+      }),
+    );
   }
 };
 
-const checkDepth = (
-  value: unknown,
-  issues: ArvoEventValidationIssue[],
-): void => {
+const checkDepth = (value: unknown, issues: ErrorIssue[]): void => {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    issues.push({
-      path: 'depth',
-      message: 'must be a non-negative integer',
-      received: value,
-    });
+    issues.push(
+      new ErrorIssue({
+        path: 'depth',
+        message: 'must be a non-negative integer',
+        received: value,
+      }),
+    );
   }
 };
 
 const isoDateTimeWithOffset = z.iso.datetime({ offset: true });
 
-const checkTime = (
-  value: unknown,
-  issues: ArvoEventValidationIssue[],
-): void => {
+const checkTime = (value: unknown, issues: ErrorIssue[]): void => {
   if (
     typeof value !== 'string' ||
     !isoDateTimeWithOffset.safeParse(value).success
   ) {
-    issues.push({
-      path: 'time',
-      message: 'must be an RFC 3339 timestamp carrying a UTC offset',
-      received: value,
-    });
+    issues.push(
+      new ErrorIssue({
+        path: 'time',
+        message: 'must be an RFC 3339 timestamp carrying a UTC offset',
+        received: value,
+      }),
+    );
   }
 };
 
@@ -126,17 +128,16 @@ const checkTime = (
  * stated explicitly for conformance across a future non-JS implementation,
  * not because anything finite here could fail it.
  */
-const checkExecutionUnits = (
-  value: unknown,
-  issues: ArvoEventValidationIssue[],
-): void => {
+const checkExecutionUnits = (value: unknown, issues: ErrorIssue[]): void => {
   if (value === null) return;
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    issues.push({
-      path: 'executionunits',
-      message: 'must be null or a finite IEEE 754 binary64 number',
-      received: value,
-    });
+    issues.push(
+      new ErrorIssue({
+        path: 'executionunits',
+        message: 'must be null or a finite IEEE 754 binary64 number',
+        received: value,
+      }),
+    );
   }
 };
 
@@ -187,7 +188,7 @@ const findForbiddenCodePoint = (
 const checkCharacterDomain = (
   value: unknown,
   path: string,
-  issues: ArvoEventValidationIssue[],
+  issues: ErrorIssue[],
 ): void => {
   if (typeof value !== 'string' || value.length === 0) return;
   const violation = findForbiddenCodePoint(value);
@@ -196,11 +197,13 @@ const checkCharacterDomain = (
       .toString(16)
       .toUpperCase()
       .padStart(4, '0');
-    issues.push({
-      path,
-      message: `must not contain U+${codePointHex} — control characters, Unicode noncharacters, and unpaired surrogates are forbidden`,
-      received: value,
-    });
+    issues.push(
+      new ErrorIssue({
+        path,
+        message: `must not contain U+${codePointHex} — control characters, Unicode noncharacters, and unpaired surrogates are forbidden`,
+        received: value,
+      }),
+    );
   }
 };
 
@@ -236,15 +239,17 @@ const isUriReference = (value: string): boolean => {
 const checkUriReference = (
   value: unknown,
   path: string,
-  issues: ArvoEventValidationIssue[],
+  issues: ErrorIssue[],
 ): void => {
   if (typeof value !== 'string' || value.length === 0) return;
   if (!isUriReference(value)) {
-    issues.push({
-      path,
-      message: 'must be a valid RFC 3986 URI-reference',
-      received: value,
-    });
+    issues.push(
+      new ErrorIssue({
+        path,
+        message: 'must be a valid RFC 3986 URI-reference',
+        received: value,
+      }),
+    );
   }
 };
 
@@ -255,29 +260,33 @@ const checkUriReference = (
  */
 const checkRootConstraint = (
   candidate: Record<string, unknown>,
-  issues: ArvoEventValidationIssue[],
+  issues: ErrorIssue[],
 ): void => {
   if (candidate.parentid !== null) return;
 
   if (candidate.executionid !== candidate.subject) {
-    issues.push({
-      path: 'parentid + executionid',
-      message:
-        'a root event (parentid null) must carry executionid equal to subject, since the root execution is the workflow itself',
-      received: {
-        executionid: candidate.executionid,
-        subject: candidate.subject,
-      },
-    });
+    issues.push(
+      new ErrorIssue({
+        path: 'parentid + executionid',
+        message:
+          'a root event (parentid null) must carry executionid equal to subject, since the root execution is the workflow itself',
+        received: {
+          executionid: candidate.executionid,
+          subject: candidate.subject,
+        },
+      }),
+    );
   }
 
   if (candidate.depth !== 0) {
-    issues.push({
-      path: 'parentid + depth',
-      message:
-        'a root event (parentid null) must carry depth 0, the nesting level of the root execution',
-      received: candidate.depth,
-    });
+    issues.push(
+      new ErrorIssue({
+        path: 'parentid + depth',
+        message:
+          'a root event (parentid null) must carry depth 0, the nesting level of the root execution',
+        received: candidate.depth,
+      }),
+    );
   }
 };
 
@@ -288,14 +297,16 @@ const checkRootConstraint = (
  */
 const checkCorrelationConstraint = (
   candidate: Record<string, unknown>,
-  issues: ArvoEventValidationIssue[],
+  issues: ErrorIssue[],
 ): void => {
   if (candidate.category === 'io.arvo.complete' && candidate.initid === null) {
-    issues.push({
-      path: 'category + initid',
-      message:
-        'an event whose category is io.arvo.complete must carry initid, naming the request it answers',
-    });
+    issues.push(
+      new ErrorIssue({
+        path: 'category + initid',
+        message:
+          'an event whose category is io.arvo.complete must carry initid, naming the request it answers',
+      }),
+    );
   }
 };
 
@@ -311,15 +322,17 @@ const checkCorrelationConstraint = (
 export const validateArvoEvent = (
   input: unknown,
   options: ArvoEventValidationOptions = {},
-): { value: ArvoEventFields; issues: ArvoEventValidationIssue[] } => {
-  const issues: ArvoEventValidationIssue[] = [];
+): { value: ArvoEventFields; issues: ErrorIssue[] } => {
+  const issues: ErrorIssue[] = [];
 
   if (input === null || typeof input !== 'object' || Array.isArray(input)) {
-    issues.push({
-      path: 'event',
-      message: 'must be an object',
-      received: input,
-    });
+    issues.push(
+      new ErrorIssue({
+        path: 'event',
+        message: 'must be an object',
+        received: input,
+      }),
+    );
     return {
       value: applyDefaults({}) as unknown as ArvoEventFields,
       issues,
@@ -330,7 +343,9 @@ export const validateArvoEvent = (
 
   for (const key of Object.keys(raw)) {
     if (!(KNOWN_FIELDS as readonly string[]).includes(key)) {
-      issues.push({ path: key, message: 'is not a field of ArvoEvent' });
+      issues.push(
+        new ErrorIssue({ path: key, message: 'is not a field of ArvoEvent' }),
+      );
     }
   }
 
@@ -365,7 +380,7 @@ export const validateArvoEvent = (
   const payload = options.skipPayloadValidation
     ? {
         value: candidate.data as JSONObject,
-        issues: [] as ArvoEventValidationIssue[],
+        issues: [] as ErrorIssue[],
       }
     : walkPayload(candidate.data, 'data');
   issues.push(...payload.issues);
@@ -373,7 +388,7 @@ export const validateArvoEvent = (
   const baggage = options.skipPayloadValidation
     ? {
         value: candidate.baggage as FlatMap,
-        issues: [] as ArvoEventValidationIssue[],
+        issues: [] as ErrorIssue[],
       }
     : walkFlatMap(candidate.baggage, 'baggage');
   issues.push(...baggage.issues);
