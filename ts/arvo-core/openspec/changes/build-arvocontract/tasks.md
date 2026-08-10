@@ -1,13 +1,12 @@
 ## 1. Shared groundwork
 
-- [ ] 1.1 **Move** `isUriReference` out of `src/ArvoEvent/validator.ts` into `src/utils/uri.ts` and export it; update `src/ArvoEvent/validator.ts` to import it. This relocates existing behaviour — the event validator's URI checking must be unchanged, verified by the existing `tests/ArvoEvent/validator.spec.ts` still passing untouched.
-- [ ] 1.2 Add `tests/utils/uri.spec.ts` covering `isUriReference` directly: canonical accept, non-canonical percent-encoding, wrong case, unresolved dot-segment, empty string.
+- [x] 1.1 **Move** `isUriReference` out of `src/ArvoEvent/validator.ts` into `src/utils/uri.ts` and export it; update `src/ArvoEvent/validator.ts` to import it. This relocates existing behaviour — the event validator's URI checking must be unchanged, verified by the existing `tests/ArvoEvent/validator.spec.ts` still passing untouched.
+- [x] 1.2 Add `tests/utils/uri.spec.ts` covering `isUriReference` directly: canonical accept, non-canonical percent-encoding, wrong case, unresolved dot-segment, empty string.
 
 ## 2. Types
 
-- [ ] 2.1 Create `src/ArvoContract/types.ts` with `ArvoContractVersionParam` (`accepts`, `emits`), `ArvoContractVersionMapParam`, `ArvoContractParam`, and `VersionedArvoContractParam`, using `zod/v4/core` types for schema positions.
-- [ ] 2.2 Document on `ArvoContractVersionMapParam` that annotating a versions map with it collapses literal keys and loses per-version inference, per design.md — Risks.
-- [ ] 2.3 Add `tests/ArvoContract/types.spec.ts` as a type-level test: a declared version key resolves, an undeclared key is a compile error, and two versions' `accepts` types stay distinct.
+- [x] 2.1 Create `src/ArvoContract/types.ts` with `ArvoContractVersionParam` (`accepts`, `emits`), `ArvoContractVersionMapParam`, `ArvoContractParam`, and `VersionedArvoContractParam`, using `zod/v4/core` types for schema positions.
+- [x] 2.2 Document on `ArvoContractVersionMapParam` that annotating a versions map with it collapses literal keys and loses per-version inference, per design.md — Risks.
 
 ## 3. Handler error
 
