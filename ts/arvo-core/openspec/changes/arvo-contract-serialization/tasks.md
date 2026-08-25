@@ -43,14 +43,14 @@
 
 ## 7. Round trip
 
-- [ ] 7.1 Add `tests/serializers/ArvoContractSerializer/round-trip.spec.ts` pinning that one crossing is faithful: string length, numeric range, and set membership each still reject a violating payload after serialize-then-deserialize, and a payload the original accepts is accepted after.
-- [ ] 7.2 Add the recursive round trip: a self-referencing `accepts` serializes and reads back.
-- [ ] 7.3 Do **not** add a test asserting repeated crossings preserve constraints. They do not — `email` and `uuid` stop being enforced after two. Record that in a comment beside the single-crossing tests so the absence reads as deliberate rather than as missing coverage.
+- [x] 7.1 Add `tests/serializers/ArvoContractSerializer/round-trip.spec.ts` pinning that one crossing is faithful: string length, numeric range, and set membership each still reject a violating payload after serialize-then-deserialize, and a payload the original accepts is accepted after.
+- [x] 7.2 Add the recursive round trip: a self-referencing `accepts` serializes and reads back.
+- [x] 7.3 Do **not** add a test asserting repeated crossings preserve constraints. They do not — `email` and `uuid` stop being enforced after two. Record that in a comment beside the single-crossing tests so the absence reads as deliberate rather than as missing coverage.
 
 ## 8. Immutability
 
-- [ ] 8.1 Freeze both result objects and their `warnings` arrays. `ErrorIssue` already freezes itself, so the value is immutable to its leaves.
-- [ ] 8.2 Add tests that a returned result, its collection of losses, and an individual loss all resist mutation.
+- [x] 8.1 Freeze both result objects and their `warnings` arrays. `ErrorIssue` already freezes itself, so the value is immutable to its leaves.
+- [x] 8.2 Add tests that a returned result, its collection of losses, and an individual loss all resist mutation.
 
 ## 9. Public surface
 
