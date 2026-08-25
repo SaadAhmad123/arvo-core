@@ -152,19 +152,29 @@ export class ArvoContractSerializer {
       );
     }
 
-    // Not guarded. The contract's own rules have already passed, so the
-    // constructor cannot reject what they accepted -- `arvo-contract` has a
-    // test asserting that invariant directly. Catching here would convert a
-    // broken invariant into a well-formed "could not be read", which claims a
-    // kind of failure that did not occur.
-    return fromNeverthrow(
-      ok(
-        sealed(
-          { contract: new ArvoContract(read.value.param) },
-          read.value.losses,
+    try {
+      return fromNeverthrow(
+        ok(
+          sealed(
+            { contract: new ArvoContract(read.value.param) },
+            read.value.losses,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (error) {
+      // The contract's own rules have already passed, so this should be
+      // unreachable -- `arvo-contract` has a test asserting a declaration it
+      // accepts always constructs. Guarded anyway, and worded so it does not
+      // blame the form: nothing was wrong with what the caller supplied.
+      return fromNeverthrow(
+        err(
+          new ArvoContractSerializerError(
+            'ArvoContract was read but could not be constructed.',
+            { cause: asError(error) },
+          ),
+        ),
+      );
+    }
   }
 
   /**
