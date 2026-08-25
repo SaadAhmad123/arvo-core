@@ -16,7 +16,6 @@ const valid = (over: Partial<ArvoContractParam> = {}): ArvoContractParam =>
     type: 'com_order_create',
     versions: { '1.0.0': { accepts, emits: { com_order_created: emit } } },
     ...over,
-    // biome-ignore lint/suspicious/noExplicitAny: tests reach past the types
   }) as any;
 
 /** `path: message` lines, which is what a reader actually acts on. */
@@ -371,7 +370,6 @@ describe('validateVersionedArvoContract', () => {
       accepts,
       emits: { com_order_created: emit },
       ...over,
-      // biome-ignore lint/suspicious/noExplicitAny: tests reach past the types
     }) as any;
 
   it('accepts a well-formed version', () => {

@@ -21,7 +21,6 @@ const param = (
     accepts,
     emits: { com_order_created: emit },
     ...over,
-    // biome-ignore lint/suspicious/noExplicitAny: tests reach past the types
   }) as any;
 
 describe('VersionedArvoContract', () => {
