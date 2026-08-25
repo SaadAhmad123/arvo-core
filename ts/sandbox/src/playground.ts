@@ -484,6 +484,220 @@ function contractsAsJson(): void {
 	}
 }
 
+/**
+ * What a crossing costs, and how to find out.
+ *
+ * JSON Schema cannot express everything zod can. What it cannot express is
+ * left out rather than approximated, and every omission is reported -- so a
+ * form that enforces less than the contract did never comes back quietly.
+ */
+function whatACrossingCosts(): void {
+  console.log("\n--- what a crossing costs ---\n");
+
+  const serializer = new ArvoContractSerializer();
+
+  // A Date has no JSON Schema equivalent, so the position ends up carrying
+  // nothing. The contract still serializes.
+  const withDate = new ArvoContract({
+    type: "com_report_run",
+    versions: {
+      "1.0.0": {
+        accepts: z.object({ from: z.date(), label: z.string().min(2) }),
+        emits: {},
+      },
+    },
+  });
+  const dated = serializer.serialize(withDate);
+  console.log("a Date in accepts:");
+  console.log(indent(dated.warningString ?? "nothing lost"));
+  console.log(
+    "  the position now carries:",
+    JSON.stringify(
+      JSON.parse(dated.schema).versions["1.0.0"].accepts.properties.from,
+    ),
+  );
+
+  // A url() check survives as documentation. Nothing may enforce an
+  // annotation keyword, so the check stops working while staying readable.
+  const withUrl = new ArvoContract({
+    type: "com_link_check",
+    versions: {
+      "1.0.0": { accepts: z.object({ target: z.url() }), emits: {} },
+    },
+  });
+  const linked = serializer.serialize(withUrl);
+  console.log("\na url() check:");
+  console.log(indent(linked.warningString ?? "nothing lost"));
+  const { contract: linkedBack } = serializer.deserialize(linked.schema);
+  console.log(
+    "  original rejects 'nope'? ",
+    !z.safeParse(withUrl.versions["1.0.0"].accepts, { target: "nope" }).success,
+  );
+  console.log(
+    "  read back rejects it?    ",
+    !z.safeParse(linkedBack.versions["1.0.0"].accepts, { target: "nope" })
+      .success,
+  );
+
+  // An email() keeps working, because zod writes a pattern beside the
+  // annotation and a pattern is enforced by everyone.
+  const withEmail = new ArvoContract({
+    type: "com_user_invite",
+    versions: {
+      "1.0.0": { accepts: z.object({ to: z.email() }), emits: {} },
+    },
+  });
+  const mailed = serializer.serialize(withEmail);
+  console.log("\nan email() check:");
+  console.log("  losses:", mailed.warningString ?? "none");
+  console.log(
+    "  read back rejects 'nope'?",
+    !z.safeParse(
+      serializer.deserialize(mailed.schema).contract.versions["1.0.0"].accepts,
+      { to: "nope" },
+    ).success,
+  );
+
+  // Nothing lost at all: the usual case.
+  const plain = new ArvoContract({
+    type: "com_order_place",
+    versions: {
+      "1.0.0": {
+        accepts: z.object({ sku: z.string(), qty: z.int().min(1) }),
+        emits: {},
+      },
+    },
+  });
+  console.log("\na contract of plain data:");
+  console.log("  losses:", serializer.serialize(plain).warningString ?? "none");
+}
+
+/**
+ * Reading a form that came from somewhere else.
+ *
+ * This is the case the canonical form exists for: JSON written by hand, or by
+ * another language's tooling, becoming a contract here.
+ */
+function readingAForeignForm(): void {
+  console.log("\n--- reading a form from elsewhere ---\n");
+
+  const serializer = new ArvoContractSerializer();
+  const DIALECT = "https://json-schema.org/draft/2020-12/schema";
+
+  // Hand-written, and deliberately terse: the optional fields are omitted
+  // entirely and `uri` is left to be derived from `type`.
+  const foreign = JSON.stringify({
+    type: "com_payment_process",
+    versions: {
+      "1.0.0": {
+        accepts: {
+          $schema: DIALECT,
+          type: "object",
+          properties: {
+            amount: { type: "number", exclusiveMinimum: 0 },
+            currency: { type: "string", minLength: 3, maxLength: 3 },
+          },
+          required: ["amount", "currency"],
+        },
+        emits: {
+          com_payment_processed: {
+            $schema: DIALECT,
+            type: "object",
+            properties: { transaction_id: { type: "string" } },
+            required: ["transaction_id"],
+          },
+        },
+      },
+    },
+  });
+
+  const { contract, warningString } = serializer.deserialize(foreign);
+  console.log("uri derived from type:", contract.uri);
+  console.log("description/domain:   ", contract.description, contract.domain);
+  console.log("dataschema:           ", contract.versions["1.0.0"].dataschema);
+  console.log("handler error:        ", contract.versions["1.0.0"].handlerError.type);
+  console.log("losses:               ", warningString ?? "none");
+
+  const accepts = contract.versions["1.0.0"].accepts;
+  console.log("\nthe constraints still hold:");
+  console.log("  { amount: 5, currency: 'GBP' } ->", z.safeParse(accepts, { amount: 5, currency: "GBP" }).success);
+  console.log("  { amount: 0, currency: 'GBP' } ->", z.safeParse(accepts, { amount: 0, currency: "GBP" }).success);
+  console.log("  { amount: 5, currency: 'GB' }  ->", z.safeParse(accepts, { amount: 5, currency: "GB" }).success);
+}
+
+/**
+ * The ways reading a form can fail, and how each one tells you.
+ *
+ * A failure at the serializer's own boundary keeps the underlying error. A
+ * failure of the contract's rules names every position. A malformed form
+ * stops before the contract is reached and says so.
+ */
+function whenAFormIsRejected(): void {
+  console.log("\n--- when a form is rejected ---\n");
+
+  const serializer = new ArvoContractSerializer();
+  const DIALECT = "https://json-schema.org/draft/2020-12/schema";
+  const objectSchema = { $schema: DIALECT, type: "object", properties: {} };
+  const show = (label: string, json: string): void => {
+    const result = serializer.tryDeserialize(json);
+    console.log(`${label}:`);
+    if (result.ok) {
+      console.log("  read without complaint");
+      return;
+    }
+    console.log(indent(result.error.message));
+    if (result.error.cause) console.log("  cause:", result.error.cause.name);
+    console.log();
+  };
+
+  show("not JSON at all", "{ not json");
+
+  // Several contract rules broken at once, all reported together.
+  show(
+    "three contract rules broken",
+    JSON.stringify({
+      type: "com_a_b",
+      domain: "Bad_Domain",
+      versions: {
+        "01.0.0": { accepts: objectSchema, emits: { Bad_Key: objectSchema } },
+      },
+    }),
+  );
+
+  // A form-level fault stops the run: the contract's rules would report the
+  // same position in different words, so the form answers first.
+  show(
+    "a schema position that is not an object",
+    JSON.stringify({
+      type: "com_a_b",
+      domain: "Bad_Domain",
+      versions: {
+        "1.0.0": { accepts: { $schema: DIALECT, type: "string" }, emits: {} },
+      },
+    }),
+  );
+
+  // Legal JSON Schema this implementation cannot read. Named, never admitted
+  // as a contract enforcing less than the form declares.
+  show(
+    "a construct the conversion refuses",
+    JSON.stringify({
+      type: "com_a_b",
+      versions: {
+        "1.0.0": {
+          accepts: {
+            $schema: DIALECT,
+            type: "object",
+            properties: { a: { type: "string" } },
+            unevaluatedProperties: false,
+          },
+          emits: {},
+        },
+      },
+    }),
+  );
+}
+
 const indent = (text: string): string =>
   text
     .split('\n')
@@ -501,6 +715,9 @@ async function main(): Promise<void> {
   semanticVersions();
   contracts();
   contractsAsJson();
+  whatACrossingCosts();
+  readingAForeignForm();
+  whenAFormIsRejected();
 }
 
 await main();
