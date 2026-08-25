@@ -26,11 +26,11 @@
 
 ## 5. Inbound — conversion and loss detection
 
-- [ ] 5.1 Convert each schema position, failing with construct and position named when zod refuses one. Cover the five documented keywords and the two composition shapes from the proposal's **Known gaps**.
-- [ ] 5.2 Implement the loss diff: re-export each converted schema and compare constraint keywords by path against the input, reporting anything present going in and absent coming out. Ignore *additions* — `additionalProperties: {}` appears on re-export for every plain object.
-- [ ] 5.3 Define the constraint-keyword set from 2020-12's assertion keywords plus `format`, excluding annotations and anything that only widens. Missing an entry costs a warning, never correctness — err toward including.
-- [ ] 5.4 Add `tests/serializers/ArvoContractSerializer/losses.spec.ts` covering each measured silent drop individually: a constraint in a typeless `allOf` subschema, `propertyNames`, and `uniqueItems`. Assert the reported path, and assert a fully-supported schema reports nothing.
-- [ ] 5.5 Add tests for each unreadable construct: the five keywords, plus top-level `allOf` and `patternProperties`. Each fails naming the construct and the position, never silently admitting a contract that enforces less than it declares.
+- [x] 5.1 Convert each schema position, failing with construct and position named when zod refuses one. Cover the five documented keywords and the two composition shapes from the proposal's **Known gaps**.
+- [x] 5.2 Implement the loss diff: re-export each converted schema and compare constraint keywords by path against the input, reporting anything present going in and absent coming out. Ignore *additions* — `additionalProperties: {}` appears on re-export for every plain object.
+- [x] 5.3 Define the constraint-keyword set from 2020-12's assertion keywords plus `format`, excluding annotations and anything that only widens. Missing an entry costs a warning, never correctness — err toward including.
+- [x] 5.4 Add `tests/serializers/ArvoContractSerializer/losses.spec.ts` covering each measured silent drop individually: a constraint in a typeless `allOf` subschema, `propertyNames`, and `uniqueItems`. Assert the reported path, and assert a fully-supported schema reports nothing.
+- [ ] 5.5 Add tests for each unreadable construct: the five keywords, plus top-level `allOf` and `patternProperties`. Each fails naming the construct and the position, never silently admitting a contract that enforces less than it declares. **The five keywords are covered in `losses.spec.ts`. The two composition shapes are not refused by the conversion — they convert to an intersection and a record, and are refused by the contract's own object-shape check — so they need the full deserialize path and are covered in section 6.**
 
 ## 6. Inbound — assembly
 
