@@ -29,9 +29,9 @@ export type {
 export { CloudEvent } from './cloudevent/types.js';
 export { ArvoSemanticVersionCheckError } from './semver/errors.js';
 export { ArvoSemanticVersion } from './semver/index.js';
-export { ArvoEventSerializerError } from './serializer/errors.js';
-export type { ArvoEventSerializerMode } from './serializer/index.js';
-export { ArvoEventSerializer } from './serializer/index.js';
+export { ArvoEventSerializerError } from './serializers/ArvoEventSerializer/errors.js';
+export type { ArvoEventSerializerMode } from './serializers/ArvoEventSerializer/index.js';
+export { ArvoEventSerializer } from './serializers/ArvoEventSerializer/index.js';
 export type {
   AsyncResult,
   FlatMap,

@@ -1,4 +1,4 @@
-import { describeValue } from '../utils/error-issue.js';
+import { describeValue } from '../../utils/error-issue.js';
 
 /**
  * Thrown when {@link ArvoEventSerializer}'s own boundary work fails — a
