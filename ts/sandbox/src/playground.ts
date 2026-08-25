@@ -373,7 +373,8 @@ function contracts(): void {
 	// A broken declaration reports every problem at once, not the first.
 	try {
 		new ArvoContract({
-			type: "Com_Order_Create", // must be lowercase_snake_case
+			type: "com_order_create",
+			domain: "Bad_Domain", // must be lowercase_snake_case
 			versions: {
 				// biome-ignore lint/suspicious/noExplicitAny: deliberately wrong
 				"01.0.0": {
@@ -387,6 +388,29 @@ function contracts(): void {
 	} catch (error) {
 		if (!(error instanceof ArvoContractValidationError)) throw error;
 		console.log(`\n${indent(error.message)}`);
+	}
+
+	// An invalid type is the exception. The uri, the handler error type and the
+	// emit-key collision rules are all built from it, so checking them would
+	// judge values the declaration never established. It reports the type alone
+	// and says the list is partial -- note there is no complaint about a uri
+	// that was never supplied.
+	try {
+		new ArvoContract({
+			type: "Com_Order_Create", // must be lowercase_snake_case
+			domain: "Bad_Domain",
+			versions: {
+				// biome-ignore lint/suspicious/noExplicitAny: deliberately wrong
+				"01.0.0": { accepts: z.object({ a: z.string() }), emits: {} } as any,
+				// biome-ignore lint/suspicious/noExplicitAny: deliberately wrong
+			} as any,
+		});
+	} catch (error) {
+		if (!(error instanceof ArvoContractValidationError)) throw error;
+		console.log(`\n${indent(error.message)}`);
+		const [blocking] = error.issues;
+		console.log(`\n  issues reported: ${error.issues.length}`);
+		console.log(`  isBlocking:      ${blocking?.isBlocking}`);
 	}
 }
 

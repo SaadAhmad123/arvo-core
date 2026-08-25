@@ -58,14 +58,7 @@
 - [x] 9.6 Add the test that guards the narrowing: a **valid** `type` with faults in several other positions still reports every one of them. This is the property being traded against, so it is pinned rather than assumed.
 - [x] 9.7 Update the existing multi-failure tests that use a malformed `type` as their aggregation example — the spec scenario now uses `domain`, and a test still asserting four issues from a bad `type` would contradict it.
 
-## 10. Precise `dataschema`
+## 10. Close out, again
 
-- [ ] 10.1 Probe the generic shape before adopting it, as was done for literal version keys: confirm a literal `uri` survives into `dataschema`, that per-version `z.infer` still differs, that an undeclared version key is still a compile error, and that a non-literal `uri` degrades to `string` rather than erroring.
-- [ ] 10.2 Thread `uri` as a type parameter through `ArvoContract` and `VersionedArvoContract`, and narrow the `dataschema` getter's return type accordingly.
-- [ ] 10.3 Add type-level tests asserting each property from 10.1, so the inference cannot regress silently.
-- [ ] 10.4 Check the TSDoc examples on both classes still show what they claim, now that `dataschema` reports a precise value.
-
-## 11. Close out, again
-
-- [ ] 11.1 Re-run `pnpm test --coverage`, `pnpm lint`, and `tsc --noEmit`; hold `src/ArvoContract/` at 100% line and function coverage, including both sides of the new prerequisite gate.
-- [ ] 11.2 Exercise the new behaviour in `ts/sandbox/src/playground.ts`: a declaration rejected for its `type` showing the single issue and the stopped-early message, and a precise `dataschema` value.
+- [x] 10.1 Re-run `pnpm test --coverage`, `pnpm lint`, and `tsc --noEmit`; hold `src/ArvoContract/` at 100% line and function coverage, including both sides of the new prerequisite gate.
+- [x] 10.2 Exercise the new behaviour in `ts/sandbox/src/playground.ts`: a declaration rejected for its `type` showing the single issue and the stopped-early message.

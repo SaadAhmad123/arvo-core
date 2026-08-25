@@ -78,13 +78,15 @@ Two alternatives were tried first and rejected for the same fault. A separate `s
 
 The `issues`-must-not-lie objection that pointed at the summary line still holds and is what rules out a synthetic entry. Marking a real issue is not the same as inventing one: every entry still names a path and a rule it broke, and one of them additionally says nothing after it was checked.
 
-### `uri` is a type parameter, so `dataschema` keeps its value
+### `dataschema` stays loosely typed — precise typing considered and rejected
 
-`dataschema` is typed `` `${string}/${V}` ``: the version literal survives, the `uri` literal does not. Nothing discards it — `uri` is simply `string` on both classes, so there was never a precise value to keep. Threading it as a parameter makes `dataschema` exact for a caller who supplied a literal `uri` or took derivation from a literal `type`.
+`dataschema` is typed `` `${string}/${V}` ``: the version literal survives, the `uri` literal does not. Nothing discards it — `uri` is simply `string` on both classes, so there is no precise value being thrown away.
 
-Done now because nothing is released. This changes both classes' public type signatures, which costs nothing today and is a breaking change to every consumer's inferred types once published. The deadline, not the value, is what puts it in this change.
+Making it exact was prototyped and rejected. It works: a fourth type parameter threaded through both classes, with the `uri` derivation written a second time as a recursive template literal type, gives `#/com/order/create/1.0.0` in a consumer's editor. All five properties were probed and held — derived and explicit `uri` both stay precise, per-version `z.infer` still differs, an undeclared version key is still a compile error, and a non-literal `uri` degrades to `string` rather than erroring.
 
-*Risk:* it is a third generic threaded through two classes, and the literal-key preservation this design already depends on was established by probing rather than assumption. The same probing applies here — that per-version `z.infer` still differs, that an undeclared version key is still a compile error, and that a `uri` which is genuinely not a literal degrades to `string` rather than to an error.
+It was rejected on cost. The derivation algorithm would exist twice, once for runtime and once for the type system, with nothing able to check that the two agree — and the one place they meet needs an assertion TypeScript cannot verify. This change spent two commits removing exactly that shape of problem from this seam. Trading a checked invariant for editor ergonomics is the wrong direction, and the runtime value is already correct.
+
+The argument for doing it anyway was timing: it changes public type signatures, so it is free before release and breaking after. That is true and still not sufficient — a deadline makes a nice-to-have urgent without making it worthwhile. If a consumer ever needs `dataschema` as a literal, this is the shape that works and the cost to accept.
 
 ### Issue paths address the declaration
 
@@ -133,8 +135,6 @@ One new `ArvoContractValidationError`: `_tag` discriminant, frozen `issues`, mes
 **Freezing `metadata` is a small behaviour surprise** → A consumer passing an object they intend to keep mutating will find it frozen. Consistent with `ArvoEvent`, which already freezes `data`.
 
 **Narrowing report-everything could be read as a regression** → It reports strictly fewer findings for one input shape, and "reports every failure" is the validator's headline property. Mitigated by scope: the gate is one field, every other position still aggregates, and there is a scenario pinning that. The findings removed were derived from a placeholder rather than from the declaration.
-
-**A third generic on both classes** → More inference surface to get wrong, and the existing literal-key behaviour is load-bearing. Mitigated the same way it was established in the first place: probe the real generic shape before adopting it, and assert the properties in tests rather than trusting them.
 
 ## Migration Plan
 
