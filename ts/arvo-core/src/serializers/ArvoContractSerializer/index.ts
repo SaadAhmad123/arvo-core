@@ -1,4 +1,6 @@
+import { err, ok } from 'neverthrow';
 import type { ArvoContract } from '../../ArvoContract/index.js';
+import { fromNeverthrow } from '../../result.js';
 import type { Result } from '../../types.js';
 import type { ErrorIssue } from '../../utils/error-issue.js';
 import { ArvoContractSerializerError } from './errors.js';
@@ -69,18 +71,20 @@ export class ArvoContractSerializer {
         contract,
         this.options.serialize,
       );
-      return {
-        ok: true,
-        value: sealed({ schema: JSON.stringify(form) }, warnings),
-      };
+      return fromNeverthrow(
+        ok(sealed({ schema: JSON.stringify(form) }, warnings)),
+      );
     } catch (error) {
-      return {
-        ok: false,
-        error: new ArvoContractSerializerError(
-          'ArvoContract could not be serialized.',
-          { cause: error instanceof Error ? error : new Error(String(error)) },
+      return fromNeverthrow(
+        err(
+          new ArvoContractSerializerError(
+            'ArvoContract could not be serialized.',
+            {
+              cause: error instanceof Error ? error : new Error(String(error)),
+            },
+          ),
         ),
-      };
+      );
     }
   }
 
