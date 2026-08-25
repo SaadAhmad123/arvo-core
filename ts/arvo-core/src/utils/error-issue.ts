@@ -102,22 +102,20 @@ export class ErrorIssue {
   readonly blockingReason: string | null;
 
   /** Whether this issue is the one that stopped the run. */
-  get isBlocking(): boolean {
-    return this.blockingReason !== null;
-  }
+  readonly isBlocking: boolean;
 
   /** Where the problem is. */
-  path: string;
+  readonly path: string;
 
   /** What is wrong with the value at {@link path}. */
-  message: string;
+  readonly message: string;
 
   /**
    * The offending value. Absent and `undefined` are indistinguishable, and
    * both render without a `received` clause — a rule about a value being
    * `undefined` should say so in its {@link message}.
    */
-  received?: unknown;
+  readonly received?: unknown;
 
   /** @param param - The issue's parts. See {@link ErrorIssueParam}. */
   constructor(param: ErrorIssueParam) {
@@ -125,6 +123,8 @@ export class ErrorIssue {
     this.message = param.message;
     this.received = param.received;
     this.blockingReason = param.blockingReason?.trim() || null;
+    this.isBlocking = this.blockingReason !== null;
+    Object.freeze(this);
   }
 
   /**
