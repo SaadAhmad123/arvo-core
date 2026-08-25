@@ -25,15 +25,19 @@ See `proposal.md` — Why. The constraints that shape the approach:
 
 ## Decisions
 
-### Loss is measured inbound, not looked up
+### Loss is measured in both directions, not looked up
 
-Outbound, zod's `unrepresentable` hook reports each construct as it fails. Inbound has no hook at all — a dropped constraint raises nothing.
+Neither direction gets told. Inbound has no hook at all — a dropped constraint raises nothing. Outbound has one in zod's current documentation, but not in the version this package builds against: `unrepresentable` is typed `"throw" | "any"` there, and a function passed to it is **silently ignored** — verified, the handler is never called and the output is produced as though `'any'` had been given. A design resting on it would report nothing while appearing to work, which is the exact failure it existed to prevent.
 
-Two ways to find out. Pre-scan the JSON for keywords known to be unsupported, or convert and then compare: re-export each converted schema and diff its constraint keywords against the input, treating anything present going in and absent coming out as lost.
+So both directions read the result instead. Outbound, the `override` hook is used as an observer: it is called for every node with that node's zod type, its path, and the JSON Schema produced for it, so an empty result identifies a construct the dialect could not carry, by name and position. Inbound, each converted schema is re-exported and its constraint keywords diffed against the input, with anything present going in and absent coming out treated as lost.
 
-Comparison wins, and not marginally. A pre-scan encodes *what zod cannot do*, which is exactly the thing its documentation says will change; the list would rot silently and its rot would look like everything working. Comparison encodes *what a constraint keyword is* — JSON Schema's own vocabulary, far more stable — and observes what zod actually did on this call, with this version. A behaviour change in the importer surfaces as a new warning rather than as silence.
+The alternative for inbound was a pre-scan of the JSON for keywords known to be unsupported; for outbound, a walk of the zod schema for types known to be unrepresentable. Both are the same idea and both were rejected together.
 
-Verified: the three known silent drops are all caught with exact paths, and a fully-supported schema reports nothing.
+Observation wins, and not marginally. A pre-scan encodes *what zod cannot do*, which is exactly the thing its documentation says will change; the list would rot silently and its rot would look like everything working. Observation encodes *what a constraint keyword is*, or *what an empty schema means* — JSON Schema's own vocabulary, far more stable — and reports what zod actually did on this call, in this version. A behaviour change surfaces as a new warning rather than as silence. It also removes any dependence on a hook being present in whichever zod a consumer resolved.
+
+Verified in both directions: outbound, `z.date()`, `z.bigint()`, `z.map()`, `z.set()`, `z.nan()` and `z.custom()` are each caught with exact paths, nested and inside arrays included, and a fully-expressible schema reports nothing. Inbound, the three known silent drops are caught with exact paths, and a fully-supported schema reports nothing.
+
+*What it costs, outbound:* `unknown` and `any` convert to `{}` exactly as a loss does, so both are excluded by name — nothing was lost where an author asked for no constraint. That exclusion is a small list, and unlike a support list its staleness is visible: a new intentionally-unconstrained type would show up as a spurious warning rather than as silence.
 
 *Costs, accepted:* an extra export per import, which is nothing for something that happens at module load. And the diff must ignore *additions*, since `additionalProperties: {}` appears on re-export for every plain object.
 
@@ -68,11 +72,13 @@ A recursive payload is a legitimate contract — a comment tree, a nested catego
 
 *Known consequence:* `.meta({ type: 'number' })` on a string schema emits `type: "number"`, so an author can produce a form contradicting their own validator. Not defended against. Doing so would require the serializer to adjudicate the author's intent.
 
-### A caller's `unrepresentable` replaces ours
+### A caller's `override` replaces ours
 
-It does not wrap. Supplying one means no losses are reported, and a handler returning a fabricated stand-in departs from ADR-005.
+`override` is exposed, and is also the mechanism this serializer inspects losses through. A caller supplying their own replaces it rather than composing with it, so nothing is reported for that conversion.
 
-Wrapping was considered and rejected: it would keep reporting intact whatever the caller passed, but it would also mean a caller cannot fully control the conversion they asked to control, and the reporting would describe substitutions the caller had already replaced. A caller reaching for this option is taking the decision, and the departure is theirs.
+Composition was implemented first and then rejected. Running the caller's hook before the inspection would keep reporting alive whatever they passed, and would describe what the form ended up lacking rather than what zod originally dropped — defensible, but it means a caller cannot fully control a hook they explicitly reached for, and it quietly makes their substitutions this serializer's business. Replacement matches the rule `unrepresentable` already follows and puts the consequence where the decision was made.
+
+`unrepresentable` needs no such rule: in this zod version it is only `'throw'` or `'any'`, so there is nothing of ours for a caller to displace.
 
 ### The error carries issues as well as a cause
 

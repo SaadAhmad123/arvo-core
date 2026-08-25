@@ -32,10 +32,9 @@ export const demotedCheck = (path: string, what: string): ErrorIssue =>
  * nothing was lost.
  *
  * Separate from `buildErrorIssueMessage` because these are not problems. A
- * constraint JSON Schema cannot carry is omitted because ADR-005 requires it
- * to be omitted, so a heading reading "problems were found" would describe
- * compliance as a fault. See
- * [ADR-005](../../../../docs/adr/005-arvocontract-structure.md).
+ * constraint JSON Schema cannot carry is omitted because the model requires
+ * omission rather than approximation, so a heading reading "problems were
+ * found" would describe compliance as a fault.
  *
  * @param issues - Every loss, from either direction.
  */

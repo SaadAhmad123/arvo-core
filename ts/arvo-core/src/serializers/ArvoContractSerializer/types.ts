@@ -6,16 +6,22 @@ import type { ErrorIssue } from '../../utils/error-issue.js';
  * Zod's own conversion parameters, as far as this serializer exposes them.
  *
  * `target` is absent deliberately: the canonical form is JSON Schema 2020-12,
- * and a form emitted against another dialect is not a canonical form. See
- * [ADR-005](../../../../docs/adr/005-arvocontract-structure.md).
+ * and a form emitted against another dialect is not a canonical form.
  *
- * `metadata` and `override` are absent too. Contracts carry `.meta()`
- * annotations straight through, and what an author annotates their own
- * schemas with is theirs to decide.
+ * `metadata` is absent too. Contracts carry `.meta()` annotations straight
+ * through, and what an author annotates their own schemas with is theirs to
+ * decide.
+ *
+ * `override` is available, and is how this serializer finds what a crossing
+ * cost. Supplying your own replaces that inspection, so nothing is reported
+ * for that conversion. Substituting a stand-in for a construct JSON Schema
+ * cannot express also implies a check the form does not actually make, which
+ * the canonical form must never do — either way, a caller who reaches for
+ * this option owns the consequence.
  */
 export type ArvoContractSerializeOptions = Pick<
   Parameters<typeof z.toJSONSchema>[1] & object,
-  'unrepresentable' | 'io' | 'cycles' | 'reused' | 'uri'
+  'unrepresentable' | 'io' | 'cycles' | 'reused' | 'uri' | 'override'
 >;
 
 /**

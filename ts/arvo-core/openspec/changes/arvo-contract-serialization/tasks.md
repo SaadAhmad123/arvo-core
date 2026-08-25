@@ -12,12 +12,12 @@
 
 ## 3. Outbound
 
-- [ ] 3.1 Build the default conversion params: `target: 'draft-2020-12'` forced, `io: 'input'`, `cycles: 'ref'`, `reused: 'inline'`, and an `unrepresentable` **function** that substitutes `{}` and records an `ErrorIssue` from zod's supplied `path` and `message`. The function rather than `'any'` is the whole mechanism for reporting; `'any'` would omit silently.
-- [ ] 3.2 Merge caller-supplied options over the defaults, with `target` not overridable. A caller-supplied `unrepresentable` **replaces** ours rather than wrapping it, so no losses are collected in that case.
-- [ ] 3.3 Implement `trySerialize`: convert each schema position, assemble the container with every field materialized at its default, exclude the handler error, stringify, and return `{ schema, warnings, warningString }` frozen to its leaves.
-- [ ] 3.4 Add `tests/serializers/ArvoContractSerializer/serialize.spec.ts`: the 2020-12 `$schema` at every position, defaults materialized, explicit-null indistinguishable from omitted, no handler error key anywhere, and a recursive schema expressed by reference rather than refused.
-- [ ] 3.5 Extend it with the loss cases: an unrepresentable type reported rather than raised, the position named, and nothing reported when nothing was lost — with `warningString` absent rather than empty.
-- [ ] 3.6 Add a test that `target` cannot be overridden by a caller.
+- [x] 3.1 Build the default conversion params: `target: 'draft-2020-12'` forced, `io: 'input'`, `cycles: 'ref'`, `reused: 'inline'`, and an `unrepresentable` **function** that substitutes `{}` and records an `ErrorIssue` from zod's supplied `path` and `message`. The function rather than `'any'` is the whole mechanism for reporting; `'any'` would omit silently.
+- [x] 3.2 Merge caller-supplied options over the defaults, with `target` not overridable. A caller-supplied `unrepresentable` **replaces** ours rather than wrapping it, so no losses are collected in that case.
+- [x] 3.3 Implement `trySerialize`: convert each schema position, assemble the container with every field materialized at its default, exclude the handler error, stringify, and return `{ schema, warnings, warningString }` frozen to its leaves.
+- [x] 3.4 Add `tests/serializers/ArvoContractSerializer/serialize.spec.ts`: the 2020-12 `$schema` at every position, defaults materialized, explicit-null indistinguishable from omitted, no handler error key anywhere, and a recursive schema expressed by reference rather than refused.
+- [x] 3.5 Extend it with the loss cases: an unrepresentable type reported rather than raised, the position named, and nothing reported when nothing was lost — with `warningString` absent rather than empty.
+- [x] 3.6 Add a test that `target` cannot be overridden by a caller.
 
 ## 4. Inbound — form checks
 

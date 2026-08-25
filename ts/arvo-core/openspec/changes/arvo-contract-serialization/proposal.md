@@ -30,11 +30,15 @@ Reading a form runs in a fixed order, and the order is the design:
 
 ### Both directions report what was lost
 
-Outbound, zod's `unrepresentable` hook names each construct JSON Schema cannot carry.
+Neither direction is announced by the library; both are measured from what it produced.
 
-Inbound has no such hook, so loss is measured rather than announced: convert, re-export, and diff the constraint keywords. That catches constraints zod's importer silently drops — a `minLength` inside a typeless `allOf` subschema, a `propertyNames`, a `uniqueItems` — none of which raise anything on their own.
+Outbound, the `override` hook is used as an observer. It is called for every node with that node's own zod type, its path, and the JSON Schema produced for it, so a node whose result is empty is a construct the dialect could not carry — reported by both name and position.
 
-Measuring beats maintaining a list of what zod cannot do. It observes what zod actually did, so it stays correct as the importer changes, which is the one thing its documentation tells us to expect.
+Zod's `unrepresentable` hook accepts a reporting function in its current documentation, but not in the version this package builds against, where it is typed `"throw" | "any"` and a function passed to it is silently ignored. Depending on it would have meant a serializer reporting nothing while appearing to work.
+
+Inbound, loss is measured too: convert, re-export, and diff the constraint keywords. That catches constraints zod's importer silently drops — a `minLength` inside a typeless `allOf` subschema, a `propertyNames`, a `uniqueItems` — none of which raise anything on their own.
+
+Measuring beats both a list of what zod cannot do and a hook that announces it. It observes what zod actually did, so it stays correct as the conversion changes — the one thing its documentation tells us to expect — and it does not depend on a feature being present in whichever version a consumer resolved.
 
 Two kinds of finding, reported differently. A constraint **dropped** is gone. A check **demoted** survives in the form as an annotation nothing is permitted to enforce — what happens to `z.email()`, whose `format` keyword is dropped on the first crossing while the `pattern` beside it survives. Both are losses; conflating them would train a reader to ignore the frequent one and miss the serious one.
 
@@ -43,19 +47,22 @@ Two kinds of finding, reported differently. A constraint **dropped** is gone. A 
 A caller may supply `Pick<ToJSONSchemaParams, 'unrepresentable' | 'io' | 'cycles' | 'reused' | 'uri'>` for the outbound direction. Two options are withheld for reasons rather than convenience:
 
 - **`target` is forced to `draft-2020-12`.** ADR-005 pins the dialect so two languages cannot disagree about the same bytes. A form emitted against draft-07 is not a canonical form, so this is a correctness boundary.
-- **`metadata` and `override` are not exposed**, and `metadata` is not passed. Zod's registry behaviour therefore applies and `.meta()` fields flow into the output untouched. An author using `.meta()` to override a generated keyword is describing their own contract as they choose.
+- **`metadata` is not exposed and not passed.** Zod's registry behaviour therefore applies and `.meta()` fields flow into the output untouched. An author using `.meta()` to override a generated keyword is describing their own contract as they choose.
+
+`override` *is* exposed, and is also how this serializer finds what a crossing cost. A caller supplying their own replaces that inspection rather than composing with it, so nothing is reported for that conversion — the same rule `unrepresentable` follows, and the same reasoning: a caller reaching for the option has taken the decision.
 
 Defaults for what a caller may set:
 
 | Option | Default | Why |
 |---|---|---|
-| `unrepresentable` | a function substituting `{}` and recording an `ErrorIssue` | `{}` is JSON Schema's "unknown", so the constraint is omitted rather than approximated, as ADR-005 requires. The function form rather than `'any'` is what makes the omission reportable. |
+| `unrepresentable` | `'any'` | `{}` is JSON Schema's "unknown", so the constraint is omitted rather than approximated, as ADR-005 requires. A caller may set `'throw'` to refuse the conversion instead. |
+| `override` | an observer that records each loss | The only hook available in this zod version that sees a node's type, path, and result together, so it is what turns an omission into a report. |
 | `io` | `'input'` | Two reasons. Under `'output'` zod emits `additionalProperties: false` for a plain `z.object()`, but `z.object()` *strips* unknown keys rather than rejecting them — so that keyword would assert a check zod never performs, the fabricated stand-in ADR-005 forbids. And a round trip under `'output'` produces a contract that **rejects** payloads the original accepted; under `'input'` it accepts more. ADR-005 permits a weaker materialization, never a stricter one. Both `accepts` and `emits` describe a wire payload, and a wire payload is always the input to whoever validates it, so one setting is right for both. |
 | `cycles` | `'ref'` | A recursive payload is a legitimate contract and `$ref: '#'` is legal 2020-12 — ADR-005 discusses `$ref` alongside sibling keywords, so it expects `$ref` in canonical forms. Throwing would leave a recursive contract with no canonical form at all, which ADR-005 requires every implementation to be able to produce. |
 | `reused` | `'inline'` | Self-contained output, and byte-level canonicalization is deferred anyway, so `$defs` extraction buys nothing. |
 | `uri` | unset | Only reached when a schema carries a registered id. |
 
-**A caller-supplied `unrepresentable` replaces the default outright.** No wrapping, so supplying one means no warnings are collected, and a handler returning a fabricated stand-in departs from ADR-005. That departure is the caller's, made deliberately.
+**A caller-supplied `override` replaces ours outright.** No composition, so supplying one means no losses are reported for that conversion, and filling in a stand-in for something the dialect cannot express implies a check the form does not make — which ADR-005 forbids. Either way the departure is the caller's, made deliberately.
 
 **The inbound direction takes no options.** Nothing about reading a form is configurable, and the option bag is keyed by direction so a `deserialize` key can be added later without reshaping anything. An empty key shipped now would only invite a use to be invented for it.
 
@@ -158,7 +165,9 @@ Worth knowing how narrow it is, measured against zod 4.4.3. None of these are re
 
 The canonical form is a floor, and a floor has a shape. These are consequences, not defects, and the list will grow as more of the boundary is exercised.
 
-**A zod type JSON Schema cannot express becomes `{}`, with a warning.** `z.date()`, `z.bigint()`, `z.map()`, `z.transform()` and the rest. The contract still serializes; the reader of the form learns less than the author wrote.
+**A zod type JSON Schema cannot express becomes `{}`, with a warning.** `z.date()`, `z.bigint()`, `z.map()`, `z.transform()` and the rest. The contract still serializes; the reader of the form learns less than the author wrote. A position a caller deliberately left unconstrained — an `unknown`, an `any` — is reported the same way, since the report is true of it too.
+
+**A position left deliberately unconstrained is not reported.** An `unknown` or an `any` converts to `{}` exactly as a loss does, but nothing was lost — the author asked for no constraint and got none, so those two types are excluded by name.
 
 **A constraint in a typeless subschema is dropped on the way in.** Zod drops any constraint group with no `type` of its own to attach to — `allOf: [{"type":"string"},{"minLength":3}]` imports as a plain string. Reported by the diff, never silent. Unreachable from anything this package writes, since zod's own exports always carry `type`.
 
