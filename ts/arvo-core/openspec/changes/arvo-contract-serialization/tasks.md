@@ -6,9 +6,9 @@
 
 ## 2. Types
 
-- [ ] 2.1 Create `src/serializers/ArvoContractSerializer/types.ts` with `ArvoContractSerializeOptions` (the narrowed `Pick` of zod's conversion params), `ArvoContractSerializerOptions` keyed by direction, `ArvoContractSerializerWarnings`, and the two result types extending it.
-- [ ] 2.2 Document on `ArvoContractSerializerOptions` why it is keyed by direction, so a later `deserialize` key is additive rather than a reshape.
-- [ ] 2.3 Use `readonly` on every result field and `readonly ErrorIssue[]` for the collection — not `Readonly<ErrorIssue[]>`, which leaves `push` callable and protects nothing.
+- [x] 2.1 Create `src/serializers/ArvoContractSerializer/types.ts` with `ArvoContractSerializeOptions` (the narrowed `Pick` of zod's conversion params), `ArvoContractSerializerOptions` keyed by direction, `ArvoContractSerializerWarnings`, and the two result types extending it.
+- [x] 2.2 Document on `ArvoContractSerializerOptions` why it is keyed by direction, so a later `deserialize` key is additive rather than a reshape.
+- [x] 2.3 Use `readonly` on every result field and `readonly ErrorIssue[]` for the collection — not `Readonly<ErrorIssue[]>`, which leaves `push` callable and protects nothing.
 
 ## 3. Outbound
 
