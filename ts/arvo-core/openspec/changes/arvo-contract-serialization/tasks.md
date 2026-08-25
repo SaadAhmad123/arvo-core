@@ -21,8 +21,8 @@
 
 ## 4. Inbound — form checks
 
-- [ ] 4.1 Implement the form-level checks against the parsed JSON, before any conversion: container fields present, `versions` non-empty, and per schema position the literal `"type": "object"` and the `$schema` declaration. These cannot run after conversion — zod erases the distinction, so a form built from `allOf` may import as something object-ish while never having carried the keyword.
-- [ ] 4.2 Add `tests/serializers/ArvoContractSerializer/form.spec.ts`: a position describing an object but lacking the literal keyword is rejected and named; a missing `type`, missing `versions`, and empty `versions` each fail naming what is missing.
+- [x] 4.1 Implement the form-level checks against the parsed JSON, before any conversion: container fields present, `versions` non-empty, and per schema position the literal `"type": "object"` and the `$schema` declaration. These cannot run after conversion — zod erases the distinction, so a form built from `allOf` may import as something object-ish while never having carried the keyword.
+- [x] 4.2 Add `tests/serializers/ArvoContractSerializer/form.spec.ts`: a position describing an object but lacking the literal keyword is rejected and named; a missing `type`, missing `versions`, and empty `versions` each fail naming what is missing.
 
 ## 5. Inbound — conversion and loss detection
 
