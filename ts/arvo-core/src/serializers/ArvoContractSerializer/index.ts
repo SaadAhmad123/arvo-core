@@ -1,13 +1,15 @@
 import { err, ok } from 'neverthrow';
-import type { ArvoContract } from '../../ArvoContract/index.js';
+import { ArvoContract } from '../../ArvoContract/index.js';
 import { fromNeverthrow } from '../../result.js';
 import type { Result } from '../../types.js';
 import type { ErrorIssue } from '../../utils/error-issue.js';
+import { readCanonicalForm } from './deserialize.js';
 import { ArvoContractSerializerError } from './errors.js';
 import { buildCanonicalForm } from './serialize.js';
 import type {
   ArvoContractSerializerOptions,
   ArvoContractSerializerWarnings,
+  DeserializedArvoContract,
   SerializedArvoContract,
 } from './types.js';
 import { buildWarningFromErrorIssues } from './warnings.js';
@@ -95,6 +97,80 @@ export class ArvoContractSerializer {
    */
   serialize(contract: ArvoContract): SerializedArvoContract {
     const result = this.trySerialize(contract);
+    if (result.ok) return result.value;
+    throw result.error;
+  }
+
+  /**
+   * Builds a contract from a canonical form, reporting failure as a value.
+   *
+   * Never raises for an expected failure. A constraint the conversion could
+   * not carry across is not a failure — it appears in `warnings` and the
+   * contract is still built, weaker than the form declared.
+   *
+   * The reconstructed contract does not carry the literal types of the one
+   * that produced the form. A canonical form contains no TypeScript, so
+   * version keys and payload shapes arrive as their widened types.
+   *
+   * The inbound conversion rests on `zod`'s `fromJSONSchema`, which `zod`
+   * documents as experimental and expects to change. A form containing a
+   * construct it cannot read fails naming that construct rather than
+   * producing a contract that enforces less than the form declared.
+   */
+  tryDeserialize(
+    json: string,
+  ): Result<DeserializedArvoContract, ArvoContractSerializerError> {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch (error) {
+      return fromNeverthrow(
+        err(
+          new ArvoContractSerializerError('ArvoContract could not be read.', {
+            cause: error instanceof Error ? error : new Error(String(error)),
+          }),
+        ),
+      );
+    }
+
+    const read = readCanonicalForm(parsed);
+    if (!read.ok) {
+      return fromNeverthrow(
+        err(
+          new ArvoContractSerializerError('ArvoContract could not be read.', {
+            issues: read.issues,
+          }),
+        ),
+      );
+    }
+
+    try {
+      return fromNeverthrow(
+        ok(
+          sealed(
+            { contract: new ArvoContract(read.value.param) },
+            read.value.losses,
+          ),
+        ),
+      );
+    } catch (error) {
+      return fromNeverthrow(
+        err(
+          new ArvoContractSerializerError('ArvoContract could not be read.', {
+            cause: error instanceof Error ? error : new Error(String(error)),
+          }),
+        ),
+      );
+    }
+  }
+
+  /**
+   * {@link tryDeserialize}, throwing instead of reporting.
+   *
+   * @throws {ArvoContractSerializerError} What `tryDeserialize` would report.
+   */
+  deserialize(json: string): DeserializedArvoContract {
+    const result = this.tryDeserialize(json);
     if (result.ok) return result.value;
     throw result.error;
   }

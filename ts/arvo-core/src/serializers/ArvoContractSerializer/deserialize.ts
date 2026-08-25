@@ -1,6 +1,9 @@
 import * as z from 'zod';
 import type * as zc from 'zod/v4/core';
+import type { ArvoContractParam } from '../../ArvoContract/types.js';
+import { validateArvoContract } from '../../ArvoContract/validator.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
+import { validateCanonicalForm } from './form.js';
 import { droppedConstraint } from './warnings.js';
 
 /**
@@ -153,4 +156,114 @@ export const convertFromJSONSchema = (
   }
 
   return { ok: true, schema: native, losses };
+};
+
+/**
+ * Why a malformed form stops the run before the contract's own rules are
+ * reached.
+ *
+ * Not merely tidiness. The two layers overlap on one rule — whether a schema
+ * position describes an object — and each words it differently, so running
+ * both would report one fault twice. The form is the artifact that actually
+ * carries the keyword, so it answers first, and what depends on a form being
+ * well formed waits.
+ */
+const FORM_IS_PREREQUISITE =
+  'the form itself is not well formed, so the contract it would build was not checked';
+
+/** A form read into the pieces a contract is declared from. */
+export type ReadForm = {
+  param: ArvoContractParam;
+  losses: ErrorIssue[];
+};
+
+/**
+ * Reads a parsed canonical form into a contract declaration.
+ *
+ * Ordered, and the order is the design. The form's own rules are checked
+ * against the JSON first, because a conversion erases what they check. Then
+ * each schema position is converted, measuring what the conversion dropped.
+ * Only then are the contract's own rules applied — and by calling the
+ * validator rather than building a contract and catching, so that everything
+ * it finds arrives with everything found before it.
+ */
+export const readCanonicalForm = (
+  parsed: unknown,
+): { ok: true; value: ReadForm } | { ok: false; issues: ErrorIssue[] } => {
+  const formIssues = validateCanonicalForm(parsed);
+  if (formIssues.length > 0) {
+    const [first, ...rest] = formIssues;
+    return {
+      ok: false,
+      issues: [
+        new ErrorIssue({
+          path: (first as ErrorIssue).path,
+          message: (first as ErrorIssue).message,
+          received: (first as ErrorIssue).received,
+          blockingReason: FORM_IS_PREREQUISITE,
+        }),
+        ...rest,
+      ],
+    };
+  }
+
+  const form = parsed as {
+    uri?: unknown;
+    type: string;
+    description?: unknown;
+    domain?: unknown;
+    metadata?: unknown;
+    versions: Record<
+      string,
+      { accepts: unknown; emits: Record<string, unknown> }
+    >;
+  };
+
+  const issues: ErrorIssue[] = [];
+  const losses: ErrorIssue[] = [];
+  const versions: Record<string, { accepts: unknown; emits: unknown }> = {};
+
+  for (const [version, definition] of Object.entries(form.versions)) {
+    const at = `versions[${JSON.stringify(version)}]`;
+    const accepts = convertFromJSONSchema(definition.accepts, `${at}.accepts`);
+    const emits: Record<string, unknown> = {};
+    for (const [type, schema] of Object.entries(definition.emits)) {
+      const converted = convertFromJSONSchema(
+        schema,
+        `${at}.emits[${JSON.stringify(type)}]`,
+      );
+      if (converted.ok) {
+        emits[type] = converted.schema;
+        losses.push(...converted.losses);
+      } else {
+        issues.push(converted.issue);
+      }
+    }
+    if (accepts.ok) {
+      losses.push(...accepts.losses);
+      versions[version] = { accepts: accepts.schema, emits };
+    } else {
+      issues.push(accepts.issue);
+    }
+  }
+
+  if (issues.length > 0) return { ok: false, issues };
+
+  const param = {
+    ...(typeof form.uri === 'string' ? { uri: form.uri } : {}),
+    type: form.type,
+    ...(typeof form.description === 'string'
+      ? { description: form.description }
+      : {}),
+    ...(typeof form.domain === 'string' ? { domain: form.domain } : {}),
+    ...(form.metadata !== undefined && form.metadata !== null
+      ? { metadata: form.metadata }
+      : {}),
+    versions,
+  } as ArvoContractParam;
+
+  const checked = validateArvoContract(param);
+  if (checked.issues.length > 0) return { ok: false, issues: checked.issues };
+
+  return { ok: true, value: { param, losses } };
 };

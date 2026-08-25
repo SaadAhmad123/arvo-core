@@ -142,9 +142,14 @@ The system SHALL report a failure originating at its own boundary — input that
 - **WHEN** a form parses but breaks the contract's own rules
 - **THEN** the failure names every position that broke a rule
 
-#### Scenario: Form and contract problems arrive together
-- **WHEN** a form breaks both a form-level rule and a contract-level rule that can still be evaluated
-- **THEN** one attempt reports both
+#### Scenario: Several contract problems arrive together
+- **WHEN** a form parses and breaks more than one of the contract's own rules
+- **THEN** one attempt reports all of them
+
+#### Scenario: A malformed form stops before the contract is checked
+- **WHEN** a form breaks a form-level rule
+- **THEN** the contract's own rules are not evaluated
+- **AND** the failure states that the list is partial and why
 
 ### Requirement: Conversion Options Are Narrowed, Not Passed Through
 

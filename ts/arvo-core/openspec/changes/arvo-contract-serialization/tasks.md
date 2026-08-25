@@ -30,16 +30,16 @@
 - [x] 5.2 Implement the loss diff: re-export each converted schema and compare constraint keywords by path against the input, reporting anything present going in and absent coming out. Ignore *additions* — `additionalProperties: {}` appears on re-export for every plain object.
 - [x] 5.3 Define the constraint-keyword set from 2020-12's assertion keywords plus `format`, excluding annotations and anything that only widens. Missing an entry costs a warning, never correctness — err toward including.
 - [x] 5.4 Add `tests/serializers/ArvoContractSerializer/losses.spec.ts` covering each measured silent drop individually: a constraint in a typeless `allOf` subschema, `propertyNames`, and `uniqueItems`. Assert the reported path, and assert a fully-supported schema reports nothing.
-- [ ] 5.5 Add tests for each unreadable construct: the five keywords, plus top-level `allOf` and `patternProperties`. Each fails naming the construct and the position, never silently admitting a contract that enforces less than it declares. **The five keywords are covered in `losses.spec.ts`. The two composition shapes are not refused by the conversion — they convert to an intersection and a record, and are refused by the contract's own object-shape check — so they need the full deserialize path and are covered in section 6.**
+- [x] 5.5 Add tests for each unreadable construct: the five keywords, plus top-level `allOf` and `patternProperties`. Each fails naming the construct and the position, never silently admitting a contract that enforces less than it declares. **The five keywords are covered in `losses.spec.ts`. The two composition shapes are not refused by the conversion — they convert to an intersection and a record, and are refused by the contract's own object-shape check — so they need the full deserialize path and are covered in section 6.**
 
 ## 6. Inbound — assembly
 
-- [ ] 6.1 Call `validateArvoContract` on the assembled param rather than constructing an `ArvoContract` and catching, merging its issues with the serializer's own into one report.
-- [ ] 6.2 Construct the contract when nothing is reported, and return `{ contract, warnings, warningString }` frozen to its leaves.
-- [ ] 6.3 Implement `deserialize` and `serialize` as throwing wrappers with no logic beyond unwrapping their primitive.
-- [ ] 6.4 Add `tests/serializers/ArvoContractSerializer/deserialize.spec.ts`: a form this system produced reads back with identity fields and version keys intact; a form it did not produce reads back; a bad `emits` key is rejected and named; a non-JSON string fails at this boundary with the original parse failure retrievable.
-- [ ] 6.5 Add the aggregation test: a form breaking a form-level rule *and* an evaluable contract-level rule reports both in one attempt.
-- [ ] 6.6 Add the pair tests: each primitive does not raise for an expected failure, each companion raises what its primitive reported, and both agree on the same input.
+- [x] 6.1 Call `validateArvoContract` on the assembled param rather than constructing an `ArvoContract` and catching, merging its issues with the serializer's own into one report.
+- [x] 6.2 Construct the contract when nothing is reported, and return `{ contract, warnings, warningString }` frozen to its leaves.
+- [x] 6.3 Implement `deserialize` and `serialize` as throwing wrappers with no logic beyond unwrapping their primitive.
+- [x] 6.4 Add `tests/serializers/ArvoContractSerializer/deserialize.spec.ts`: a form this system produced reads back with identity fields and version keys intact; a form it did not produce reads back; a bad `emits` key is rejected and named; a non-JSON string fails at this boundary with the original parse failure retrievable.
+- [x] 6.5 Add the aggregation test: a form breaking a form-level rule *and* an evaluable contract-level rule reports both in one attempt.
+- [x] 6.6 Add the pair tests: each primitive does not raise for an expected failure, each companion raises what its primitive reported, and both agree on the same input.
 
 ## 7. Round trip
 
