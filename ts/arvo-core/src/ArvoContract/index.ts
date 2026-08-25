@@ -118,7 +118,7 @@ export class ArvoContract<
             metadata: this.metadata,
             accepts: definition.accepts,
             emits: definition.emits,
-          } as never),
+          }),
         ]),
       ),
     ) as this['versions'];

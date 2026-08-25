@@ -3,7 +3,7 @@ import type { JSONObject } from '../types.js';
 import { ErrorIssue } from '../utils/error-issue.js';
 import { isUriReference } from '../utils/uri.js';
 import { handlerErrorType } from './handler-error.js';
-import type { ArvoContractParam } from './types.js';
+import type { ArvoContractParam, ArvoContractVersionParam } from './types.js';
 import type { VersionedArvoContractParam } from './versioned/types.js';
 
 /** Lowercase alphanumeric segments joined by single underscores. */
@@ -176,7 +176,7 @@ export type NormalizedContract = {
   description: string | null;
   domain: string | null;
   metadata: JSONObject;
-  versions: Record<string, { accepts: unknown; emits: unknown }>;
+  versions: Record<string, ArvoContractVersionParam>;
 };
 
 /**
@@ -199,7 +199,7 @@ const normalize = (param: ArvoContractParam): NormalizedContract => {
     description: param.description ?? null,
     domain: param.domain ?? null,
     metadata: param.metadata ?? {},
-    versions: (param.versions ?? {}) as NormalizedContract['versions'],
+    versions: param.versions ?? {},
   };
 };
 
