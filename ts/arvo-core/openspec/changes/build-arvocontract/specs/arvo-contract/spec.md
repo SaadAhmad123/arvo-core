@@ -248,10 +248,12 @@ The handler error SHALL be derived from `type` and the version rather than decla
 
 ### Requirement: Declaration-Time Rejection Reports Every Failure
 
-The system SHALL validate a contract when it is declared, and SHALL report every rule the declaration broke rather than only the first. Each reported failure SHALL identify the position within the contract that broke it.
+The system SHALL validate a contract when it is declared, and SHALL report every rule the declaration broke that can be meaningfully evaluated, rather than only the first. Each reported failure SHALL identify the position within the contract that broke it.
+
+A rule SHALL NOT be reported when the value it would judge could not be established because a prerequisite failed — see **Prerequisite Validity Of `type`**. The system SHALL NOT report a derived value as a failure when that value could not be derived.
 
 #### Scenario: Multiple independent failures
-- **WHEN** a contract is declared with a malformed `type`, two malformed `emits` keys, and a malformed version key
+- **WHEN** a contract is declared with a malformed `domain`, two malformed `emits` keys, and a malformed version key
 - **THEN** declaration fails
 - **AND** the failure names all four problems
 
@@ -262,6 +264,37 @@ The system SHALL validate a contract when it is declared, and SHALL report every
 #### Scenario: Failure positions are identified
 - **WHEN** a version's emit key is malformed
 - **THEN** the reported failure identifies the version and the offending key
+
+#### Scenario: Aggregation is unaffected when `type` is valid
+- **WHEN** a contract with a valid `type` is declared with faults in several other positions
+- **THEN** the failure names every one of them
+
+### Requirement: Prerequisite Validity Of `type`
+
+`type` SHALL be validated before any rule that depends on it. When `type` is invalid, the system SHALL report that failure alone and SHALL NOT evaluate the remaining rules. The reported failure SHALL state that the remaining rules were not evaluated, so a reader is not left to infer that nothing else is wrong.
+
+This SHALL apply wherever a contract or a standalone version contract is declared.
+
+#### Scenario: An invalid `type` is reported alone
+- **WHEN** a contract is declared with an invalid `type` and faults in other positions
+- **THEN** declaration fails
+- **AND** the only reported failure is the one naming `type`
+
+#### Scenario: The reader is told the run stopped
+- **WHEN** declaration fails because `type` is invalid
+- **THEN** the failure states that the remaining rules were not evaluated
+
+#### Scenario: A derived `uri` is not reported when it could not be derived
+- **WHEN** a contract is declared with an invalid `type` and no `uri`
+- **THEN** no failure names `uri`
+
+#### Scenario: A supplied `uri` is still the caller's to answer for
+- **WHEN** a contract is declared with a valid `type` and an invalid `uri`
+- **THEN** the failure names `uri`
+
+#### Scenario: A standalone version contract behaves the same way
+- **WHEN** a version contract is declared directly with an invalid `type` and faults in other positions
+- **THEN** the only reported failure is the one naming `type`
 
 ### Requirement: Standalone Version Declaration
 

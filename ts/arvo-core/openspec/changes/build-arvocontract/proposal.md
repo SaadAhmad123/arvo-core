@@ -14,8 +14,18 @@ This change builds the contract structure ADR-005 defines. It deliberately stops
 - **`dataschema`** on `VersionedArvoContract` only, computed as `{uri}/{version}`. The container has no version and so cannot have one.
 - **Handler error**, computed rather than stored, exposed in the same shape as an ordinary emit so a handler can treat everything it may emit uniformly. Its type is `handler_{type}_error`; its payload is the fixed `error_name`/`error_message`/`error_stack` shape; its `dataschema` is the producing version's own.
 - **Validation on construction, reporting every failure at once.** A new contract validator, built the same way as `src/ArvoEvent/validator.ts` — normalize first, then collect `ErrorIssue`s rather than throwing at the first fault — so a contract with a malformed `type`, two bad `emits` keys, and an invalid version key reports all four in one error. Both classes validate in their constructor and throw; `VersionedArvoContract`'s own validation exists for the standalone case, where one is constructed directly rather than through a container.
+- **`type` is a prerequisite, validated before anything derived from it.** When it fails, that issue is reported alone and the remaining rules do not run, with the error stating that they did not. `uri` derivation, the handler error type, and the `emits`-must-not-reuse-`type` comparison are all computed from `type`, and each currently substitutes a placeholder when it is unusable — which is how a caller who supplied no `uri` is told their `uri` is empty. Validating first lets those three placeholders be deleted rather than guarded. This narrows the reporting promise below deliberately; see **Reporting every failure, narrowed**.
+- **`uri` becomes a type parameter**, so a version's `dataschema` keeps its precise value instead of widening to plain `string`. Public type signatures on both classes change, which is free now and breaking once released — that timing, not the size of the win, is why it is here.
 - Zod v4 is the native authoring surface for `accepts` and `emits`. It is already a peer dependency; no dependency changes.
-- **BREAKING**: none. New code with no prior behaviour to break.
+- **BREAKING**: none. New code with no prior behaviour to break, and nothing released.
+
+## Reporting every failure, narrowed
+
+Validating every rule and reporting all of them at once is this validator's headline property, and the `type` prerequisite deliberately reduces it: a declaration with a bad `type` and a bad version key now takes two attempts where it took one.
+
+This is worth stating rather than burying because it changes a guarantee the spec already made. The findings being removed were computed against a placeholder rather than against the declaration — aggregation was presenting a guess next to a fact, and quoting values the caller never supplied. Fewer findings, all of them true.
+
+The gate is one field. Every other position still collects and continues, and there is a scenario pinning that so the narrowing cannot quietly widen.
 
 ## Capabilities
 

@@ -58,6 +58,30 @@ Both classes run the **same** version-level function. That is what makes the spe
 
 *Alternative considered:* the container constructs version contracts and lets their constructors throw. Rejected — the first bad version aborts the loop, so a contract with problems in `1.0.0` and `2.0.0` reports only `1.0.0`, reintroducing the fix-one-at-a-time cycle this change exists to remove.
 
+### `type` is a prerequisite, as `versions` already is
+
+`type` is validated before anything derives from it. If it fails, that issue is returned alone and nothing else runs.
+
+Three things are computed from `type`: `uri` when not supplied, the handler error type, and the "an `emits` key must not reuse the contract type" comparison. Each currently guards against a non-string `type` by substituting `''` and carrying on, in three separate places. That placeholder is what produces `uri: must be a non-empty string (received "")` for a caller who never supplied a `uri` — a fabricated finding quoting a value they never wrote, sitting directly beneath the true one.
+
+The validator already has this concept. A non-object `versions` and an empty `versions` both stop the run and return early, because nothing further can be judged. `type` is the same kind of failure and was simply never treated as one. This is an existing rule applied consistently, not a new mechanism.
+
+Validating `type` first means the three placeholders are **deleted rather than gated** — once `type` is known to be a valid identifier, `deriveUri` and `handlerErrorType` can trust their input. The fix removes code and removes a rule duplicated three ways.
+
+*The trade, stated plainly:* this narrows *Declaration-Time Rejection Reports Every Failure*. A declaration with a bad `type` and a bad version key now takes two attempts where it took one. That is deliberate — the second finding was computed against a placeholder, so aggregation was reporting a guess alongside a fact. Fewer findings, all of them true.
+
+*The gate stays at `type` alone.* Not `uri`, not `metadata`, not `versions` beyond the early returns already there. Every other field keeps collect-and-continue, which is the behaviour worth protecting. A future author wanting to add a second prerequisite is making a new decision, not extending this one by analogy.
+
+*Where the explanation lives:* on the error's summary line, not inside the `type` issue and not as a synthetic issue of its own. `issues` is a machine-readable list in which each entry names a path and the rule it broke; "the rest did not run" is a statement about the run, not about a path, so an entry for it would make the list lie. This gives `ArvoContractValidationError` a notion of having stopped early — a small addition to a class that otherwise just formats a list, and the reason it is worth it is that the alternative corrupts the part consumers parse.
+
+### `uri` is a type parameter, so `dataschema` keeps its value
+
+`dataschema` is typed `` `${string}/${V}` ``: the version literal survives, the `uri` literal does not. Nothing discards it — `uri` is simply `string` on both classes, so there was never a precise value to keep. Threading it as a parameter makes `dataschema` exact for a caller who supplied a literal `uri` or took derivation from a literal `type`.
+
+Done now because nothing is released. This changes both classes' public type signatures, which costs nothing today and is a breaking change to every consumer's inferred types once published. The deadline, not the value, is what puts it in this change.
+
+*Risk:* it is a third generic threaded through two classes, and the literal-key preservation this design already depends on was established by probing rather than assumption. The same probing applies here — that per-version `z.infer` still differs, that an undeclared version key is still a compile error, and that a `uri` which is genuinely not a literal degrades to `string` rather than to an error.
+
 ### Issue paths address the declaration
 
 `ErrorIssue.path` uses the shape of the authored object: `type`, `uri`, `versions.1.0.0.emits.Bad_Key`, `versions.1.0.0.accepts`. A reader should be able to go from the message to the line without a second lookup.
@@ -103,6 +127,10 @@ One new `ArvoContractValidationError`: `_tag` discriminant, frozen `issues`, mes
 **Deferring the canonical form leaves ADR-005 partly unimplemented** → Named openly in `proposal.md` rather than left for a reader to discover. The mitigations are structural: store the ADR's field set exactly, materialize defaults, keep every schema position exportable.
 
 **Freezing `metadata` is a small behaviour surprise** → A consumer passing an object they intend to keep mutating will find it frozen. Consistent with `ArvoEvent`, which already freezes `data`.
+
+**Narrowing report-everything could be read as a regression** → It reports strictly fewer findings for one input shape, and "reports every failure" is the validator's headline property. Mitigated by scope: the gate is one field, every other position still aggregates, and there is a scenario pinning that. The findings removed were derived from a placeholder rather than from the declaration.
+
+**A third generic on both classes** → More inference surface to get wrong, and the existing literal-key behaviour is load-bearing. Mitigated the same way it was established in the first place: probe the real generic shape before adopting it, and assert the properties in tests rather than trusting them.
 
 ## Migration Plan
 
