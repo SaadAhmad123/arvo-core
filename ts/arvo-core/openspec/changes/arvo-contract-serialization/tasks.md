@@ -1,8 +1,8 @@
 ## 1. Groundwork
 
-- [ ] 1.1 Create `src/serializers/ArvoContractSerializer/errors.ts` with `ArvoContractSerializerError`: a `_tag` discriminant, an optional `cause` for a failure originating at this boundary, and a frozen `issues` array in the `ErrorIssue` vocabulary for everything position-shaped. Per design.md, one type carries both channels — a caller should not have to know which layer failed to know what to catch.
-- [ ] 1.2 Create `src/serializers/ArvoContractSerializer/warnings.ts` with `buildWarningFromErrorIssues`, rendering a list of losses as one message. Do not modify `buildErrorIssueMessage`. Distinguish a constraint **dropped** from a check **demoted** in the wording — the demotion fires on most real contracts, so if it reads like a defect callers will learn to ignore warnings entirely.
-- [ ] 1.3 Add `tests/serializers/ArvoContractSerializer/warnings.spec.ts`: no losses renders nothing, one loss, several losses, and a drop reading differently from a demotion.
+- [x] 1.1 Create `src/serializers/ArvoContractSerializer/errors.ts` with `ArvoContractSerializerError`: a `_tag` discriminant, an optional `cause` for a failure originating at this boundary, and a frozen `issues` array in the `ErrorIssue` vocabulary for everything position-shaped. Per design.md, one type carries both channels — a caller should not have to know which layer failed to know what to catch.
+- [x] 1.2 Create `src/serializers/ArvoContractSerializer/warnings.ts` with `buildWarningFromErrorIssues`, rendering a list of losses as one message. Do not modify `buildErrorIssueMessage`. Distinguish a constraint **dropped** from a check **demoted** in the wording — the demotion fires on most real contracts, so if it reads like a defect callers will learn to ignore warnings entirely.
+- [x] 1.3 Add `tests/serializers/ArvoContractSerializer/warnings.spec.ts`: no losses renders nothing, one loss, several losses, and a drop reading differently from a demotion.
 
 ## 2. Types
 
