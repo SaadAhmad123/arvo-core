@@ -1,3 +1,5 @@
+import { err, ok } from 'neverthrow';
+import { fromNeverthrow } from '../result.js';
 import type { Result } from '../types.js';
 import { ErrorIssue } from '../utils/error-issue.js';
 import { ArvoSemanticVersionCheckError } from './errors.js';
@@ -78,30 +80,32 @@ const tryCheck = (
   data: unknown,
 ): Result<ArvoSemanticVersion, ArvoSemanticVersionCheckError> => {
   if (typeof data !== 'string') {
-    return {
-      ok: false,
-      error: new ArvoSemanticVersionCheckError([
-        new ErrorIssue({
-          path: 'version',
-          message: 'must be a string',
-          received: data,
-        }),
-      ]),
-    };
+    return fromNeverthrow(
+      err(
+        new ArvoSemanticVersionCheckError([
+          new ErrorIssue({
+            path: 'version',
+            message: 'must be a string',
+            received: data,
+          }),
+        ]),
+      ),
+    );
   }
 
   const segments = data.split('.');
   if (segments.length !== 3) {
-    return {
-      ok: false,
-      error: new ArvoSemanticVersionCheckError([
-        new ErrorIssue({
-          path: 'version',
-          message: `must have exactly three '.'-separated segments, found ${segments.length}`,
-          received: data,
-        }),
-      ]),
-    };
+    return fromNeverthrow(
+      err(
+        new ArvoSemanticVersionCheckError([
+          new ErrorIssue({
+            path: 'version',
+            message: `must have exactly three '.'-separated segments, found ${segments.length}`,
+            received: data,
+          }),
+        ]),
+      ),
+    );
   }
 
   const issues = SEGMENT_NAMES.map((name, index) =>
@@ -109,10 +113,10 @@ const tryCheck = (
   ).filter((issue): issue is ErrorIssue => issue !== null);
 
   if (issues.length > 0) {
-    return { ok: false, error: new ArvoSemanticVersionCheckError(issues) };
+    return fromNeverthrow(err(new ArvoSemanticVersionCheckError(issues)));
   }
 
-  return { ok: true, value: data as ArvoSemanticVersion };
+  return fromNeverthrow(ok(data as ArvoSemanticVersion));
 };
 
 /**

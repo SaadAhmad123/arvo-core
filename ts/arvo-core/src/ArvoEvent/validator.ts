@@ -1,8 +1,8 @@
-import fastUri from 'fast-uri';
 import { z } from 'zod';
 import type { FlatMap, JSONObject } from '../types.js';
 import { ErrorIssue } from '../utils/error-issue.js';
 import { createTimestamp } from '../utils/index.js';
+import { isUriReference } from '../utils/uri.js';
 import { walkFlatMap, walkPayload } from './json.js';
 import type { ArvoEventFields, ArvoEventValidationOptions } from './types.js';
 
@@ -205,35 +205,6 @@ const checkCharacterDomain = (
       }),
     );
   }
-};
-
-/**
- * RFC 3986 URI-reference, delegated to `fast-uri` rather than hand-rolled:
- * writing and maintaining a correct grammar is exactly the kind of general,
- * non-Arvo-specific parsing concern this package's dependency conventions
- * favor reusing over reimplementing.
- *
- * `fast-uri`'s own `parse`/`serialize` are lenient by design — malformed
- * input is percent-encoded into validity rather than rejected, which is
- * the opposite of what this rule needs (a producer's invalid value must
- * fail construction, not be silently rewritten). Round-tripping through
- * both and requiring an exact match turns that leniency into a rejection:
- * anything `serialize(parse(value))` had to change to make valid was not
- * already valid.
- *
- * The one accepted cost: `serialize` also canonicalizes case-insensitive
- * components (scheme, host) and resolves dot-segments, so a small set of
- * inputs that are grammatically valid but not already in canonical form —
- * an uppercase scheme, an unresolved `./`/`../` segment — are rejected
- * too, stricter than the bare grammar requires. Neither is a shape a
- * producer chooses deliberately for a `source` or `dataschema` identifier,
- * and the rejection is reported with the same diagnostic quality as any
- * other rule, so it is correctable rather than silently wrong.
- */
-const isUriReference = (value: string): boolean => {
-  const parsed = fastUri.parse(value);
-  if ('error' in parsed) return false;
-  return fastUri.serialize(parsed) === value;
 };
 
 const checkUriReference = (

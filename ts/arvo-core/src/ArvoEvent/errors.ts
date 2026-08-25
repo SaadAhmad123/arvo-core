@@ -13,9 +13,6 @@ import {
  * The message names every rule that was broken, so it can be acted on without
  * reading this source. {@link issues} carries the same information
  * individually for callers that would rather present it their own way.
- *
- * @see docs/adr/001-arvoevent-structure.md for the full field definitions and
- * structural rules.
  */
 export class ArvoEventValidationError extends Error {
   /** Discriminant for identifying this error without an `instanceof` check. */

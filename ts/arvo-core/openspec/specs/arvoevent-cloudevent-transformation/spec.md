@@ -7,7 +7,7 @@ Defines the bidirectional transformation between an ArvoEvent and a CloudEvent, 
 
 The system SHALL transform every structurally valid ArvoEvent into a CloudEvent conforming to CloudEvents 1.0.2. Producing the CloudEvent SHALL NOT fail for structural reasons.
 
-Per [ADR-003](../../../../docs/adr/003-arvoevent-cloudevent-transformation.md), this direction is total because ADR-002's field-domain narrowing closes the gap between ArvoEvent's field domains and CloudEvents' own attribute type system for every field but `depth`, which needs no narrowing since it is already a non-negative integer with an exact decimal-string form.
+Per [ADR-003](../../../../../docs/adr/003-arvoevent-cloudevent-transformation.md), this direction is total because ADR-002's field-domain narrowing closes the gap between ArvoEvent's field domains and CloudEvents' own attribute type system for every field but `depth`, which needs no narrowing since it is already a non-negative integer with an exact decimal-string form.
 
 #### Scenario: Every structurally valid event transforms successfully
 - **WHEN** a structurally valid ArvoEvent, taking any combination of legal field values, is transformed

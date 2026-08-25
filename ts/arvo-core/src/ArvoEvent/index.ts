@@ -14,9 +14,6 @@ import { validateArvoEvent } from './validator.js';
  * structural rule throws {@link ArvoEventValidationError} immediately, and
  * the instance is frozen once constructed.
  *
- * @see docs/adr/001-arvoevent-structure.md for the full definition of every
- * field, its default, and the rules it must satisfy.
- *
  * @example
  * ```typescript
  * const event = new ArvoEvent({
