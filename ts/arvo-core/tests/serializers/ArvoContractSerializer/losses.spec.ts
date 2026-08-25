@@ -54,7 +54,7 @@ describe('a construct the conversion refuses', () => {
   it('names the position it refused', () => {
     const result = read(of({ a: { not: { type: 'number' } } }));
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.issue.path).toBe('accepts');
+    if (!result.ok) expect(result.error.path).toBe('accepts');
   });
 
   it('names the construct it could not read', () => {
@@ -63,8 +63,8 @@ describe('a construct the conversion refuses', () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.issue.message).toContain('cannot be read');
-      expect(result.issue.message).toContain('unevaluatedProperties');
+      expect(result.error.message).toContain('cannot be read');
+      expect(result.error.message).toContain('unevaluatedProperties');
     }
   });
 
@@ -82,10 +82,12 @@ describe('a constraint the conversion drops without saying so', () => {
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.losses.map((l) => l.message).join(' ')).toContain(
+      expect(result.value.losses.map((l) => l.message).join(' ')).toContain(
         'minLength',
       );
-      expect(result.losses[0]?.path).toBe('accepts.properties.a.allOf[1]');
+      expect(result.value.losses[0]?.path).toBe(
+        'accepts.properties.a.allOf[1]',
+      );
     }
   });
 
@@ -95,10 +97,10 @@ describe('a constraint the conversion drops without saying so', () => {
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.losses.map((l) => l.message).join(' ')).toContain(
+      expect(result.value.losses.map((l) => l.message).join(' ')).toContain(
         'propertyNames',
       );
-      expect(result.losses[0]?.path).toBe('accepts.properties.a');
+      expect(result.value.losses[0]?.path).toBe('accepts.properties.a');
     }
   });
 
@@ -110,7 +112,7 @@ describe('a constraint the conversion drops without saying so', () => {
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.losses.map((l) => l.message).join(' ')).toContain(
+      expect(result.value.losses.map((l) => l.message).join(' ')).toContain(
         'uniqueItems',
       );
     }
@@ -123,7 +125,7 @@ describe('a constraint the conversion drops without saying so', () => {
       of({ a: { allOf: [{ type: 'string' }, { minLength: 3 }] } }),
     );
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.schema).toBeDefined();
+    if (result.ok) expect(result.value.schema).toBeDefined();
   });
 });
 
@@ -133,7 +135,7 @@ describe('a fully expressible schema', () => {
       of({ a: { type: 'string', minLength: 3 } }, { required: ['a'] }),
     );
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.losses).toEqual([]);
+    if (result.ok) expect(result.value.losses).toEqual([]);
   });
 
   it('reports nothing for constraints nested and inside arrays', () => {
@@ -147,7 +149,7 @@ describe('a fully expressible schema', () => {
       }),
     );
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.losses).toEqual([]);
+    if (result.ok) expect(result.value.losses).toEqual([]);
   });
 
   it('does not mistake an added keyword for a loss', () => {
@@ -155,7 +157,7 @@ describe('a fully expressible schema', () => {
     // takes nothing away, so it must not be reported.
     const result = read(of({ a: { type: 'string' } }, { required: ['a'] }));
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.losses).toEqual([]);
+    if (result.ok) expect(result.value.losses).toEqual([]);
   });
 
   it('reports nothing for a self-referencing schema', () => {
@@ -165,7 +167,7 @@ describe('a fully expressible schema', () => {
       properties: { next: { $ref: '#' } },
     });
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.losses).toEqual([]);
+    if (result.ok) expect(result.value.losses).toEqual([]);
   });
 });
 
@@ -179,7 +181,9 @@ describe('an annotation keyword states no check', () => {
     const result = read(of({ u: { type: 'string', format: 'uri' } }));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(z.safeParse(result.schema, { u: 'nope' }).success).toBe(true);
+      expect(z.safeParse(result.value.schema, { u: 'nope' }).success).toBe(
+        true,
+      );
     }
   });
 
@@ -187,9 +191,9 @@ describe('an annotation keyword states no check', () => {
     const result = read(of({ u: { type: 'string', format: 'uri' } }));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.losses).toHaveLength(1);
-      expect(result.losses[0]?.message).toContain('documentation only');
-      expect(result.losses[0]?.path).toBe('accepts.properties.u');
+      expect(result.value.losses).toHaveLength(1);
+      expect(result.value.losses[0]?.message).toContain('documentation only');
+      expect(result.value.losses[0]?.path).toBe('accepts.properties.u');
     }
   });
 
@@ -203,8 +207,10 @@ describe('an annotation keyword states no check', () => {
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.losses).toEqual([]);
-      expect(z.safeParse(result.schema, { e: 'nope' }).success).toBe(false);
+      expect(result.value.losses).toEqual([]);
+      expect(z.safeParse(result.value.schema, { e: 'nope' }).success).toBe(
+        false,
+      );
     }
   });
 
@@ -219,7 +225,9 @@ describe('an annotation keyword states no check', () => {
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.losses[0]?.path).toBe('accepts.properties.a.properties.u');
+      expect(result.value.losses[0]?.path).toBe(
+        'accepts.properties.a.properties.u',
+      );
     }
   });
 });

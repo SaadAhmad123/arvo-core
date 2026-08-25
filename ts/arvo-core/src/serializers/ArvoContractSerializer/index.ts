@@ -146,7 +146,7 @@ export class ArvoContractSerializer {
       return fromNeverthrow(
         err(
           new ArvoContractSerializerError('ArvoContract could not be read.', {
-            issues: read.issues,
+            issues: read.error,
           }),
         ),
       );

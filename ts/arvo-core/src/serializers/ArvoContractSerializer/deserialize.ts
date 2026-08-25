@@ -2,6 +2,7 @@ import * as z from 'zod';
 import type * as zc from 'zod/v4/core';
 import type { ArvoContractParam } from '../../ArvoContract/types.js';
 import { validateArvoContract } from '../../ArvoContract/validator.js';
+import type { Result } from '../../types.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
 import { validateCanonicalForm } from './form.js';
 import { demotedCheck, droppedConstraint } from './warnings.js';
@@ -169,9 +170,7 @@ const refusalOf = (error: unknown): string => String(error).split('\n')[0];
 export const convertFromJSONSchema = (
   schema: unknown,
   position: string,
-):
-  | { ok: true; schema: zc.$ZodType; losses: ErrorIssue[] }
-  | { ok: false; issue: ErrorIssue } => {
+): Result<{ schema: zc.$ZodType; losses: ErrorIssue[] }, ErrorIssue> => {
   const demotions: ErrorIssue[] = [];
   const withheld = withoutFormat(schema, position, demotions);
 
@@ -181,7 +180,7 @@ export const convertFromJSONSchema = (
   } catch (error) {
     return {
       ok: false,
-      issue: new ErrorIssue({
+      error: new ErrorIssue({
         path: position,
         message: `cannot be read: ${refusalOf(error)}`,
       }),
@@ -208,7 +207,7 @@ export const convertFromJSONSchema = (
     // was lost. The schema itself is sound, so the contract still reads.
   }
 
-  return { ok: true, schema: native, losses };
+  return { ok: true, value: { schema: native, losses } };
 };
 
 /**
@@ -242,13 +241,13 @@ export type ReadForm = {
  */
 export const readCanonicalForm = (
   parsed: unknown,
-): { ok: true; value: ReadForm } | { ok: false; issues: ErrorIssue[] } => {
+): Result<ReadForm, ErrorIssue[]> => {
   const formIssues = validateCanonicalForm(parsed);
   if (formIssues.length > 0) {
     const [first, ...rest] = formIssues;
     return {
       ok: false,
-      issues: [
+      error: [
         new ErrorIssue({
           path: (first as ErrorIssue).path,
           message: (first as ErrorIssue).message,
@@ -286,21 +285,21 @@ export const readCanonicalForm = (
         `${at}.emits[${JSON.stringify(type)}]`,
       );
       if (converted.ok) {
-        emits[type] = converted.schema;
-        losses.push(...converted.losses);
+        emits[type] = converted.value.schema;
+        losses.push(...converted.value.losses);
       } else {
-        issues.push(converted.issue);
+        issues.push(converted.error);
       }
     }
     if (accepts.ok) {
-      losses.push(...accepts.losses);
-      versions[version] = { accepts: accepts.schema, emits };
+      losses.push(...accepts.value.losses);
+      versions[version] = { accepts: accepts.value.schema, emits };
     } else {
-      issues.push(accepts.issue);
+      issues.push(accepts.error);
     }
   }
 
-  if (issues.length > 0) return { ok: false, issues };
+  if (issues.length > 0) return { ok: false, error: issues };
 
   const param = {
     ...(typeof form.uri === 'string' ? { uri: form.uri } : {}),
@@ -316,7 +315,7 @@ export const readCanonicalForm = (
   } as ArvoContractParam;
 
   const checked = validateArvoContract(param);
-  if (checked.issues.length > 0) return { ok: false, issues: checked.issues };
+  if (checked.issues.length > 0) return { ok: false, error: checked.issues };
 
   return { ok: true, value: { param, losses } };
 };
