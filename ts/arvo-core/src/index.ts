@@ -29,6 +29,15 @@ export type {
 export { CloudEvent } from './cloudevent/types.js';
 export { ArvoSemanticVersionCheckError } from './semver/errors.js';
 export { ArvoSemanticVersion } from './semver/index.js';
+export { ArvoContractSerializerError } from './serializers/ArvoContractSerializer/errors.js';
+export { ArvoContractSerializer } from './serializers/ArvoContractSerializer/index.js';
+export type {
+  ArvoContractSerializeOptions,
+  ArvoContractSerializerOptions,
+  ArvoContractSerializerWarnings,
+  DeserializedArvoContract,
+  SerializedArvoContract,
+} from './serializers/ArvoContractSerializer/types.js';
 export { ArvoEventSerializerError } from './serializers/ArvoEventSerializer/errors.js';
 export type { ArvoEventSerializerMode } from './serializers/ArvoEventSerializer/index.js';
 export { ArvoEventSerializer } from './serializers/ArvoEventSerializer/index.js';

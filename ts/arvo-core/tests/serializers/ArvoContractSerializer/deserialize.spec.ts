@@ -122,6 +122,18 @@ describe('a form this serializer did not produce', () => {
   });
 });
 
+describe('a form that omitted its uri', () => {
+  it('derives one from the type, as a declaration would', () => {
+    const { contract } = serializer.deserialize(
+      JSON.stringify({
+        type: 'com_order_create',
+        versions: { '1.0.0': { accepts: objectSchema(), emits: {} } },
+      }),
+    );
+    expect(contract.uri).toBe('#/com/order/create');
+  });
+});
+
 describe('failure at this boundary', () => {
   it('reports a string that is not JSON', () => {
     const error = failureOf('not json at all');
@@ -242,6 +254,29 @@ describe('a construct that cannot be read', () => {
     });
     expect(error.issues.map((i) => i.path)).toContain(
       'versions["1.0.0"].accepts',
+    );
+  });
+
+  it('names one inside an emits entry, not only in accepts', () => {
+    const error = failureOf(
+      form({
+        versions: {
+          '1.0.0': {
+            accepts: objectSchema(),
+            emits: {
+              com_a_done: {
+                $schema: S,
+                type: 'object',
+                properties: { a: { type: 'string' } },
+                unevaluatedProperties: false,
+              },
+            },
+          },
+        },
+      }),
+    );
+    expect(error.issues.map((i) => i.path)).toContain(
+      'versions["1.0.0"].emits["com_a_done"]',
     );
   });
 

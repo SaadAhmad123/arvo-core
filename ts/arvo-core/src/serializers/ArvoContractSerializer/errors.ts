@@ -4,6 +4,16 @@ import {
   type ErrorIssue,
 } from '../../utils/error-issue.js';
 
+/**
+ * Whatever was thrown, as an `Error`.
+ *
+ * A `throw` can carry anything, and `cause` is declared as an `Error`. The
+ * conversions used here throw `Error`s, so the other branch is a guard rather
+ * than a path taken -- but a guard that keeps the declared type honest.
+ */
+export const asError = (thrown: unknown): Error =>
+  thrown instanceof Error ? thrown : new Error(String(thrown));
+
 /** The parts of an {@link ArvoContractSerializerError}. */
 export type ArvoContractSerializerErrorParam = {
   /**
@@ -33,6 +43,9 @@ export type ArvoContractSerializerErrorParam = {
  *
  * One type rather than two, so a caller does not have to know which layer
  * failed in order to know what to catch.
+ *
+ * When one of the {@link issues} is blocking, the rules that depend on it were
+ * not evaluated and the list is partial — fix what it names and try again.
  */
 export class ArvoContractSerializerError extends Error {
   /** Discriminant for identifying this error without an `instanceof` check. */

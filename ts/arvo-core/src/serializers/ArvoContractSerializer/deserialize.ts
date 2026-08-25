@@ -4,16 +4,19 @@ import type { ArvoContractParam } from '../../ArvoContract/types.js';
 import { validateArvoContract } from '../../ArvoContract/validator.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
 import { validateCanonicalForm } from './form.js';
-import { droppedConstraint } from './warnings.js';
+import { demotedCheck, droppedConstraint } from './warnings.js';
 
 /**
  * Keywords whose absence means a constraint stopped being enforced.
  *
- * JSON Schema 2020-12's assertion keywords, plus `format`, plus
- * `propertyNames` — an applicator, but one whose loss removes a real check.
- * Annotations (`title`, `description`, `examples`) are absent: losing them
- * costs documentation, not enforcement. So are the applicators that only
- * widen, such as `additionalProperties`.
+ * JSON Schema 2020-12's assertion keywords, plus `propertyNames` — an
+ * applicator, but one whose loss removes a real check. Annotations
+ * (`title`, `description`, `examples`) are absent: losing them costs
+ * documentation, not enforcement. So are the applicators that only widen,
+ * such as `additionalProperties`.
+ *
+ * `format` is absent because it never reaches the comparison: it is removed
+ * before conversion and reported separately. See {@link withoutFormat}.
  *
  * This list is ours to keep, and it is the safe kind to own. Missing an entry
  * costs a warning that should have been raised; it never changes what a
@@ -31,7 +34,6 @@ const CONSTRAINT_KEYWORDS = new Set([
   'maxLength',
   'minLength',
   'pattern',
-  'format',
   'maxItems',
   'minItems',
   'uniqueItems',
@@ -105,9 +107,55 @@ const lostConstraints = (
   return losses;
 };
 
-/** Reads the keyword a conversion refused out of its own complaint. */
-const refusalOf = (error: unknown): string =>
-  error instanceof Error ? error.message.split('\n')[0] : String(error);
+/**
+ * The schema with every `format` keyword removed, and each one that mattered
+ * recorded as a check demoted to documentation.
+ *
+ * `format` is an annotation, and an annotation states no check — so no
+ * implementation may enforce one, or the same bytes would mean different
+ * things in different languages. The conversion used here does enforce it, so
+ * the keyword is withheld from it rather than the enforcement being switched
+ * off, which is not something the conversion offers.
+ *
+ * The form itself is untouched. A reader of the JSON still sees `format` and
+ * still learns what the author meant; only the schema built from it declines
+ * to act on it.
+ *
+ * A `format` sitting beside a `pattern` is removed just the same but reported
+ * as nothing: the pattern is an assertion, so it carries the enforcement for
+ * every reader and no check was lost.
+ */
+const withoutFormat = (
+  node: unknown,
+  position: string,
+  into: ErrorIssue[],
+): unknown => {
+  if (node === null || typeof node !== 'object') return node;
+  if (Array.isArray(node)) {
+    return node.map((child, i) =>
+      withoutFormat(child, `${position}[${i}]`, into),
+    );
+  }
+  const schema = node as Record<string, unknown>;
+  if (typeof schema.format === 'string' && schema.pattern === undefined) {
+    into.push(demotedCheck(position, `format: ${schema.format}`));
+  }
+  const stripped: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'format') continue;
+    stripped[key] = withoutFormat(value, `${position}.${key}`, into);
+  }
+  return stripped;
+};
+
+/**
+ * Reads the keyword a conversion refused out of its own complaint.
+ *
+ * `String` rather than a check for an `Error`: it handles either, and a
+ * conversion that threw something other than an `Error` still has to be
+ * reported rather than crashing the read.
+ */
+const refusalOf = (error: unknown): string => String(error).split('\n')[0];
 
 /**
  * Converts one schema position from JSON Schema to a native schema, and
@@ -124,9 +172,12 @@ export const convertFromJSONSchema = (
 ):
   | { ok: true; schema: zc.$ZodType; losses: ErrorIssue[] }
   | { ok: false; issue: ErrorIssue } => {
+  const demotions: ErrorIssue[] = [];
+  const withheld = withoutFormat(schema, position, demotions);
+
   let native: zc.$ZodType;
   try {
-    native = z.fromJSONSchema(schema as never);
+    native = z.fromJSONSchema(withheld as never);
   } catch (error) {
     return {
       ok: false,
@@ -137,18 +188,20 @@ export const convertFromJSONSchema = (
     };
   }
 
-  let losses: ErrorIssue[] = [];
+  const losses: ErrorIssue[] = [...demotions];
   try {
-    losses = lostConstraints(
-      schema,
-      z.toJSONSchema(native as never, {
-        target: 'draft-2020-12',
-        io: 'input',
-        cycles: 'ref',
-        reused: 'inline',
-        unrepresentable: 'any',
-      }),
-      position,
+    losses.push(
+      ...lostConstraints(
+        withheld,
+        z.toJSONSchema(native as never, {
+          target: 'draft-2020-12',
+          io: 'input',
+          cycles: 'ref',
+          reused: 'inline',
+          unrepresentable: 'any',
+        }),
+        position,
+      ),
     );
   } catch {
     // A schema that converts in but not back out tells us nothing about what

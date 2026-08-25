@@ -63,8 +63,7 @@ const recordLoss = (
   if (Object.keys(ctx.jsonSchema).length > 0) return;
   const type = ctx.zodSchema._zod.def.type;
   if (DELIBERATELY_UNCONSTRAINED.has(type)) return;
-  const at =
-    ctx.path.length === 0 ? position : `${position}.${ctx.path.join('.')}`;
+  const at = [position, ...ctx.path].join('.');
   if (into.some((issue) => issue.path === at)) return;
   into.push(
     droppedConstraint(at, `a ${type} cannot be expressed in JSON Schema`),

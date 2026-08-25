@@ -198,6 +198,40 @@ describe('what the crossing cost', () => {
     expect(warnings).toEqual([]);
   });
 
+  it('reports one loss per position, not one per visit', () => {
+    // An optional unrepresentable field is visited twice — once as the type,
+    // once as the wrapper — and both results are empty. One field, one loss.
+    const { warnings } = new ArvoContractSerializer().serialize(
+      new ArvoContract({
+        type: 'com_a_b',
+        versions: {
+          '1.0.0': {
+            accepts: z.object({ at: z.date().optional() }),
+            emits: {},
+          },
+        },
+      }),
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.path).toBe('versions["1.0.0"].accepts.properties.at');
+  });
+
+  it('reports a format with no pattern as documentation only', () => {
+    // z.url() emits `format: "uri"` alone. Nothing may enforce an annotation,
+    // so the check the author wrote becomes documentation in the form.
+    const { warnings } = new ArvoContractSerializer().serialize(
+      new ArvoContract({
+        type: 'com_a_b',
+        versions: {
+          '1.0.0': { accepts: z.object({ u: z.url() }), emits: {} },
+        },
+      }),
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain('documentation only');
+    expect(warnings[0]?.path).toBe('versions["1.0.0"].accepts.properties.u');
+  });
+
   it('does not report a format that keeps its pattern', () => {
     // zod emits `pattern` beside `format` for these, so the assertion still
     // carries the enforcement and nothing has been demoted.
@@ -256,6 +290,23 @@ describe('conversion options', () => {
       }),
     );
     expect(warnings).toEqual([]);
+  });
+
+  it('the throwing companion raises what the primitive reported', () => {
+    const refusing = new ArvoContractSerializer({
+      serialize: { unrepresentable: 'throw' },
+    });
+    const withADate = new ArvoContract({
+      type: 'com_a_b',
+      versions: { '1.0.0': { accepts: z.object({ at: z.date() }), emits: {} } },
+    });
+    const reported = refusing.trySerialize(withADate);
+    expect(reported.ok).toBe(false);
+    if (!reported.ok) {
+      expect(() => refusing.serialize(withADate)).toThrow(
+        reported.error.message,
+      );
+    }
   });
 
   it('cannot be told to target another dialect', () => {

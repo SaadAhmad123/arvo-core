@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { asError } from '../../../src/serializers/ArvoContractSerializer/errors.js';
 import {
   buildWarningFromErrorIssues,
   demotedCheck,
@@ -66,5 +67,19 @@ describe('a drop and a demotion read differently', () => {
   it('neither is blocking — a loss does not stop the crossing', () => {
     expect(dropped.isBlocking).toBe(false);
     expect(demoted.isBlocking).toBe(false);
+  });
+});
+
+describe('asError', () => {
+  it('passes an Error through untouched', () => {
+    const thrown = new SyntaxError('bad json');
+    expect(asError(thrown)).toBe(thrown);
+  });
+
+  it('wraps anything else, keeping what it said', () => {
+    // A `throw` can carry anything, and `cause` is declared an Error.
+    expect(asError('a bare string')).toBeInstanceOf(Error);
+    expect(asError('a bare string').message).toBe('a bare string');
+    expect(asError(42).message).toBe('42');
   });
 });

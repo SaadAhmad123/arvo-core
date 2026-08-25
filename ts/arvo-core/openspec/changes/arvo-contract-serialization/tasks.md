@@ -54,11 +54,11 @@
 
 ## 9. Public surface
 
-- [ ] 9.1 Export `ArvoContractSerializer`, `ArvoContractSerializerError`, and the result and options types from `src/index.ts`.
-- [ ] 9.2 Write the TSDoc for the public surface per `project.md` — rules, not provenance. State on `tryDeserialize`/`deserialize` that the inbound conversion rests on zod's experimental `z.fromJSONSchema`, so a consumer meets that at the signature rather than in a changelog. Cite `docs/` paths only, never `openspec/`.
-- [ ] 9.3 Add a section to `ts/sandbox/src/playground.ts`: a contract serialized and read back, a contract carrying a `z.date()` showing the loss report, and a form this implementation cannot read failing with its construct named.
+- [x] 9.1 Export `ArvoContractSerializer`, `ArvoContractSerializerError`, and the result and options types from `src/index.ts`.
+- [x] 9.2 Write the TSDoc for the public surface per `project.md` — rules, not provenance. State on `tryDeserialize`/`deserialize` that the inbound conversion rests on zod's experimental `z.fromJSONSchema`, so a consumer meets that at the signature rather than in a changelog. Cite `docs/` paths only, never `openspec/`.
+- [x] 9.3 Add a section to `ts/sandbox/src/playground.ts`: a contract serialized and read back, a contract carrying a `z.date()` showing the loss report, and a form this implementation cannot read failing with its construct named.
 
 ## 10. Close out
 
-- [ ] 10.1 Run `pnpm test --coverage`, `pnpm lint`, and `tsc --noEmit`; hold `src/serializers/` at the 100% line and function coverage the rest of the package holds.
-- [ ] 10.2 Re-run the measurements this change was designed from against the installed zod, confirming the five refused keywords, the three silent drops, and the two-crossing decay are all still what the proposal says. Any divergence means zod moved and the proposal's numbers need correcting rather than the tests being adjusted to match.
+- [x] 10.1 Run `pnpm test --coverage`, `pnpm lint`, and `tsc --noEmit`; hold `src/serializers/` at the 100% line and function coverage the rest of the package holds.
+- [x] 10.2 Re-run the measurements this change was designed from against the installed zod, confirming the five refused keywords, the three silent drops, and the two-crossing decay are all still what the proposal says. Any divergence means zod moved and the proposal's numbers need correcting rather than the tests being adjusted to match.

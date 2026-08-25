@@ -4,7 +4,7 @@ import { fromNeverthrow } from '../../result.js';
 import type { Result } from '../../types.js';
 import type { ErrorIssue } from '../../utils/error-issue.js';
 import { readCanonicalForm } from './deserialize.js';
-import { ArvoContractSerializerError } from './errors.js';
+import { ArvoContractSerializerError, asError } from './errors.js';
 import { buildCanonicalForm } from './serialize.js';
 import type {
   ArvoContractSerializerOptions,
@@ -34,17 +34,25 @@ const sealed = <T extends object>(
  *
  * A crossing can cost something. JSON Schema cannot express every constraint
  * zod can, and where it cannot the constraint is omitted rather than
- * approximated. Every omission is reported alongside the result, so a form
- * that enforces less than the contract did never comes back silently.
+ * approximated. Every omission is reported alongside the result, in both
+ * directions, so a contract that enforces less than it declares never comes
+ * back silently. One crossing out and back keeps everything the form can
+ * express; repeated crossings are not guaranteed to.
  *
- * @example Serialize a contract
+ * @example Out and back
  * const serializer = new ArvoContractSerializer();
  * const { schema, warningString } = serializer.serialize(contract);
  * if (warningString) console.warn(warningString);
  *
- * @example Report what a crossing cost
+ * const { contract: back } = serializer.deserialize(schema);
+ *
+ * @example Act on what a crossing cost
  * const { warnings } = serializer.serialize(contract);
  * for (const loss of warnings) console.warn(loss.path, loss.message);
+ *
+ * @example A form that cannot be read fails naming why
+ * const result = serializer.tryDeserialize(json);
+ * if (!result.ok) for (const issue of result.error.issues) console.error(issue);
  */
 export class ArvoContractSerializer {
   private readonly options: ArvoContractSerializerOptions;
@@ -82,7 +90,7 @@ export class ArvoContractSerializer {
           new ArvoContractSerializerError(
             'ArvoContract could not be serialized.',
             {
-              cause: error instanceof Error ? error : new Error(String(error)),
+              cause: asError(error),
             },
           ),
         ),
@@ -127,7 +135,7 @@ export class ArvoContractSerializer {
       return fromNeverthrow(
         err(
           new ArvoContractSerializerError('ArvoContract could not be read.', {
-            cause: error instanceof Error ? error : new Error(String(error)),
+            cause: asError(error),
           }),
         ),
       );
@@ -144,24 +152,19 @@ export class ArvoContractSerializer {
       );
     }
 
-    try {
-      return fromNeverthrow(
-        ok(
-          sealed(
-            { contract: new ArvoContract(read.value.param) },
-            read.value.losses,
-          ),
+    // Not guarded. The contract's own rules have already passed, so the
+    // constructor cannot reject what they accepted -- `arvo-contract` has a
+    // test asserting that invariant directly. Catching here would convert a
+    // broken invariant into a well-formed "could not be read", which claims a
+    // kind of failure that did not occur.
+    return fromNeverthrow(
+      ok(
+        sealed(
+          { contract: new ArvoContract(read.value.param) },
+          read.value.losses,
         ),
-      );
-    } catch (error) {
-      return fromNeverthrow(
-        err(
-          new ArvoContractSerializerError('ArvoContract could not be read.', {
-            cause: error instanceof Error ? error : new Error(String(error)),
-          }),
-        ),
-      );
-    }
+      ),
+    );
   }
 
   /**

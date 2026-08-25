@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { convertFromJSONSchema } from '../../../src/serializers/ArvoContractSerializer/deserialize.js';
 
 const S = 'https://json-schema.org/draft/2020-12/schema';
@@ -34,7 +35,12 @@ describe('a construct the conversion refuses', () => {
     ],
     [
       'if/then/else',
-      of({ a: { type: 'string' } }, { if: {}, then: { required: ['b'] } }),
+      // Built from a string rather than a literal: `then` is a JSON Schema
+      // keyword, and an object literal defining one reads as a thenable.
+      of(
+        { a: { type: 'string' } },
+        JSON.parse('{"if":{},"then":{"required":["b"]}}'),
+      ),
     ],
   ];
 
@@ -160,5 +166,60 @@ describe('a fully expressible schema', () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.losses).toEqual([]);
+  });
+});
+
+describe('an annotation keyword states no check', () => {
+  // `format` is an annotation, so no implementation may enforce one — the
+  // same bytes would otherwise mean different things in different languages.
+  // The conversion used here does enforce it, so it is withheld from the
+  // conversion rather than the form being rewritten.
+
+  it('does not enforce a format the form documents', () => {
+    const result = read(of({ u: { type: 'string', format: 'uri' } }));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(z.safeParse(result.schema, { u: 'nope' }).success).toBe(true);
+    }
+  });
+
+  it('reports it as documentation rather than a drop', () => {
+    const result = read(of({ u: { type: 'string', format: 'uri' } }));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.losses).toHaveLength(1);
+      expect(result.losses[0]?.message).toContain('documentation only');
+      expect(result.losses[0]?.path).toBe('accepts.properties.u');
+    }
+  });
+
+  it('reports nothing when a pattern carries the enforcement', () => {
+    // The pattern is an assertion, so every reader enforces it and no check
+    // was lost by withholding the annotation beside it.
+    const result = read(
+      of({
+        e: { type: 'string', format: 'email', pattern: '^[a-z]+@[a-z]+$' },
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.losses).toEqual([]);
+      expect(z.safeParse(result.schema, { e: 'nope' }).success).toBe(false);
+    }
+  });
+
+  it('reaches a format nested inside another schema', () => {
+    const result = read(
+      of({
+        a: {
+          type: 'object',
+          properties: { u: { type: 'string', format: 'uri' } },
+        },
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.losses[0]?.path).toBe('accepts.properties.a.properties.u');
+    }
   });
 });
