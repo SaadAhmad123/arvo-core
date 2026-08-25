@@ -181,10 +181,11 @@ export type NormalizedContract = {
 /**
  * `type` with every `_` replaced by `/`, prefixed with `#/`.
  *
- * Spelled out rather than delegated to a replace-all helper so that every
- * language implementation produces the same value from the same `type`.
+ * Every occurrence, not the first. ADR-005 states the rule that way because a
+ * language whose `replace` stops at the first match would derive a different
+ * `uri` from the same `type`; `replaceAll` carries no such ambiguity.
  */
-const deriveUri = (type: string): string => `#/${type.split('_').join('/')}`;
+const deriveUri = (type: string): string => `#/${type.replaceAll('_', '/')}`;
 
 /**
  * Applies defaults and derives `uri`, so that every check below sees the

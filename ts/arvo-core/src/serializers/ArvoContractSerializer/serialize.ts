@@ -77,8 +77,10 @@ const recordLoss = (
  * Where zod emits a `pattern` too, the assertion carries the enforcement and
  * there is nothing to report. These are the ones where it does not.
  */
-const isUnenforcedFormat = (schema: JSONObject): boolean =>
-  typeof schema.format === 'string' && schema.pattern === undefined;
+const unenforcedFormat = (schema: JSONObject): string | null =>
+  typeof schema.format === 'string' && schema.pattern === undefined
+    ? schema.format
+    : null;
 
 /** Walks a converted schema, recording every check demoted to documentation. */
 const recordDemotions = (
@@ -94,9 +96,8 @@ const recordDemotions = (
     return;
   }
   const schema = node as JSONObject;
-  if (isUnenforcedFormat(schema)) {
-    into.push(demotedCheck(position, `format: ${String(schema.format)}`));
-  }
+  const format = unenforcedFormat(schema);
+  if (format !== null) into.push(demotedCheck(position, `format: ${format}`));
   for (const [key, child] of Object.entries(schema)) {
     if (key === 'format' || key === 'pattern') continue;
     recordDemotions(child, `${position}.${key}`, into);

@@ -49,7 +49,7 @@ describe('a serialization result', () => {
     } catch {
       // As above.
     }
-    expect(result.warnings.length).toBe(before);
+    expect(result.warnings).toHaveLength(before);
   });
 
   it('does not take an assignment inside a loss', () => {

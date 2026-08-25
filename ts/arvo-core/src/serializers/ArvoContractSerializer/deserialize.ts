@@ -229,6 +229,82 @@ export type ReadForm = {
   losses: ErrorIssue[];
 };
 
+/** The shape a form has once its own rules have passed. */
+type CheckedForm = {
+  uri?: unknown;
+  type: string;
+  description?: unknown;
+  domain?: unknown;
+  metadata?: unknown;
+  versions: Record<
+    string,
+    { accepts: unknown; emits: Record<string, unknown> }
+  >;
+};
+
+/** One form issue, marked as the reason nothing after it was checked. */
+const blocking = (issue: ErrorIssue): ErrorIssue =>
+  new ErrorIssue({
+    path: issue.path,
+    message: issue.message,
+    received: issue.received,
+    blockingReason: FORM_IS_PREREQUISITE,
+  });
+
+/** Converts one version's schemas, collecting refusals and losses apart. */
+const readVersion = (
+  definition: { accepts: unknown; emits: Record<string, unknown> },
+  at: string,
+  issues: ErrorIssue[],
+  losses: ErrorIssue[],
+): { accepts: unknown; emits: Record<string, unknown> } | null => {
+  const emits: Record<string, unknown> = {};
+  for (const [type, schema] of Object.entries(definition.emits)) {
+    const converted = convertFromJSONSchema(
+      schema,
+      `${at}.emits[${JSON.stringify(type)}]`,
+    );
+    if (converted.ok) {
+      emits[type] = converted.value.schema;
+      losses.push(...converted.value.losses);
+    } else {
+      issues.push(converted.error);
+    }
+  }
+
+  const accepts = convertFromJSONSchema(definition.accepts, `${at}.accepts`);
+  if (!accepts.ok) {
+    issues.push(accepts.error);
+    return null;
+  }
+  losses.push(...accepts.value.losses);
+  return { accepts: accepts.value.schema, emits };
+};
+
+/**
+ * The form's fields as a contract declaration.
+ *
+ * An absent optional field is left absent rather than passed as its default,
+ * so the contract applies its own default and there is one place that decides
+ * what a default is.
+ */
+const asDeclaration = (
+  form: CheckedForm,
+  versions: Record<string, unknown>,
+): ArvoContractParam =>
+  ({
+    ...(typeof form.uri === 'string' ? { uri: form.uri } : {}),
+    type: form.type,
+    ...(typeof form.description === 'string'
+      ? { description: form.description }
+      : {}),
+    ...(typeof form.domain === 'string' ? { domain: form.domain } : {}),
+    ...(form.metadata !== undefined && form.metadata !== null
+      ? { metadata: form.metadata }
+      : {}),
+    versions,
+  }) as ArvoContractParam;
+
 /**
  * Reads a parsed canonical form into a contract declaration.
  *
@@ -245,75 +321,27 @@ export const readCanonicalForm = (
   const formIssues = validateCanonicalForm(parsed);
   if (formIssues.length > 0) {
     const [first, ...rest] = formIssues;
-    return {
-      ok: false,
-      error: [
-        new ErrorIssue({
-          path: (first as ErrorIssue).path,
-          message: (first as ErrorIssue).message,
-          received: (first as ErrorIssue).received,
-          blockingReason: FORM_IS_PREREQUISITE,
-        }),
-        ...rest,
-      ],
-    };
+    return { ok: false, error: [blocking(first as ErrorIssue), ...rest] };
   }
 
-  const form = parsed as {
-    uri?: unknown;
-    type: string;
-    description?: unknown;
-    domain?: unknown;
-    metadata?: unknown;
-    versions: Record<
-      string,
-      { accepts: unknown; emits: Record<string, unknown> }
-    >;
-  };
-
+  const form = parsed as CheckedForm;
   const issues: ErrorIssue[] = [];
   const losses: ErrorIssue[] = [];
-  const versions: Record<string, { accepts: unknown; emits: unknown }> = {};
+  const versions: Record<string, unknown> = {};
 
   for (const [version, definition] of Object.entries(form.versions)) {
-    const at = `versions[${JSON.stringify(version)}]`;
-    const accepts = convertFromJSONSchema(definition.accepts, `${at}.accepts`);
-    const emits: Record<string, unknown> = {};
-    for (const [type, schema] of Object.entries(definition.emits)) {
-      const converted = convertFromJSONSchema(
-        schema,
-        `${at}.emits[${JSON.stringify(type)}]`,
-      );
-      if (converted.ok) {
-        emits[type] = converted.value.schema;
-        losses.push(...converted.value.losses);
-      } else {
-        issues.push(converted.error);
-      }
-    }
-    if (accepts.ok) {
-      losses.push(...accepts.value.losses);
-      versions[version] = { accepts: accepts.value.schema, emits };
-    } else {
-      issues.push(accepts.error);
-    }
+    const read = readVersion(
+      definition,
+      `versions[${JSON.stringify(version)}]`,
+      issues,
+      losses,
+    );
+    if (read !== null) versions[version] = read;
   }
 
   if (issues.length > 0) return { ok: false, error: issues };
 
-  const param = {
-    ...(typeof form.uri === 'string' ? { uri: form.uri } : {}),
-    type: form.type,
-    ...(typeof form.description === 'string'
-      ? { description: form.description }
-      : {}),
-    ...(typeof form.domain === 'string' ? { domain: form.domain } : {}),
-    ...(form.metadata !== undefined && form.metadata !== null
-      ? { metadata: form.metadata }
-      : {}),
-    versions,
-  } as ArvoContractParam;
-
+  const param = asDeclaration(form, versions);
   const checked = validateArvoContract(param);
   if (checked.issues.length > 0) return { ok: false, error: checked.issues };
 
