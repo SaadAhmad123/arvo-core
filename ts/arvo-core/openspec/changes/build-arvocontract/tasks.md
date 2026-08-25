@@ -50,13 +50,13 @@
 
 ## 9. `type` as a prerequisite
 
-- [ ] 9.1 Give `ArvoContractValidationError` a way to say the run stopped early, surfaced on the summary line rather than as an entry in `issues`. Per design.md, `issues` stays a list of true per-path findings.
-- [ ] 9.2 In `src/ArvoContract/validator.ts`, validate `type` before `normalize` derives anything, and return immediately with only that issue when it fails.
-- [ ] 9.3 **Delete** the three non-string-`type` placeholders now that nothing downstream can see an unusable `type`: the `''` fallback in `uri` derivation, and the `''` substitutions at both `checkVersionInterface` call sites. Not gated — removed.
-- [ ] 9.4 Apply the same ordering in `validateVersionedArvoContract`, which has the same structure and the same placeholder.
-- [ ] 9.5 Add tests: an invalid `type` yields exactly one issue; the message states the remaining rules did not run; no issue names `uri` when derivation could not happen; a supplied-but-invalid `uri` alongside a valid `type` still reports.
-- [ ] 9.6 Add the test that guards the narrowing: a **valid** `type` with faults in several other positions still reports every one of them. This is the property being traded against, so it is pinned rather than assumed.
-- [ ] 9.7 Update the existing multi-failure tests that use a malformed `type` as their aggregation example — the spec scenario now uses `domain`, and a test still asserting four issues from a bad `type` would contradict it.
+- [x] 9.1 Give `ErrorIssue` an optional `blockingReason`, with `isBlocking` derived from it, so the issue that stopped the run is the thing that says so. `buildErrorIssueMessage` reads the list rather than taking a separate argument, and no error type carries a flag of its own.
+- [x] 9.2 In `src/ArvoContract/validator.ts`, validate `type` before `normalize` derives anything, and return immediately with only that issue when it fails.
+- [x] 9.3 **Delete** the three non-string-`type` placeholders now that nothing downstream can see an unusable `type`: the `''` fallback in `uri` derivation, and the `''` substitutions at both `checkVersionInterface` call sites. Not gated — removed.
+- [x] 9.4 Apply the same ordering in `validateVersionedArvoContract`, which has the same structure and the same placeholder.
+- [x] 9.5 Add tests: an invalid `type` yields exactly one issue; the message states the remaining rules did not run; no issue names `uri` when derivation could not happen; a supplied-but-invalid `uri` alongside a valid `type` still reports.
+- [x] 9.6 Add the test that guards the narrowing: a **valid** `type` with faults in several other positions still reports every one of them. This is the property being traded against, so it is pinned rather than assumed.
+- [x] 9.7 Update the existing multi-failure tests that use a malformed `type` as their aggregation example — the spec scenario now uses `domain`, and a test still asserting four issues from a bad `type` would contradict it.
 
 ## 10. Precise `dataschema`
 

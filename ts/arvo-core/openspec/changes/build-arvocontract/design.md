@@ -72,7 +72,11 @@ Validating `type` first means the three placeholders are **deleted rather than g
 
 *The gate stays at `type` alone.* Not `uri`, not `metadata`, not `versions` beyond the early returns already there. Every other field keeps collect-and-continue, which is the behaviour worth protecting. A future author wanting to add a second prerequisite is making a new decision, not extending this one by analogy.
 
-*Where the explanation lives:* on the error's summary line, not inside the `type` issue and not as a synthetic issue of its own. `issues` is a machine-readable list in which each entry names a path and the rule it broke; "the rest did not run" is a statement about the run, not about a path, so an entry for it would make the list lie. This gives `ArvoContractValidationError` a notion of having stopped early — a small addition to a class that otherwise just formats a list, and the reason it is worth it is that the alternative corrupts the part consumers parse.
+*Where the explanation lives:* on the `ErrorIssue` that stopped the run, as a `blockingReason` in the shared vocabulary every validating boundary already reports in. Supplying a reason is what marks an issue blocking, and `isBlocking` derives from it, so there is no second flag to keep in step.
+
+Two alternatives were tried first and rejected for the same fault. A separate `stoppedEarly` on the error, and a synthetic entry in `issues`, both put "the run stopped" somewhere other than the problem that stopped it: the error and its list could then disagree, and a reader with three issues and a flag would still be guessing which one was fatal. Attaching it to the issue makes that unaskable — the cause and the consequence are one object — and lets `buildErrorIssueMessage` read the list rather than be told about it.
+
+The `issues`-must-not-lie objection that pointed at the summary line still holds and is what rules out a synthetic entry. Marking a real issue is not the same as inventing one: every entry still names a path and a rule it broke, and one of them additionally says nothing after it was checked.
 
 ### `uri` is a type parameter, so `dataschema` keeps its value
 

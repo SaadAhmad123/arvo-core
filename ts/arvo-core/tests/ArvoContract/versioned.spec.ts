@@ -150,9 +150,17 @@ describe('VersionedArvoContract', () => {
     });
 
     it('reports every problem at once', () => {
+      // Not `type` -- that blocks the run by design, so it would assert the
+      // opposite of the prerequisite rule.
       expect(
-        rejects({ type: 'Bad', uri: '', emits: { Bad_Key: emit } }).length,
+        rejects({ domain: 'Bad', uri: '', emits: { Bad_Key: emit } }).length,
       ).toBeGreaterThanOrEqual(3);
+    });
+
+    it('reports an invalid type alone, and says the list is partial', () => {
+      expect(
+        rejects({ type: 'Bad', uri: '', emits: { Bad_Key: emit } }),
+      ).toEqual(['type']);
     });
 
     it('throws ArvoContractValidationError', () => {

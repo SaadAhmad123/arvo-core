@@ -26,21 +26,19 @@ const push = (
   path: string,
   message: string,
   received?: unknown,
+  blockingReason?: string,
 ): void => {
-  issues.push(
-    received === undefined
-      ? new ErrorIssue({ path, message })
-      : new ErrorIssue({ path, message, received }),
-  );
+  issues.push(new ErrorIssue({ path, message, received, blockingReason }));
 };
 
 const checkIdentifier = (
   value: unknown,
   path: string,
   issues: ErrorIssue[],
+  blockingReason?: string,
 ): void => {
   if (typeof value !== 'string' || value.length === 0) {
-    push(issues, path, 'must be a non-empty string', value);
+    push(issues, path, 'must be a non-empty string', value, blockingReason);
     return;
   }
   if (!IDENTIFIER_GRAMMAR.test(value)) {
@@ -49,6 +47,7 @@ const checkIdentifier = (
       path,
       'must be lowercase alphanumeric segments joined by single underscores',
       value,
+      blockingReason,
     );
   }
 };
@@ -190,32 +189,60 @@ const deriveUri = (type: string): string => `#/${type.split('_').join('/')}`;
 /**
  * Applies defaults and derives `uri`, so that every check below sees the
  * values that will actually be stored rather than what the caller supplied.
+ *
+ * Only ever called with a `type` already known to be a valid identifier, so
+ * derivation cannot fail and needs no fallback.
  */
-const normalize = (param: ArvoContractParam): NormalizedContract => {
-  const type = param.type;
-  return {
-    type,
-    uri: param.uri ?? (typeof type === 'string' ? deriveUri(type) : ''),
-    description: param.description ?? null,
-    domain: param.domain ?? null,
-    metadata: param.metadata ?? {},
-    versions: param.versions ?? {},
-  };
-};
+const normalize = (param: ArvoContractParam): NormalizedContract => ({
+  type: param.type,
+  uri: param.uri ?? deriveUri(param.type),
+  description: param.description ?? null,
+  domain: param.domain ?? null,
+  metadata: param.metadata ?? {},
+  versions: param.versions ?? {},
+});
+
+/**
+ * Why validation stops when `type` is invalid.
+ *
+ * Stated once and shared by both entry points, so a caller sees the same
+ * explanation whichever one rejected their declaration.
+ */
+const TYPE_IS_LOAD_BEARING =
+  'the uri, the handler error type, and the rule against an emits key reusing the contract type are all derived from it';
+
+/**
+ * The outcome of validating a contract declaration.
+ *
+ * A normalized contract exists only when `type` was valid: `uri` is derived
+ * from it, so there is nothing to normalize until it holds.
+ */
+export type ArvoContractValidation =
+  | { blocked: true; issues: ErrorIssue[] }
+  | { blocked: false; value: NormalizedContract; issues: ErrorIssue[] };
 
 /**
  * Normalizes a contract declaration and collects everything wrong with it.
  *
- * Never throws and never stops at the first problem: the returned `issues`
+ * Never throws, and never stops at the first problem: the returned `issues`
  * holds every broken rule, so one attempt reports all of them.
+ *
+ * The exception is `type`, which is checked first and on its own. The `uri`,
+ * the handler error type, and the rule against an `emits` key reusing the
+ * contract type are all computed from it, so with `type` broken those rules
+ * would judge values the declaration never established. Reporting them would
+ * mean quoting values the caller never supplied.
  */
 export const validateArvoContract = (
   param: ArvoContractParam,
-): { value: NormalizedContract; issues: ErrorIssue[] } => {
+): ArvoContractValidation => {
+  const blocking: ErrorIssue[] = [];
+  checkIdentifier(param.type, 'type', blocking, TYPE_IS_LOAD_BEARING);
+  if (blocking.length > 0) return { blocked: true, issues: blocking };
+
   const issues: ErrorIssue[] = [];
   const value = normalize(param);
 
-  checkIdentifier(value.type, 'type', issues);
   checkUri(value.uri, 'uri', issues);
   checkDescription(value.description, 'description', issues);
   checkNullableIdentifier(value.domain, 'domain', issues);
@@ -223,13 +250,13 @@ export const validateArvoContract = (
 
   if (!isRecord(param.versions)) {
     push(issues, 'versions', 'must be an object', param.versions);
-    return { value, issues };
+    return { blocked: false, value, issues };
   }
 
   const keys = Object.keys(value.versions);
   if (keys.length === 0) {
     push(issues, 'versions', 'must declare at least one version');
-    return { value, issues };
+    return { blocked: false, value, issues };
   }
 
   for (const key of keys) {
@@ -244,7 +271,7 @@ export const validateArvoContract = (
 
     checkVersionInterface(
       {
-        type: typeof value.type === 'string' ? value.type : '',
+        type: value.type,
         accepts: definition.accepts,
         emits: definition.emits,
       },
@@ -253,7 +280,7 @@ export const validateArvoContract = (
     );
   }
 
-  return { value, issues };
+  return { blocked: false, value, issues };
 };
 
 /**
@@ -266,9 +293,12 @@ export const validateArvoContract = (
 export const validateVersionedArvoContract = (
   param: VersionedArvoContractParam,
 ): { issues: ErrorIssue[] } => {
+  const blocking: ErrorIssue[] = [];
+  checkIdentifier(param.type, 'type', blocking, TYPE_IS_LOAD_BEARING);
+  if (blocking.length > 0) return { issues: blocking };
+
   const issues: ErrorIssue[] = [];
 
-  checkIdentifier(param.type, 'type', issues);
   checkUri(param.uri, 'uri', issues);
   checkDescription(param.description, 'description', issues);
   checkNullableIdentifier(param.domain, 'domain', issues);
@@ -277,7 +307,7 @@ export const validateVersionedArvoContract = (
 
   checkVersionInterface(
     {
-      type: typeof param.type === 'string' ? param.type : '',
+      type: param.type,
       accepts: param.accepts,
       emits: param.emits,
     },

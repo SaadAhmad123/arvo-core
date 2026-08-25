@@ -71,10 +71,16 @@ describe('validateArvoContract', () => {
       expect(value.metadata).toEqual({});
     });
 
-    it('validates the derived uri, not the absent input', () => {
-      // A type that is itself invalid derives a uri; both are reported,
-      // rather than uri going unchecked because it was never supplied.
-      expect(paths({ type: 'Bad Type' })).toContain('uri');
+    it('derives a uri that always passes its own validation', () => {
+      // This used to be shown the other way round -- an invalid type derived
+      // a uri and both were reported. `type` is now checked first and stops
+      // the run, so a derived uri is only ever built from a valid type, and
+      // ADR-005's grammar guarantees the result is well formed. There is no
+      // observable failing case left; what is left to pin is the invariant
+      // that makes the gate safe.
+      for (const type of ['payment', 'com_order_create', 'a1_b2_c3']) {
+        expect(paths({ type })).not.toContain('uri');
+      }
     });
   });
 
@@ -320,13 +326,16 @@ describe('validateArvoContract', () => {
 
   describe('reports every failure, not the first', () => {
     it('reports four independent problems at once', () => {
+      // `domain` rather than `type` as the non-version fault: `type` blocks
+      // the run by design, so using it here would assert the opposite of
+      // what the prerequisite rule promises.
       const reported = issuesOf({
-        type: 'Bad_Type',
+        domain: 'Bad_Domain',
         versions: {
           '01.0.0': { accepts, emits: { Bad_Key: emit, 'also.bad': emit } },
         } as never,
       });
-      expect(reported).toContainEqual(expect.stringContaining('type:'));
+      expect(reported).toContainEqual(expect.stringContaining('domain:'));
       expect(reported).toContainEqual(
         expect.stringContaining('versions["01.0.0"]:'),
       );
@@ -352,6 +361,46 @@ describe('validateArvoContract', () => {
     it('shows the offending value alongside the rule', () => {
       const issue = validateArvoContract(valid({ type: 'Bad_Type' })).issues[0];
       expect(issue?.received).toBe('Bad_Type');
+    });
+  });
+
+  describe('an invalid type stops the run', () => {
+    const broken = { type: 'Bad_Type', domain: 'Bad', uri: 'NOT A URI' };
+
+    it('reports the type alone, whatever else is wrong', () => {
+      expect(paths(broken)).toEqual(['type']);
+    });
+
+    it('marks the issue as the one that blocked the rest', () => {
+      const [issue] = validateArvoContract(valid(broken)).issues;
+      expect(issue?.isBlocking).toBe(true);
+      expect(issue?.blockingReason).toContain('derived from it');
+    });
+
+    it('says so in the rendered issue', () => {
+      const [issue] = validateArvoContract(valid({ type: 'Bad_Type' })).issues;
+      expect(issue?.toString()).toContain('nothing after this was checked');
+    });
+
+    it('reports no uri when there was none to derive one from', () => {
+      // The old behaviour reported `uri: must be a non-empty string
+      // (received "")` here -- a value the caller never supplied.
+      expect(paths({ type: 42 as never })).toEqual(['type']);
+    });
+
+    it("still reports a supplied uri, which is the caller's to answer for", () => {
+      expect(paths({ uri: '' })).toContain('uri');
+    });
+
+    it('leaves no normalized contract to read', () => {
+      const result = validateArvoContract(valid({ type: 'Bad_Type' }));
+      expect(result.blocked).toBe(true);
+    });
+
+    it('does not block when the type is valid', () => {
+      const result = validateArvoContract(valid({ domain: 'Bad' }));
+      expect(result.blocked).toBe(false);
+      expect(result.issues[0]?.isBlocking).toBe(false);
     });
   });
 });
@@ -393,12 +442,12 @@ describe('validateVersionedArvoContract', () => {
 
   it('validates its own identity fields', () => {
     const issues = validateVersionedArvoContract(
-      validVersion({ type: 'Bad', uri: '', version: '1.0' as never }),
+      validVersion({ uri: '', version: '1.0' as never, domain: 'Bad' }),
     ).issues;
     const reported = issues.map((i) => i.path);
-    expect(reported).toContain('type');
     expect(reported).toContain('uri');
     expect(reported).toContain('version');
+    expect(reported).toContain('domain');
   });
 
   it('does not crash deriving the error type when type is not a string', () => {

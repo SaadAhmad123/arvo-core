@@ -96,7 +96,9 @@ export class ArvoContract<
   };
 
   constructor(param: ArvoContractParam<T, M>) {
-    const { value, issues } = validateArvoContract(param);
+    const result = validateArvoContract(param);
+    if (result.blocked) throw new ArvoContractValidationError(result.issues);
+    const { value, issues } = result;
     if (issues.length > 0) throw new ArvoContractValidationError(issues);
 
     this.type = value.type as T;

@@ -83,7 +83,7 @@ TSDoc is written for the **package consumer**, not the contributor. Someone who 
 - **Keep it short.** A hover tooltip is a small box. Every sentence that does not change what the caller writes or expects buries the one that does.
 - **Cite `docs/` paths, never `openspec/` paths.** ADRs and the vision document are durable, are the architecture, and change only by supersession, so a reader can follow them. OpenSpec paths move when a change is archived, so a shipped comment pointing at one rots by design.
 - **A citation supplements the rule, never replaces stating it.** Being pointed at an ADR is not a substitute for being told what the constraint is.
-- **Document a constraint where a caller meets it**, not on the type that models it. A rule enforced when an event is constructed belongs on that field, not on the type alias its value happens to use.
+- **Document a constraint where a caller meets it**, not on the type that models it. A rule enforced when an event is constructed belongs on that field, not on the type alias its value happens to use. A `Param` type is where a caller meets the input rules, so it holds them in full and the constructed object's own members stay to one line each — they answer *what can I read*, not *what may I pass*, and repeating one on the other is how the two drift.
 
 The reasoning is not lost by keeping it out of source — it is recorded in the ADRs and in `openspec/`. Duplicating it into shipped comments creates a second copy that drifts and can only be corrected by cutting a release.
 
@@ -122,6 +122,8 @@ Two fields this does not reach, because `null` is not a value they can hold: an 
 ### Validation
 
 Runtime validation is not optional, and compile-time types do not substitute for it. ADR-000 is explicit that types cannot establish validity across independently deployed, external, or cross-language participants.
+
+Report every rule a value broke, not the first. Where one failure makes others unanswerable — a value the remaining rules derive from or compare against — check it first, stop, and mark that `ErrorIssue` with a `blockingReason` saying what depended on it. Never report a value the input never established: a rule judging a placeholder produces a finding the caller cannot act on, quoting something they never supplied. Stopping is the exception and stays confined to the field that is genuinely load-bearing; everything else collects and continues.
 
 ### Testing
 
