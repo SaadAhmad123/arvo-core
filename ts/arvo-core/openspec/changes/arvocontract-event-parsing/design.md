@@ -56,11 +56,11 @@ That keeps one definition of "matches". The alternative — the container reimpl
 
 Three things can go wrong before a payload is ever looked at, and each has a different fix. They are distinguished by the `path` on the reported issue, so a caller compares a field rather than reading a message:
 
-| What went wrong | `path` | What the caller does about it |
-|---|---|---|
-| asserted a type this version does not declare | `expectedType` | fix the assertion |
-| the event belongs to a different contract | `dataschema.uri` | find the right contract |
-| the version is not one this contract declares | `dataschema.version` | look at the version list |
+| What went wrong | Reported as | `path` | What the caller does about it |
+|---|---|---|---|
+| asserted a type this version does not declare | contract error | `expectedType` | fix the assertion |
+| the event belongs to a different contract | event error | `event.dataschema.uri` | find the right contract |
+| the version is not one this contract declares | event error | `event.dataschema.version` | look at the version list |
 
 The messages still differ, and still name the offending value — the version list, the expected `uri` — but nothing about telling them apart depends on parsing prose.
 
@@ -74,9 +74,11 @@ The messages still differ, and still name the offending value — the version li
 
 An `expectedType` naming something the version does not declare is a **contract** error and blocks. There is no schema to check the payload against, so every check below it would be checking against nothing — the same reason a malformed `type` blocks a declaration.
 
+The two `dataschema` failures are **event** errors, and they block too. Blocking and error kind are separate axes: blocking says nothing below could be evaluated, and the error kind says whose fault it is. A `dataschema` naming another contract, or a version this contract never declared, is a fact about the event that arrived — the caller asking about it did nothing wrong, so attributing it to the contract would send them looking in the wrong place.
+
 `event.type` not matching, and `event.data` failing its schema, are **event** errors and aggregate. A caller with both a wrong type and a bad payload should learn both in one call.
 
-*Why the two error types rather than one:* they answer different questions. A contract error says the caller used the contract wrongly; an event error says the event does not satisfy a contract that was used correctly. One `instanceof` check each tells a caller which of those they are looking at, and they belong in different places in a log.
+*Why the two error types rather than one:* they answer different questions. A contract error says the caller used the contract wrongly; an event error says the event does not satisfy the contract it named. That leaves exactly one contract error here — the assertion, the only part of the call the caller authored. One `instanceof` check each tells a caller which of the two they are looking at, and they belong in different places in a log.
 
 ### A parsed event is a new event
 

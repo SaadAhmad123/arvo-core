@@ -217,8 +217,8 @@ Three kinds, and they are not interchangeable.
 | Situation | Reported as | Position | Blocking |
 |---|---|---|---|
 | `expectedType` names something this version does not declare | contract error | `expectedType` | yes — no schema to check against |
-| `dataschema`'s `uri` is not this contract's | contract error | `dataschema.uri` | yes — wrong contract entirely |
-| `dataschema`'s version is not declared here | contract error | `dataschema.version` | yes — no interface to select |
+| `event.dataschema`'s `uri` part is not this contract's | event error | `event.dataschema` uri part | yes — wrong event for contract entirely |
+| `event.dataschema`'s `version` part is not declared here | event error | `event.dataschema` version part | yes — no interface to select |
 | `event.type` matches none of the version's shapes | event error | `type` | no |
 | `event.data` fails the matched schema | event error | `data.…` | no |
 

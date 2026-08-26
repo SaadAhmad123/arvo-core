@@ -39,7 +39,7 @@
 
 - [ ] 7.1 Add `tests/ArvoContract/parse-failures.spec.ts` asserting the position each of the three prerequisite failures reports, and that the three differ from one another. The spec pins these positions because a caller writes code against them, so a reworded message must not be able to break that.
 - [ ] 7.2 Assert each prerequisite failure states the remaining rules did not run.
-- [ ] 7.3 Assert a contract misuse and an event failure are distinguishable — one `instanceof` check each, with no string matching.
+- [ ] 7.3 Assert an undeclared assertion is reported as a contract failure while both `dataschema` failures are reported as event failures — one `instanceof` check each, with no string matching.
 
 ## 8. Public surface
 

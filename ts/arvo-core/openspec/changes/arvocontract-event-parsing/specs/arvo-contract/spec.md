@@ -183,11 +183,19 @@ The system SHALL provide, on both a contract and a version contract, a primitive
 
 ### Requirement: A Failure Of The Contract Is Distinguishable From A Failure Of The Event
 
-The system SHALL report a caller's misuse of the contract — an assertion the version does not declare, an event addressed to another contract, an event addressed to an undeclared version — distinguishably from an event that fails a contract used correctly.
+The system SHALL distinguish a caller's misuse of the contract from an event that does not satisfy the contract it named, so that a caller can tell the two apart without reading the failure's wording.
+
+An assertion naming a type the version does not declare SHALL be attributable to the contract, that being the only part of the request the caller supplied.
+
+An event addressed to another contract, an event addressed to an undeclared version, an unmatched type, and a failing payload SHALL each be attributable to the event.
 
 #### Scenario: Misuse of the contract
-- **WHEN** parsing fails because of an undeclared assertion, a foreign contract, or an undeclared version
+- **WHEN** parsing fails because the asserted type is not declared by the version
 - **THEN** the failure is attributable to the contract rather than to the event
+
+#### Scenario: A misaddressed event is a failure of the event
+- **WHEN** parsing fails because the event's `dataschema` names a different contract or an undeclared version
+- **THEN** the failure is attributable to the event rather than to the contract
 
 #### Scenario: A failure of the event
 - **WHEN** parsing fails because the event's type or payload does not satisfy a version the contract does declare
