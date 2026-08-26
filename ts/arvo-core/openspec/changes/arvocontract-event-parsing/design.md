@@ -14,7 +14,7 @@ See `proposal.md` — Why. The constraints that shape the approach:
 - One implementation of what "this event matches this contract" means, reachable from both classes.
 - A caller who asserts a type gets a narrowed payload; a caller who asks gets facts — the version and the category — and a plain event.
 - A result that is self-describing: which version validated it, and which category matched.
-- The three prerequisite failures distinguishable from each other, not merged into "did not match".
+- The four prerequisite failures distinguishable from each other, not merged into "did not match".
 
 **Non-Goals**
 
@@ -52,23 +52,25 @@ That keeps one definition of "matches". The alternative — the container reimpl
 
 *What the spec should not say:* nothing about version ranges. A version key is a bare `MAJOR.MINOR.PATCH` triple, so a range-shaped string is simply not a declared key and the lookup misses as it would for any other undeclared version. A scenario ruling ranges out would imply the concept exists.
 
-### The three prerequisite failures are told apart by `path`, not by prose
+### Failures are told apart by `path`, not by prose
 
-Three things can go wrong before a payload is ever looked at, and each has a different fix. They are distinguished by the `path` on the reported issue, so a caller compares a field rather than reading a message:
+Each failure has a different fix, and they are distinguished by the `path` on the reported issue, so a caller compares a field rather than reading a message:
 
 | What went wrong | `path` | What the caller does about it |
 |---|---|---|
 | asserted a type this version does not declare | `expectedType` | fix the assertion |
 | the event belongs to a different contract | `event.dataschema.uri` | find the right contract |
 | the version is not one this contract declares | `event.dataschema.version` | look at the version list |
+| the type is none of the version's shapes | `event.type` | look at what the version declares |
+| the payload breaks a rule | `event.data.…` | fix the payload at that position |
 
 The messages still differ, and still name the offending value — the version list, the expected `uri` — but nothing about telling them apart depends on parsing prose.
 
-*Why not one "does not match this contract" failure:* the middle and bottom rows carry the same severity and completely different next actions. One means the caller is holding the wrong object; the other means they are holding the right object at an interface it does not have. A message covering both sends half its readers the wrong way.
+*Why not one "does not match this contract" failure:* the two `dataschema` rows carry the same severity and completely different next actions. One means the caller is holding the wrong object; the other means they are holding the right object at an interface it does not have. A message covering both sends half its readers the wrong way.
 
 `blockingReason` carries the "nothing after this ran" part, as it already does for a malformed `type` in a declaration.
 
-*What the spec must pin:* the position each of the three reports. It is observable behaviour a caller writes code against, so leaving it to implementation would make a reworded message a breaking change.
+*What the spec must pin:* the position each of these reports. It is observable behaviour a caller writes code against, so leaving it to implementation would make a reworded message a breaking change.
 
 ### One error for one operation
 
@@ -78,15 +80,32 @@ Parsing reports every failure as `ArvoContractParseError`, modelled on `ArvoCont
 
 So distinguishing lives entirely in `path`. One position, `expectedType`, names the request the caller made; the four others name the event they supplied. `blockingReason` still says whether the list is partial. Both classes throw and return the one type, so a `catch` has one shape to know.
 
-*Consequence:* a caller cannot separate their own misuse from a bad event with an `instanceof`. They compare a field instead — which is what the three prerequisite failures already required, so this makes one rule out of two rather than adding one.
+*Consequence:* a caller cannot separate their own misuse from a bad event with an `instanceof`. They compare a field instead — which is what telling the prerequisite failures apart already required, so this makes one rule out of two rather than adding one.
 
-### Assert stops, ask aggregates
+### Everything before the payload is a prerequisite
 
-An `expectedType` naming something the version does not declare blocks. There is no schema to check the payload against, so every check below it would be checking against nothing — the same reason a malformed `type` blocks a declaration.
+Four things establish what the payload is checked against, and each blocks when it fails, because the checks below it would be checking against nothing:
 
-The two `dataschema` failures block too, for the same reason: without a version there is no declaration to check anything against.
+| What failed | What it was establishing |
+|---|---|
+| `expectedType` names an undeclared type | which shape the caller claims |
+| `dataschema`'s `uri` is not this contract's | that this contract is the right one to ask |
+| `dataschema`'s version is not declared | which version's declaration applies |
+| `event.type` matches none of the shapes | which of that version's three shapes to use |
 
-`event.type` not matching, and `event.data` failing its schema, aggregate. A caller with both a wrong type and a bad payload should learn both in one call.
+The last row is the one worth arguing. It would be possible to try the payload against every shape the version declares and report what came back — but that produces a list of failures for schemas the event never claimed to satisfy, which reads as several problems where there is one: the type is wrong. There is also no useful answer in the case that matters, since a payload matching some *other* shape does not make the event valid. So an unmatched type blocks, and the caller fixes the type before learning anything about the payload.
+
+That leaves one non-blocking failure, and it aggregates within itself: a payload can break several rules at once and all of them are reported.
+
+*Consequence:* a caller cannot learn about a wrong type and a bad payload in the same call. Accepted — those are not two independent problems, and reporting the second requires guessing which shape was meant.
+
+### Payload issues come from zod, unaltered
+
+`safeParse`'s failure is translated into `ErrorIssue`s one for one: zod's `path` becomes the position, prefixed to sit under `event.data`, and zod's message is carried across as it stands.
+
+Nothing here re-implements a check zod already performs, and nothing paraphrases what it reported. A hand-rolled equivalent would be a second validator that drifts from the schema it claims to describe, and a rewritten message would lose the detail zod puts in it — which value, which constraint, which position in a nested object.
+
+*Consequence:* the exact wording of a payload failure is zod's to change, and a version bump can change it. That is the right trade: `path` is what a caller writes code against, and it is stable.
 
 ### A parsed event is a new event
 

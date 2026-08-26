@@ -94,11 +94,12 @@ A contract SHALL NOT accept such an assertion, the version it would be checked a
 
 ### Requirement: Prerequisite Failures Report Distinct Positions
 
-Three failures SHALL be reported before any payload is examined, and each SHALL identify a different position, so that they are distinguishable without reading the failure's wording:
+Four failures SHALL be reported before any payload is examined, and each SHALL identify a different position, so that they are distinguishable without reading the failure's wording:
 
 - an assertion naming a type the version does not declare
 - an event whose `dataschema` names a different contract
 - an event whose `dataschema` names a version the contract does not declare
+- an event whose `type` matches none of the version's declared shapes
 
 Each SHALL state that the remaining rules were not evaluated.
 
@@ -114,25 +115,44 @@ Each SHALL state that the remaining rules were not evaluated.
 - **WHEN** parsing fails because the event's `dataschema` names an undeclared version
 - **THEN** the reported position identifies the version within `dataschema`
 
-#### Scenario: The three are not interchangeable
-- **WHEN** each of the three failures occurs in turn
-- **THEN** each reports a position distinct from the other two
+#### Scenario: An unmatched type is attributed to the type
+- **WHEN** parsing fails because the event's `type` matches none of the version's declared shapes
+- **THEN** the reported position is the event's type
+
+#### Scenario: The four are not interchangeable
+- **WHEN** each of the four failures occurs in turn
+- **THEN** each reports a position distinct from the other three
 
 #### Scenario: Nothing further is evaluated
-- **WHEN** any of the three occurs
+- **WHEN** any of the four occurs
 - **THEN** the failure states that the remaining rules did not run
 
-### Requirement: Type And Payload Failures Are Reported Together
+### Requirement: An Unmatched Type Stops Before The Payload
 
-Where a prerequisite has not failed, the system SHALL evaluate both the event's type and its payload, and SHALL report every one that failed rather than stopping at the first.
+Where the event's `type` matches none of the version's declared shapes, the system SHALL NOT examine the payload, no shape having been selected to examine it against.
 
-#### Scenario: A wrong type and a bad payload in one attempt
-- **WHEN** an event carrying an undeclared type and a payload that would not satisfy any of the version's schemas is parsed
-- **THEN** the failure names both problems
+#### Scenario: A bad payload is not reported alongside an unmatched type
+- **WHEN** an event carrying an undeclared type and a payload no shape would accept is parsed
+- **THEN** the failure names the unmatched type
+- **AND** reports no failure of the payload
+
+### Requirement: Payload Failures Are Reported Together, As The Schema Reported Them
+
+Where a shape has been selected and the payload does not satisfy it, the system SHALL report every rule the payload broke rather than only the first.
+
+Each SHALL identify the position within the payload that broke, as the schema identified it, and SHALL carry the schema's own account of what was wrong rather than a restatement of it.
 
 #### Scenario: A payload failure names its position
 - **WHEN** an event whose type matches but whose payload violates that schema is parsed
 - **THEN** the failure identifies the offending position within the payload
+
+#### Scenario: A payload breaking several rules
+- **WHEN** an event's payload breaks more than one of the selected shape's rules
+- **THEN** every one of them is reported
+
+#### Scenario: A position nested within the payload
+- **WHEN** the rule that broke is on a value nested inside the payload
+- **THEN** the reported position names that nested value, not the payload as a whole
 
 ### Requirement: A Parsed Event Carries The Contract's Declared Defaults
 

@@ -15,15 +15,15 @@
 
 - [ ] 3.1 Create `src/ArvoContract/parse.ts` holding the checks both classes reach: which of the three shapes a type names, the payload check against the matched schema, and building the result. Both classes call this so an event a contract accepts is exactly an event one of its versions accepts.
 - [ ] 3.2 Report failures as `ErrorIssue`s in the shared vocabulary, carried by `ArvoContractParseError`, with the positions the spec pins — the assertion, the contract identifier within `dataschema`, the version within `dataschema`, the event's type, and a path into the payload.
-- [ ] 3.3 Mark the three prerequisite failures with a `blockingReason`, so a partial list says it is partial. Same mechanism the declaration validator uses for a malformed `type`.
-- [ ] 3.4 Check payloads with zod's standalone `safeParse`, since a version's `accepts` is a core schema with no parse method of its own.
+- [ ] 3.3 Mark all four prerequisite failures with a `blockingReason`, so a partial list says it is partial. Same mechanism the declaration validator uses for a malformed `type`.
+- [ ] 3.4 Check payloads with zod's standalone `safeParse`, since a version's `accepts` is a core schema with no parse method of its own. Translate its issues one for one — zod's `path` prefixed to sit under `event.data`, zod's message carried across as it stands. No check zod already performs is re-implemented and no message it produced is paraphrased.
 
 ## 4. VersionedArvoContract
 
 - [ ] 4.1 Add `tryParse` and `parse` with both overloads — ask, and assert. The throwing companion carries no logic beyond unwrapping.
 - [ ] 4.2 Build the returned event through `ArvoEvent`'s own constructor, so a parsed event cannot bypass a rule a constructed one obeys, and carry `id`, `subject`, `source`, `type` and `dataschema` across unchanged.
 - [ ] 4.3 Add `tests/ArvoContract/parse-version.spec.ts`: each of the three shapes matching, the handler error parsable when `emits` is empty, an event matching none, a correct assertion, an assertion the event contradicts, an assertion the version does not declare, and no assertion at all.
-- [ ] 4.4 Extend it with the aggregation cases: a wrong type and a bad payload reported together, and a payload failure naming its position within the payload.
+- [ ] 4.4 Extend it with the payload cases: several broken rules reported together, a position nested inside the payload named as such, and a payload no shape would accept reported as an unmatched type alone when the type does not match.
 
 ## 5. ArvoContract
 
@@ -38,7 +38,7 @@
 
 ## 7. Distinguishable failures
 
-- [ ] 7.1 Add `tests/ArvoContract/parse-failures.spec.ts` asserting the position each of the three prerequisite failures reports, and that the three differ from one another. The spec pins these positions because a caller writes code against them, so a reworded message must not be able to break that.
+- [ ] 7.1 Add `tests/ArvoContract/parse-failures.spec.ts` asserting the position each of the four prerequisite failures reports, and that the four differ from one another. The spec pins these positions because a caller writes code against them, so a reworded message must not be able to break that.
 - [ ] 7.2 Assert each prerequisite failure states the remaining rules did not run.
 - [ ] 7.3 Assert every failure arrives as `ArvoContractParseError`, from both classes and for every one of the five situations, and that a caller separates their own bad assertion from a bad event by comparing `path` rather than by matching a message.
 
@@ -47,7 +47,7 @@
 - [ ] 8.1 Export `ArvoContractParseError` and the result and category types from `src/index.ts`. The helper conditional types stay internal unless a consumer needs to name one.
 - [ ] 8.2 Write the TSDoc per `project.md` — rules, not provenance. State on `parse` that the event returned is a new event carrying the contract's defaults, so a caller comparing it to the one they supplied is not surprised. Say on the ask path that a typed payload requires asserting.
 - [ ] 8.3 Add type-level tests for what the probes in section 1 established, so the narrowing cannot regress silently.
-- [ ] 8.4 Add a section to `ts/sandbox/src/playground.ts`: asking and switching on the category, asserting for a known type, the discovery-then-assert flow with its narrowing step, and each of the three prerequisite failures printing its own position.
+- [ ] 8.4 Add a section to `ts/sandbox/src/playground.ts`: asking and switching on the category, asserting for a known type, the discovery-then-assert flow with its narrowing step, and each of the four prerequisite failures printing its own position.
 
 ## 9. Close out
 

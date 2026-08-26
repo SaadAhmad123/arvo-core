@@ -221,12 +221,14 @@ Five things can go wrong, and the `path` on the issue is what tells them apart.
 | `expectedType` names something this version does not declare | `expectedType` | yes — no schema to check against |
 | `event.dataschema`'s `uri` part is not this contract's | `event.dataschema` uri part | yes — wrong event for contract entirely |
 | `event.dataschema`'s `version` part is not declared here | `event.dataschema` version part | yes — no interface to select |
-| `event.type` matches none of the version's shapes | `type` | no |
-| `event.data` fails the matched schema | `data.…` | no |
+| `event.type` matches none of the version's shapes | `event.type` | yes — with no shape selected there is nothing to check the payload against |
+| `event.data` fails the selected schema | `event.data.…` | no |
 
 One position names the request the caller made; the other four name the event they supplied. That is the distinction a caller acts on, and it lives in a field rather than in an error class or a sentence. The middle two matter most: one means the caller is holding the wrong contract, the other that they hold the right contract at an interface it does not have — same severity, opposite next action.
 
-The first three stop the run because nothing below them can be evaluated — the same prerequisite shape `arvo-contract`'s declaration validator already uses for `type`. The last two aggregate, so one call reports both a wrong type and a bad payload rather than one at a time.
+The first four stop the run, each for the same reason: nothing below them can be evaluated. `event.type` is what selects the shape, so an unmatched type leaves no schema to check the payload against — checking a payload against every shape the version declares would produce a list of failures for schemas the event never claimed to satisfy. That is the prerequisite shape `arvo-contract`'s declaration validator already uses for `type`, and it recurs here for the same reason: a value the rules below depend on was not established.
+
+So exactly one row aggregates, and it aggregates within itself. A payload can break several rules at once, and all of them are reported — taken straight from `safeParse`'s result, `path` and message as zod produced them. Nothing here re-implements a check zod already performs, or paraphrases what it said.
 
 ## Impact
 
