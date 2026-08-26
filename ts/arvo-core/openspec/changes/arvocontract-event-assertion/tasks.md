@@ -42,8 +42,8 @@
 
 ## 6. The event is untouched
 
-- [ ] 6.1 Add `tests/ArvoContract/assert-identity.spec.ts`: the result's event is the same instance that went in, from both classes and on both overloads.
-- [ ] 6.2 Assert a field the selected schema defaults and the payload omitted is still absent afterwards, and that the event is unchanged by having been asserted.
+- [x] 6.1 Add `tests/ArvoContract/assert-identity.spec.ts`: the result's event is the same instance that went in, from both classes and on both overloads.
+- [x] 6.2 Assert a field the selected schema defaults and the payload omitted is still absent afterwards, and that the event is unchanged by having been asserted.
 
 ## 7. Distinguishable failures
 
