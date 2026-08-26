@@ -47,10 +47,10 @@
 
 ## 7. Distinguishable failures
 
-- [ ] 7.1 Add `tests/ArvoContract/assert-failures.spec.ts` asserting the literal `path` each of the five prerequisite failures reports — `expectedType`, `event.dataschema`, `event.dataschema.uri`, `event.dataschema.version`, `event.type` — and that the five differ from one another. Compare the strings, not a description of them: they are what a caller's code contains, so a rename must fail a test.
-- [ ] 7.2 Assert the order: an event breaking several of them at once reports only the first, and an undeclarable expectation on an event from another contract reports `expectedType` alone.
-- [ ] 7.3 Assert each prerequisite failure states the remaining rules did not run.
-- [ ] 7.4 Assert every failure arrives as `ArvoContractAssertionError`, from both classes and for every one of the six situations, and that a caller separates their own bad expectation from a bad event by comparing `path` rather than by matching a message.
+- [x] 7.1 Add `tests/ArvoContract/assert-failures.spec.ts` asserting the literal `path` each of the five prerequisite failures reports — `expectedType`, `event.dataschema`, `event.dataschema.uri`, `event.dataschema.version`, `event.type` — and that the five differ from one another. Compare the strings, not a description of them: they are what a caller's code contains, so a rename must fail a test.
+- [x] 7.2 Assert the order: an event breaking several of them at once reports only the first, and an undeclarable expectation on an event from another contract reports `expectedType` alone.
+- [x] 7.3 Assert each prerequisite failure states the remaining rules did not run.
+- [x] 7.4 Assert every failure arrives as `ArvoContractAssertionError`, from both classes and for every one of the six situations, and that a caller separates their own bad expectation from a bad event by comparing `path` rather than by matching a message.
 
 ## 8. Public surface
 
