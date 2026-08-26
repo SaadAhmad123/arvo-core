@@ -123,7 +123,7 @@ type PayloadFor<E extends string, T extends string, C> =
  *
  * The same event, narrower. Nothing was rebuilt to earn the parameters.
  */
-type NarrowedArvoEvent<V extends ArvoSemanticVersion, E extends string, D> = {
+type NarrowedAssertedArvoEvent<V extends ArvoSemanticVersion, E extends string, D> = {
   readonly version: V;
   readonly scope: ScopeOf<E, T, C>;
   readonly event: ArvoEvent<E, D>;
@@ -146,7 +146,7 @@ class VersionedArvoContract<T, V, C, …> {
     event: ArvoEvent,
     expectedType: E,
   ): Result<
-    NarrowedArvoEvent<V, E, PayloadFor<E, T, C>>,
+    NarrowedAssertedArvoEvent<V, E, PayloadFor<E, T, C>>,
     ArvoContractAssertionError
   >;
 
@@ -154,7 +154,7 @@ class VersionedArvoContract<T, V, C, …> {
   assert<E extends AssertableType>(
     event: ArvoEvent,
     expectedType: E,
-  ): NarrowedArvoEvent<V, E, PayloadFor<E, T, C>>;
+  ): NarrowedAssertedArvoEvent<V, E, PayloadFor<E, T, C>>;
 }
 ```
 
