@@ -3,7 +3,7 @@
 See `proposal.md` — Why. The constraints that shape the approach:
 
 - **The contract already holds everything needed.** `dataschema` is `{uri}/{version}`, the version map is keyed by exactly that version, the handler error type is a fixed function of `type`, and each version's schemas are already object schemas. Nothing new has to be stored; this is reading a declaration that is already complete.
-- **The parts to reuse exist.** `ErrorIssue` as the shared reporting vocabulary, `ArvoEvent`'s own constructor for rebuilding a parsed event, `ArvoContractValidationError` and `ArvoEventValidationError` for the two failure kinds, and the prerequisite-then-aggregate pattern the declaration validator already uses.
+- **The parts to reuse exist.** `ErrorIssue` as the shared reporting vocabulary, `ArvoEvent`'s own constructor for rebuilding a parsed event, `ArvoContractValidationError` as the shape a new parse error is modelled on, and the prerequisite-then-aggregate pattern the declaration validator already uses.
 - **ADR-005 defers handler behaviour, and this sits next to that line.** Reading a declaration is not handler protocol; selecting among versions by range is. The design has to hold that distinction rather than blur it.
 - **`accepts` and `emits` are core zod schemas.** They have no `safeParse` method of their own — parsing goes through zod's standalone form. A consumer hitting this is the reason it is worth stating.
 
@@ -56,11 +56,11 @@ That keeps one definition of "matches". The alternative — the container reimpl
 
 Three things can go wrong before a payload is ever looked at, and each has a different fix. They are distinguished by the `path` on the reported issue, so a caller compares a field rather than reading a message:
 
-| What went wrong | Reported as | `path` | What the caller does about it |
-|---|---|---|---|
-| asserted a type this version does not declare | contract error | `expectedType` | fix the assertion |
-| the event belongs to a different contract | event error | `event.dataschema.uri` | find the right contract |
-| the version is not one this contract declares | event error | `event.dataschema.version` | look at the version list |
+| What went wrong | `path` | What the caller does about it |
+|---|---|---|
+| asserted a type this version does not declare | `expectedType` | fix the assertion |
+| the event belongs to a different contract | `event.dataschema.uri` | find the right contract |
+| the version is not one this contract declares | `event.dataschema.version` | look at the version list |
 
 The messages still differ, and still name the offending value — the version list, the expected `uri` — but nothing about telling them apart depends on parsing prose.
 
@@ -70,15 +70,23 @@ The messages still differ, and still name the offending value — the version li
 
 *What the spec must pin:* the position each of the three reports. It is observable behaviour a caller writes code against, so leaving it to implementation would make a reworded message a breaking change.
 
+### One error for one operation
+
+Parsing reports every failure as `ArvoContractParseError`, modelled on `ArvoContractValidationError`: a `_tag` discriminant, a frozen `readonly issues`, and a message built by `buildErrorIssueMessage` so it names every rule that was evaluated and says when the list is partial.
+
+*Why not reuse the two existing errors:* they were the obvious reach, and they partition the wrong thing. `ArvoEventValidationError` belongs to constructing an event and `ArvoContractValidationError` to declaring a contract — neither is what a parse did. Worse, a union of the two makes the error *class* a second channel for what the issues already say, and it does not divide cleanly: a `dataschema` naming another contract is a fact about the event, discovered by a contract method, and either error would be defensible. A caller writing `catch` would have to know that one call can produce two types and then decide which mattered.
+
+So distinguishing lives entirely in `path`. One position, `expectedType`, names the request the caller made; the four others name the event they supplied. `blockingReason` still says whether the list is partial. Both classes throw and return the one type, so a `catch` has one shape to know.
+
+*Consequence:* a caller cannot separate their own misuse from a bad event with an `instanceof`. They compare a field instead — which is what the three prerequisite failures already required, so this makes one rule out of two rather than adding one.
+
 ### Assert stops, ask aggregates
 
-An `expectedType` naming something the version does not declare is a **contract** error and blocks. There is no schema to check the payload against, so every check below it would be checking against nothing — the same reason a malformed `type` blocks a declaration.
+An `expectedType` naming something the version does not declare blocks. There is no schema to check the payload against, so every check below it would be checking against nothing — the same reason a malformed `type` blocks a declaration.
 
-The two `dataschema` failures are **event** errors, and they block too. Blocking and error kind are separate axes: blocking says nothing below could be evaluated, and the error kind says whose fault it is. A `dataschema` naming another contract, or a version this contract never declared, is a fact about the event that arrived — the caller asking about it did nothing wrong, so attributing it to the contract would send them looking in the wrong place.
+The two `dataschema` failures block too, for the same reason: without a version there is no declaration to check anything against.
 
-`event.type` not matching, and `event.data` failing its schema, are **event** errors and aggregate. A caller with both a wrong type and a bad payload should learn both in one call.
-
-*Why the two error types rather than one:* they answer different questions. A contract error says the caller used the contract wrongly; an event error says the event does not satisfy the contract it named. That leaves exactly one contract error here — the assertion, the only part of the call the caller authored. One `instanceof` check each tells a caller which of the two they are looking at, and they belong in different places in a log.
+`event.type` not matching, and `event.data` failing its schema, aggregate. A caller with both a wrong type and a bad payload should learn both in one call.
 
 ### A parsed event is a new event
 

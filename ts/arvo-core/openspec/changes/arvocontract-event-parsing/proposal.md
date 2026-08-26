@@ -33,7 +33,7 @@ Note the third row. The container's `version` is the union of the versions it de
 
 **Asking** — no `expectedType`. "What is this?" The contract answers with the version and the category, and hands back a plain `ArvoEvent`. Deliberately not narrowed: without an assertion the contract does not know which of its shapes it matched until runtime, and an unparameterised `ArvoEvent` says so honestly rather than implying a payload type nobody has established.
 
-**Asserting** — "I believe this is `com_order_created`." Available on `VersionedArvoContract` only, because asserting a type requires knowing which version declares it. The contract confirms or contradicts, and the event comes back typed. Naming something the version does not declare is the caller misusing the contract rather than a bad event, so it fails as a contract error and stops: there is no schema to check the payload against.
+**Asserting** — "I believe this is `com_order_created`." Available on `VersionedArvoContract` only, because asserting a type requires knowing which version declares it. The contract confirms or contradicts, and the event comes back typed. Naming something the version does not declare is the caller misusing the contract rather than a bad event, so it fails at the position `expectedType` and stops: there is no schema to check the payload against.
 
 `ArvoContract` therefore takes no `expectedType` at all. It cannot: the version is what it is in the middle of working out.
 
@@ -105,7 +105,7 @@ class VersionedArvoContract<T, V, C, …> {
   /** Ask: which of my shapes is this? */
   tryParse(event: ArvoEvent): Result<
     ParsedArvoEvent<V>,
-    ArvoEventValidationError
+    ArvoContractParseError
   >;
 
   /** Assert: I believe it is this one. */
@@ -114,7 +114,7 @@ class VersionedArvoContract<T, V, C, …> {
     expectedType: E,
   ): Result<
     AssertedArvoEvent<V, E, PayloadFor<C, E>>,
-    ArvoEventValidationError | ArvoContractValidationError
+    ArvoContractParseError
   >;
 
   parse(event: ArvoEvent): ParsedArvoEvent<V>;
@@ -134,7 +134,7 @@ class ArvoContract<T, M, …> {
    */
   tryParse(event: ArvoEvent): Result<
     ParsedArvoEvent<keyof M & ArvoSemanticVersion>,
-    ArvoEventValidationError | ArvoContractValidationError
+    ArvoContractParseError
   >;
 
   parse(event: ArvoEvent): ParsedArvoEvent<keyof M & ArvoSemanticVersion>;
@@ -210,19 +210,21 @@ const { event: filled } = v1.parse(sparse);
 filled.data.currency; // 'GBP', from the schema's default
 ```
 
-## Failure, and what reports which
+## Failure, and how a caller tells them apart
 
-Three kinds, and they are not interchangeable.
+Parsing is one operation, so it has one error: `ArvoContractParseError`, shaped like `ArvoContractValidationError` — a `_tag`, a frozen list of `ErrorIssue`s, and a message built the same way, naming every rule that was evaluated and saying so when the list is partial. The existing two errors keep their existing jobs, declaring a contract and constructing an event; parsing stops borrowing them.
 
-| Situation | Reported as | Position | Blocking |
-|---|---|---|---|
-| `expectedType` names something this version does not declare | contract error | `expectedType` | yes — no schema to check against |
-| `event.dataschema`'s `uri` part is not this contract's | event error | `event.dataschema` uri part | yes — wrong event for contract entirely |
-| `event.dataschema`'s `version` part is not declared here | event error | `event.dataschema` version part | yes — no interface to select |
-| `event.type` matches none of the version's shapes | event error | `type` | no |
-| `event.data` fails the matched schema | event error | `data.…` | no |
+Five things can go wrong, and the `path` on the issue is what tells them apart.
 
-The position is what tells the first three apart, so a caller compares a field rather than reading a message. The middle two matter most: one means the caller is holding the wrong contract, the other that they hold the right contract at an interface it does not have — same severity, opposite next action.
+| Situation | Position | Blocking |
+|---|---|---|
+| `expectedType` names something this version does not declare | `expectedType` | yes — no schema to check against |
+| `event.dataschema`'s `uri` part is not this contract's | `event.dataschema` uri part | yes — wrong event for contract entirely |
+| `event.dataschema`'s `version` part is not declared here | `event.dataschema` version part | yes — no interface to select |
+| `event.type` matches none of the version's shapes | `type` | no |
+| `event.data` fails the matched schema | `data.…` | no |
+
+One position names the request the caller made; the other four name the event they supplied. That is the distinction a caller acts on, and it lives in a field rather than in an error class or a sentence. The middle two matter most: one means the caller is holding the wrong contract, the other that they hold the right contract at an interface it does not have — same severity, opposite next action.
 
 The first three stop the run because nothing below them can be evaluated — the same prerequisite shape `arvo-contract`'s declaration validator already uses for `type`. The last two aggregate, so one call reports both a wrong type and a bad payload rather than one at a time.
 
@@ -233,6 +235,7 @@ The first three stop the run because nothing below them can be evaluated — the
 - `src/ArvoContract/versioned/index.ts` — the validating pair
 - `src/ArvoContract/index.ts` — the resolving pair
 - `src/ArvoContract/parse.ts` (new) — the shared checking logic both call
+- `src/ArvoContract/errors.ts` — `ArvoContractParseError`, alongside the declaration error
 - `src/ArvoContract/types.ts` — the result and payload-mapping types
 - `src/index.ts` — new public exports
 - `tests/ArvoContract/parse.spec.ts` (new), plus additions to the two class specs

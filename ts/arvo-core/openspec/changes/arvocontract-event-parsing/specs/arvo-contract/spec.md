@@ -181,22 +181,24 @@ The system SHALL provide, on both a contract and a version contract, a primitive
 - **THEN** they agree on success or failure
 - **AND** on success both produce the same result
 
-### Requirement: A Failure Of The Contract Is Distinguishable From A Failure Of The Event
+### Requirement: Every Parse Failure Is Reported As One Kind Of Failure
 
-The system SHALL distinguish a caller's misuse of the contract from an event that does not satisfy the contract it named, so that a caller can tell the two apart without reading the failure's wording.
+The system SHALL report every parse failure, from either a contract or a version contract, as a single kind of failure carrying the positions that broke. It SHALL NOT vary the kind of failure by what went wrong.
 
-An assertion naming a type the version does not declare SHALL be attributable to the contract, that being the only part of the request the caller supplied.
+Within that failure, the position SHALL distinguish a caller's own request from the event they supplied: an assertion the version does not declare is reported at the assertion, and every other failure is reported at a position on the event.
 
-An event addressed to another contract, an event addressed to an undeclared version, an unmatched type, and a failing payload SHALL each be attributable to the event.
+#### Scenario: The same kind of failure for a request problem and an event problem
+- **WHEN** parsing fails because the asserted type is not declared, and again because the event's payload does not satisfy its schema
+- **THEN** both are reported as the same kind of failure
 
-#### Scenario: Misuse of the contract
+#### Scenario: A contract and a version contract fail alike
+- **WHEN** parsing fails on a contract and on a version contract
+- **THEN** both report the same kind of failure
+
+#### Scenario: The caller's own request is identifiable by position
 - **WHEN** parsing fails because the asserted type is not declared by the version
-- **THEN** the failure is attributable to the contract rather than to the event
+- **THEN** the reported position is the assertion
 
-#### Scenario: A misaddressed event is a failure of the event
-- **WHEN** parsing fails because the event's `dataschema` names a different contract or an undeclared version
-- **THEN** the failure is attributable to the event rather than to the contract
-
-#### Scenario: A failure of the event
-- **WHEN** parsing fails because the event's type or payload does not satisfy a version the contract does declare
-- **THEN** the failure is attributable to the event rather than to the contract
+#### Scenario: An event problem is identifiable by position
+- **WHEN** parsing fails because the event is addressed elsewhere, carries an undeclared type, or carries a payload its schema rejects
+- **THEN** the reported position is on the event, not on the assertion

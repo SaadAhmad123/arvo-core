@@ -4,16 +4,17 @@
 - [ ] 1.2 Probe the container's result: the version it reports is the union of its declared versions, and narrowing that to a literal permits an assert call on `versions[version]` while the un-narrowed union does not. The second half is the surprising one and the usage sketch depends on it.
 - [ ] 1.3 Probe that `expectedType` rejects a plain `string` variable. If a `string` is accepted the union has been widened somewhere and the assertion has stopped checking anything.
 
-## 2. Types
+## 2. Types and the error
 
-- [ ] 2.1 Add `ArvoContractEventCategory`, `ParsedArvoEvent`, `AssertedArvoEvent`, and the `CategoryOf` / `PayloadFor` helpers to `src/ArvoContract/types.ts`.
-- [ ] 2.2 Type the container's reported version as the union of its declared versions rather than any semantic version. It costs nothing — the container knows which key it matched — and it is what makes the discovery-then-assert flow type-check.
-- [ ] 2.3 Document on the ask-path result that its event is deliberately unparameterised: the contract knows the version and the category, not the payload type, until a caller asserts one.
+- [ ] 2.1 Add `ArvoContractParseError` to `src/ArvoContract/errors.ts`, shaped on `ArvoContractValidationError`: a `_tag`, a frozen `readonly issues`, and a message from `buildErrorIssueMessage`. One error for the whole operation — parsing does not borrow the declaration or event errors.
+- [ ] 2.2 Add `ArvoContractEventCategory`, `ParsedArvoEvent`, `AssertedArvoEvent`, and the `CategoryOf` / `PayloadFor` helpers to `src/ArvoContract/types.ts`.
+- [ ] 2.3 Type the container's reported version as the union of its declared versions rather than any semantic version. It costs nothing — the container knows which key it matched — and it is what makes the discovery-then-assert flow type-check.
+- [ ] 2.4 Document on the ask-path result that its event is deliberately unparameterised: the contract knows the version and the category, not the payload type, until a caller asserts one.
 
 ## 3. The shared checking logic
 
 - [ ] 3.1 Create `src/ArvoContract/parse.ts` holding the checks both classes reach: which of the three shapes a type names, the payload check against the matched schema, and building the result. Both classes call this so an event a contract accepts is exactly an event one of its versions accepts.
-- [ ] 3.2 Report failures as `ErrorIssue`s in the shared vocabulary, with the positions the spec pins — the assertion, the contract identifier within `dataschema`, the version within `dataschema`, the event's type, and a path into the payload.
+- [ ] 3.2 Report failures as `ErrorIssue`s in the shared vocabulary, carried by `ArvoContractParseError`, with the positions the spec pins — the assertion, the contract identifier within `dataschema`, the version within `dataschema`, the event's type, and a path into the payload.
 - [ ] 3.3 Mark the three prerequisite failures with a `blockingReason`, so a partial list says it is partial. Same mechanism the declaration validator uses for a malformed `type`.
 - [ ] 3.4 Check payloads with zod's standalone `safeParse`, since a version's `accepts` is a core schema with no parse method of its own.
 
@@ -39,11 +40,11 @@
 
 - [ ] 7.1 Add `tests/ArvoContract/parse-failures.spec.ts` asserting the position each of the three prerequisite failures reports, and that the three differ from one another. The spec pins these positions because a caller writes code against them, so a reworded message must not be able to break that.
 - [ ] 7.2 Assert each prerequisite failure states the remaining rules did not run.
-- [ ] 7.3 Assert an undeclared assertion is reported as a contract failure while both `dataschema` failures are reported as event failures — one `instanceof` check each, with no string matching.
+- [ ] 7.3 Assert every failure arrives as `ArvoContractParseError`, from both classes and for every one of the five situations, and that a caller separates their own bad assertion from a bad event by comparing `path` rather than by matching a message.
 
 ## 8. Public surface
 
-- [ ] 8.1 Export the result and category types from `src/index.ts`. The helper conditional types stay internal unless a consumer needs to name one.
+- [ ] 8.1 Export `ArvoContractParseError` and the result and category types from `src/index.ts`. The helper conditional types stay internal unless a consumer needs to name one.
 - [ ] 8.2 Write the TSDoc per `project.md` — rules, not provenance. State on `parse` that the event returned is a new event carrying the contract's defaults, so a caller comparing it to the one they supplied is not surprised. Say on the ask path that a typed payload requires asserting.
 - [ ] 8.3 Add type-level tests for what the probes in section 1 established, so the narrowing cannot regress silently.
 - [ ] 8.4 Add a section to `ts/sandbox/src/playground.ts`: asking and switching on the category, asserting for a known type, the discovery-then-assert flow with its narrowing step, and each of the three prerequisite failures printing its own position.
