@@ -213,8 +213,8 @@ asserted.event === incoming; // true
 ```ts
 // Discovery then typed access. The version must be narrowed to a literal
 // first: indexing `versions` with the union gives a union of version
-// contracts, which only accepts a type every one of them declares — and you
-// cannot name an emit before knowing which version declares it.
+// contracts, and the expected-type overload is not callable on a union at
+// all — you cannot name an emit before knowing which version declares it.
 const found = contract.assert(incoming);
 
 if (found.version === '1.1.0' && found.scope === 'emits') {

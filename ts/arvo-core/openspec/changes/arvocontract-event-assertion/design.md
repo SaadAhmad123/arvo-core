@@ -194,7 +194,9 @@ Not an omission. Naming a type requires knowing which version declares it, and f
 
 A caller who knows what they are waiting for does not need the container: they index `versions` and name it there. A caller who does not know asks the container, and names it afterwards if they want types.
 
-*Consequence, and it surprises people:* indexing `versions` with the returned `version` gives a **union** of version contracts, and a call against a union only accepts a type every member declares. So the discovery-then-narrow flow needs the version narrowed to a literal first — verified by probe, not assumed. That is correct rather than awkward: you cannot name an emit type before knowing which version declares it. The usage sketch shows the narrowing step explicitly so nobody meets it by surprise.
+*Consequence, and it surprises people:* indexing `versions` with the returned `version` gives a **union** of version contracts, and the expected-type overload is then not callable at all — not even for a type every member declares. Measured, not assumed: TypeScript will not call a generic signature across a union, because the members' signatures are not compatible with one another. So the discovery-then-narrow flow needs the version narrowed to a literal first, and narrowing is mandatory rather than merely limiting.
+
+The ask overload is not generic, so it *is* callable on the union, and its result's `version` comes back as the union of the members' versions. That is what makes the two-step flow work at all: ask the container, narrow on the answer, then name a type. The usage sketch shows the narrowing step explicitly so nobody meets it by surprise.
 
 ### Checking goes through zod's standalone form
 

@@ -1,8 +1,8 @@
 ## 1. Probes before types
 
-- [ ] 1.1 Probe the narrowing path's conditional types against the real generic shape, not a mock: the contract's `type`, an emit key, and the handler error type each narrow the reported scope to a single literal, the payload type follows the expected type, and an undeclared type is rejected at the call site. Recorded in design.md as already probed on a mock — repeat it against the actual classes, since a conditional that resolves on a hand-written shape can still collapse when the emit keys arrive through a generic.
-- [ ] 1.2 Probe the container's result: the version it reports is the union of its declared versions, and narrowing that to a literal permits an `assert` call on `versions[version]` with an expected type while the un-narrowed union does not. The second half is the surprising one and the usage sketch depends on it.
-- [ ] 1.3 Probe that `expectedType` rejects a plain `string` variable. If a `string` is accepted the union has been widened somewhere and the expectation has stopped checking anything.
+- [x] 1.1 Probe the narrowing path's conditional types against the real generic shape, not a mock: the contract's `type`, an emit key, and the handler error type each narrow the reported scope to a single literal, the payload type follows the expected type, and an undeclared type is rejected at the call site. Recorded in design.md as already probed on a mock — repeat it against the actual classes, since a conditional that resolves on a hand-written shape can still collapse when the emit keys arrive through a generic.
+- [x] 1.2 Probe the container's result: the version it reports is the union of its declared versions, and narrowing that to a literal permits an `assert` call on `versions[version]` with an expected type while the un-narrowed union does not. The second half is the surprising one and the usage sketch depends on it.
+- [x] 1.3 Probe that `expectedType` rejects a plain `string` variable. If a `string` is accepted the union has been widened somewhere and the expectation has stopped checking anything.
 
 ## 2. Types and the error
 
