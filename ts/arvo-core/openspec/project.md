@@ -109,6 +109,8 @@ Not every `tryX` needs a failure channel that swallows everything indiscriminate
 
 Which library supplies `Result`/`AsyncResult` is an implementation detail, decided and recorded per change under *Dependencies and reuse* — not fixed here. The aliases themselves live in `src/types.ts`, alongside the package's other shared value types.
 
+A `Result` is never written as an object literal. It is built with that library's own success and failure constructors and converted once, at the single conversion point in `src/result.ts` — today `ok()`/`err()` from `neverthrow`, through `fromNeverthrow`. `src/semver/index.ts` is the reference. This holds for internal, non-exported helpers exactly as it does for a public `tryX`: a hand-rolled `{ ok: true, value }` or `{ ok: false, error }` impersonates a `Result` without passing through the one place that builds them, which is the same two-mechanisms problem the paragraph above rejects, arriving at the construction level rather than the API-shape level. A literal found in `src/` is a defect to fix, never a precedent to follow.
+
 ### Optional inputs
 
 An optional input is `T | undefined` — written `field?: T`, never `field?: T | null` — even when the field it populates is stored as `T | null`. Omission is the only way a caller asks for the default. Normalization collapses the absent value to whatever that default is, and the stored field is free to be nullable.

@@ -1,7 +1,9 @@
+import { err, ok } from 'neverthrow';
 import * as z from 'zod';
 import type * as zc from 'zod/v4/core';
 import type { ArvoContractParam } from '../../ArvoContract/types.js';
 import { validateArvoContract } from '../../ArvoContract/validator.js';
+import { fromNeverthrow } from '../../result.js';
 import type { Result } from '../../types.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
 import { validateCanonicalForm } from './form.js';
@@ -178,13 +180,14 @@ export const convertFromJSONSchema = (
   try {
     native = z.fromJSONSchema(withheld as never);
   } catch (error) {
-    return {
-      ok: false,
-      error: new ErrorIssue({
-        path: position,
-        message: `cannot be read: ${refusalOf(error)}`,
-      }),
-    };
+    return fromNeverthrow(
+      err(
+        new ErrorIssue({
+          path: position,
+          message: `cannot be read: ${refusalOf(error)}`,
+        }),
+      ),
+    );
   }
 
   const losses: ErrorIssue[] = [...demotions];
@@ -207,7 +210,7 @@ export const convertFromJSONSchema = (
     // was lost. The schema itself is sound, so the contract still reads.
   }
 
-  return { ok: true, value: { schema: native, losses } };
+  return fromNeverthrow(ok({ schema: native, losses }));
 };
 
 /**
@@ -321,7 +324,7 @@ export const readCanonicalForm = (
   const formIssues = validateCanonicalForm(parsed);
   if (formIssues.length > 0) {
     const [first, ...rest] = formIssues;
-    return { ok: false, error: [blocking(first as ErrorIssue), ...rest] };
+    return fromNeverthrow(err([blocking(first as ErrorIssue), ...rest]));
   }
 
   const form = parsed as CheckedForm;
@@ -339,11 +342,11 @@ export const readCanonicalForm = (
     if (read !== null) versions[version] = read;
   }
 
-  if (issues.length > 0) return { ok: false, error: issues };
+  if (issues.length > 0) return fromNeverthrow(err(issues));
 
   const param = asDeclaration(form, versions);
   const checked = validateArvoContract(param);
-  if (checked.issues.length > 0) return { ok: false, error: checked.issues };
+  if (checked.issues.length > 0) return fromNeverthrow(err(checked.issues));
 
-  return { ok: true, value: { param, losses } };
+  return fromNeverthrow(ok({ param, losses }));
 };
