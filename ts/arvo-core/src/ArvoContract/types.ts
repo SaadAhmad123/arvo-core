@@ -145,3 +145,17 @@ export type PayloadFor<
     : E extends keyof C['emits']
       ? z.input<C['emits'][E & keyof C['emits']]>
       : never;
+
+/**
+ * Every type one version may legitimately carry: its contract's `type`, one
+ * of its `emits` keys, or its handler error type.
+ *
+ * Deliberately not widened with `string`. A union including `string` swallows
+ * every literal member and collapses to `string`, giving an expectation that
+ * type-checks against anything and narrows nothing — worse than none, because
+ * it looks like one.
+ */
+export type AssertableType<
+  T extends string,
+  C extends ArvoContractVersionParam,
+> = T | (keyof C['emits'] & string) | `handler_${T}_error`;

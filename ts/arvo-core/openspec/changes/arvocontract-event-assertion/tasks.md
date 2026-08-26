@@ -26,11 +26,11 @@
 
 ## 4. VersionedArvoContract
 
-- [ ] 4.1 Add `tryAssert` and `assert` with both overloads — with an expected type, and without. The throwing companion carries no logic beyond unwrapping.
-- [ ] 4.2 Check the event's `dataschema` here too: the identifier is this contract's and the version is this version. Routed through the container this cannot fail — the version was found in the map a moment earlier — so it is a direct call that exercises it, and a direct call the test must make.
-- [ ] 4.3 Return the event by reference, so `result.event === input` holds. Nothing is constructed, nothing is copied, and no field has to be carried across.
-- [ ] 4.4 Add `tests/ArvoContract/assert-version.spec.ts`: each of the three shapes matching, the handler error assertable when `emits` is empty, an event matching none, a correct expectation, an expectation the event contradicts, an expectation the version does not declare, and no expectation at all. The contradicted expectation reports at `event.type`; the undeclarable one at `expectedType`.
-- [ ] 4.5 Extend it with the payload cases: several broken rules reported together, a position nested inside the payload named as such, the offending value carried as `received`, an absent required value carrying none, and a payload no shape would accept reported as a type failure alone when the type does not match — including when the type is declared but is not the one expected.
+- [x] 4.1 Add `tryAssert` and `assert` with both overloads — with an expected type, and without. The throwing companion carries no logic beyond unwrapping.
+- [x] 4.2 Check the event's `dataschema` here too: the identifier is this contract's and the version is this version. Routed through the container this cannot fail — the version was found in the map a moment earlier — so it is a direct call that exercises it, and a direct call the test must make.
+- [x] 4.3 Return the event by reference, so `result.event === input` holds. Nothing is constructed, nothing is copied, and no field has to be carried across.
+- [x] 4.4 Add `tests/ArvoContract/assert-version.spec.ts`: each of the three shapes matching, the handler error assertable when `emits` is empty, an event matching none, a correct expectation, an expectation the event contradicts, an expectation the version does not declare, and no expectation at all. The contradicted expectation reports at `event.type`; the undeclarable one at `expectedType`.
+- [x] 4.5 Extend it with the payload cases: several broken rules reported together, a position nested inside the payload named as such, the offending value carried as `received`, an absent required value carrying none, and a payload no shape would accept reported as a type failure alone when the type does not match — including when the type is declared but is not the one expected.
 
 ## 5. ArvoContract
 

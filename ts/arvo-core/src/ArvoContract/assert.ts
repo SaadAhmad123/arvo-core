@@ -203,6 +203,73 @@ export const checkPayload = (
 };
 
 /**
+ * The expectation, checked before anything about the event is read.
+ *
+ * `null` when nothing was expected, or when what was expected is a shape this
+ * version declares.
+ */
+const checkExpectation = (
+  expectedType: string | undefined,
+  expectedScope: ArvoContractEventAssertionScope | null,
+  declared: readonly string[],
+): ErrorIssue | null =>
+  expectedType !== undefined && expectedScope === null
+    ? undeclaredExpectationIssue(expectedType, declared)
+    : null;
+
+/**
+ * The event's `dataschema`, read and compared against one version's identity.
+ *
+ * Three failures in one place because they are one question asked in
+ * sequence: is there an identifier and a version at all, is the identifier
+ * this contract's, is the version the one being asked about. Each answer is
+ * what makes the next question meaningful.
+ */
+const checkIdentity = (
+  dataschema: string,
+  uri: string,
+  version: string,
+): ErrorIssue | null => {
+  const parts = readDataschema(dataschema);
+  if (!parts.ok) return parts.error;
+  if (parts.value.uri !== uri) {
+    return foreignContractIssue(parts.value.uri, uri);
+  }
+  if (parts.value.version !== version) {
+    return unknownVersionIssue(parts.value.version, [version]);
+  }
+  return null;
+};
+
+/**
+ * Which shape the event belongs to, or why it belongs to none being checked.
+ *
+ * `wanted` is what the caller expects, or the event's own type when they
+ * expected nothing — so one lookup answers both paths. It fails when the
+ * version declares no such shape, and when the event carries a type other
+ * than the one expected.
+ */
+const resolveScope = (
+  eventType: string,
+  wanted: string,
+  scope: ArvoContractEventAssertionScope | null,
+  expectedType: string | undefined,
+  declared: readonly string[],
+): Result<ArvoContractEventAssertionScope, ErrorIssue> => {
+  if (scope === null || eventType !== wanted) {
+    return fromNeverthrow(
+      err(
+        typeDisagreementIssue(
+          eventType,
+          expectedType === undefined ? declared : [expectedType],
+        ),
+      ),
+    );
+  }
+  return fromNeverthrow(ok(scope));
+};
+
+/**
  * Checks an event against one version's declaration.
  *
  * The single definition of "this event matches this version", reached by both
@@ -252,56 +319,44 @@ export const checkAgainstVersion = (param: {
     handlerError,
     expectedType,
   } = param;
+
   const declared = declaredTypes(type, emits, handlerError.type);
+  /** What is being checked against: the expectation, else the event itself. */
+  const wanted = expectedType ?? event.type;
+  const wantedScope = scopeOfType(wanted, type, emits, handlerError.type);
 
-  const expectedScope =
-    expectedType === undefined
-      ? null
-      : scopeOfType(expectedType, type, emits, handlerError.type);
+  const blocking =
+    checkExpectation(expectedType, wantedScope, declared) ??
+    checkIdentity(event.dataschema, uri, version);
+  if (blocking !== null) return fromNeverthrow(err([blocking]));
 
-  if (expectedType !== undefined && expectedScope === null) {
-    return fromNeverthrow(
-      err([undeclaredExpectationIssue(expectedType, declared)]),
-    );
-  }
-
-  const parts = readDataschema(event.dataschema);
-  if (!parts.ok) return fromNeverthrow(err([parts.error]));
-
-  if (parts.value.uri !== uri) {
-    return fromNeverthrow(err([foreignContractIssue(parts.value.uri, uri)]));
-  }
-
-  if (parts.value.version !== version) {
-    return fromNeverthrow(
-      err([unknownVersionIssue(parts.value.version, [version])]),
-    );
-  }
-
-  const scope =
-    expectedType === undefined
-      ? scopeOfType(event.type, type, emits, handlerError.type)
-      : event.type === expectedType
-        ? expectedScope
-        : null;
-
-  if (scope === null) {
-    return fromNeverthrow(
-      err([
-        typeDisagreementIssue(
-          event.type,
-          expectedType === undefined ? declared : [expectedType],
-        ),
-      ]),
-    );
-  }
+  const scope = resolveScope(
+    event.type,
+    wanted,
+    wantedScope,
+    expectedType,
+    declared,
+  );
+  if (!scope.ok) return fromNeverthrow(err([scope.error]));
 
   const issues = checkPayload(
-    schemaForScope(scope, event.type, accepts, emits, handlerError),
+    schemaForScope(scope.value, event.type, accepts, emits, handlerError),
     event.data,
   );
-  return fromNeverthrow(issues.length > 0 ? err(issues) : ok(scope));
+  return fromNeverthrow(issues.length > 0 ? err(issues) : ok(scope.value));
 };
+
+/**
+ * Maps a successful outcome's value, leaving a failure untouched.
+ *
+ * The one shape both classes need on the way out: the check reports which
+ * scope matched, and the caller turns that into the result it publishes.
+ */
+export const mapOk = <A, B, E>(
+  outcome: Result<A, E>,
+  f: (value: A) => B,
+): Result<B, E> =>
+  fromNeverthrow(outcome.ok ? ok(f(outcome.value)) : err(outcome.error));
 
 /**
  * Builds an assertion's outcome in the shape every fallible operation in

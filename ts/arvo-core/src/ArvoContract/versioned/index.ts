@@ -1,11 +1,23 @@
+import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { ArvoSemanticVersion } from '../../semver/index.js';
-import type { JSONObject } from '../../types.js';
-import { ArvoContractValidationError } from '../errors.js';
+import type { JSONObject, Result } from '../../types.js';
+import { assertionResult, checkAgainstVersion, mapOk } from '../assert.js';
+import {
+  type ArvoContractAssertionError,
+  ArvoContractValidationError,
+} from '../errors.js';
 import {
   type HandlerErrorContract,
   handlerErrorContract,
 } from '../handler-error.js';
-import type { ArvoContractVersionParam } from '../types.js';
+import type {
+  ArvoContractVersionParam,
+  AssertableType,
+  AssertedArvoEvent,
+  NarrowedAssertedArvoEvent,
+  PayloadFor,
+  ScopeOf,
+} from '../types.js';
 import { validateVersionedArvoContract } from '../validator.js';
 import type { VersionedArvoContractParam } from './types.js';
 
@@ -52,6 +64,86 @@ export class VersionedArvoContract<
   /** `uri` and `version` joined — what an event of this version carries. */
   get dataschema(): `${string}/${V}` {
     return `${this.uri}/${this.version}`;
+  }
+
+  /**
+   * Checks whether an event is one this version declares, reporting the
+   * outcome rather than throwing.
+   *
+   * Called with an event alone, it answers which of the three shapes the
+   * event belongs to and hands the event back unparameterised — the payload
+   * type is a runtime fact until a caller says what they expect. Called with
+   * an `expectedType`, it confirms or contradicts that, and the event comes
+   * back with the payload type that shape declares.
+   *
+   * The event returned is the event supplied: the same instance, unchanged.
+   * Nothing is rebuilt and no schema default is applied, so a payload the
+   * sender left incomplete stays incomplete.
+   *
+   * The event's `dataschema` is checked here as well as by the contract this
+   * version came from. Neither relies on the other, so reaching for a version
+   * directly is guarded too — without that, an event from a sibling version
+   * would be accepted whenever its payload happened to fit.
+   *
+   * @example Asking
+   * const asserted = v.tryAssert(event);
+   * if (asserted.ok) asserted.value.scope;  // 'accepts' | 'emits' | 'handlerError'
+   *
+   * @example Expecting a type
+   * const asserted = v.tryAssert(event, 'com_order_created');
+   * if (asserted.ok) asserted.value.event.data.order_id;  // typed
+   */
+  tryAssert(
+    event: ArvoEvent,
+  ): Result<AssertedArvoEvent<V>, ArvoContractAssertionError>;
+  tryAssert<E extends AssertableType<T, C>>(
+    event: ArvoEvent,
+    expectedType: E,
+  ): Result<
+    NarrowedAssertedArvoEvent<V, E, ScopeOf<E, T, C>, PayloadFor<E, T, C>>,
+    ArvoContractAssertionError
+  >;
+  tryAssert(
+    event: ArvoEvent,
+    expectedType?: string,
+  ): Result<AssertedArvoEvent<V>, ArvoContractAssertionError> {
+    return assertionResult(
+      mapOk(
+        checkAgainstVersion({
+          event,
+          type: this.type,
+          uri: this.uri,
+          version: this.version,
+          accepts: this.accepts,
+          emits: this.emits,
+          handlerError: this.handlerError,
+          expectedType,
+        }),
+        (scope) => ({ version: this.version, scope, event }),
+      ),
+    );
+  }
+
+  /**
+   * {@link tryAssert}, throwing on failure and returning the value directly.
+   *
+   * Carries no logic of its own beyond the unwrap.
+   *
+   * @throws {ArvoContractAssertionError} If the event is not one this version
+   * declares, or the expected type is not one it declares.
+   */
+  assert(event: ArvoEvent): AssertedArvoEvent<V>;
+  assert<E extends AssertableType<T, C>>(
+    event: ArvoEvent,
+    expectedType: E,
+  ): NarrowedAssertedArvoEvent<V, E, ScopeOf<E, T, C>, PayloadFor<E, T, C>>;
+  assert(event: ArvoEvent, expectedType?: string): AssertedArvoEvent<V> {
+    const result =
+      expectedType === undefined
+        ? this.tryAssert(event)
+        : this.tryAssert(event, expectedType as AssertableType<T, C>);
+    if (result.ok) return result.value as AssertedArvoEvent<V>;
+    throw result.error;
   }
 
   constructor(param: VersionedArvoContractParam<T, V, C>) {

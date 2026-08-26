@@ -4,6 +4,7 @@ import { ArvoContractValidationError } from './errors.js';
 import type {
   ArvoContractParam,
   ArvoContractVersionMapParam,
+  ArvoContractVersionParam,
 } from './types.js';
 import { validateArvoContract } from './validator.js';
 import { VersionedArvoContract } from './versioned/index.js';
@@ -107,23 +108,25 @@ export class ArvoContract<
     this.domain = value.domain;
     this.metadata = Object.freeze({ ...value.metadata });
 
-    this.versions = Object.freeze(
-      Object.fromEntries(
-        Object.entries(value.versions).map(([version, definition]) => [
-          version,
-          new VersionedArvoContract({
-            type: this.type,
-            version: version as ArvoSemanticVersion,
-            uri: this.uri,
-            description: this.description,
-            domain: this.domain,
-            metadata: this.metadata,
-            accepts: definition.accepts,
-            emits: definition.emits,
-          }),
-        ]),
-      ),
-    ) as this['versions'];
+    const versions: Record<
+      string,
+      VersionedArvoContract<T, ArvoSemanticVersion, ArvoContractVersionParam>
+    > = {};
+
+    for (const [version, definition] of Object.entries(value.versions)) {
+      versions[version] = new VersionedArvoContract({
+        type: this.type,
+        version: version as ArvoSemanticVersion,
+        uri: this.uri,
+        description: this.description,
+        domain: this.domain,
+        metadata: this.metadata,
+        accepts: definition.accepts,
+        emits: definition.emits,
+      });
+    }
+
+    this.versions = Object.freeze(versions) as unknown as this['versions'];
 
     Object.freeze(this);
   }
