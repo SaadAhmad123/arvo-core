@@ -54,10 +54,10 @@
 
 ## 8. Public surface
 
-- [ ] 8.1 Export `ArvoContractAssertionError` and the result and scope types from `src/index.ts`. The helper conditional types stay internal unless a consumer needs to name one.
-- [ ] 8.2 Write the TSDoc per `project.md` — rules, not provenance. State on `assert` that the event returned is the event supplied and that schema defaults are not applied, so a caller expecting a filled payload is not surprised. Say on the ask path that a typed payload requires naming the type expected, and on the narrowing path where each of its two failures is reported.
-- [ ] 8.3 Add type-level tests for what the probes in section 1 established, so the narrowing cannot regress silently.
-- [ ] 8.4 Add a section to `ts/sandbox/src/playground.ts`: asking and switching on the scope, naming an expected type, the discovery-then-narrow flow with its narrowing step, and each of the five prerequisite failures printing its own position.
+- [x] 8.1 Export `ArvoContractAssertionError` and the result and scope types from `src/index.ts`. The helper conditional types stay internal unless a consumer needs to name one.
+- [x] 8.2 Write the TSDoc per `project.md` — rules, not provenance. State on `assert` that the event returned is the event supplied and that schema defaults are not applied, so a caller expecting a filled payload is not surprised. Say on the ask path that a typed payload requires naming the type expected, and on the narrowing path where each of its two failures is reported.
+- [x] 8.3 Add type-level tests for what the probes in section 1 established, so the narrowing cannot regress silently.
+- [x] 8.4 Add a section to `ts/sandbox/src/playground.ts`: asking and switching on the scope, naming an expected type, the discovery-then-narrow flow with its narrowing step, and each of the five prerequisite failures printing its own position.
 
 ## 9. Close out
 

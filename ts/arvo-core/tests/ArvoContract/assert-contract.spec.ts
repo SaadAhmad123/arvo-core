@@ -21,7 +21,9 @@ const contract = new ArvoContract({
 const explicitUri = new ArvoContract({
   type: 'com_user_register',
   uri: '#/services/identity/user/registration',
-  versions: { '1.0.0': { accepts: z.object({ email: z.string() }), emits: {} } },
+  versions: {
+    '1.0.0': { accepts: z.object({ email: z.string() }), emits: {} },
+  },
 });
 
 const event = (

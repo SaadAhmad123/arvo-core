@@ -1,10 +1,17 @@
-export { ArvoContractValidationError } from './ArvoContract/errors.js';
+export {
+  ArvoContractAssertionError,
+  ArvoContractValidationError,
+} from './ArvoContract/errors.js';
 export type { HandlerErrorContract } from './ArvoContract/handler-error.js';
 export { ArvoContract } from './ArvoContract/index.js';
 export type {
+  ArvoContractEventAssertionScope,
   ArvoContractParam,
   ArvoContractVersionMapParam,
   ArvoContractVersionParam,
+  AssertableType,
+  AssertedArvoEvent,
+  NarrowedAssertedArvoEvent,
 } from './ArvoContract/types.js';
 export { VersionedArvoContract } from './ArvoContract/versioned/index.js';
 export type { VersionedArvoContractParam } from './ArvoContract/versioned/types.js';

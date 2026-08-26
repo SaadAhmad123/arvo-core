@@ -38,9 +38,7 @@ describe('asserting an event against a version', () => {
   });
 
   it('matches a declared emit', () => {
-    const asserted = v1.assert(
-      event('com_order_created', { order_id: 'o-1' }),
-    );
+    const asserted = v1.assert(event('com_order_created', { order_id: 'o-1' }));
     expect(asserted.scope).toBe('emits');
   });
 
@@ -117,9 +115,9 @@ describe('expecting a particular type', () => {
     expect(v1.assert(event('com_order_create', { items: [] })).scope).toBe(
       'accepts',
     );
-    expect(
-      v1.assert(event('com_order_created', { order_id: 'o' })).scope,
-    ).toBe('emits');
+    expect(v1.assert(event('com_order_created', { order_id: 'o' })).scope).toBe(
+      'emits',
+    );
   });
 });
 
