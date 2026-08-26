@@ -61,7 +61,7 @@
 
 ## 9. Close out
 
-- [ ] 9.1 Run `pnpm test --coverage`, `pnpm lint`, and `tsc --noEmit`; hold `src/ArvoContract/` at the 100% line, branch and function coverage the package holds.
-- [ ] 9.2 Confirm nothing here reaches past an exact version lookup. No range, `latest` or `oldest` handling should have appeared; a version key is a bare triple, so an undeclared string simply misses. If any resolution logic crept in, it is a separate decision and belongs in its own change.
-- [ ] 9.3 Confirm nothing constructs an `ArvoEvent`. If it does, the operation has stopped being an assertion.
-- [ ] 9.4 Confirm neither deferral was settled: nothing decides where the check runs or what a handler does when it fails, and nothing decides a trust boundary. Providing a check is the whole of the scope.
+- [x] 9.1 Run `pnpm test --coverage`, `pnpm lint`, and `tsc --noEmit`; hold `src/ArvoContract/` at the 100% line, branch and function coverage the package holds.
+- [x] 9.2 Confirm nothing here reaches past an exact version lookup. No range, `latest` or `oldest` handling should have appeared; a version key is a bare triple, so an undeclared string simply misses. If any resolution logic crept in, it is a separate decision and belongs in its own change.
+- [x] 9.3 Confirm nothing constructs an `ArvoEvent`. If it does, the operation has stopped being an assertion.
+- [x] 9.4 Confirm neither deferral was settled: nothing decides where the check runs or what a handler does when it fails, and nothing decides a trust boundary. Providing a check is the whole of the scope.

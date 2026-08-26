@@ -172,6 +172,40 @@ describe('the payload', () => {
     expect(attempt.error.issues[0]?.received).toBeUndefined();
   });
 
+  it('reports no value when the position does not exist in the payload', () => {
+    // A contract's own check may report a path deeper than the payload goes.
+    // There is no value at that position, so none is reported.
+    const refined = new ArvoContract({
+      type: 'com_order_create',
+      versions: {
+        '1.0.0': {
+          accepts: z.object({ items: z.array(z.string()) }).check((ctx) =>
+            ctx.issues.push({
+              code: 'custom',
+              message: 'items must be priced',
+              path: ['items', 0, 'price'],
+              input: ctx.value,
+            }),
+          ),
+          emits: {},
+        },
+      },
+    });
+    const attempt = refined.versions['1.0.0'].tryAssert(
+      new ArvoEvent({
+        source: 'com.test.suite',
+        subject: 'order-1',
+        type: 'com_order_create',
+        dataschema: refined.versions['1.0.0'].dataschema,
+        data: { items: ['book'] },
+      }),
+    );
+    expect(attempt.ok).toBe(false);
+    if (attempt.ok) return;
+    expect(attempt.error.issues[0]?.path).toBe('event.data.items.0.price');
+    expect(attempt.error.issues[0]?.received).toBeUndefined();
+  });
+
   it('is not judged when the type does not match', () => {
     const attempt = v1.tryAssert(event('com_order_cancelled', { junk: true }));
     expect(attempt.ok).toBe(false);
