@@ -50,6 +50,8 @@ That keeps one definition of "matches". The alternative — the container reimpl
 
 *Consequence worth naming:* the container's failure modes are a superset of the version's, not a different set. Everything a version can report, the container can report by delegation, plus the two resolution failures that are its own.
 
+*What the spec should not say:* nothing about version ranges. A version key is a bare `MAJOR.MINOR.PATCH` triple, so a range-shaped string is simply not a declared key and the lookup misses as it would for any other undeclared version. A scenario ruling ranges out would imply the concept exists.
+
 ### The three prerequisite failures are told apart by `path`, not by prose
 
 Three things can go wrong before a payload is ever looked at, and each has a different fix. They are distinguished by the `path` on the reported issue, so a caller compares a field rather than reading a message:
@@ -65,6 +67,8 @@ The messages still differ, and still name the offending value — the version li
 *Why not one "does not match this contract" failure:* the middle and bottom rows carry the same severity and completely different next actions. One means the caller is holding the wrong object; the other means they are holding the right object at an interface it does not have. A message covering both sends half its readers the wrong way.
 
 `blockingReason` carries the "nothing after this ran" part, as it already does for a malformed `type` in a declaration.
+
+*What the spec must pin:* the position each of the three reports. It is observable behaviour a caller writes code against, so leaving it to implementation would make a reworded message a breaking change.
 
 ### Assert stops, ask aggregates
 
@@ -96,7 +100,11 @@ Asserting the contract's `type` implies `'accepts'`; an emit key implies `'emits
 
 **Decision: narrow it.** A conditional type mapping the asserted type to its category is a handful of lines, and the alternative hands back a value less precise than the input justifies — a caller who asserted an emit key still has to prove to the compiler that `category` is not `'handlerError'`.
 
-*Risk:* one more conditional type in a class that already carries several. It is verified by probe, not assumed, the same way literal version keys were.
+Probed before adoption, the same way literal version keys were: asserting the contract's `type`, an emit key, and the handler error type each narrow `category` to a single literal, and an undeclared type is rejected at the call site.
+
+*Risk:* one more conditional type in a class that already carries several.
+
+*What the spec should say about it:* nothing. How precisely a result is typed is not spec material — specs here describe observable behaviour rather than type shapes, the way `arvo-event`'s spec never mentions a TypeScript type. This belongs here and in a type-level test.
 
 ### The container takes no `expectedType`
 
@@ -127,11 +135,3 @@ Worth recording because a consumer will hit the same thing the moment they touch
 ## Migration Plan
 
 None. Additive methods on two existing classes; nothing published.
-
-## Open Questions
-
-None that would change the specs or the task breakdown.
-
-One thing the spec must pin rather than leave to implementation: that the three prerequisite failures report distinct positions, since that is observable behaviour a caller depends on.
-
-Two things the spec must **not** try to pin, recorded so nobody adds them later. Version ranges need no scenario — a version key is a bare triple, so a range-shaped string is simply not a declared key, and a scenario ruling out ranges would imply the concept exists. And how precisely a result is typed is not spec material: specs here describe observable behaviour rather than type shapes, the way `arvo-event`'s spec never mentions a TypeScript type. That belongs in this document and in a type-level test.
