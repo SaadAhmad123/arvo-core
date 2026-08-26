@@ -2,7 +2,7 @@ import {
   buildErrorIssueMessage,
   describeValue,
   type ErrorIssue,
-} from '../utils/error-issue.js';
+} from '../../utils/error-issue.js';
 
 /**
  * One of two unrelated things that can go wrong crossing the CloudEvent

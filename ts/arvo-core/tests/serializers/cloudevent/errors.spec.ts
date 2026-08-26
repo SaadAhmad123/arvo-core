@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CloudEventTransformationError } from '../../src/cloudevent/errors.js';
-import { ErrorIssue } from '../../src/utils/error-issue.js';
+import { CloudEventTransformationError } from '../../../src/serializers/cloudevent/errors.js';
+import { ErrorIssue } from '../../../src/utils/error-issue.js';
 
 describe('CloudEventTransformationError', () => {
   describe('kind: "strict"/"foreign"', () => {

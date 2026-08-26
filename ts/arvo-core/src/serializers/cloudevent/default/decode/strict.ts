@@ -1,4 +1,4 @@
-import { ErrorIssue } from '../../../utils/error-issue.js';
+import { ErrorIssue } from '../../../../utils/error-issue.js';
 import type { CloudEvent } from '../../types.js';
 import { DepthCodec } from '../codecs/depth.js';
 import { ExecutionUnitsCodec } from '../codecs/execution-units.js';

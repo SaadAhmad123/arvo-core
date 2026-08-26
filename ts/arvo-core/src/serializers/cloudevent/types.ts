@@ -1,5 +1,5 @@
 import { CloudEvent as CloudEventClass } from 'cloudevents';
-import type { FlatMap } from '../types.js';
+import type { FlatMap } from '../../types.js';
 
 export type { CloudEventV1 } from 'cloudevents';
 

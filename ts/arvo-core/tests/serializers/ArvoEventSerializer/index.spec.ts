@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { ArvoEventValidationError } from '../../../src/ArvoEvent/errors.js';
 import { ArvoEvent } from '../../../src/ArvoEvent/index.js';
 import type { ArvoEventParam } from '../../../src/ArvoEvent/types.js';
-import { CloudEventTransformationError } from '../../../src/cloudevent/errors.js';
-import { CloudEventConverter } from '../../../src/cloudevent/index.js';
-import type { ICloudEventConverter } from '../../../src/cloudevent/interface.js';
-import { CloudEvent } from '../../../src/cloudevent/types.js';
 import { ArvoEventSerializerError } from '../../../src/serializers/ArvoEventSerializer/errors.js';
 import { ArvoEventSerializer } from '../../../src/serializers/ArvoEventSerializer/index.js';
+import { CloudEventTransformationError } from '../../../src/serializers/cloudevent/errors.js';
+import { CloudEventConverter } from '../../../src/serializers/cloudevent/index.js';
+import type { ICloudEventConverter } from '../../../src/serializers/cloudevent/interface.js';
+import { CloudEvent } from '../../../src/serializers/cloudevent/types.js';
 
 const baseParam = (): ArvoEventParam<'test.event', { hello: string }> => ({
   subject: 'subj-1',

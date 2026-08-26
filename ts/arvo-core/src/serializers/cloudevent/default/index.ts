@@ -1,6 +1,6 @@
-import { ArvoEventValidationError } from '../../ArvoEvent/errors.js';
-import { ArvoEvent } from '../../ArvoEvent/index.js';
-import type { ArvoEventParam } from '../../ArvoEvent/types.js';
+import { ArvoEventValidationError } from '../../../ArvoEvent/errors.js';
+import { ArvoEvent } from '../../../ArvoEvent/index.js';
+import type { ArvoEventParam } from '../../../ArvoEvent/types.js';
 import { CloudEventTransformationError } from '../errors.js';
 import type { IArvoEventTransformer } from '../interface.js';
 import type { CloudEvent, ForeignCloudEventFallback } from '../types.js';

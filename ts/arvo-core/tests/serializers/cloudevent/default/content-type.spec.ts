@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseDataContentType } from '../../../src/cloudevent/default/content-type.js';
+import { parseDataContentType } from '../../../../src/serializers/cloudevent/default/content-type.js';
 
 describe('parseDataContentType', () => {
   it('parses a bare media type with no parameters', () => {

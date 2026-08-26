@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DepthCodec } from '../../../src/cloudevent/default/codecs/depth.js';
-import { ExecutionUnitsCodec } from '../../../src/cloudevent/default/codecs/execution-units.js';
+import { DepthCodec } from '../../../../src/serializers/cloudevent/default/codecs/depth.js';
+import { ExecutionUnitsCodec } from '../../../../src/serializers/cloudevent/default/codecs/execution-units.js';
 
 describe('DepthCodec', () => {
   const codec = new DepthCodec();
