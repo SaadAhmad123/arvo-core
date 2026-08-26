@@ -5,11 +5,8 @@ import { fromNeverthrow } from '../result.js';
 import type { Result } from '../types.js';
 import { ErrorIssue } from '../utils/error-issue.js';
 import { ArvoContractAssertionError } from './errors.js';
-import { HANDLER_ERROR_SCHEMA, handlerErrorType } from './handler-error.js';
-import type {
-  ArvoContractEventAssertionScope,
-  ArvoContractVersionParam,
-} from './types.js';
+import type { HandlerErrorContract } from './handler-error.js';
+import type { ArvoContractEventAssertionScope } from './types.js';
 
 /**
  * Why a prerequisite failure stops everything after it. Each names what it
@@ -43,10 +40,10 @@ export const readDataschema = (
   dataschema: string,
 ): Result<DataschemaParts, ErrorIssue> => {
   const at = dataschema.lastIndexOf('/');
-  const uri = dataschema.slice(0, at);
-  const version = dataschema.slice(at + 1);
+  const uri = at === -1 ? '' : dataschema.slice(0, at);
+  const version = at === -1 ? '' : dataschema.slice(at + 1);
 
-  if (at === -1 || uri === '' || version === '') {
+  if (uri === '' || version === '') {
     return fromNeverthrow(
       err(
         new ErrorIssue({
@@ -97,7 +94,8 @@ export const unknownVersionIssue = (
 const declaredTypes = (
   type: string,
   emits: Record<string, unknown>,
-): string[] => [type, ...Object.keys(emits), handlerErrorType(type)];
+  handlerErrorType: string,
+): string[] => [type, ...Object.keys(emits), handlerErrorType];
 
 /**
  * Which of a version's three shapes a type names, or `null` for none.
@@ -111,9 +109,10 @@ export const scopeOfType = (
   candidate: string,
   type: string,
   emits: Record<string, unknown>,
+  handlerErrorType: string,
 ): ArvoContractEventAssertionScope | null => {
   if (candidate === type) return 'accepts';
-  if (candidate === handlerErrorType(type)) return 'handlerError';
+  if (candidate === handlerErrorType) return 'handlerError';
   if (Object.hasOwn(emits, candidate)) return 'emits';
   return null;
 };
@@ -124,9 +123,10 @@ const schemaForScope = (
   eventType: string,
   accepts: z.core.$ZodType,
   emits: Record<string, z.core.$ZodType>,
+  handlerError: HandlerErrorContract,
 ): z.core.$ZodType => {
   if (scope === 'accepts') return accepts;
-  if (scope === 'handlerError') return HANDLER_ERROR_SCHEMA;
+  if (scope === 'handlerError') return handlerError.schema;
   return emits[eventType];
 };
 
@@ -205,31 +205,59 @@ export const checkPayload = (
 /**
  * Checks an event against one version's declaration.
  *
- * The single definition of "this event matches this version", reached by
- * both a contract and a version contract, so an event a contract accepts is
+ * The single definition of "this event matches this version", reached by both
+ * a contract and a version contract, so an event a contract accepts is
  * exactly an event one of its versions accepts.
  *
- * Everything before the payload is a prerequisite: an expected type the
- * version does not declare, then a type that is not the shape being checked.
- * The first to fail is reported alone, because a payload judged against a
- * shape the event did not claim reports rules the event never claimed to
- * satisfy. Only payload failures arrive together.
+ * Five checks run in one order, and the first to fail is reported alone,
+ * because each one establishes what the next is judged against:
+ *
+ * ```
+ * expectedType -> event.dataschema -> uri -> version -> event.type -> event.data
+ * ```
+ *
+ * `expectedType` leads because it is the only failure that says nothing about
+ * the event: the call itself could not be answered, and replying with a fact
+ * about the event would send the caller after something that was never the
+ * problem. Only payload failures arrive together.
+ *
+ * Nothing is derived here. The identity to compare against, the version, and
+ * the handler error all arrive as arguments — deriving any of them would put a
+ * second copy of a rule the caller already holds inside the check that uses
+ * it.
  */
-export const checkAgainstVersion = <
-  T extends string,
-  C extends ArvoContractVersionParam,
->(param: {
+export const checkAgainstVersion = (param: {
+  /** The event to check. Returned by the caller as it arrived. */
   event: ArvoEvent;
-  type: T;
-  accepts: C['accepts'];
-  emits: C['emits'];
+  /** The contract's `type`, whose payload is its `accepts`. */
+  type: string;
+  /** The contract's identifier, compared for equality and never parsed. */
+  uri: string;
+  /** The one version this check is against. */
+  version: string;
+  accepts: z.core.$ZodType;
+  emits: Record<string, z.core.$ZodType>;
+  /** Supplied, never derived: the caller already holds it. */
+  handlerError: HandlerErrorContract;
+  /** What the caller expects the event to be, if they said. */
   expectedType?: string;
 }): Result<ArvoContractEventAssertionScope, ErrorIssue[]> => {
-  const { event, type, accepts, emits, expectedType } = param;
-  const declared = declaredTypes(type, emits);
+  const {
+    event,
+    type,
+    uri,
+    version,
+    accepts,
+    emits,
+    handlerError,
+    expectedType,
+  } = param;
+  const declared = declaredTypes(type, emits, handlerError.type);
 
   const expectedScope =
-    expectedType === undefined ? null : scopeOfType(expectedType, type, emits);
+    expectedType === undefined
+      ? null
+      : scopeOfType(expectedType, type, emits, handlerError.type);
 
   if (expectedType !== undefined && expectedScope === null) {
     return fromNeverthrow(
@@ -237,9 +265,22 @@ export const checkAgainstVersion = <
     );
   }
 
+  const parts = readDataschema(event.dataschema);
+  if (!parts.ok) return fromNeverthrow(err([parts.error]));
+
+  if (parts.value.uri !== uri) {
+    return fromNeverthrow(err([foreignContractIssue(parts.value.uri, uri)]));
+  }
+
+  if (parts.value.version !== version) {
+    return fromNeverthrow(
+      err([unknownVersionIssue(parts.value.version, [version])]),
+    );
+  }
+
   const scope =
     expectedType === undefined
-      ? scopeOfType(event.type, type, emits)
+      ? scopeOfType(event.type, type, emits, handlerError.type)
       : event.type === expectedType
         ? expectedScope
         : null;
@@ -256,7 +297,7 @@ export const checkAgainstVersion = <
   }
 
   const issues = checkPayload(
-    schemaForScope(scope, event.type, accepts, emits),
+    schemaForScope(scope, event.type, accepts, emits, handlerError),
     event.data,
   );
   return fromNeverthrow(issues.length > 0 ? err(issues) : ok(scope));
