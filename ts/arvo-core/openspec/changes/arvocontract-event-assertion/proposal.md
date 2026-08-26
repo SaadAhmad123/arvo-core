@@ -48,7 +48,9 @@ Note the third row. The container's `version` is the union of the versions it de
 
 **Asking** — no `expectedType`. "What is this?" The contract answers with the version and the scope, and hands back the event unparameterised. Deliberately not narrowed: without an expected type the contract does not know which of its shapes matched until runtime, and an unparameterised `ArvoEvent` says so honestly rather than implying a payload type nobody has established.
 
-**Asserting a type** — "I believe this is `com_order_created`." Available on `VersionedArvoContract` only, because naming a type requires knowing which version declares it. The contract confirms or contradicts, and the event comes back typed. Naming something the version does not declare is the caller misusing the contract rather than a bad event, so it fails at the position `expectedType` and stops: there is no schema to check the payload against.
+**Asserting a type** — "I believe this is `com_order_created`." Available on `VersionedArvoContract` only, because naming a type requires knowing which version declares it. The contract confirms or contradicts, and the event comes back typed.
+
+Two different failures live here, and they report in different places. Naming something the version does not declare is the caller misusing the contract rather than a bad event, so it fails at `expectedType`. Naming something the version *does* declare, on an event that carries a different type, is a fact about the event — so it fails at `event.type`, exactly as an unmatched type does on the ask path. Both stop before the payload.
 
 `ArvoContract` therefore takes no `expectedType` at all. It cannot: the version is what it is in the middle of working out.
 
@@ -227,7 +229,7 @@ if (found.version === '1.1.0' && found.scope === 'emits') {
 ```ts
 // Reporting failure without exceptions.
 const attempt = contract.tryAssert(incoming);
-if (attempt.isErr()) {
+if (!attempt.ok) {
   for (const issue of attempt.error.issues) {
     logger.warn(`${issue.path}: ${issue.message}`);
   }
@@ -251,19 +253,37 @@ Six things can go wrong, and the `path` on the issue is what tells them apart. T
 | Situation | `path` | Blocking |
 |---|---|---|
 | `expectedType` names something this version does not declare | `expectedType` | yes — no schema to check against |
-| `event.dataschema` is not of the form `{uri}/{version}` | `event.dataschema.structure` | yes — there are no halves to attribute anything to |
+| `event.dataschema` is not of the form `{uri}/{version}` | `event.dataschema` | yes — there are no halves to attribute anything to |
 | the `uri` half is not this contract's | `event.dataschema.uri` | yes — wrong event for contract entirely |
-| the version half is not declared here | `event.dataschema.version` | yes — no interface to select |
-| `event.type` matches none of the version's shapes | `event.type` | yes — with no shape selected there is nothing to check the payload against |
+| the version half is not the one being asked | `event.dataschema.version` | yes — no interface to select |
+| `event.type` is not the shape being checked | `event.type` | yes — the payload belongs to a different schema than the one in hand |
 | `event.data` fails the selected schema | `event.data.…` | no |
 
-The halves are found by splitting at the **last** `/`: the version is the final segment, and everything before it is the `uri`. A `uri` contains slashes of its own, so splitting anywhere else attributes part of it to the version and both halves then fail for the wrong reason.
+The halves are found by splitting at the **last** `/`: the version is the final segment, and everything before it is the `uri`. A `uri` contains slashes of its own, so splitting anywhere else attributes part of it to the version and both halves then fail for the wrong reason. The structural failure fires in exactly two cases — no separator at all, or one of the halves empty. Everything else *has* two halves and is judged as two halves, whatever they look like: `#/a/b/latest` is a `uri` and a version that is not declared, reported at `event.dataschema.version`, because a version half is compared as a string and never checked for being a version first.
 
 One position names the request the caller made; the other five name the event they supplied. That is the distinction a caller acts on, and it lives in a field rather than in an error class or a sentence. The middle two matter most: one means the caller is holding the wrong contract, the other that they hold the right contract at an interface it does not have — same severity, opposite next action.
 
-The first five stop the run, each for the same reason: nothing below them can be evaluated. `event.type` is what selects the shape, so an unmatched type leaves no schema to check the payload against — checking a payload against every shape the version declares would produce a list of failures for schemas the event never claimed to satisfy. That is the prerequisite shape `arvo-contract`'s declaration validator already uses for `type`, and it recurs here for the same reason: a value the rules below depend on was not established.
+The fifth row covers two situations that are the same situation. Asking, the event's `type` matches none of the version's shapes, so nothing is selected. Naming an expected type, the event's `type` is not the one expected, so the wrong thing is selected. Either way the payload in hand belongs to a *different* shape than the one being checked against, and judging it anyway would report failures about a schema the event never claimed to satisfy.
 
-So exactly one row aggregates, and it aggregates within itself. A payload can break several rules at once, and all of them are reported — taken straight from `safeParse`'s result, `path` and message as zod produced them. Nothing here re-implements a check zod already performs, or paraphrases what it said.
+The first five stop the run, each for the same reason: nothing below them can be evaluated. That is the prerequisite shape `arvo-contract`'s declaration validator already uses for `type`, and it recurs here for the same reason — a value the rules below depend on was not established.
+
+They are checked in one order, and a blocking failure is reported on its own rather than alongside others:
+
+```
+expectedType → event.dataschema → uri → version → event.type → event.data
+```
+
+`expectedType` goes first because it is the only failure that says nothing about the event: the call itself was unanswerable, and answering it with a fact about the event would send the caller after the wrong thing. The rest follow what depends on what.
+
+So exactly one row aggregates, and it aggregates within itself. A payload can break several rules at once and all of them are reported, one issue per rule, taken straight from `safeParse`:
+
+| field | value |
+|---|---|
+| `path` | `event.data` followed by zod's own path — `event.data.items.2.price` |
+| `message` | zod's message for that issue, verbatim |
+| `received` | the value at that path in the payload |
+
+Nothing here re-implements a check zod already performs, or paraphrases what it said. `received` is read out of the payload because zod does not report it, and because the offending value is what that field means everywhere else in this package. When the broken rule is a missing field there is no value to read, so `received` is absent and the rendered issue simply omits it.
 
 ## Impact
 

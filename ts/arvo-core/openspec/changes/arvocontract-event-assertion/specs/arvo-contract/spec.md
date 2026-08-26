@@ -32,7 +32,9 @@ A version contract SHALL determine whether an event matches one of the three sha
 
 An event's `dataschema` SHALL be accepted only in the form `{uri}/{version}`. The version SHALL be its final segment and the identifier everything preceding that segment.
 
-A `dataschema` not of that form SHALL fail, and SHALL be reported at the position `event.dataschema.structure` rather than at either part.
+A `dataschema` SHALL be treated as not of that form only when it carries no separator, or when either part is empty. It SHALL then fail, reported at the position `event.dataschema` rather than at either part.
+
+A `dataschema` carrying two non-empty parts SHALL be judged as those two parts, whatever they contain. The version part SHALL be compared as it stands against the versions declared, and SHALL NOT be required to be a well-formed version before that comparison.
 
 #### Scenario: The version is the final segment
 - **WHEN** an event's `dataschema` is read
@@ -43,11 +45,21 @@ A `dataschema` not of that form SHALL fail, and SHALL be reported at the positio
 - **WHEN** an event's `dataschema` identifier itself contains separators
 - **THEN** the whole identifier is taken, not a leading part of it
 
-#### Scenario: A dataschema with no version to read
-- **WHEN** an event's `dataschema` is not of the form `{uri}/{version}`
+#### Scenario: A dataschema with no separator
+- **WHEN** an event's `dataschema` carries no separator
 - **THEN** the assertion fails
-- **AND** the reported position is `event.dataschema.structure`
+- **AND** the reported position is `event.dataschema`
 - **AND** no failure is reported against either the identifier or the version
+
+#### Scenario: A dataschema with an empty part
+- **WHEN** an event's `dataschema` has a separator but one of its two parts is empty
+- **THEN** the assertion fails
+- **AND** the reported position is `event.dataschema`
+
+#### Scenario: A version part that is not a well-formed version
+- **WHEN** an event's `dataschema` has two non-empty parts and the version part is not a well-formed version
+- **THEN** it is compared against the versions declared as it stands
+- **AND** the failure is reported at `event.dataschema.version`, the version not being one that is declared
 
 ### Requirement: Both A Contract And A Version Contract Check The Dataschema
 
@@ -130,6 +142,7 @@ A contract SHALL NOT accept such a statement, the version it would be checked ag
 - **WHEN** an event is asserted against a type this version declares but the event does not carry
 - **THEN** the assertion fails
 - **AND** the failure names both what was expected and what was found
+- **AND** the failure is reported at the event's type, the expectation itself being declarable
 
 #### Scenario: An expectation the version does not declare
 - **WHEN** an event is asserted against a type the version does not declare
@@ -148,12 +161,16 @@ Five failures SHALL be reported before any payload is examined, and each SHALL r
 | What failed | Reported position |
 |---|---|
 | an expected type the version does not declare | `expectedType` |
-| a `dataschema` not of the form `{uri}/{version}` | `event.dataschema.structure` |
+| a `dataschema` not of the form `{uri}/{version}` | `event.dataschema` |
 | a `dataschema` whose identifier is another contract's | `event.dataschema.uri` |
 | a `dataschema` whose version is not the one being asked | `event.dataschema.version` |
-| a `type` matching none of the version's declared shapes | `event.type` |
+| a `type` that is not the shape being checked | `event.type` |
 
 These positions are the reported values themselves, not descriptions of them. Callers compare them, so changing one is a breaking change.
+
+The last covers both ways a type can be wrong: matching none of the version's declared shapes, and not being the type the caller expected. Both SHALL be reported at `event.type`.
+
+These SHALL be evaluated in the order listed, and the first to fail SHALL be reported on its own.
 
 Each failure SHALL state that the remaining rules were not evaluated.
 
@@ -173,6 +190,20 @@ Each failure SHALL state that the remaining rules were not evaluated.
 - **WHEN** the assertion fails because the event's `type` matches none of the version's declared shapes
 - **THEN** the reported position is `event.type`
 
+#### Scenario: A contradicted expectation is attributed to the type
+- **WHEN** the assertion fails because the event's `type` is not the type expected, the version declaring both
+- **THEN** the reported position is `event.type`
+- **AND** not `expectedType`, which the version does declare
+
+#### Scenario: An unanswerable request is reported before anything about the event
+- **WHEN** an event addressed to another contract is asserted against a type the version does not declare
+- **THEN** the reported position is `expectedType`
+- **AND** no failure of the event is reported alongside it
+
+#### Scenario: One blocking failure at a time
+- **WHEN** an event fails more than one of these
+- **THEN** only the first in the order above is reported
+
 #### Scenario: The five are not interchangeable
 - **WHEN** each of the five failures occurs in turn
 - **THEN** each reports a position distinct from the other four
@@ -181,13 +212,18 @@ Each failure SHALL state that the remaining rules were not evaluated.
 - **WHEN** any of the five occurs
 - **THEN** the failure states that the remaining rules did not run
 
-### Requirement: An Unmatched Type Stops Before The Payload
+### Requirement: A Type That Is Not The Shape Being Checked Stops Before The Payload
 
-Where the event's `type` matches none of the version's declared shapes, the system SHALL NOT examine the payload, no shape having been selected to examine it against.
+Where the event's `type` is not the shape being checked — matching none of the version's declared shapes, or not being the type the caller expected — the system SHALL NOT examine the payload. The payload belongs to a different shape than the one in hand, so any rule applied to it would be a rule the event never claimed to satisfy.
 
 #### Scenario: A bad payload is not reported alongside an unmatched type
 - **WHEN** an event carrying an undeclared type and a payload no shape would accept is asserted
 - **THEN** the failure names the unmatched type
+- **AND** reports no failure of the payload
+
+#### Scenario: A payload is not judged against a shape the event did not claim
+- **WHEN** an event carrying one declared type is asserted against a different declared type
+- **THEN** the failure names the type disagreement
 - **AND** reports no failure of the payload
 
 ### Requirement: Payload Failures Are Reported Together, As The Schema Reported Them
@@ -195,6 +231,8 @@ Where the event's `type` matches none of the version's declared shapes, the syst
 Where a shape has been selected and the payload does not satisfy it, the system SHALL report every rule the payload broke rather than only the first.
 
 Each SHALL identify the position within the payload that broke, as the schema identified it, and SHALL carry the schema's own account of what was wrong rather than a restatement of it.
+
+Each SHALL also carry the value found at that position. Where the broken rule is a value's absence, there is no value to carry and none SHALL be reported.
 
 #### Scenario: A payload failure names its position
 - **WHEN** an event whose type matches but whose payload violates that schema is asserted
@@ -207,6 +245,14 @@ Each SHALL identify the position within the payload that broke, as the schema id
 #### Scenario: A position nested within the payload
 - **WHEN** the rule that broke is on a value nested inside the payload
 - **THEN** the reported position names that nested value beneath `event.data`, not the payload as a whole
+
+#### Scenario: The offending value is reported
+- **WHEN** a value in the payload breaks a rule of the selected shape
+- **THEN** the failure carries the value found at that position
+
+#### Scenario: An absent value has nothing to report
+- **WHEN** the rule that broke is that a required value is absent
+- **THEN** the failure reports no value found
 
 ### Requirement: An Assertion Returns The Event It Was Given
 

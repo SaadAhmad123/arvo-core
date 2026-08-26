@@ -87,7 +87,9 @@ Neither class trusts the other to have checked. `ArvoContract` confirms the `uri
 
 The only accepted form. The version is the final segment and the `uri` is everything before it, so the split is at the last `/` — a `uri` carries slashes of its own, and splitting anywhere else hands part of it to the version, after which both halves fail for reasons that are not the real one.
 
-Anything not of that form has no halves to attribute a failure to, so it reports at `event.dataschema.structure` and blocks before either half is judged. The prerequisite pattern, one level above the halves.
+Anything not of that form has no halves to attribute a failure to, so it reports at `event.dataschema` and blocks before either half is judged. The prerequisite pattern, one level above the halves.
+
+*Exactly when that fires:* no separator at all, or a half that is empty. Nothing else. A `dataschema` with two non-empty halves is judged as two halves whatever they contain — `#/a/b/latest` is an identifier and a version that is not declared, reported at `event.dataschema.version`. The version half is compared as a string against declared keys and is never checked for *being* a version first, which is what keeps `latest` a miss rather than a rejection, exactly as `proposal.md` — Out of Scope promises.
 
 *The `uri` is opaque.* It is read off the contract and compared for equality — never parsed, never rebuilt. ADR-005 derives a `uri` from `type` only where an authoring surface permits omission, and an explicit one wins and may bear no relation to `type`, so there is no internal shape to rely on: an assertion that read `#/` or counted segments would be asserting a convention the model does not guarantee. It would also duplicate a rule that lives in ADR-005 and drift from it silently.
 
@@ -100,10 +102,10 @@ Each failure has a different fix, and they are distinguished by the `path` on th
 | What went wrong | `path` | What the caller does about it |
 |---|---|---|
 | expected a type this version does not declare | `expectedType` | fix the expectation |
-| `dataschema` is not `{uri}/{version}` | `event.dataschema.structure` | fix the producer |
+| `dataschema` is not `{uri}/{version}` | `event.dataschema` | fix the producer |
 | the event belongs to a different contract | `event.dataschema.uri` | find the right contract |
 | the version is not the one being asked | `event.dataschema.version` | look at the version list |
-| the type is none of the version's shapes | `event.type` | look at what the version declares |
+| the type is not the shape being checked | `event.type` | look at what the version declares, or at what was expected |
 | the payload breaks a rule | `event.data.…` | fix the payload at that position |
 
 The messages still differ, and still name the offending value — the version list, the expected `uri` — but nothing about telling them apart depends on parsing prose.
@@ -124,9 +126,27 @@ Five things establish what the payload is checked against, and each blocks when 
 | `dataschema` is not `{uri}/{version}` | that there is an identifier and a version at all |
 | `dataschema`'s `uri` is not this contract's | that this contract is the right one to ask |
 | `dataschema`'s version is not the one asked | which version's declaration applies |
-| `event.type` matches none of the shapes | which of that version's three shapes to use |
+| `event.type` is not the shape being checked | that the payload in hand belongs to the shape being checked |
 
-The last row is the one worth arguing. It would be possible to try the payload against every shape the version declares and report what came back — but that produces a list of failures for schemas the event never claimed to satisfy, which reads as several problems where there is one: the type is wrong. There is also no useful answer in the case that matters, since a payload matching some *other* shape does not make the event valid. So an unmatched type blocks, and the caller fixes the type before learning anything about the payload.
+The last row is the one worth arguing, and it covers two situations that turn out to be one. On the ask path the event's `type` matches none of the version's shapes, so nothing is selected. On the narrowing path the event's `type` is not the one expected, so the wrong thing is selected. Either way the payload in hand belongs to a different shape than the one being checked against.
+
+It would be possible to check it anyway — against every shape on the ask path, or against the expected shape on the narrowing path — but both produce failures about a schema the event never claimed to satisfy, which reads as several problems where there is one: the type is wrong. There is no useful answer in either case, since a payload satisfying some *other* shape does not make the event what was asked about. So both block, and the caller fixes the type before learning anything about the payload.
+
+*Consequence:* a contradicted expectation reports at `event.type`, not at `expectedType`. `expectedType` means one thing only — the expectation is not declarable — which keeps the two apart: one is a bad question, the other a true answer the caller did not want.
+
+### One order, and a blocking failure reports alone
+
+The checks run in a fixed order, and the first to fail is reported by itself:
+
+```
+expectedType → event.dataschema → uri → version → event.type → event.data
+```
+
+Order matters because every one of the first five blocks, so which one a caller sees is observable. Pinning it is the same discipline the declaration validator already applies to a malformed `type`.
+
+`expectedType` leads because it is the only failure that says nothing about the event. The call itself could not be answered, and replying with a fact about the event — "this is from another contract" — sends the caller after something that was never the problem. `event.dataschema` precedes its halves because there are no halves until it holds; the halves precede `event.type` because the version's declaration is what a type is checked against; and `event.type` precedes the payload because the type selects the schema.
+
+*Consequence:* a caller with two problems fixes them one call at a time. Accepted, and it is what blocking already meant — a partial list that says it is partial beats a list mixing real findings with answers computed from a value that was never established.
 
 That leaves one non-blocking failure, and it aggregates within itself: a payload can break several rules at once and all of them are reported.
 
@@ -134,11 +154,21 @@ That leaves one non-blocking failure, and it aggregates within itself: a payload
 
 ### Payload issues come from zod, unaltered
 
-`safeParse`'s failure is translated into `ErrorIssue`s one for one: zod's `path` becomes the position, prefixed to sit under `event.data`, and zod's message is carried across as it stands.
+`safeParse`'s failure is translated into `ErrorIssue`s one for one:
 
-Nothing here re-implements a check zod already performs, and nothing paraphrases what it reported. A hand-rolled equivalent would be a second validator that drifts from the schema it claims to describe, and a rewritten message would lose the detail zod puts in it — which value, which constraint, which position in a nested object.
+| field | value |
+|---|---|
+| `path` | `event.data` followed by zod's own path |
+| `message` | zod's message for that issue, verbatim |
+| `received` | the value at that path in the payload |
 
-*Consequence:* the exact wording of a payload failure is zod's to change, and a version bump can change it. That is the right trade: `path` is what a caller writes code against, and it is stable.
+Nothing here re-implements a check zod already performs, and nothing paraphrases what it reported. A hand-rolled equivalent would be a second validator that drifts from the schema it claims to describe, and a rewritten message would lose the detail zod puts in it — which constraint, which bound, which position in a nested object.
+
+*Why `received` is read from the payload:* measured against zod 4.4.3, an issue carries `code`, `path`, `message` and the constraint's own fields, and no value — `input` is absent from the issues `safeParse` returns. So the value has to be fetched by walking the payload with zod's `path`. That is worth the walk because `received` means the offending value everywhere else in this package, and putting the zod issue there instead would make one field mean two things.
+
+*Consequence:* a missing field has no value to read, so `received` is absent and `toString` omits the clause — which is already how the renderer treats an unsupplied value.
+
+*Consequence:* the exact wording of a payload failure is zod's to change, and a version bump can change it. `project.md` asks a message to name what failed, the value involved, and the rule violated; zod's message and this `received` together cover that, but the wording is not ours to guarantee. That is the right trade: `path` is what a caller writes code against, and it is stable.
 
 ### `expectedType` is a literal union, never widened with `string`
 
