@@ -7,7 +7,7 @@
 ## 2. Types and the error
 
 - [ ] 2.1 Add `ArvoContractAssertionError` to `src/ArvoContract/errors.ts`, shaped on `ArvoContractValidationError`: a `_tag`, a frozen `readonly issues`, and a message from `buildErrorIssueMessage`. One error for the whole operation — asserting does not borrow the declaration or event errors. Its heading says the assertion failed, not that the contract is invalid; the most common failure is a wrong expectation against a valid contract.
-- [ ] 2.2 Add `ArvoContractEventScope`, `AssertedArvoEvent`, `NarrowedArvoEvent`, and the `ScopeOf` / `PayloadFor` helpers to `src/ArvoContract/types.ts`. `PayloadFor` resolves through `z.input`, not `z.infer` — the payload returned is the one that arrived, so a transform's output type would describe a value nobody produced.
+- [ ] 2.2 Add `ArvoContractEventAssertionScope`, `AssertedArvoEvent`, `NarrowedArvoEvent`, and the `ScopeOf` / `PayloadFor` helpers to `src/ArvoContract/types.ts`. `PayloadFor` resolves through `z.input`, not `z.infer` — the payload returned is the one that arrived, so a transform's output type would describe a value nobody produced.
 - [ ] 2.3 Type the container's reported version as the union of its declared versions rather than any semantic version. It costs nothing — the container knows which key it matched — and it is what makes the discovery-then-narrow flow type-check.
 - [ ] 2.4 Document on the ask-path result that its event is deliberately unparameterised: the contract knows the version and the scope, not the payload type, until a caller says what they expect.
 

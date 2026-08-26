@@ -76,7 +76,7 @@ Illustrative, not normative — the spec governs. Types are indicative; the real
 
 ```ts
 /** Which of a version's three declared shapes an event matched. */
-type ArvoContractEventScope = 'accepts' | 'emits' | 'handlerError';
+type ArvoContractEventAssertionScope = 'accepts' | 'emits' | 'handlerError';
 
 /**
  * What an assertion reports when no type was expected.
@@ -87,7 +87,7 @@ type ArvoContractEventScope = 'accepts' | 'emits' | 'handlerError';
  */
 type AssertedArvoEvent<V extends ArvoSemanticVersion> = {
   readonly version: V;
-  readonly scope: ArvoContractEventScope;
+  readonly scope: ArvoContractEventAssertionScope;
   readonly event: ArvoEvent;
 };
 
