@@ -16,7 +16,7 @@ See `proposal.md` — Why. The constraints that shape the approach:
 - Every path guarded, including a caller who reaches straight for a version contract.
 - A caller who names the type they expect gets a narrowed payload; a caller who asks gets facts — the version and the scope — and a plain event.
 - A result that is self-describing: which version validated it, and which scope matched.
-- The four prerequisite failures distinguishable from each other, not merged into "did not match".
+- The five prerequisite failures distinguishable from each other, not merged into "did not match".
 - The event unchanged. Whatever a caller learns, they learn about the thing they already had.
 
 **Non-Goals**
@@ -47,7 +47,7 @@ Its heading is its own. `ArvoContractValidationError` opens with "ArvoContract i
 
 *Why not reuse the two existing errors:* they were the obvious reach, and they partition the wrong thing. `ArvoEventValidationError` belongs to constructing an event and `ArvoContractValidationError` to declaring a contract — neither is what an assertion did. Worse, a union of the two makes the error *class* a second channel for what the issues already say, and it does not divide cleanly: a `dataschema` naming another contract is a fact about the event, discovered by a contract method, and either error would be defensible. A caller writing `catch` would have to know that one call can produce two types and then decide which mattered.
 
-So distinguishing lives entirely in `path`. One position, `expectedType`, names the request the caller made; the four others name the event they supplied. `blockingReason` still says whether the list is partial. Both classes throw and return the one type, so a `catch` has one shape to know.
+So distinguishing lives entirely in `path`. One position, `expectedType`, names the request the caller made; the other five name the event they supplied. `blockingReason` still says whether the list is partial. Both classes throw and return the one type, so a `catch` has one shape to know.
 
 *Consequence:* a caller cannot separate their own misuse from a bad event with an `instanceof`. They compare a field instead — which is what telling the prerequisite failures apart already required, so this makes one rule out of two rather than adding one.
 

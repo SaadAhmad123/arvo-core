@@ -256,7 +256,7 @@ Six things can go wrong, and the `path` on the issue is what tells them apart. T
 | `event.dataschema` is not of the form `{uri}/{version}` | `event.dataschema` | yes — there are no halves to attribute anything to |
 | the `uri` half is not this contract's | `event.dataschema.uri` | yes — wrong event for contract entirely |
 | the version half is not the one being asked | `event.dataschema.version` | yes — no interface to select |
-| `event.type` is not the shape being checked | `event.type` | yes — the payload belongs to a different schema than the one in hand |
+| `event.type` is not the shape being checked | `event.type` | yes — nothing is selected, or the wrong thing is |
 | `event.data` fails the selected schema | `event.data.…` | no |
 
 The halves are found by splitting at the **last** `/`: the version is the final segment, and everything before it is the `uri`. A `uri` contains slashes of its own, so splitting anywhere else attributes part of it to the version and both halves then fail for the wrong reason. The structural failure fires in exactly two cases — no separator at all, or one of the halves empty. Everything else *has* two halves and is judged as two halves, whatever they look like: `#/a/b/latest` is a `uri` and a version that is not declared, reported at `event.dataschema.version`, because a version half is compared as a string and never checked for being a version first.
@@ -295,7 +295,7 @@ Nothing here re-implements a check zod already performs, or paraphrases what it 
 - `src/ArvoContract/errors.ts` — `ArvoContractAssertionError`, alongside the declaration error
 - `src/ArvoContract/types.ts` — the result and payload-mapping types
 - `src/index.ts` — new public exports
-- `tests/ArvoContract/assert.spec.ts` (new), plus additions to the two class specs
+- `tests/ArvoContract/assert-version.spec.ts`, `assert-contract.spec.ts`, `assert-identity.spec.ts` and `assert-failures.spec.ts` (all new)
 
 **Dependencies**
 
