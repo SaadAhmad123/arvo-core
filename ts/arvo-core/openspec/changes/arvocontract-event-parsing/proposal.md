@@ -68,10 +68,31 @@ type ParsedArvoEvent<V extends ArvoSemanticVersion> = {
   readonly event: ArvoEvent;
 };
 
+/**
+ * Which category an asserted type belongs to.
+ *
+ * Asserting the contract's `type` can only mean `accepts`, the handler error
+ * type can only mean `handlerError`, and an emit key can only mean `emits`.
+ * The caller has already established which; returning the three-way union
+ * would hand back less than they supplied.
+ */
+type CategoryOf<E extends string, T extends string, C> =
+  E extends T ? 'accepts'
+  : E extends `handler_${T}_error` ? 'handlerError'
+  : E extends keyof C['emits'] ? 'emits'
+  : never;
+
+/** The payload that goes with an asserted type. */
+type PayloadFor<E extends string, T extends string, C> =
+  E extends T ? z.infer<C['accepts']>
+  : E extends `handler_${T}_error` ? HandlerErrorPayload
+  : E extends keyof C['emits'] ? z.infer<C['emits'][E]>
+  : never;
+
 /** What a parse reports when a type was asserted, on a single version. */
 type AssertedArvoEvent<V extends ArvoSemanticVersion, E extends string, D> = {
   readonly version: V;
-  readonly category: CategoryOf<E>;
+  readonly category: CategoryOf<E, T, C>;
   readonly event: ArvoEvent<E, D>;
 };
 ```
@@ -138,8 +159,14 @@ if (category === 'handlerError') {
 // Asserting, when the caller already knows what it is waiting for. Straight to
 // the version — no discovery step needed.
 const v1 = contract.versions['1.0.0'];
-const { event } = v1.parse(incoming, 'com_order_created');
+const { event, category } = v1.parse(incoming, 'com_order_created');
+
 event.data.order_id; // typed
+category;            // 'emits' — not the three-way union
+
+// Which is the point of narrowing it. Without it, a caller who already said
+// what they expected would still have to write a check that cannot fail:
+//   if (category === 'emits') { ... }
 ```
 
 ```ts
