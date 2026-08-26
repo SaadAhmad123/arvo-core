@@ -4,6 +4,7 @@ See `proposal.md` — Why. The constraints that shape the approach:
 
 - **The contract already holds everything needed.** `dataschema` is `{uri}/{version}`, the version map is keyed by exactly that version, the handler error type is a fixed function of `type`, and each version's schemas are already object schemas. Nothing new has to be stored; this is reading a declaration that is already complete.
 - **The parts to reuse exist.** `ErrorIssue` as the shared reporting vocabulary, `ArvoContractValidationError` as the shape a new assertion error is modelled on, and the prerequisite-then-aggregate pattern the declaration validator already uses.
+- **No ADR governs this check.** ADR-001 defers contract validation of data and its trust boundaries; ADR-005 defers handler behaviour. See `proposal.md` — Whose rules these are. Nothing below may quietly settle either deferral.
 - **ADR-005 defers handler behaviour, and this sits next to that line.** Reading a declaration is not handler protocol; selecting among versions by range is. The design has to hold that distinction rather than blur it.
 - **`accepts` and `emits` are core zod schemas.** They have no `safeParse` method of their own — checking goes through zod's standalone form. A consumer hitting this is the reason it is worth stating.
 
@@ -11,7 +12,8 @@ See `proposal.md` — Why. The constraints that shape the approach:
 
 **Goals**
 
-- One implementation of what "this event matches this contract" means, reachable from both classes.
+- One implementation of the type-and-payload check, reachable from both classes, so "does this event match" has a single answer.
+- Every path guarded, including a caller who reaches straight for a version contract.
 - A caller who names the type they expect gets a narrowed payload; a caller who asks gets facts — the version and the scope — and a plain event.
 - A result that is self-describing: which version validated it, and which scope matched.
 - The four prerequisite failures distinguishable from each other, not merged into "did not match".
@@ -41,6 +43,8 @@ That discarded value is the whole of the decision. It is the payload with schema
 
 Asserting reports every failure as `ArvoContractAssertionError`, modelled on `ArvoContractValidationError`: a `_tag` discriminant, a frozen `readonly issues`, and a message built by `buildErrorIssueMessage` so it names every rule that was evaluated and says when the list is partial.
 
+Its heading is its own. `ArvoContractValidationError` opens with "ArvoContract is not valid.", which would be false here for the most common misuse — a caller expecting a type the version does not declare holds a perfectly valid contract and made a wrong request.
+
 *Why not reuse the two existing errors:* they were the obvious reach, and they partition the wrong thing. `ArvoEventValidationError` belongs to constructing an event and `ArvoContractValidationError` to declaring a contract — neither is what an assertion did. Worse, a union of the two makes the error *class* a second channel for what the issues already say, and it does not divide cleanly: a `dataschema` naming another contract is a fact about the event, discovered by a contract method, and either error would be defensible. A caller writing `catch` would have to know that one call can produce two types and then decide which mattered.
 
 So distinguishing lives entirely in `path`. One position, `expectedType`, names the request the caller made; the four others name the event they supplied. `blockingReason` still says whether the list is partial. Both classes throw and return the one type, so a `catch` has one shape to know.
@@ -65,15 +69,29 @@ The third row is where the principle does real work. It would be simpler to type
 
 *Consequence accepted:* the ask path gives an unparameterised `ArvoEvent`, so a caller who wants a typed payload has to name the type they expect. That is the point rather than a shortcoming.
 
-### The container resolves, the version checks
+### Both levels check `dataschema`, each against what it knows
 
-`ArvoContract.tryAssert` does no checking of its own beyond finding the version. It splits `dataschema`, confirms the `uri` is its own and the version is declared, then calls that `VersionedArvoContract`'s `tryAssert` and returns what it returns.
+Neither class trusts the other to have checked. `ArvoContract` confirms the `uri` half is its own and the version half is one of the versions it declares; `VersionedArvoContract` confirms the `uri` half is its contract's and the version half is its own single version. Same question, different granularity, and each level asks it of the thing it alone can know.
 
-That keeps one definition of "matches". The alternative — the container reimplementing the checks across every version — is the same failure the declaration validator already avoids by having both classes share one version-level function: two rule sets that can disagree, where the disagreement is invisible until a contract accepts an event one of its own versions would reject.
+*Why not put it only on the container:* `contract.versions['1.0.0']` is a public value and callers reach for it directly — that is the whole point of the discovery-then-narrow flow. A version that trusted the caller's choice would accept an event stamped `…/1.1.0` whenever the payload happened to fit `1.0.0`, and return a result reporting `version: '1.0.0'` around an event claiming otherwise: two fields of one object disagreeing. ADR-001 makes `type` and `dataschema` jointly identifying, neither sufficient alone, so the level holding the declaration has to be the level that checks.
 
-*Consequence worth naming:* the container's failure modes are a superset of the version's, not a different set. Everything a version can report, the container can report by delegation, plus the two resolution failures that are its own.
+*Why not put it only on the version:* the container is the only thing that holds the version *set*, so it is the only thing that can say "this contract declares 1.0.0 and 1.1.0, not 2.0.0". Pushing that down would mean handing a version contract a list it has no business knowing.
+
+*Consequence:* routed through the container, the version's check cannot fail — the version half was found in the map a moment earlier. It fails only on a direct call, which is the path that would otherwise be unguarded. It is therefore not dead code, and the test for it has to call a version directly.
+
+*What stays shared:* the type-and-payload check, which is where drift would actually hurt. Both classes reach one function for it, the same way the declaration validator already has both classes share one version-level function — two rule sets for "does this payload match" could disagree, and the disagreement would be invisible until a contract accepted an event one of its own versions would reject. Two rule sets for "is this `dataschema` mine" cannot disagree, because they are answering about different scopes.
 
 *What the spec should not say:* nothing about version ranges. A version key is a bare `MAJOR.MINOR.PATCH` triple, so a range-shaped string is simply not a declared key and the lookup misses as it would for any other undeclared version. A scenario ruling ranges out would imply the concept exists.
+
+### `dataschema` is `{uri}/{version}`, split at the last slash
+
+The only accepted form. The version is the final segment and the `uri` is everything before it, so the split is at the last `/` — a `uri` carries slashes of its own, and splitting anywhere else hands part of it to the version, after which both halves fail for reasons that are not the real one.
+
+Anything not of that form has no halves to attribute a failure to, so it reports at `event.dataschema.structure` and blocks before either half is judged. The prerequisite pattern, one level above the halves.
+
+*The `uri` is opaque.* It is read off the contract and compared for equality — never parsed, never rebuilt. ADR-005 derives a `uri` from `type` only where an authoring surface permits omission, and an explicit one wins and may bear no relation to `type`, so there is no internal shape to rely on: an assertion that read `#/` or counted segments would be asserting a convention the model does not guarantee. It would also duplicate a rule that lives in ADR-005 and drift from it silently.
+
+*Why a third position rather than reusing one of the halves:* attributing a missing slash to the `uri` would tell a caller their contract identifier is wrong when their `dataschema` never had an identifier to be wrong about — reporting a value the input never established, which `project.md` forbids.
 
 ### Failures are told apart by `path`, not by prose
 
@@ -82,8 +100,9 @@ Each failure has a different fix, and they are distinguished by the `path` on th
 | What went wrong | `path` | What the caller does about it |
 |---|---|---|
 | expected a type this version does not declare | `expectedType` | fix the expectation |
+| `dataschema` is not `{uri}/{version}` | `event.dataschema.structure` | fix the producer |
 | the event belongs to a different contract | `event.dataschema.uri` | find the right contract |
-| the version is not one this contract declares | `event.dataschema.version` | look at the version list |
+| the version is not the one being asked | `event.dataschema.version` | look at the version list |
 | the type is none of the version's shapes | `event.type` | look at what the version declares |
 | the payload breaks a rule | `event.data.…` | fix the payload at that position |
 
@@ -93,17 +112,18 @@ The messages still differ, and still name the offending value — the version li
 
 `blockingReason` carries the "nothing after this ran" part, as it already does for a malformed `type` in a declaration.
 
-*What the spec must pin:* the position each of these reports. It is observable behaviour a caller writes code against, so leaving it to implementation would make a reworded message a breaking change.
+*What the spec must pin:* the `path` strings themselves, verbatim, not a description of them. A caller's code contains the literal, so the literal is the observable contract — a spec saying "identifies the version within `dataschema`" would let a rename pass every test while silently breaking every consumer's comparison.
 
 ### Everything before the payload is a prerequisite
 
-Four things establish what the payload is checked against, and each blocks when it fails, because the checks below it would be checking against nothing:
+Five things establish what the payload is checked against, and each blocks when it fails, because the checks below it would be checking against nothing:
 
 | What failed | What it was establishing |
 |---|---|
 | `expectedType` names an undeclared type | which shape the caller claims |
+| `dataschema` is not `{uri}/{version}` | that there is an identifier and a version at all |
 | `dataschema`'s `uri` is not this contract's | that this contract is the right one to ask |
-| `dataschema`'s version is not declared | which version's declaration applies |
+| `dataschema`'s version is not the one asked | which version's declaration applies |
 | `event.type` matches none of the shapes | which of that version's three shapes to use |
 
 The last row is the one worth arguing. It would be possible to try the payload against every shape the version declares and report what came back — but that produces a list of failures for schemas the event never claimed to satisfy, which reads as several problems where there is one: the type is wrong. There is also no useful answer in the case that matters, since a payload matching some *other* shape does not make the event valid. So an unmatched type blocks, and the caller fixes the type before learning anything about the payload.
@@ -159,6 +179,10 @@ Worth recording because a consumer will hit the same thing the moment they touch
 **Defaults are not applied** → A schema's declared defaults stay undeclared in the event, so a handler reading `event.data` sees exactly what the sender sent. The contract is the only participant that knows the defaults, so declining to apply them does leave that knowledge unused. Accepted: applying them means returning a different event than was supplied, and that cost is higher. Stated in the TSDoc so nobody expects otherwise.
 
 **This is adjacent to deferred territory** → An exact-version lookup is not resolution, but it is one increment away from it, and the increment would be easy to make without noticing. The proposal states the line, and the closing task checks no range handling appeared.
+
+**Two deferrals sit on either side of this** → ADR-001 defers contract validation of data and its trust boundaries; ADR-005 defers handler behaviour. This provides a check without saying where it runs or what to do when it fails, which is the narrow gap between them. The risk is that a later reader takes the existence of the check as an answer to either question. `proposal.md` — Whose rules these are, and the Out of Scope entries, exist to prevent that.
+
+**Payload types are a schema's input side** → `PayloadFor` resolves through `z.input`, not `z.infer`. Because the event's `data` is returned as it arrived, a schema carrying a transform or a coercion would have its *output* type describe a value that was never produced — `z.coerce.date()` would type the payload's field as a `Date` while the event still holds the string. The input side is what the data actually is. Consequence: a caller wanting the transformed value runs the schema themselves, which is honest — the transformation is theirs, not the contract's.
 
 **Two conditional types on the narrowing path** → Payload-for-expected-type, and scope-for-expected-type. Both verified by probe before adoption, and both fail loudly at compile time rather than silently at runtime if wrong. The ask path needs neither, which is most of why dropping narrowing there was worth it.
 

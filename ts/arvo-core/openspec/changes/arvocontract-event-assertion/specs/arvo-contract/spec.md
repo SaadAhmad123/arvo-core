@@ -28,6 +28,55 @@ A version contract SHALL determine whether an event matches one of the three sha
 - **THEN** the assertion fails
 - **AND** the failure names the type it was given
 
+### Requirement: An Event's Dataschema Is Read As An Identifier And A Version
+
+An event's `dataschema` SHALL be accepted only in the form `{uri}/{version}`. The version SHALL be its final segment and the identifier everything preceding that segment.
+
+A `dataschema` not of that form SHALL fail, and SHALL be reported at the position `event.dataschema.structure` rather than at either part.
+
+#### Scenario: The version is the final segment
+- **WHEN** an event's `dataschema` is read
+- **THEN** its final segment is taken as the version
+- **AND** everything before that segment is taken as the identifier
+
+#### Scenario: An identifier containing separators
+- **WHEN** an event's `dataschema` identifier itself contains separators
+- **THEN** the whole identifier is taken, not a leading part of it
+
+#### Scenario: A dataschema with no version to read
+- **WHEN** an event's `dataschema` is not of the form `{uri}/{version}`
+- **THEN** the assertion fails
+- **AND** the reported position is `event.dataschema.structure`
+- **AND** no failure is reported against either the identifier or the version
+
+### Requirement: Both A Contract And A Version Contract Check The Dataschema
+
+A contract and a version contract SHALL each check an event's `dataschema` themselves, neither relying on the other to have done so.
+
+Both SHALL check that the identifier is their own contract's, comparing it against the `uri` the contract holds. Neither SHALL derive, rebuild, or inspect the inside of that identifier. A contract SHALL check that the version is one of the versions it declares; a version contract SHALL check that the version is its own.
+
+#### Scenario: A version contract rejects an event from another version
+- **WHEN** an event whose `dataschema` names version `1.1.0` is asserted directly against version `1.0.0` of the same contract
+- **THEN** the assertion fails
+- **AND** the reported position is `event.dataschema.version`
+
+#### Scenario: A version contract rejects an event from another contract
+- **WHEN** an event whose `dataschema` names a different contract's identifier is asserted directly against a version contract
+- **THEN** the assertion fails
+- **AND** the reported position is `event.dataschema.uri`
+
+#### Scenario: An identifier bearing no relation to the contract's type
+- **WHEN** a contract whose `uri` was supplied explicitly, sharing nothing with its `type`, asserts an event carrying that `uri`
+- **THEN** the identifier is accepted
+
+#### Scenario: A version accepts the version it declares
+- **WHEN** an event whose `dataschema` names the version contract's own version and contract is asserted against it
+- **THEN** the `dataschema` is not the reason for any failure
+
+#### Scenario: A result never disagrees with the event it carries
+- **WHEN** an assertion succeeds
+- **THEN** the version the result names is the version the event's `dataschema` names
+
 ### Requirement: A Result Names The Version That Validated It
 
 Every successful assertion SHALL report the version whose declaration the event was checked against.
@@ -44,7 +93,7 @@ Every successful assertion SHALL report the version whose declaration the event 
 
 A contract SHALL determine which of its declared versions an event belongs to from that event's `dataschema`, and SHALL then apply that version's own rules.
 
-The contract SHALL NOT apply rules of its own beyond selecting the version, so that an event a contract accepts is exactly an event one of its versions accepts.
+Beyond checking the `dataschema` against the versions it declares, the contract SHALL NOT apply rules of its own, so that an event a contract accepts is exactly an event one of its versions accepts.
 
 #### Scenario: The version is taken from the event
 - **WHEN** a contract declaring versions `1.0.0` and `1.1.0` asserts an event whose `dataschema` names version `1.1.0`
@@ -94,37 +143,42 @@ A contract SHALL NOT accept such a statement, the version it would be checked ag
 
 ### Requirement: Prerequisite Failures Report Distinct Positions
 
-Four failures SHALL be reported before any payload is examined, and each SHALL identify a different position, so that they are distinguishable without reading the failure's wording:
+Five failures SHALL be reported before any payload is examined, and each SHALL report the position named below, so that they are distinguishable without reading the failure's wording:
 
-- an expected type the version does not declare
-- an event whose `dataschema` names a different contract
-- an event whose `dataschema` names a version the contract does not declare
-- an event whose `type` matches none of the version's declared shapes
+| What failed | Reported position |
+|---|---|
+| an expected type the version does not declare | `expectedType` |
+| a `dataschema` not of the form `{uri}/{version}` | `event.dataschema.structure` |
+| a `dataschema` whose identifier is another contract's | `event.dataschema.uri` |
+| a `dataschema` whose version is not the one being asked | `event.dataschema.version` |
+| a `type` matching none of the version's declared shapes | `event.type` |
 
-Each SHALL state that the remaining rules were not evaluated.
+These positions are the reported values themselves, not descriptions of them. Callers compare them, so changing one is a breaking change.
+
+Each failure SHALL state that the remaining rules were not evaluated.
 
 #### Scenario: An undeclared expectation is attributed to the expectation
 - **WHEN** the assertion fails because the expected type is not declared by the version
-- **THEN** the reported position is the expectation, not the event
+- **THEN** the reported position is `expectedType`
 
 #### Scenario: A foreign contract is attributed to the identifier
 - **WHEN** the assertion fails because the event's `dataschema` names a different contract
-- **THEN** the reported position identifies the contract identifier within `dataschema`
+- **THEN** the reported position is `event.dataschema.uri`
 
 #### Scenario: An unknown version is attributed to the version
-- **WHEN** the assertion fails because the event's `dataschema` names an undeclared version
-- **THEN** the reported position identifies the version within `dataschema`
+- **WHEN** the assertion fails because the event's `dataschema` names a version other than the one being asked
+- **THEN** the reported position is `event.dataschema.version`
 
 #### Scenario: An unmatched type is attributed to the type
 - **WHEN** the assertion fails because the event's `type` matches none of the version's declared shapes
-- **THEN** the reported position is the event's type
+- **THEN** the reported position is `event.type`
 
-#### Scenario: The four are not interchangeable
-- **WHEN** each of the four failures occurs in turn
-- **THEN** each reports a position distinct from the other three
+#### Scenario: The five are not interchangeable
+- **WHEN** each of the five failures occurs in turn
+- **THEN** each reports a position distinct from the other four
 
 #### Scenario: Nothing further is evaluated
-- **WHEN** any of the four occurs
+- **WHEN** any of the five occurs
 - **THEN** the failure states that the remaining rules did not run
 
 ### Requirement: An Unmatched Type Stops Before The Payload
@@ -144,7 +198,7 @@ Each SHALL identify the position within the payload that broke, as the schema id
 
 #### Scenario: A payload failure names its position
 - **WHEN** an event whose type matches but whose payload violates that schema is asserted
-- **THEN** the failure identifies the offending position within the payload
+- **THEN** the reported position is the offending position within the payload, beneath `event.data`
 
 #### Scenario: A payload breaking several rules
 - **WHEN** an event's payload breaks more than one of the selected shape's rules
@@ -152,7 +206,7 @@ Each SHALL identify the position within the payload that broke, as the schema id
 
 #### Scenario: A position nested within the payload
 - **WHEN** the rule that broke is on a value nested inside the payload
-- **THEN** the reported position names that nested value, not the payload as a whole
+- **THEN** the reported position names that nested value beneath `event.data`, not the payload as a whole
 
 ### Requirement: An Assertion Returns The Event It Was Given
 
@@ -191,7 +245,7 @@ The system SHALL provide, on both a contract and a version contract, a primitive
 
 The system SHALL report every failed assertion, from either a contract or a version contract, as a single kind of failure carrying the positions that broke. It SHALL NOT vary the kind of failure by what went wrong.
 
-Within that failure, the position SHALL distinguish a caller's own request from the event they supplied: an expected type the version does not declare is reported at the expectation, and every other failure is reported at a position on the event.
+Within that failure, the position SHALL distinguish a caller's own request from the event they supplied: an expected type the version does not declare is reported at `expectedType`, and every other failure is reported beneath `event`.
 
 #### Scenario: The same kind of failure for a request problem and an event problem
 - **WHEN** the assertion fails because the expected type is not declared, and again because the event's payload does not satisfy its schema
@@ -203,8 +257,8 @@ Within that failure, the position SHALL distinguish a caller's own request from 
 
 #### Scenario: The caller's own request is identifiable by position
 - **WHEN** the assertion fails because the expected type is not declared by the version
-- **THEN** the reported position is the expectation
+- **THEN** the reported position is `expectedType`
 
 #### Scenario: An event problem is identifiable by position
 - **WHEN** the assertion fails because the event is addressed elsewhere, carries an undeclared type, or carries a payload its schema rejects
-- **THEN** the reported position is on the event, not on the expectation
+- **THEN** the reported position is beneath `event`, not `expectedType`
