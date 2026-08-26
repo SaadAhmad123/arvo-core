@@ -1,10 +1,20 @@
+import type { ArvoEvent } from '../ArvoEvent/index.js';
 import type { ArvoSemanticVersion } from '../semver/index.js';
-import type { JSONObject } from '../types.js';
-import { ArvoContractValidationError } from './errors.js';
+import type { JSONObject, Result } from '../types.js';
+import {
+  assertionFailure,
+  readDataschema,
+  unknownVersionIssue,
+} from './assert.js';
+import {
+  type ArvoContractAssertionError,
+  ArvoContractValidationError,
+} from './errors.js';
 import type {
   ArvoContractParam,
   ArvoContractVersionMapParam,
   ArvoContractVersionParam,
+  AssertedArvoEvent,
 } from './types.js';
 import { validateArvoContract } from './validator.js';
 import { VersionedArvoContract } from './versioned/index.js';
@@ -95,6 +105,62 @@ export class ArvoContract<
   readonly versions: {
     [V in keyof M & ArvoSemanticVersion]: VersionedArvoContract<T, V, M[V]>;
   };
+
+  /**
+   * Finds which of this contract's versions an event belongs to, then checks
+   * it against that version's declaration.
+   *
+   * The version comes from the event's `dataschema`, so no caller supplies
+   * one. What comes back names the version that validated the event and which
+   * of its three shapes matched, with the event itself unchanged.
+   *
+   * There is no expected type here, and the omission is deliberate: naming a
+   * type requires knowing which version declares it, which is what this
+   * method is for. A caller who already knows goes to that version — see
+   * `VersionedArvoContract.tryAssert`.
+   *
+   * Beyond finding the version this checks nothing of its own, so an event
+   * this accepts is exactly an event one of its versions accepts.
+   *
+   * @example
+   * const asserted = contract.tryAssert(event);
+   * if (asserted.ok) {
+   *   asserted.value.version;  // one of the declared versions
+   *   asserted.value.scope;    // which shape it matched
+   * }
+   */
+  tryAssert(
+    event: ArvoEvent,
+  ): Result<
+    AssertedArvoEvent<keyof M & ArvoSemanticVersion>,
+    ArvoContractAssertionError
+  > {
+    const parts = readDataschema(event.dataschema);
+    if (!parts.ok) return assertionFailure([parts.error]);
+
+    const version = parts.value.version as keyof M & ArvoSemanticVersion;
+    if (!Object.hasOwn(this.versions, version)) {
+      return assertionFailure([
+        unknownVersionIssue(parts.value.version, Object.keys(this.versions)),
+      ]);
+    }
+
+    return this.versions[version].tryAssert(event);
+  }
+
+  /**
+   * {@link tryAssert}, throwing on failure and returning the value directly.
+   *
+   * Carries no logic of its own beyond the unwrap.
+   *
+   * @throws {ArvoContractAssertionError} If the event belongs to no version
+   * this contract declares, or does not satisfy the version it names.
+   */
+  assert(event: ArvoEvent): AssertedArvoEvent<keyof M & ArvoSemanticVersion> {
+    const result = this.tryAssert(event);
+    if (result.ok) return result.value;
+    throw result.error;
+  }
 
   constructor(param: ArvoContractParam<T, M>) {
     const result = validateArvoContract(param);

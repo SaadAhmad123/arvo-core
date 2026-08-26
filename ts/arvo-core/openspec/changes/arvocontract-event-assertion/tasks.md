@@ -34,11 +34,11 @@
 
 ## 5. ArvoContract
 
-- [ ] 5.1 Add `tryAssert` and `assert`. Split `dataschema`, check the identifier half is this contract's, check the version half is one it declares, then delegate. No expected type, and nothing beyond that check of its own.
-- [ ] 5.2 Add `tests/ArvoContract/assert-contract.spec.ts`: the version taken from the event, a foreign contract rejected, an undeclared version rejected with the declared versions named, a `dataschema` with no separator and one with an empty half both rejected at `event.dataschema`, a range-shaped or `latest` version half reaching `event.dataschema.version` rather than being rejected for its shape, an identifier containing separators read whole rather than truncated, and the result naming the version selected.
-- [ ] 5.3 Add the guarded-direct-path test: a version contract asked about an event from a sibling version rejects it at `event.dataschema.version`, and one asked about a foreign contract's event rejects it at `event.dataschema.uri`.
-- [ ] 5.4 Assert a successful result never disagrees with the event it carries — the version reported is the version the `dataschema` names, from both classes.
-- [ ] 5.5 Add the agreement test: the same event given to a contract and to the version that contract selects produces the same verdict and the same scope. This is what makes "one definition of matches" checkable rather than asserted.
+- [x] 5.1 Add `tryAssert` and `assert`. Split `dataschema`, check the identifier half is this contract's, check the version half is one it declares, then delegate. No expected type, and nothing beyond that check of its own.
+- [x] 5.2 Add `tests/ArvoContract/assert-contract.spec.ts`: the version taken from the event, a foreign contract rejected, an undeclared version rejected with the declared versions named, a `dataschema` with no separator and one with an empty half both rejected at `event.dataschema`, a range-shaped or `latest` version half reaching `event.dataschema.version` rather than being rejected for its shape, an identifier containing separators read whole rather than truncated, and the result naming the version selected.
+- [x] 5.3 Add the guarded-direct-path test: a version contract asked about an event from a sibling version rejects it at `event.dataschema.version`, and one asked about a foreign contract's event rejects it at `event.dataschema.uri`.
+- [x] 5.4 Assert a successful result never disagrees with the event it carries — the version reported is the version the `dataschema` names, from both classes.
+- [x] 5.5 Add the agreement test: the same event given to a contract and to the version that contract selects produces the same verdict and the same scope. This is what makes "one definition of matches" checkable rather than asserted.
 
 ## 6. The event is untouched
 

@@ -359,6 +359,17 @@ export const mapOk = <A, B, E>(
   fromNeverthrow(outcome.ok ? ok(f(outcome.value)) : err(outcome.error));
 
 /**
+ * A failed assertion, for a caller that has issues rather than an outcome.
+ *
+ * The counterpart to {@link assertionResult} for a check that has not run
+ * anything to succeed at — a version that was never declared, say.
+ */
+export const assertionFailure = <R>(
+  issues: ErrorIssue[],
+): Result<R, ArvoContractAssertionError> =>
+  fromNeverthrow(err(new ArvoContractAssertionError(issues)));
+
+/**
  * Builds an assertion's outcome in the shape every fallible operation in
  * this package reports, wrapping issues in the one error asserting has.
  */

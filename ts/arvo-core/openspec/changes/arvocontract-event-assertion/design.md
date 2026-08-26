@@ -89,6 +89,8 @@ The only accepted form. The version is the final segment and the `uri` is everyt
 
 Anything not of that form has no halves to attribute a failure to, so it reports at `event.dataschema` and blocks before either half is judged. The prerequisite pattern, one level above the halves.
 
+*A range cannot reach here at all.* Measured while testing: `dataschema` must be a valid RFC 3986 URI-reference, so an event carrying `#/com/order/create/^1.0.0` cannot be constructed — `^` is not a legal character. So the "a range simply misses" argument is stronger than stated: a range-shaped `dataschema` is refused one layer earlier, by the event. Only a range-shaped string that happens to be URI-legal, such as `latest`, reaches a version lookup, and that misses.
+
 *Exactly when that fires:* no separator at all, or a half that is empty. Nothing else. A `dataschema` with two non-empty halves is judged as two halves whatever they contain — `#/a/b/latest` is an identifier and a version that is not declared, reported at `event.dataschema.version`. The version half is compared as a string against declared keys and is never checked for *being* a version first, which is what keeps `latest` a miss rather than a rejection, exactly as `proposal.md` — Out of Scope promises.
 
 *The `uri` is opaque.* It is read off the contract and compared for equality — never parsed, never rebuilt. ADR-005 derives a `uri` from `type` only where an authoring surface permits omission, and an explicit one wins and may bear no relation to `type`, so there is no internal shape to rely on: an assertion that read `#/` or counted segments would be asserting a convention the model does not guarantee. It would also duplicate a rule that lives in ADR-005 and drift from it silently.
