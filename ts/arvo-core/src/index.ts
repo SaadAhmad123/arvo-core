@@ -22,6 +22,10 @@ export type {
   ArvoEventParam,
   ArvoEventValidationOptions,
 } from './ArvoEvent/types.js';
+export {
+  createArvoContract,
+  tryCreateArvoContract,
+} from './factories/createArvoContract.js';
 export { ArvoSemanticVersionCheckError } from './semver/errors.js';
 export { ArvoSemanticVersion } from './semver/index.js';
 export { ArvoContractSerializerError } from './serializers/ArvoContractSerializer/errors.js';
