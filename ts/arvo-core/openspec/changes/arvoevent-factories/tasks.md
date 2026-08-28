@@ -61,7 +61,7 @@
 
 ## 9. Close out
 
-- [ ] 9.1 Run `pnpm test --coverage`, `pnpm lint` and `npx tsc --noEmit`; hold `src/factories/` at the 100% line, branch and function coverage the package holds. The `createEmitted` guard, the non-`Error` path and the factory's contract guard are reachable only from untyped callers — cover them, do not delete them.
-- [ ] 9.2 Confirm nothing here derives causality. No task should have added inference of `parentid`, `initid`, `depth` or `subject` from another event, `clone` included.
-- [ ] 9.3 Confirm no field is filled in with a value nothing knows. `subject` is generated, and `to` on `createAccepted` comes from the contract; every other absent field is left absent.
-- [ ] 9.4 Confirm the deferrals held: nothing resolves a version, nothing decides whether or when an event is sent, and no domain behaviour beyond reading one of the four named sources appeared.
+- [x] 9.1 Run `pnpm test --coverage`, `pnpm lint` and `npx tsc --noEmit`; hold `src/factories/` at the 100% line, branch and function coverage the package holds. The `createEmitted` guard, the non-`Error` path and the factory's contract guard are reachable only from untyped callers — cover them, do not delete them.
+- [x] 9.2 Confirm nothing here derives causality. No task should have added inference of `parentid`, `initid`, `depth` or `subject` from another event, `clone` included.
+- [x] 9.3 Confirm no field is filled in with a value nothing knows. `subject` is generated, and `to` on `createAccepted` comes from the contract; every other absent field is left absent.
+- [x] 9.4 Confirm the deferrals held: nothing resolves a version, nothing decides whether or when an event is sent, and no domain behaviour beyond reading one of the four named sources appeared.
