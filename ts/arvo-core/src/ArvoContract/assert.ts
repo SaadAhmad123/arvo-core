@@ -82,13 +82,16 @@ export const foreignContractIssue = (
 export const unknownVersionIssue = (
   found: string,
   declared: readonly string[],
-): ErrorIssue =>
-  new ErrorIssue({
+): ErrorIssue => {
+  const wanted =
+    declared.length === 1 ? declared[0] : `one of ${declared.join(', ')}`;
+  return new ErrorIssue({
     path: 'event.dataschema.version',
-    message: `must be ${declared.length === 1 ? declared[0] : `one of ${declared.join(', ')}`}`,
+    message: `must be ${wanted}`,
     received: found,
     blockingReason: BLOCKED_BY.version,
   });
+};
 
 /** Every type one version may legitimately carry, in reporting order. */
 const declaredTypes = (
