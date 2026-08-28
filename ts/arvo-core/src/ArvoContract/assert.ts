@@ -1,5 +1,5 @@
 import { err, ok } from 'neverthrow';
-import { z } from 'zod';
+import * as z from 'zod/v4/core';
 import type { ArvoEvent } from '../ArvoEvent/index.js';
 import { fromNeverthrow } from '../result.js';
 import type { Result } from '../types.js';
@@ -124,10 +124,10 @@ export const scopeOfType = (
 const schemaForScope = (
   scope: ArvoContractEventAssertionScope,
   eventType: string,
-  accepts: z.core.$ZodType,
-  emits: Record<string, z.core.$ZodType>,
+  accepts: z.$ZodType,
+  emits: Record<string, z.$ZodType>,
   handlerError: HandlerErrorContract,
-): z.core.$ZodType => {
+): z.$ZodType => {
   if (scope === 'accepts') return accepts;
   if (scope === 'handlerError') return handlerError.schema;
   return emits[eventType];
@@ -189,7 +189,7 @@ const valueAt = (payload: unknown, path: readonly PropertyKey[]): unknown => {
  * used, the event being returned as it arrived.
  */
 export const checkPayload = (
-  schema: z.core.$ZodType,
+  schema: z.$ZodType,
   data: unknown,
 ): ErrorIssue[] => {
   const result = z.safeParse(schema, data);
@@ -305,8 +305,8 @@ export const checkAgainstVersion = (param: {
   uri: string;
   /** The one version this check is against. */
   version: string;
-  accepts: z.core.$ZodType;
-  emits: Record<string, z.core.$ZodType>;
+  accepts: z.$ZodType;
+  emits: Record<string, z.$ZodType>;
   /** Supplied, never derived: the caller already holds it. */
   handlerError: HandlerErrorContract;
   /** What the caller expects the event to be, if they said. */

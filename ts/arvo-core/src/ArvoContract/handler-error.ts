@@ -1,13 +1,33 @@
-import { z } from 'zod';
+import * as z from 'zod/v4/core';
+
+/**
+ * The two schema constructors this module needs, each keeping the type of what
+ * it was given.
+ *
+ * `zod/v4/core`'s constructors accept no type arguments and widen their shape
+ * to an index signature, so a schema built through them directly infers
+ * nothing — `z.input` of it would be `{ [k: string]: unknown }`. These
+ * restate the type the runtime object actually has. The cast is confined to
+ * one line each rather than spreading to whatever is built from them.
+ */
+const string = (): z.$ZodString => new z.$ZodString({ type: 'string' });
+
+const nullable = <T extends z.$ZodType>(innerType: T): z.$ZodNullable<T> =>
+  new z.$ZodNullable({ type: 'nullable', innerType }) as z.$ZodNullable<T>;
+
+const object = <S extends Record<string, z.$ZodType>>(
+  shape: S,
+): z.$ZodObject<S> =>
+  new z.$ZodObject({ type: 'object', shape }) as unknown as z.$ZodObject<S>;
 
 /**
  * Payload of every handler error. Identical for every contract and every
  * version, so this one schema is shared rather than rebuilt per contract.
  */
-export const HANDLER_ERROR_SCHEMA = z.object({
-  error_name: z.string(),
-  error_message: z.string(),
-  error_stack: z.string().nullable(),
+export const HANDLER_ERROR_SCHEMA = object({
+  error_name: string(),
+  error_message: string(),
+  error_stack: nullable(string()),
 });
 
 /** The handler error event type for a contract of this `type`. */

@@ -35,7 +35,7 @@ export const ArvoDomain = Object.freeze({
   FROM_EVENT_CONTRACT,
 
   /**
-   * The `domain` declared by the contract of whoever is building the event,
+   * The `domain` declared by the contract of the handler which is building the event,
    * where that differs from the event's own contract.
    */
   FROM_SELF_CONTRACT,
