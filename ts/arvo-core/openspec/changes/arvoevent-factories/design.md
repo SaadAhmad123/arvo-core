@@ -4,7 +4,7 @@ See `proposal.md` — Why. The constraints that shape the approach, most of them
 
 - **The constructor already holds every structural rule** and validates in its own body. A factory is a way of reaching it, never a second opinion about what a valid event is.
 - **The declaration holds the rest.** A `VersionedArvoContract` carries `type`, `dataschema`, `accepts`, `emits`, `handlerError` and `domain`. All five variants read fields that already exist.
-- **An event's stored fields and an event's input fields are different types.** Stored is `string | null`; input is `string | undefined`, `project.md` — *Optional inputs* declining to spell `null` at all. So an event's own fields cannot be handed straight back as input — which is exactly what `.clone` wants to do.
+- **An event's stored fields and an event's input fields are different types.** Stored is `string | null`; input is `string | undefined`, `project.md` — *Optional inputs* declining to spell `null` at all. So an event's own fields cannot be handed straight back as input — which is exactly what `cloneArvoEvent` wants to do.
 - **Everything zod is `zod/v4/core`.** The one entry point a library may depend on. Core schemas carry no methods, so payloads are checked with the standalone `z.safeParse`, and core's constructors accept no type arguments — both facts leave marks on the design below.
 - **`ArvoDomain` is already shipped.** Four symbols naming where a `domain` may be read from, and an internal resolver. This change consumes it rather than defining it.
 
@@ -30,11 +30,11 @@ See `proposal.md` — Why. The constraints that shape the approach, most of them
 
 Each variant does what its name says and nothing more. Where the two conflict, the name wins over the safer behaviour.
 
-That is not a style preference; it changed two decisions. An earlier draft had `.clone` drop `id` and `time` so a clone could never collide with its source under ADR-001's global-uniqueness rule. But a function named `clone` that silently alters two fields is a function whose name argues with its body, and the caller — who is the only one who knows whether both events will be sent — is better placed to decide than a default is. And an earlier draft filled in `source` and `dataschema` when omitted, which made the easiest way to build an event also the way to build one nobody can trace.
+That is not a style preference; it changed two decisions. An earlier draft had cloning drop `id` and `time` so a clone could never collide with its source under ADR-001's global-uniqueness rule. But a function named `clone` that silently alters two fields is a function whose name argues with its body, and the caller — who is the only one who knows whether both events will be sent — is better placed to decide than a default is. And an earlier draft filled in `source` and `dataschema` when omitted, which made the easiest way to build an event also the way to build one nobody can trace.
 
 *The rule that came out of it:* a utility fills in a field only where nothing else could supply it. That leaves exactly one — `subject`, where omission means this event starts its own execution.
 
-### `.clone` copies every field, and its typing always survives
+### Cloning copies every field, and its typing always survives
 
 Every field comes across, `id` and `time` included, then overrides are applied over the top.
 
@@ -48,7 +48,7 @@ One signature, not two: `clone<T, D>(event: ArvoEvent<T, D>, overrides?: Partial
 
 ### One generic, taken from the value
 
-Each contract-aware variant is generic in the contract it is handed — `<V extends VersionedArvoContract>` — and every other type is read off it: `V['type']`, `V['accepts']`, `V['emits'][E]`, `V['handlerError']['schema']`. `.by` adds one more, `E extends keyof V['emits'] & string`.
+Each contract-aware variant is generic in the contract it is handed — `<V extends VersionedArvoContract>` — and every other type is read off it: `V['type']`, `V['accepts']`, `V['emits'][E]`, `V['handlerError']['schema']`. `createEmitted` adds one more, `E extends keyof V['emits'] & string`.
 
 An earlier draft threaded the class's own three parameters — `<T, V, C>` — because that is how the class is declared. That was copying, not designing: the factory does not need the class's decomposition, and the three-parameter form also failed to compile against `domainFor`, the class being invariant since its generic assert methods. One parameter read off the value is smaller, and it is what makes the return type honest — `ArvoEvent<V['type'], z.output<V['accepts']>>` rather than `ArvoEvent<T, any>`.
 
@@ -79,13 +79,13 @@ The first is a type lie and the more dangerous of the two. `z.output` types the 
 
 *One deliberate wording:* each payload issue's message carries a suffix naming which schema judged it — "(against the contract's accepts)", "(against the contract's emits[com_order_created])" — because the same payload shape can exist under several keys and the position alone does not say which declaration was consulted.
 
-### `.for` addresses the event; `.by` and `.error` do not
+### `createAccepted` addresses the event; `createEmitted` and `createError` do not
 
-`.for` defaults `to` to `contract.type` when the caller says nothing. The event it builds is a request, Arvo routes by type, and the handler bound to this contract is who accepts events of that type — so the destination is a fact the contract holds, the same category of knowledge as `type` and `dataschema`, not a placeholder invented on the caller's behalf.
+`createAccepted` defaults `to` to the contract's `type` when the caller says nothing. The event it builds is a request, Arvo routes by type, and the handler bound to this contract is who accepts events of that type — so the destination is a fact the contract holds, the same category of knowledge as `type` and `dataschema`, not a placeholder invented on the caller's behalf.
 
-`.by` and `.error` default nothing. Where an emitted event or an error goes is fully the caller's decision: the contract knows what those events *are*, not who is waiting for them, and a default aimed at `contract.type` would address them back at the very handler that produced them.
+`createEmitted` and `createError` default nothing. Where an emitted event or an error goes is fully the caller's decision: the contract knows what those events *are*, not who is waiting for them, and a default aimed at `contract.type` would address them back at the very handler that produced them.
 
-*Why this does not break the fills-in rule:* the rule bans filling a field with a value nothing knows. `to` on `.for` is a value the contract does know — the line stays where it was, between supplied knowledge and invented placeholders.
+*Why this does not break the fills-in rule:* the rule bans filling a field with a value nothing knows. `to` on `createAccepted` is a value the contract does know — the line stays where it was, between supplied knowledge and invented placeholders.
 
 ### `domain` is absent, a value, or an instruction
 
@@ -97,27 +97,27 @@ Omitted, the event has no domain — nothing is inherited silently, including th
 
 ### Nothing derived is derived twice
 
-`.error` reads both the event type and the payload shape off `contract.handlerError` — `V['handlerError']['type']` and `V['handlerError']['schema']` — rather than rebuilding `handler_${T}_error` and importing the payload type.
+`createError` reads both the event type and the payload shape off `contract.handlerError` — `V['handlerError']['type']` and `V['handlerError']['schema']` — rather than rebuilding `handler_${T}_error` and importing the payload type.
 
 *Why it matters beyond tidiness:* the first sketch did rebuild it, and so did three type helpers in `ArvoContract/types.ts`. Each copy is a place the rule can drift from the contract that owns it. The same reasoning already applies to the assertion path, where the handler error arrives as an argument rather than being derived inside the check.
 
-### `.error` checks the payload it built itself
+### `createError` checks the payload it built itself
 
 The three fields are read off the error — `error?.name`, `error?.message`, `error?.stack ?? null` — and then checked against the handler error schema like any supplied payload.
 
 An earlier draft skipped the check on the grounds that a payload built here is built into the declared shape. The sketch showed why that is wrong: a JavaScript caller can pass anything as `error`, the optional-chained reads then yield `undefined`, and without the check the factory either builds an event no consumer can read or throws a `TypeError` out of a `tryX`. With it, the failure is two issues naming `data.error_name` and `data.error_message`.
 
-### `.by` guards its schema lookup at runtime
+### `createEmitted` guards its schema lookup at runtime
 
 An undeclared `type` cannot compile — `E extends keyof V['emits']` — but JavaScript callers and casts exist, and without a guard the missing schema reaches `safeParse`, which throws. The guard reports at position `type`, naming the keys the version does declare, with distinct wording for a version declaring none at all (`join` on an empty list would otherwise end the message mid-sentence).
 
 The comment on the guard states that it is unreachable from TypeScript and reachable from JavaScript — otherwise it reads as dead code, and coverage pressure deletes it.
 
-*Why the handler error is not reachable here:* `.by` reads `emits`, and a handler error is derived rather than declared — it is not an entry of `emits`. A consequence of what `.by` reads, not a policy it enforces.
+*Why the handler error is not reachable here:* `createEmitted` reads `emits`, and a handler error is derived rather than declared — it is not an entry of `emits`. A consequence of what `createEmitted` reads, not a policy it enforces.
 
 ### `type` is a field of the param, not an argument of its own
 
-`.by(contract, { type, source, data })`, not `.by(contract, type, { source, data })`. As a field it sits where every other event field sits, so a caller moving between variants never rearranges their call — and it stays in the spread on the way to the constructor, being the event's own field that the caller chose.
+`createEmitted({ type, source, data })`, not `createEmitted(type, { source, data })`. As a field it sits where every other event field sits, so a caller moving between methods never rearranges their call — and it stays in the spread on the way to the constructor, being the event's own field that the caller chose.
 
 ### The event's own error, everywhere — no factory error exists
 
@@ -131,15 +131,19 @@ Every failure, from every variant and both forms, is `ArvoEventValidationError`.
 
 An unexpected throw is not converted, matching the contract factory: an error type is a claim about what kind of failure occurred, and a bug elsewhere on the call path is not a validation failure.
 
-### One file per variant, one surface assembled over them
+### A factory holds the version; what needs no contract stands outside it
 
-`src/factories/createArvoEvent/` holds `raw.ts`, `clone.ts`, `for-contract.ts`, `by-contract.ts`, `handler-error.ts`, the shared `payload.ts` and `domain.ts`, `types.ts`, and `index.ts` assembling the two callable objects — `Object.assign` on the plain function, frozen.
+`createArvoEventFactory(version)` returns an `ArvoEventFactory` carrying that version, and its three builders — `createAccepted`, `createEmitted`, `createError`, each with a reporting twin — take their `type` and `dataschema` from it. The version stops being an argument at every call site.
 
-*Why named files rather than one module:* a stack trace, a test name and a coverage report all read better against a named function than an anonymous property. The dotted surface is for the caller's fingers, not the implementation's identity.
+*Why bound rather than passed:* a handler works against one version at a time, and passing the same contract to every call is the repetition the declaration exists to remove. The generic also moves up: with `ArvoEventFactory<V>` in scope, `createEmitted` needs only `E extends keyof V['emits']`, so the method signatures got shorter, not longer.
 
-*Consequence worth naming:* properties on a function are not tree-shakeable. Importing `createArvoEvent` for the plain form pulls in all five variants and the payload check with them. Acceptable at this size.
+*What stays outside, and why:* `createArvoEvent` and `cloneArvoEvent` read no contract. An earlier draft had cloning as a factory method, and it implied a check that never happened — a caller cloning an event of one contract through another version's factory would have been quietly encouraged. Both are standalone functions instead.
 
-*Why the explicit names stay internal:* two ways to call one function is what `project.md` — *Dependencies and reuse* rejects.
+*Why the factory itself is a pair:* `tryCreateArvoEventFactory` reports something that is not a version of a contract, reachable only from a caller without types. Before it, that input surfaced as a `TypeError` from whichever method was called first, far from the mistake.
+
+*Layout:* `factory.ts` holds the class, `index.ts` the pair that reaches one, and `accepted.ts` / `emitted.ts` / `error.ts` a `buildX` primitive each, which both forms of a method call. A stack trace, a test name and a coverage report all read better against a named function than an anonymous member.
+
+*Consequence worth naming:* a class is not tree-shakeable. Importing it pulls all three builders and the payload check with them. Acceptable at this size.
 
 ### The throwing form wraps the non-throwing one, five times
 
@@ -149,7 +153,7 @@ An unexpected throw is not converted, matching the contract factory: an error ty
 
 Nothing in the implementation shares code with the assertion path — it takes an event, and here there is no event yet; calling it would mean constructing an event to find out whether it may be constructed.
 
-So the connection is a property the suite holds: an event any variant produces, asserted back against the contract that produced it, matches — with the scope that variant implies. `.for` gives `accepts`, `.by` gives `emits`, `.error` gives `handlerError`. If either direction changes its mind about what matches, that test fails rather than the two silently diverging.
+So the connection is a property the suite holds: an event any builder produces, asserted back against the version that produced it, matches — with the scope that builder implies. `createAccepted` gives `accepts`, `createEmitted` gives `emits`, `createError` gives `handlerError`. If either direction changes its mind about what matches, that test fails rather than the two silently diverging.
 
 ## Risks / Trade-offs
 
@@ -161,7 +165,9 @@ So the connection is a property the suite holds: an event any variant produces, 
 
 **A symbol whose source was not supplied resolves to `null` silently** → Indistinguishable from a source that had no domain. Recorded in the `ArvoDomain` module's own tests; the factories inherit it.
 
-**Function properties defeat tree-shaking** → Named above, accepted at this size.
+**A class defeats tree-shaking** → Named above, accepted at this size.
+
+**Two ways to reach a factory** → `createArvoEventFactory(v)` and `new ArvoEventFactory(v)`, since the class is exported for type positions. `project.md` — *Dependencies and reuse* normally rejects a second way in, but it is the relationship `ArvoContract` already has with `createArvoContract`, so the surface reads consistently rather than novel.
 
 **`data` out can differ from `data` in** → Only by the schema's declared defaults and transforms, and only on the contract-aware variants. Stated in their TSDoc, because a caller comparing what they passed with what they got will otherwise be surprised.
 
