@@ -48,8 +48,8 @@
 
 ## 8. Public surface
 
-- [ ] 8.1 Assemble `index.ts` into both forms: `tryCreateArvoEvent` as it stands, and `createArvoEvent` as the throwing companion, each frozen. Every property of the throwing form calls its primitive and unwraps, holding no logic of its own.
-- [ ] 8.2 Export `createArvoEvent` and `tryCreateArvoEvent` from `src/index.ts`, with `ContractEventParam`, `ErrorEventParam` and `ContractEventOptions` as types. The per-variant functions stay internal — two ways to call one function is what `project.md` — *Dependencies and reuse* rejects.
+- [x] 8.1 Assemble `index.ts` into both forms: `tryCreateArvoEvent` as it stands, and `createArvoEvent` as the throwing companion, each frozen. Every property of the throwing form calls its primitive and unwraps, holding no logic of its own.
+- [x] 8.2 Export `createArvoEvent` and `tryCreateArvoEvent` from `src/index.ts`, with `ContractEventParam`, `ErrorEventParam` and `ContractEventOptions` as types. The per-variant functions stay internal — two ways to call one function is what `project.md` — *Dependencies and reuse* rejects.
 - [ ] 8.3 Write the TSDoc per `project.md` for everything newly exported: rules, not provenance. State on each contract-aware variant that the payload comes back as the declaration produced it, so a caller comparing what they passed is not surprised; on `.for` that the recipient defaults to the contract's type; on `.by` and `.error` that it does not; and on `clone` that identity and time are copied, so a clone sent alongside its source needs a new one.
 - [ ] 8.4 Add type-level tests for what §1 established, so the narrowing cannot regress silently.
 - [ ] 8.5 Add a section to `ts/sandbox/src/playground.ts` exercising all five variants, each of the four domain sources, and the three failures a caller is likeliest to meet.

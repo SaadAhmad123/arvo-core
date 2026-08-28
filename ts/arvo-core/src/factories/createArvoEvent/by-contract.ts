@@ -20,7 +20,7 @@ import type { ContractEventOptions, ContractEventParam } from './types.js';
  *
  * The handler error is not reachable here. It is derived from the contract's
  * `type` rather than declared, so it is not an entry of `emits` — build it
- * with the handler error factory.
+ * with `.error`.
  *
  * `dataschema` comes from the contract. `to` does not: where an emitted event
  * goes is the caller's to say.
