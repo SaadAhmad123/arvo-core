@@ -6,9 +6,9 @@ import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import { fromNeverthrow } from '../../result.js';
 import type { Result } from '../../types.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
+import { tryCreateArvoEvent } from '../createArvoEvent.js';
 import { domainFor } from './domain.js';
 import { checkPayload } from './payload.js';
-import { raw } from './raw.js';
 import type { ContractEventOptions, ContractEventParam } from './types.js';
 
 /**
@@ -29,7 +29,7 @@ import type { ContractEventOptions, ContractEventParam } from './types.js';
  * one of `ArvoDomain`'s symbols to read one from somewhere — supplying that
  * symbol's source in `options.domainCtx` where it needs one.
  */
-export const byContract = <
+export const buildEmitted = <
   V extends VersionedArvoContract,
   E extends keyof V['emits'] & string,
 >(
@@ -71,7 +71,7 @@ export const byContract = <
   // `type` stays in `fields`: it is the event's own, and the caller chose it.
   const { data: _data, domain, ...fields } = param;
 
-  return raw<E, z.output<V['emits'][E]>>({
+  return tryCreateArvoEvent<E, z.output<V['emits'][E]>>({
     ...fields,
     dataschema: contract.dataschema,
     domain: domainFor(contract, domain, options),

@@ -4,7 +4,7 @@ import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import { traceContextFromSpan } from '../../ArvoEvent/opentelemetry.js';
 import type { ArvoEventParam } from '../../ArvoEvent/types.js';
 import type { Result } from '../../types.js';
-import { raw } from './raw.js';
+import { tryCreateArvoEvent } from '../createArvoEvent.js';
 
 /** A span if there is one, else an overridden header, else the event's own. */
 const traceOf = <T extends string, D extends Record<string, any>>(
@@ -37,7 +37,7 @@ const traceOf = <T extends string, D extends Record<string, any>>(
  * `span` replaces both, so a span carrying no trace state leaves the clone
  * with none.
  */
-export const clone = <T extends string, D extends Record<string, any>>(
+export const buildClone = <T extends string, D extends Record<string, any>>(
   event: ArvoEvent<T, D>,
   overrides: Partial<ArvoEventParam<T, D>> = {},
 ): Result<ArvoEvent<T, D>, ArvoEventValidationError> => {
@@ -47,9 +47,9 @@ export const clone = <T extends string, D extends Record<string, any>>(
 
   // An event holds `null` where its input spells absence, and normalization
   // accepts either, so the fields cross over as they stand.
-  return raw<T, D>({
+  return tryCreateArvoEvent<T, D>({
     ...event,
     ...replaced,
     ...traceOf(event, overrides),
-  } as Parameters<typeof raw<T, D>>[0]);
+  } as Parameters<typeof tryCreateArvoEvent<T, D>>[0]);
 };

@@ -5,9 +5,9 @@ import type { ArvoEventValidationError } from '../../ArvoEvent/errors.js';
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import { fromNeverthrow } from '../../result.js';
 import type { Result } from '../../types.js';
+import { tryCreateArvoEvent } from '../createArvoEvent.js';
 import { domainFor } from './domain.js';
 import { checkPayload } from './payload.js';
-import { raw } from './raw.js';
 import type { ContractEventOptions, ErrorEventParam } from './types.js';
 
 /**
@@ -17,7 +17,7 @@ import type { ContractEventOptions, ErrorEventParam } from './types.js';
  * carries, so a caller passes the error rather than assembling that shape.
  *
  * The event's type and its payload shape are both read off the contract's own
- * `handlerError` — the contract already derived them, and deriving them again
+ * `buildError` — the contract already derived them, and deriving them again
  * from its `type` would be a second copy of that rule. `dataschema` comes
  * from the contract too.
  *
@@ -32,7 +32,7 @@ import type { ContractEventOptions, ErrorEventParam } from './types.js';
  * one of `ArvoDomain`'s symbols to read one from somewhere — supplying that
  * symbol's source in `options.domainCtx` where it needs one.
  */
-export const handlerError = <V extends VersionedArvoContract>(
+export const buildError = <V extends VersionedArvoContract>(
   contract: V,
   param: ErrorEventParam,
   options?: ContractEventOptions,
@@ -54,7 +54,10 @@ export const handlerError = <V extends VersionedArvoContract>(
 
   if (!checked.ok) return fromNeverthrow(err(checked.error));
 
-  return raw<V['handlerError']['type'], z.output<V['handlerError']['schema']>>({
+  return tryCreateArvoEvent<
+    V['handlerError']['type'],
+    z.output<V['handlerError']['schema']>
+  >({
     ...fields,
     type: contract.handlerError.type,
     dataschema: contract.dataschema,

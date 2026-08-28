@@ -28,19 +28,22 @@ export type {
   ArvoEventValidationOptions,
 } from './ArvoEvent/types.js';
 export {
-  createArvoContract,
-  tryCreateArvoContract,
-} from './factories/createArvoContract.js';
-export type { CreateArvoEvent } from './factories/createArvoEvent/index.js';
-export {
-  createArvoEvent,
-  tryCreateArvoEvent,
-} from './factories/createArvoEvent/index.js';
+  ArvoEventFactory,
+  createArvoEventFactory,
+} from './factories/ArvoEventFactory/index.js';
 export type {
   ContractEventOptions,
   ContractEventParam,
   ErrorEventParam,
-} from './factories/createArvoEvent/types.js';
+} from './factories/ArvoEventFactory/types.js';
+export {
+  createArvoContract,
+  tryCreateArvoContract,
+} from './factories/createArvoContract.js';
+export {
+  createArvoEvent,
+  tryCreateArvoEvent,
+} from './factories/createArvoEvent.js';
 export { ArvoSemanticVersionCheckError } from './semver/errors.js';
 export { ArvoSemanticVersion } from './semver/index.js';
 export { ArvoContractSerializerError } from './serializers/ArvoContractSerializer/errors.js';

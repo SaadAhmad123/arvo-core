@@ -5,9 +5,9 @@ import type { ArvoEventValidationError } from '../../ArvoEvent/errors.js';
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import { fromNeverthrow } from '../../result.js';
 import type { Result } from '../../types.js';
+import { tryCreateArvoEvent } from '../createArvoEvent.js';
 import { domainFor } from './domain.js';
 import { checkPayload } from './payload.js';
-import { raw } from './raw.js';
 import type { ContractEventOptions, ContractEventParam } from './types.js';
 
 /**
@@ -25,7 +25,7 @@ import type { ContractEventOptions, ContractEventParam } from './types.js';
  * one of `ArvoDomain`'s symbols to read one from somewhere — supplying that
  * symbol's source in `options.domainCtx` where it needs one.
  */
-export const forContract = <V extends VersionedArvoContract>(
+export const buildAccepted = <V extends VersionedArvoContract>(
   contract: V,
   param: ContractEventParam<V['accepts']>,
   options?: ContractEventOptions,
@@ -40,7 +40,7 @@ export const forContract = <V extends VersionedArvoContract>(
   );
   if (!checked.ok) return fromNeverthrow(err(checked.error));
   const { data: _data, domain, ...fields } = param;
-  return raw<V['type'], z.output<V['accepts']>>({
+  return tryCreateArvoEvent<V['type'], z.output<V['accepts']>>({
     ...fields,
     to: fields.to ?? contract.type,
     type: contract.type,
