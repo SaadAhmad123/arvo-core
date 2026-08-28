@@ -44,6 +44,8 @@ export const tryCreateArvoContract = <
     if (error instanceof ArvoContractValidationError) {
       return fromNeverthrow(err(error));
     }
+    // Anything else is not an invalid declaration, so reporting it here would
+    // make the error type say something untrue. It goes up as it arrived.
     throw error;
   }
 };
