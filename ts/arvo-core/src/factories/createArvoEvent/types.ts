@@ -35,8 +35,9 @@ export type ContractEventOptions = {
  * ends up holding is the schema's output, which differs wherever the schema
  * declares a default or a transform.
  *
- * `domain` defaults to the contract's own. Pass a string to set it outright,
- * or one of `ArvoDomain`'s symbols to read it from somewhere else.
+ * `domain` omitted means the event has no domain. Pass a string to set one
+ * outright, or one of `ArvoDomain`'s symbols to read one from somewhere —
+ * `FROM_EVENT_CONTRACT` for the contract's own.
  */
 export type ContractEventParam<S extends z.$ZodType> = Partial<
   Omit<ArvoEventParam, SuppliedByContract>

@@ -8,12 +8,13 @@ import type { ContractEventOptions } from './types.js';
 /**
  * The `domain` a contract-aware factory builds an event with.
  *
- * Omitted means the contract's own, which is what a contract carries a
- * `domain` for. A symbol is read from its source; a string is used as it
- * stands.
+ * Omitted means none: nothing is inherited, and a caller who wants the
+ * contract's own asks for it with `ArvoDomain.FROM_EVENT_CONTRACT`. A string
+ * is used as it stands, and a symbol is read from its source.
  *
- * `null` becomes `undefined` on the way out: an event holds `null` for a
- * domain it does not have, and an event's input says the same by omission.
+ * A resolved `null` becomes omission, an event's input spelling absence that
+ * way. The guard is on `undefined` rather than falsiness, so an empty string
+ * reaches the resolver as the value it is.
  */
 export const domainFor = (
   contract: ArvoDomainContext['eventContract'],

@@ -42,7 +42,7 @@ One signature, not two: `clone<T, D>(event: ArvoEvent<T, D>, overrides?: Partial
 
 *Consequence, and it belongs in the TSDoc:* a clone sent alongside its source is two events with one `id`, and ADR-001 makes deduplication key on `id` alone, so one of them will be dropped. The caller overrides `id` when that matters. Stated where they meet it rather than prevented.
 
-*Consequence of the two type surfaces:* an event holds `null` for a field it has no value for, and the input type will not accept `null` at all. A clone therefore drops every null-valued field rather than passing it on, and normalization puts it back. That is a translation between two spellings of the same meaning, not a workaround — and it is the first place `project.md`'s *Optional inputs* decision has cost anything, which is worth recording rather than rediscovering.
+*Consequence of the two type surfaces:* an event holds `null` for a field it has no value for, and the input type declines to spell `null` at all. An earlier draft dropped every null-valued field on the way across, translating one spelling into the other by hand — unnecessarily, because normalization already reads either: every nullable field arrives as `input.field ?? null`. So the fields cross as they stand, behind the one cast that bridges the two type surfaces. `project.md` — *Optional inputs* says this outright, and the draft that hand-rolled it had not read far enough.
 
 *What clone does not do:* infer causality. `parentid`, `initid` and `depth` come across as they stand. A clone is not a child of its source, and a caller who wants a child says so with an override.
 

@@ -18,9 +18,12 @@ import type { ContractEventOptions, ContractEventParam } from './types.js';
  * produces is what the event carries — so a value the schema declares a
  * default for is present even where the caller omitted it.
  *
- * `domain` defaults to the contract's own. Pass a string to set it outright,
- * or one of `ArvoDomain`'s symbols to read it from somewhere else, supplying
- * that symbol's source in `options.domainCtx`.
+ * `to` defaults to the contract's `type`: a request is addressed to the
+ * handler that accepts it. Pass one to address it elsewhere.
+ *
+ * `domain` omitted means the event has no domain. Pass a string to set one, or
+ * one of `ArvoDomain`'s symbols to read one from somewhere — supplying that
+ * symbol's source in `options.domainCtx` where it needs one.
  */
 export const forContract = <V extends VersionedArvoContract>(
   contract: V,
@@ -38,8 +41,8 @@ export const forContract = <V extends VersionedArvoContract>(
   if (!checked.ok) return fromNeverthrow(err(checked.error));
   const { data: _data, domain, ...fields } = param;
   return raw<V['type'], z.output<V['accepts']>>({
-    to: fields.to ?? contract.type ?? undefined,
     ...fields,
+    to: fields.to ?? contract.type,
     type: contract.type,
     dataschema: contract.dataschema,
     domain: domainFor(contract, domain, options),

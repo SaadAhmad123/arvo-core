@@ -22,10 +22,12 @@ import type { ContractEventOptions, ContractEventParam } from './types.js';
  * `type` rather than declared, so it is not an entry of `emits` — build it
  * with the handler error factory.
  *
- * `dataschema` comes from the contract. `domain` defaults to the contract's
- * own; pass a string to set it outright, or one of `ArvoDomain`'s symbols to
- * read it from somewhere else, supplying that symbol's source in
- * `options.domainCtx`.
+ * `dataschema` comes from the contract. `to` does not: where an emitted event
+ * goes is the caller's to say.
+ *
+ * `domain` omitted means the event has no domain. Pass a string to set one, or
+ * one of `ArvoDomain`'s symbols to read one from somewhere — supplying that
+ * symbol's source in `options.domainCtx` where it needs one.
  */
 export const byContract = <
   V extends VersionedArvoContract,

@@ -26,9 +26,11 @@ import type { ContractEventOptions, ErrorEventParam } from './types.js';
  * caller who passes something that is not an `Error` and an event carrying a
  * payload no consumer can read.
  *
- * `domain` defaults to the contract's own. Pass a string to set it outright,
- * or one of `ArvoDomain`'s symbols to read it from somewhere else, supplying
- * that symbol's source in `options.domainCtx`.
+ * `to` is not defaulted: where an error goes is the caller's to say.
+ *
+ * `domain` omitted means the event has no domain. Pass a string to set one, or
+ * one of `ArvoDomain`'s symbols to read one from somewhere — supplying that
+ * symbol's source in `options.domainCtx` where it needs one.
  */
 export const handlerError = <V extends VersionedArvoContract>(
   contract: V,

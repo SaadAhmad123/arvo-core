@@ -6,27 +6,27 @@
 
 ## 2. Types and the shared pieces
 
-- [ ] 2.1 Promote `src/factories/createArvoEvent/types.ts` from the sketch: `SuppliedByContract`, `ContractEventOptions`, `ContractEventParam`, `ErrorEventParam`. Correct the stale TSDoc on `ContractEventParam` — it still says `domain` defaults to the contract's own, which stopped being true when omission came to mean no domain.
-- [ ] 2.2 Promote `payload.ts`. Keep `checkPayload<S extends z.$ZodObject>` returning `z.output<S>`; that return type is what carries the payload's type to the event.
-- [ ] 2.3 Promote `domain.ts`. Keep the `domain === undefined` guard rather than a falsiness check, so an empty string reaches the resolver and fails validation loudly. Correct its TSDoc, which also still claims omission means the contract's own.
+- [x] 2.1 Promote `src/factories/createArvoEvent/types.ts` from the sketch: `SuppliedByContract`, `ContractEventOptions`, `ContractEventParam`, `ErrorEventParam`. Correct the stale TSDoc on `ContractEventParam` — it still says `domain` defaults to the contract's own, which stopped being true when omission came to mean no domain.
+- [x] 2.2 Promote `payload.ts`. Keep `checkPayload<S extends z.$ZodObject>` returning `z.output<S>`; that return type is what carries the payload's type to the event.
+- [x] 2.3 Promote `domain.ts`. Keep the `domain === undefined` guard rather than a falsiness check, so an empty string reaches the resolver and fails validation loudly. Correct its TSDoc, which also still claims omission means the contract's own.
 
 ## 3. The plain builder
 
-- [ ] 3.1 Promote `raw.ts`. Add the TSDoc it has none of: which four fields are required, that `subject` is generated when omitted and what that means, and that an unexpected throw is not converted.
-- [ ] 3.2 Confirm `raw` converts only `ArvoEventValidationError` and rethrows anything else, matching `createArvoContract.ts`.
+- [x] 3.1 Promote `raw.ts`. Add the TSDoc it has none of: which four fields are required, that `subject` is generated when omitted and what that means, and that an unexpected throw is not converted.
+- [x] 3.2 Confirm `raw` converts only `ArvoEventValidationError` and rethrows anything else, matching `createArvoContract.ts`.
 
 ## 4. The contract-aware variants
 
-- [ ] 4.1 Promote `for-contract.ts`. Delete the dead `?? undefined` tail on the `to` default — `contract.type` is a required string and can never be nullish — and move the `to` computation after the `...fields` spread, or key it off `fields.to === undefined`, so an explicitly-passed `to: undefined` cannot overwrite the default.
-- [ ] 4.2 Promote `by-contract.ts`. Keep the runtime guard on the schema lookup and its comment: unreachable from TypeScript, reachable from JavaScript, and without it the missing schema reaches the payload check and raises out of a `tryX`.
-- [ ] 4.3 Promote `handler-error.ts`. Keep the optional-chained reads off `error` and the check on the payload it composes — together they are what turn a non-`Error` into a reported failure instead of a raised `TypeError`.
-- [ ] 4.4 Confirm every variant reads its derived values off the contract — `contract.type`, `contract.dataschema`, `contract.handlerError.type`, `contract.handlerError.schema` — and derives none of them a second time.
+- [x] 4.1 Promote `for-contract.ts`. Delete the dead `?? undefined` tail on the `to` default — `contract.type` is a required string and can never be nullish — and move the `to` computation after the `...fields` spread, or key it off `fields.to === undefined`, so an explicitly-passed `to: undefined` cannot overwrite the default.
+- [x] 4.2 Promote `by-contract.ts`. Keep the runtime guard on the schema lookup and its comment: unreachable from TypeScript, reachable from JavaScript, and without it the missing schema reaches the payload check and raises out of a `tryX`.
+- [x] 4.3 Promote `handler-error.ts`. Keep the optional-chained reads off `error` and the check on the payload it composes — together they are what turn a non-`Error` into a reported failure instead of a raised `TypeError`.
+- [x] 4.4 Confirm every variant reads its derived values off the contract — `contract.type`, `contract.dataschema`, `contract.handlerError.type`, `contract.handlerError.schema` — and derives none of them a second time.
 
 ## 5. Clone
 
-- [ ] 5.1 Promote `clone.ts`. Keep the single signature: overrides typed against the source event's own `T` and `D`, so a clone is always an `ArvoEvent<T, D>`.
-- [ ] 5.2 Document the clone's trace-context precedence in its TSDoc: a replacement span first, then replacement headers, then the cloned event's own. It holds today only because the event's constructor derives from a span after spreading everything else — invisible from this file, so a reader has no way to know it is deliberate.
-- [ ] 5.3 Keep the null-to-absence translation and its comment. An event stores `null` where it has no value and the input type declines `null` entirely, so a null field is dropped and normalization restores it.
+- [x] 5.1 Promote `clone.ts`. Keep the single signature: overrides typed against the source event's own `T` and `D`, so a clone is always an `ArvoEvent<T, D>`.
+- [x] 5.2 Document the clone's trace-context precedence in its TSDoc: a replacement span first, then replacement headers, then the cloned event's own. It holds today only because the event's constructor derives from a span after spreading everything else — invisible from this file, so a reader has no way to know it is deliberate.
+- [x] 5.3 Keep the null-to-absence translation and its comment. An event stores `null` where it has no value and the input type declines `null` entirely, so a null field is dropped and normalization restores it.
 
 ## 6. Tests
 
