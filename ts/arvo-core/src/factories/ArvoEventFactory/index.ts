@@ -1,11 +1,14 @@
+import { err, ok } from 'neverthrow';
 import type * as z from 'zod/v4/core';
-import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
+import { ArvoContractValidationError } from '../../ArvoContract/errors.js';
+import { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
 import type { ArvoEventValidationError } from '../../ArvoEvent/errors.js';
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { ArvoEventParam } from '../../ArvoEvent/types.js';
+import { fromNeverthrow } from '../../result.js';
 import type { Result } from '../../types.js';
+import { ErrorIssue } from '../../utils/error-issue.js';
 import { buildAccepted } from './accepted.js';
-import { buildClone } from './clone.js';
 import { buildEmitted } from './emitted.js';
 import { buildError } from './error.js';
 import type {
@@ -31,7 +34,8 @@ const unwrap = <R>(built: Result<R, ArvoEventValidationError>): R => {
  * would be invalid; `tryCreateX` reports the failure as a value instead — for
  * a payload from outside, where a failure is an outcome rather than a bug.
  *
- * For an event no contract declares, use `createArvoEvent`.
+ * For an event no contract declares, use `createArvoEvent`. To copy one, use
+ * `cloneArvoEvent`.
  *
  * @example
  * const orders = createArvoEventFactory(contract.versions['1.0.0']);
@@ -252,68 +256,56 @@ export class ArvoEventFactory<V extends VersionedArvoContract> {
   > {
     return buildError(this.contract, param, options);
   }
-
-  /**
-   * An existing event with the fields you replace, throwing if the result would
-   * be invalid.
-   *
-   * Nothing is read from this version — a clone is the event it was given, not
-   * an event this contract declares — so any event may be cloned here.
-   *
-   * Everything you do not replace is copied, `id` and `time` included, so a
-   * clone sent alongside its source needs a new `id`: consumers deduplicate on
-   * that field alone. Nothing is derived, `parentid`, `initid` and `depth`
-   * coming across as they stand.
-   *
-   * Trace context takes a replacement `span` first, then a replacement
-   * `traceparent` or `tracestate` field by field, then the cloned event's own.
-   * A `span` replaces both, so a span carrying no trace state leaves the clone
-   * with none.
-   *
-   * @throws {ArvoEventValidationError} If a replacement breaks a structural
-   * rule of an event. The message names every rule that broke.
-   *
-   * @example
-   * orders.createClone(emitted, { to: 'com.audit.log', id: freshId });
-   */
-  createClone<T extends string, D extends Record<string, any>>(
-    event: ArvoEvent<T, D>,
-    overrides?: Partial<ArvoEventParam<T, D>>,
-  ): ArvoEvent<T, D> {
-    return unwrap(buildClone(event, overrides));
-  }
-
-  /**
-   * An existing event with the fields you replace, reporting an invalid result
-   * rather than throwing.
-   *
-   * Nothing is read from this version — a clone is the event it was given, not
-   * an event this contract declares — so any event may be cloned here.
-   *
-   * Everything you do not replace is copied, `id` and `time` included, so a
-   * clone sent alongside its source needs a new `id`: consumers deduplicate on
-   * that field alone. Nothing is derived, `parentid`, `initid` and `depth`
-   * coming across as they stand.
-   *
-   * Trace context takes a replacement `span` first, then a replacement
-   * `traceparent` or `tracestate` field by field, then the cloned event's own.
-   * A `span` replaces both, so a span carrying no trace state leaves the clone
-   * with none.
-   *
-   * A replacement that breaks a structural rule of an event comes back as an
-   * error naming every rule that broke.
-   *
-   * @example
-   * const attempt = orders.tryCreateClone(emitted, { to: routed });
-   * if (!attempt.ok) attempt.error.issues;
-   */
-  tryCreateClone<T extends string, D extends Record<string, any>>(
-    event: ArvoEvent<T, D>,
-    overrides?: Partial<ArvoEventParam<T, D>>,
-  ): Result<ArvoEvent<T, D>, ArvoEventValidationError> {
-    return buildClone(event, overrides);
-  }
 }
+
+/**
+ * A factory for the events one version of a contract declares, reporting an
+ * unusable contract rather than throwing.
+ *
+ * Bind it once and the version stops being an argument at every call site. The
+ * factory carries the version it was given, so each event it builds takes its
+ * `type` and `dataschema` from that contract and has its payload checked
+ * against that version's own schema.
+ *
+ * Anything that is not a version of a contract comes back as an error — a
+ * possibility only for a caller without types, since the parameter admits
+ * nothing else.
+ *
+ * For an event no contract declares, use `tryCreateArvoEvent`. To copy one,
+ * use `tryCloneArvoEvent`.
+ *
+ * @param contract - The version to build events for, reached as
+ * `contract.versions['1.0.0']`.
+ *
+ * @example
+ * const built = tryCreateArvoEventFactory(contract.versions['1.0.0']);
+ * if (!built.ok) return built.error;
+ *
+ * const requested = built.value.createAccepted({
+ *   source: 'com.web.checkout',
+ *   subject: 'order-42',
+ *   data: { items: ['book'] },
+ * });
+ */
+export const tryCreateArvoEventFactory = <V extends VersionedArvoContract>(
+  contract: V,
+): Result<ArvoEventFactory<V>, ArvoContractValidationError> => {
+  if (!(contract instanceof VersionedArvoContract)) {
+    return fromNeverthrow(
+      err(
+        new ArvoContractValidationError([
+          new ErrorIssue({
+            path: 'contract',
+            message: 'must be a version of a contract',
+            received: contract,
+          }),
+        ]),
+      ),
+    );
+  }
+
+  return fromNeverthrow(ok(new ArvoEventFactory(contract)));
+};
 
 /**
  * A factory for the events one version of a contract declares.
@@ -323,10 +315,14 @@ export class ArvoEventFactory<V extends VersionedArvoContract> {
  * `type` and `dataschema` from that contract and has its payload checked
  * against that version's own schema.
  *
- * For an event no contract declares, use `createArvoEvent` instead.
+ * For an event no contract declares, use `createArvoEvent`. To copy one, use
+ * `cloneArvoEvent`.
  *
  * @param contract - The version to build events for, reached as
  * `contract.versions['1.0.0']`.
+ *
+ * @throws {ArvoContractValidationError} If `contract` is not a version of a
+ * contract — reachable only from a caller without types.
  *
  * @example
  * const orders = createArvoEventFactory(contract.versions['1.0.0']);
@@ -345,4 +341,8 @@ export class ArvoEventFactory<V extends VersionedArvoContract> {
  */
 export const createArvoEventFactory = <V extends VersionedArvoContract>(
   contract: V,
-): ArvoEventFactory<V> => new ArvoEventFactory(contract);
+): ArvoEventFactory<V> => {
+  const built = tryCreateArvoEventFactory(contract);
+  if (built.ok) return built.value;
+  throw built.error;
+};

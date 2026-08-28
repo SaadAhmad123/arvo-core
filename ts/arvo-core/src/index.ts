@@ -30,12 +30,17 @@ export type {
 export {
   ArvoEventFactory,
   createArvoEventFactory,
+  tryCreateArvoEventFactory,
 } from './factories/ArvoEventFactory/index.js';
 export type {
   ContractEventOptions,
   ContractEventParam,
   ErrorEventParam,
 } from './factories/ArvoEventFactory/types.js';
+export {
+  cloneArvoEvent,
+  tryCloneArvoEvent,
+} from './factories/cloneArvoEvent.js';
 export {
   createArvoContract,
   tryCreateArvoContract,
