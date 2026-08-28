@@ -180,6 +180,32 @@ The event cloned SHALL NOT be altered.
 - **WHEN** an event is cloned with a replacement that breaks a structural rule of an event
 - **THEN** building fails on that rule
 
+### Requirement: The Trace Context Of A Clone
+
+Where an event is cloned, the system SHALL resolve the clone's trace context by precedence: a span supplied among the replacements first, then trace headers supplied among the replacements, then the trace context the cloned event carries.
+
+Where a span is supplied, the clone's trace context SHALL be derived wholly from that span, and the cloned event's own trace context SHALL NOT be carried across in part.
+
+#### Scenario: A span supplied among the replacements
+- **WHEN** an event carrying a trace context is cloned with a span supplied
+- **THEN** the clone's trace context is the one derived from that span
+
+#### Scenario: A span replaces the trace context whole
+- **WHEN** an event carrying both trace headers is cloned with a span carrying no trace state
+- **THEN** the clone reports no trace state, rather than the cloned event's
+
+#### Scenario: Trace headers supplied among the replacements
+- **WHEN** an event carrying a trace context is cloned with trace headers supplied
+- **THEN** the clone carries the supplied headers
+
+#### Scenario: Neither supplied
+- **WHEN** an event carrying a trace context is cloned with no span and no trace headers supplied
+- **THEN** the clone carries the cloned event's trace context
+
+#### Scenario: Nothing to carry and nothing supplied
+- **WHEN** an event carrying no trace context is cloned with nothing supplied
+- **THEN** the clone carries none
+
 ### Requirement: The Domain Of An Event Built From A Contract
 
 Where an event is built from a version of a contract, the system SHALL accept for its domain either a value or a request to read one from a named source, and SHALL resolve any such request before the event exists.

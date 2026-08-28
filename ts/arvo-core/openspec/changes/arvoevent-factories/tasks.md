@@ -25,7 +25,8 @@
 ## 5. Clone
 
 - [ ] 5.1 Promote `clone.ts`. Keep the single signature: overrides typed against the source event's own `T` and `D`, so a clone is always an `ArvoEvent<T, D>`.
-- [ ] 5.2 Keep the null-to-absence translation and its comment. An event stores `null` where it has no value and the input type declines `null` entirely, so a null field is dropped and normalization restores it.
+- [ ] 5.2 Document the clone's trace-context precedence in its TSDoc: a replacement span first, then replacement headers, then the cloned event's own. It holds today only because the event's constructor derives from a span after spreading everything else — invisible from this file, so a reader has no way to know it is deliberate.
+- [ ] 5.3 Keep the null-to-absence translation and its comment. An event stores `null` where it has no value and the input type declines `null` entirely, so a null field is dropped and normalization restores it.
 
 ## 6. Tests
 
@@ -34,6 +35,7 @@
 - [ ] 6.3 Add `tests/factories/createArvoEvent/by-contract.spec.ts`: an emitted event built, the payload judged by the named type's declaration rather than a sibling's, no recipient invented, an undeclared type reported at position `type` naming what is declared, a version declaring no emits reported with its own wording, and the handler error type refused.
 - [ ] 6.4 Add `tests/factories/createArvoEvent/handler-error.spec.ts`: name, message and stack composed onto the payload, an error with no stack reporting null, type and dataschema from the version, and a non-`Error` reported rather than raised. Pin the transform-bearing outcome probed in §1.3 here.
 - [ ] 6.5 Add `tests/factories/createArvoEvent/clone.spec.ts`: every field carried across including identity and time, a replacement applied with everything else intact, causal fields carried rather than derived, the source unchanged, and a replacement that breaks a rule failing.
+- [ ] 6.5a Extend it with the trace-context precedence, all five cases: a replacement span over the source's headers, replacement headers over the source's, the source's where neither is supplied, a span where the source had none, and none where there is nothing either side. Include the case that loses information — a span carrying no trace state discards the source's — since that is the one a reader would otherwise call a bug.
 - [ ] 6.6 Add `tests/factories/createArvoEvent/domain.spec.ts`: omitted giving no domain even where the contract declares one, a value used as it stands, each of the four sources, a source not supplied giving no domain, a contract declaring no domain giving none, and an empty string reaching validation rather than being swallowed.
 - [ ] 6.7 Add `tests/factories/createArvoEvent/pairing.spec.ts`: for every variant, the throwing form and the primitive agree, the throwing form raises what the primitive reported, and no input a caller can supply raises out of the primitive.
 - [ ] 6.8 Add `tests/factories/createArvoEvent/agreement.spec.ts` — the property that ties this change to its sibling: an event built by `.for`, `.by` and `.error` in turn, asserted back against the contract that built it, matches with the scope that variant implies.
