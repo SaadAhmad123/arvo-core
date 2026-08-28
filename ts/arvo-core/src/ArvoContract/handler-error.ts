@@ -10,7 +10,8 @@ import * as z from 'zod/v4/core';
  * restate the type the runtime object actually has. The cast is confined to
  * one line each rather than spreading to whatever is built from them.
  */
-const string = (): z.$ZodString => new z.$ZodString({ type: 'string' });
+const string = (): z.$ZodString<string> =>
+  new z.$ZodString({ type: 'string' }) as unknown as z.$ZodString<string>;
 
 const nullable = <T extends z.$ZodType>(innerType: T): z.$ZodNullable<T> =>
   new z.$ZodNullable({ type: 'nullable', innerType }) as z.$ZodNullable<T>;

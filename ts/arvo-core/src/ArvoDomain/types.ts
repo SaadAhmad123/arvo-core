@@ -19,9 +19,9 @@ export type ArvoDomainInput = string | ArvoDomainSymbol;
  */
 export type ArvoDomainContext = {
   /** The contract the event being built belongs to. */
-  eventContract: VersionedArvoContract<any, any, any>;
+  eventContract: VersionedArvoContract;
   /** The contract of whoever is building the event, where that differs. */
-  selfContract?: VersionedArvoContract<any, any, any>;
+  selfContract?: VersionedArvoContract;
   /** The event that caused the one being built. */
-  triggeringEvent?: ArvoEvent<any, any>;
+  triggeringEvent?: ArvoEvent;
 };
