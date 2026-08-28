@@ -34,9 +34,9 @@ const triggeringEvent = new ArvoEvent({
 
 describe('a domain supplied as a value', () => {
   it('is used as it stands', () => {
-    expect(
-      resolveEventDomain('explicit', { eventContract: withDomain }),
-    ).toBe('explicit');
+    expect(resolveEventDomain('explicit', { eventContract: withDomain })).toBe(
+      'explicit',
+    );
   });
 
   it('is used even when it looks like a symbol description', () => {

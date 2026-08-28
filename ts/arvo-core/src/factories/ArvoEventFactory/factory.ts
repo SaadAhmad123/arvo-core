@@ -49,7 +49,9 @@ const unwrap = <R>(built: Result<R, ArvoEventValidationError>): R => {
  *   data: { order_id: 'o-1' },
  * });
  */
-export class ArvoEventFactory<V extends VersionedArvoContract> {
+export class ArvoEventFactory<
+  V extends VersionedArvoContract = VersionedArvoContract,
+> {
   /** The version every event built here belongs to. */
   readonly contract: V;
 

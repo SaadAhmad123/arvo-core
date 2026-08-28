@@ -30,16 +30,16 @@
 
 ## 6. Tests
 
-- [ ] 6.1 Add `tests/factories/createArvoEvent.spec.ts`: the four required fields alone, a generated subject differing between two events, a supplied subject kept, a missing required field failing, and a structural rule failing as it would through the constructor.
-- [ ] 6.2 Add `tests/factories/ArvoEventFactory/accepted.spec.ts`: type and dataschema from the version, the recipient defaulting to the contract's type, a supplied recipient winning, a declared default reaching the payload, a supplied value not replaced, and a rejected payload failing with positions beneath `data`.
-- [ ] 6.3 Add `tests/factories/ArvoEventFactory/emitted.spec.ts`: an emitted event built, the payload judged by the named type's declaration rather than a sibling's, no recipient invented, an undeclared type reported at position `type` naming what is declared, a version declaring no emits reported with its own wording, and the handler error type refused.
-- [ ] 6.4 Add `tests/factories/ArvoEventFactory/error.spec.ts`: name, message and stack composed onto the payload, an error with no stack reporting null, type and dataschema from the version, and a non-`Error` reported rather than raised.
-- [ ] 6.4a Pin both transform outcomes from §1.3, in `accepted.spec.ts`: a schema coercing to a `Date` builds an event carrying the serialized string — declared as a `Date` and not one, which is why the divergence is documented — and a schema transforming to a `Set` is reported at its position within the payload rather than raised.
-- [ ] 6.5 Add `tests/factories/cloneArvoEvent.spec.ts`: every field carried across including identity and time, a replacement applied with everything else intact, causal fields carried rather than derived, the source unchanged, and a replacement that breaks a rule failing.
-- [ ] 6.5a Extend it with the trace-context precedence: a replacement span over the source's headers, both headers replaced, one header replaced with the other carried across, the source's where nothing trace-related is supplied, a span where the source had none, and none where there is nothing either side. Include the asymmetry — a span replaces both, a header replaces only itself — since a reader meeting one without the other would call it inconsistent.
-- [ ] 6.6 Add `tests/factories/ArvoEventFactory/domain.spec.ts`: omitted giving no domain even where the contract declares one, a value used as it stands, each of the four sources, a source not supplied giving no domain, a contract declaring no domain giving none, and an empty string reaching validation rather than being swallowed.
-- [ ] 6.7 Add `tests/factories/pairing.spec.ts`: for every builder, the throwing form and the reporting form agree, the throwing form raises what the primitive reported, and no input a caller can supply raises out of the primitive.
-- [ ] 6.8 Add `tests/factories/agreement.spec.ts` — the property that ties this change to its sibling: an event built by `createAccepted`, `createEmitted` and `createError` in turn, asserted back against the version that built it, matches with the scope that builder implies.
+- [x] 6.1 Add `tests/factories/createArvoEvent.spec.ts`: the four required fields alone, a generated subject differing between two events, a supplied subject kept, a missing required field failing, and a structural rule failing as it would through the constructor.
+- [x] 6.2 Add `tests/factories/ArvoEventFactory/accepted.spec.ts`: type and dataschema from the version, the recipient defaulting to the contract's type, a supplied recipient winning, a declared default reaching the payload, a supplied value not replaced, and a rejected payload failing with positions beneath `data`.
+- [x] 6.3 Add `tests/factories/ArvoEventFactory/emitted.spec.ts`: an emitted event built, the payload judged by the named type's declaration rather than a sibling's, no recipient invented, an undeclared type reported at position `type` naming what is declared, a version declaring no emits reported with its own wording, and the handler error type refused.
+- [x] 6.4 Add `tests/factories/ArvoEventFactory/error.spec.ts`: name, message and stack composed onto the payload, an error with no stack reporting null, type and dataschema from the version, and a non-`Error` reported rather than raised.
+- [x] 6.4a Pin both transform outcomes from §1.3, in `accepted.spec.ts`: a schema coercing to a `Date` builds an event carrying the serialized string — declared as a `Date` and not one, which is why the divergence is documented — and a schema transforming to a `Set` is reported at its position within the payload rather than raised.
+- [x] 6.5 Add `tests/factories/cloneArvoEvent.spec.ts`: every field carried across including identity and time, a replacement applied with everything else intact, causal fields carried rather than derived, the source unchanged, and a replacement that breaks a rule failing.
+- [x] 6.5a Extend it with the trace-context precedence: a replacement span over the source's headers, both headers replaced, one header replaced with the other carried across, the source's where nothing trace-related is supplied, a span where the source had none, and none where there is nothing either side. Include the asymmetry — a span replaces both, a header replaces only itself — since a reader meeting one without the other would call it inconsistent.
+- [x] 6.6 Add `tests/factories/ArvoEventFactory/domain.spec.ts`: omitted giving no domain even where the contract declares one, a value used as it stands, each of the four sources, a source not supplied giving no domain, a contract declaring no domain giving none, and an empty string reaching validation rather than being swallowed.
+- [x] 6.7 Add `tests/factories/pairing.spec.ts`: for every builder, the throwing form and the reporting form agree, the throwing form raises what the primitive reported, and no input a caller can supply raises out of the primitive.
+- [x] 6.8 Add `tests/factories/agreement.spec.ts` — the property that ties this change to its sibling: an event built by `createAccepted`, `createEmitted` and `createError` in turn, asserted back against the version that built it, matches with the scope that builder implies.
 
 ## 7. The error's documentation
 
@@ -54,7 +54,7 @@
 - [ ] 8.4 Add type-level tests for what §1 established, so the narrowing cannot regress silently.
 - [ ] 8.5 Add a section to `ts/sandbox/src/playground.ts` exercising the factory's three builders, the two standalone pairs, each of the four domain sources, and the three failures a caller is likeliest to meet.
 
-- [ ] 8.6 Test the factory's own pair: `tryCreateArvoEventFactory` reporting at position `contract` for something that is not a version of a contract, `createArvoEventFactory` throwing the same, and the instance frozen with its `contract` readable.
+- [x] 8.6 Test the factory's own pair: `tryCreateArvoEventFactory` reporting at position `contract` for something that is not a version of a contract, `createArvoEventFactory` throwing the same, and the instance frozen with its `contract` readable.
 
 ## 9. Close out
 
