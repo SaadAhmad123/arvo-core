@@ -108,17 +108,17 @@ The comment on the guard states that it is unreachable from TypeScript and reach
 
 `.by(contract, { type, source, data })`, not `.by(contract, type, { source, data })`. As a field it sits where every other event field sits, so a caller moving between variants never rearranges their call — and it stays in the spread on the way to the constructor, being the event's own field that the caller chose.
 
-### One error, wrapping rather than re-labelling
+### The event's own error, everywhere — no factory error exists
 
-`ArvoEventFactoryError`: a `_tag`, a frozen `readonly issues`, a message from `buildErrorIssueMessage`, and `cause` carrying the `ArvoEventValidationError` when the failure came from the constructor. The sketch borrows `ArvoEventValidationError` throughout; the implementation replaces that borrowing, and the reason is on record:
+Every failure, from every variant and both forms, is `ArvoEventValidationError`. A factory does exactly two things — build an event and validate its creation — and each failure is the event failing to come into being, whichever rule caught it: a structural rule in the constructor, or the contract's schema at the door. One operation, one error, one `catch`.
 
-*Why not reuse `ArvoEventValidationError`:* its own TSDoc says, verbatim, that it "does not mean the payload failed contract validation, which is a separate check". A payload failure is the main thing that goes wrong here, so reusing it makes a shipped comment false — the same defect the assertion change rejected for the same reason.
+*What this costs, and how it is paid:* the error's own TSDoc currently says it "does not mean the payload failed contract validation, which is a separate check". That sentence was written when construction and contract validation genuinely were separate, and the factories end that separation — for an event built from a contract, the schema is part of what creation means. The sentence is amended as part of this change rather than left to become false. An earlier draft introduced a dedicated `ArvoEventFactoryError` to avoid touching it; a new public error type for the same operation-shaped failure is the heavier fix for a one-sentence problem, and hands callers two types to catch where one suffices.
 
-*Why not `ArvoContractAssertionError`:* nothing is asserted. That error means an event does not match a contract; this means a payload cannot become one.
+*Why not `ArvoContractAssertionError`:* nothing is asserted. That error means an event that exists does not match a contract; this means a payload could not become an event at all.
 
-*Why `cause` rather than rebuilding:* the constructor's error already names every structural rule that broke, with positions. Its issues are carried across and the original kept as `cause`, so nothing is restated and nothing is lost.
+*How the two sources stay one error:* the payload check builds the error itself, issues under `data.…`; a constructor failure is the error already, passed through untouched. Nothing is wrapped and nothing re-labelled, so an issue's position and message read the same whichever rule produced them.
 
-An unexpected throw is not converted, matching the contract factory: an error type is a claim about what kind of failure occurred, and a bug elsewhere on the call path is not a factory failure.
+An unexpected throw is not converted, matching the contract factory: an error type is a claim about what kind of failure occurred, and a bug elsewhere on the call path is not a validation failure.
 
 ### One file per variant, one surface assembled over them
 

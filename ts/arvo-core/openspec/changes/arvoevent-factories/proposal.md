@@ -27,7 +27,7 @@ No ADR governs building an event from a contract. [ADR-001](../../../../docs/adr
 - **`.for` also defaults `to`** — the event it builds is a request, and the handler bound to this contract is who accepts it, so `to` falls back to `contract.type` when the caller says nothing. `.by` and `.error` default nothing: where an emitted event or an error goes is fully the caller's decision.
 - **`domain` takes a value or an instruction.** Omitted means the event has no domain. A string is used as it stands. One of `ArvoDomain`'s symbols is resolved before the event is built — `FROM_EVENT_CONTRACT` reads the contract the factory already holds; `FROM_SELF_CONTRACT` and `FROM_TRIGGERING_EVENT` read sources the caller supplies in the options. The `ArvoDomain` module already ships; this change consumes it.
 - **Only one field is ever filled in silently**, and only where nothing could supply it: `subject`, whose omission means this event starts its own execution.
-- **New `ArvoEventFactoryError`** — one error for the operation, rather than stretching `ArvoEventValidationError`, whose own documentation states it does not mean a payload failed contract validation.
+- **No new error type.** A factory does exactly two things — build an event and validate its creation — and both are the event failing to come into being, so every failure is the event's own `ArvoEventValidationError`. Its documentation currently says a payload failing contract validation is a separate check; that sentence is amended by this change, since here the contract's schema is part of what creation means.
 - **BREAKING**: none. Additive.
 
 ## The developer-facing surface
@@ -39,27 +39,27 @@ interface TryCreateArvoEvent {
   /** Fields in, event out. Only `subject` is defaulted. */
   <T extends string, D extends Record<string, any>>(
     param: PartialExcept<ArvoEventParam<T, D>, 'type' | 'data' | 'source' | 'dataschema'>,
-  ): Result<ArvoEvent<T, D>, ArvoEventFactoryError>;
+  ): Result<ArvoEvent<T, D>, ArvoEventValidationError>;
 
   /** The same field values, with overrides applied. Typing survives. */
   clone<T extends string, D extends Record<string, any>>(
     event: ArvoEvent<T, D>,
     overrides?: Partial<ArvoEventParam<T, D>>,
-  ): Result<ArvoEvent<T, D>, ArvoEventFactoryError>;
+  ): Result<ArvoEvent<T, D>, ArvoEventValidationError>;
 
   /** The event this version accepts. */
   for<V extends VersionedArvoContract>(
     contract: V,
     param: ContractEventParam<V['accepts']>,
     options?: ContractEventOptions,
-  ): Result<ArvoEvent<V['type'], z.output<V['accepts']>>, ArvoEventFactoryError>;
+  ): Result<ArvoEvent<V['type'], z.output<V['accepts']>>, ArvoEventValidationError>;
 
   /** One of the events this version emits. The handler error is not among them. */
   by<V extends VersionedArvoContract, E extends keyof V['emits'] & string>(
     contract: V,
     param: { type: E } & ContractEventParam<V['emits'][E]>,
     options?: ContractEventOptions,
-  ): Result<ArvoEvent<E, z.output<V['emits'][E]>>, ArvoEventFactoryError>;
+  ): Result<ArvoEvent<E, z.output<V['emits'][E]>>, ArvoEventValidationError>;
 
   /** This version's handler error event, from the error itself. */
   error<V extends VersionedArvoContract>(
@@ -68,7 +68,7 @@ interface TryCreateArvoEvent {
     options?: ContractEventOptions,
   ): Result<
     ArvoEvent<V['handlerError']['type'], z.output<V['handlerError']['schema']>>,
-    ArvoEventFactoryError
+    ArvoEventValidationError
   >;
 }
 ```
@@ -199,7 +199,7 @@ plain ────────────────────────�
 
 ## Failure
 
-One error, `ArvoEventFactoryError`: a `_tag`, a frozen list of `ErrorIssue`s, a message naming every rule that broke, and the event's own `ArvoEventValidationError` as `cause` when the failure came from the constructor. The sketch borrows `ArvoEventValidationError` in the meantime; the implementation replaces that, since that error's own documentation says it does not mean a payload failed contract validation.
+One error, `ArvoEventValidationError` — the event's own, from every variant and both forms. A factory builds an event and validates its creation, and each failure below is the event failing to come into being, whichever rule caught it. A caller has one thing to catch, or one `issues` list to read.
 
 | Situation | Position |
 |---|---|
@@ -222,7 +222,7 @@ None. `arvo-event` keeps its rules — every event is built by its constructor �
 **Affected code**
 
 - `src/factories/createArvoEvent/` — `raw.ts`, `clone.ts`, `for-contract.ts`, `by-contract.ts`, `handler-error.ts`, the shared `payload.ts` and `domain.ts`, `types.ts`, and `index.ts` assembling the surface. The sketch of all nine exists and compiles.
-- `src/factories/errors.ts` (new) — `ArvoEventFactoryError`
+- `src/ArvoEvent/errors.ts` — one TSDoc sentence amended: `ArvoEventValidationError` now also reports a payload failing its contract's schema at construction
 - `src/index.ts` — new public exports
 - `tests/factories/createArvoEvent/` (new)
 - `ts/sandbox/src/playground.ts` — a section exercising all five
@@ -233,7 +233,7 @@ None added. Everything zod goes through `zod/v4/core`, the one entry point a lib
 
 **Not touched**
 
-- `src/ArvoEvent/` — construction goes through the existing constructor, so every structural rule already holds and none is restated.
+- `src/ArvoEvent/` behaviour — construction goes through the existing constructor, so every structural rule already holds and none is restated. Only the error's TSDoc sentence above changes.
 - `src/ArvoContract/` — a contract is read. Its `handlerError` supplies both the event type and the payload shape, so neither is derived here.
 - `src/ArvoDomain/` — already shipped. This change consumes its symbols and resolver as they stand.
 
