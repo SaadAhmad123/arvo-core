@@ -1,4 +1,4 @@
-import type { ErrorIssue } from '../../../utils/error-issue.js';
+import type { ErrorIssue } from '../../../../utils/error-issue.js';
 import type { CloudEvent } from '../../types.js';
 import { ARVO_MEDIA_TYPE, DATA_SCHEMA } from '../constants.js';
 import { parseDataContentType } from '../content-type.js';

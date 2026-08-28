@@ -15,6 +15,7 @@
 
 import {
   ArvoContract,
+  ArvoContractAssertionError,
   ArvoContractSerializer,
   ArvoContractValidationError,
   ArvoEvent,
@@ -416,72 +417,72 @@ function contracts(): void {
 }
 
 function contractsAsJson(): void {
-	console.log("\n--- a contract as portable JSON ---\n");
+  console.log('\n--- a contract as portable JSON ---\n');
 
-	const contract = new ArvoContract({
-		type: "com_order_create",
-		description: "Creates orders",
-		versions: {
-			"1.0.0": {
-				accepts: z.object({ amount: z.number().min(1) }),
-				emits: { com_order_created: z.object({ order_id: z.string() }) },
-			},
-		},
-	});
+  const contract = new ArvoContract({
+    type: 'com_order_create',
+    description: 'Creates orders',
+    versions: {
+      '1.0.0': {
+        accepts: z.object({ amount: z.number().min(1) }),
+        emits: { com_order_created: z.object({ order_id: z.string() }) },
+      },
+    },
+  });
 
-	const serializer = new ArvoContractSerializer();
-	const { schema, warningString } = serializer.serialize(contract);
-	console.log(indent(JSON.stringify(JSON.parse(schema), null, 2)));
-	console.log("\n  losses on the way out:", warningString ?? "none");
+  const serializer = new ArvoContractSerializer();
+  const { schema, warningString } = serializer.serialize(contract);
+  console.log(indent(JSON.stringify(JSON.parse(schema), null, 2)));
+  console.log('\n  losses on the way out:', warningString ?? 'none');
 
-	// Read it straight back. This is the crossing another language would make.
-	const { contract: back } = serializer.deserialize(schema);
-	console.log("\n  read back:      ", back.uri, Object.keys(back.versions));
-	console.log("  dataschema:     ", back.versions["1.0.0"].dataschema);
-	console.log("  handler error:  ", back.versions["1.0.0"].handlerError.type);
-	// `accepts` is a core zod schema, so parsing goes through zod's standalone
-	// form rather than a method on it.
-	console.log(
-		"  still rejects amount 0?",
-		!z.safeParse(back.versions["1.0.0"].accepts, { amount: 0 }).success,
-	);
+  // Read it straight back. This is the crossing another language would make.
+  const { contract: back } = serializer.deserialize(schema);
+  console.log('\n  read back:      ', back.uri, Object.keys(back.versions));
+  console.log('  dataschema:     ', back.versions['1.0.0'].dataschema);
+  console.log('  handler error:  ', back.versions['1.0.0'].handlerError.type);
+  // `accepts` is a core zod schema, so parsing goes through zod's standalone
+  // form rather than a method on it.
+  console.log(
+    '  still rejects amount 0?',
+    !z.safeParse(back.versions['1.0.0'].accepts, { amount: 0 }).success,
+  );
 
-	// JSON Schema cannot carry every constraint zod can. What it cannot carry
-	// is omitted rather than approximated, and always reported.
-	const withADate = new ArvoContract({
-		type: "com_report_run",
-		versions: {
-			"1.0.0": {
-				accepts: z.object({ from: z.date(), label: z.string() }),
-				emits: {},
-			},
-		},
-	});
-	console.log("\n  a contract carrying a Date:");
-	console.log(indent(serializer.serialize(withADate).warningString ?? ""));
+  // JSON Schema cannot carry every constraint zod can. What it cannot carry
+  // is omitted rather than approximated, and always reported.
+  const withADate = new ArvoContract({
+    type: 'com_report_run',
+    versions: {
+      '1.0.0': {
+        accepts: z.object({ from: z.date(), label: z.string() }),
+        emits: {},
+      },
+    },
+  });
+  console.log('\n  a contract carrying a Date:');
+  console.log(indent(serializer.serialize(withADate).warningString ?? ''));
 
-	// A form this implementation cannot read fails naming what stopped it,
-	// rather than producing a contract that enforces less than it declares.
-	const unreadable = JSON.stringify({
-		uri: "#/com/a/b",
-		type: "com_a_b",
-		versions: {
-			"1.0.0": {
-				accepts: {
-					$schema: "https://json-schema.org/draft/2020-12/schema",
-					type: "object",
-					properties: { a: { type: "string" } },
-					unevaluatedProperties: false,
-				},
-				emits: {},
-			},
-		},
-	});
-	const attempt = serializer.tryDeserialize(unreadable);
-	if (!attempt.ok) {
-		console.log("\n  a form using unevaluatedProperties:");
-		console.log(indent(attempt.error.message));
-	}
+  // A form this implementation cannot read fails naming what stopped it,
+  // rather than producing a contract that enforces less than it declares.
+  const unreadable = JSON.stringify({
+    uri: '#/com/a/b',
+    type: 'com_a_b',
+    versions: {
+      '1.0.0': {
+        accepts: {
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          unevaluatedProperties: false,
+        },
+        emits: {},
+      },
+    },
+  });
+  const attempt = serializer.tryDeserialize(unreadable);
+  if (!attempt.ok) {
+    console.log('\n  a form using unevaluatedProperties:');
+    console.log(indent(attempt.error.message));
+  }
 }
 
 /**
@@ -492,84 +493,84 @@ function contractsAsJson(): void {
  * form that enforces less than the contract did never comes back quietly.
  */
 function whatACrossingCosts(): void {
-  console.log("\n--- what a crossing costs ---\n");
+  console.log('\n--- what a crossing costs ---\n');
 
   const serializer = new ArvoContractSerializer();
 
   // A Date has no JSON Schema equivalent, so the position ends up carrying
   // nothing. The contract still serializes.
   const withDate = new ArvoContract({
-    type: "com_report_run",
+    type: 'com_report_run',
     versions: {
-      "1.0.0": {
+      '1.0.0': {
         accepts: z.object({ from: z.date(), label: z.string().min(2) }),
         emits: {},
       },
     },
   });
   const dated = serializer.serialize(withDate);
-  console.log("a Date in accepts:");
-  console.log(indent(dated.warningString ?? "nothing lost"));
+  console.log('a Date in accepts:');
+  console.log(indent(dated.warningString ?? 'nothing lost'));
   console.log(
-    "  the position now carries:",
+    '  the position now carries:',
     JSON.stringify(
-      JSON.parse(dated.schema).versions["1.0.0"].accepts.properties.from,
+      JSON.parse(dated.schema).versions['1.0.0'].accepts.properties.from,
     ),
   );
 
   // A url() check survives as documentation. Nothing may enforce an
   // annotation keyword, so the check stops working while staying readable.
   const withUrl = new ArvoContract({
-    type: "com_link_check",
+    type: 'com_link_check',
     versions: {
-      "1.0.0": { accepts: z.object({ target: z.url() }), emits: {} },
+      '1.0.0': { accepts: z.object({ target: z.url() }), emits: {} },
     },
   });
   const linked = serializer.serialize(withUrl);
-  console.log("\na url() check:");
-  console.log(indent(linked.warningString ?? "nothing lost"));
+  console.log('\na url() check:');
+  console.log(indent(linked.warningString ?? 'nothing lost'));
   const { contract: linkedBack } = serializer.deserialize(linked.schema);
   console.log(
     "  original rejects 'nope'? ",
-    !z.safeParse(withUrl.versions["1.0.0"].accepts, { target: "nope" }).success,
+    !z.safeParse(withUrl.versions['1.0.0'].accepts, { target: 'nope' }).success,
   );
   console.log(
-    "  read back rejects it?    ",
-    !z.safeParse(linkedBack.versions["1.0.0"].accepts, { target: "nope" })
+    '  read back rejects it?    ',
+    !z.safeParse(linkedBack.versions['1.0.0'].accepts, { target: 'nope' })
       .success,
   );
 
   // An email() keeps working, because zod writes a pattern beside the
   // annotation and a pattern is enforced by everyone.
   const withEmail = new ArvoContract({
-    type: "com_user_invite",
+    type: 'com_user_invite',
     versions: {
-      "1.0.0": { accepts: z.object({ to: z.email() }), emits: {} },
+      '1.0.0': { accepts: z.object({ to: z.email() }), emits: {} },
     },
   });
   const mailed = serializer.serialize(withEmail);
-  console.log("\nan email() check:");
-  console.log("  losses:", mailed.warningString ?? "none");
+  console.log('\nan email() check:');
+  console.log('  losses:', mailed.warningString ?? 'none');
   console.log(
     "  read back rejects 'nope'?",
     !z.safeParse(
-      serializer.deserialize(mailed.schema).contract.versions["1.0.0"].accepts,
-      { to: "nope" },
+      serializer.deserialize(mailed.schema).contract.versions['1.0.0'].accepts,
+      { to: 'nope' },
     ).success,
   );
 
   // Nothing lost at all: the usual case.
   const plain = new ArvoContract({
-    type: "com_order_place",
+    type: 'com_order_place',
     versions: {
-      "1.0.0": {
+      '1.0.0': {
         accepts: z.object({ sku: z.string(), qty: z.int().min(1) }),
         emits: {},
       },
     },
   });
-  console.log("\na contract of plain data:");
-  console.log("  losses:", serializer.serialize(plain).warningString ?? "none");
+  console.log('\na contract of plain data:');
+  console.log('  losses:', serializer.serialize(plain).warningString ?? 'none');
 }
 
 /**
@@ -579,32 +580,32 @@ function whatACrossingCosts(): void {
  * another language's tooling, becoming a contract here.
  */
 function readingAForeignForm(): void {
-  console.log("\n--- reading a form from elsewhere ---\n");
+  console.log('\n--- reading a form from elsewhere ---\n');
 
   const serializer = new ArvoContractSerializer();
-  const DIALECT = "https://json-schema.org/draft/2020-12/schema";
+  const DIALECT = 'https://json-schema.org/draft/2020-12/schema';
 
   // Hand-written, and deliberately terse: the optional fields are omitted
   // entirely and `uri` is left to be derived from `type`.
   const foreign = JSON.stringify({
-    type: "com_payment_process",
+    type: 'com_payment_process',
     versions: {
-      "1.0.0": {
+      '1.0.0': {
         accepts: {
           $schema: DIALECT,
-          type: "object",
+          type: 'object',
           properties: {
-            amount: { type: "number", exclusiveMinimum: 0 },
-            currency: { type: "string", minLength: 3, maxLength: 3 },
+            amount: { type: 'number', exclusiveMinimum: 0 },
+            currency: { type: 'string', minLength: 3, maxLength: 3 },
           },
-          required: ["amount", "currency"],
+          required: ['amount', 'currency'],
         },
         emits: {
           com_payment_processed: {
             $schema: DIALECT,
-            type: "object",
-            properties: { transaction_id: { type: "string" } },
-            required: ["transaction_id"],
+            type: 'object',
+            properties: { transaction_id: { type: 'string' } },
+            required: ['transaction_id'],
           },
         },
       },
@@ -612,17 +613,29 @@ function readingAForeignForm(): void {
   });
 
   const { contract, warningString } = serializer.deserialize(foreign);
-  console.log("uri derived from type:", contract.uri);
-  console.log("description/domain:   ", contract.description, contract.domain);
-  console.log("dataschema:           ", contract.versions["1.0.0"].dataschema);
-  console.log("handler error:        ", contract.versions["1.0.0"].handlerError.type);
-  console.log("losses:               ", warningString ?? "none");
+  console.log('uri derived from type:', contract.uri);
+  console.log('description/domain:   ', contract.description, contract.domain);
+  console.log('dataschema:           ', contract.versions['1.0.0'].dataschema);
+  console.log(
+    'handler error:        ',
+    contract.versions['1.0.0'].handlerError.type,
+  );
+  console.log('losses:               ', warningString ?? 'none');
 
-  const accepts = contract.versions["1.0.0"].accepts;
-  console.log("\nthe constraints still hold:");
-  console.log("  { amount: 5, currency: 'GBP' } ->", z.safeParse(accepts, { amount: 5, currency: "GBP" }).success);
-  console.log("  { amount: 0, currency: 'GBP' } ->", z.safeParse(accepts, { amount: 0, currency: "GBP" }).success);
-  console.log("  { amount: 5, currency: 'GB' }  ->", z.safeParse(accepts, { amount: 5, currency: "GB" }).success);
+  const accepts = contract.versions['1.0.0'].accepts;
+  console.log('\nthe constraints still hold:');
+  console.log(
+    "  { amount: 5, currency: 'GBP' } ->",
+    z.safeParse(accepts, { amount: 5, currency: 'GBP' }).success,
+  );
+  console.log(
+    "  { amount: 0, currency: 'GBP' } ->",
+    z.safeParse(accepts, { amount: 0, currency: 'GBP' }).success,
+  );
+  console.log(
+    "  { amount: 5, currency: 'GB' }  ->",
+    z.safeParse(accepts, { amount: 5, currency: 'GB' }).success,
+  );
 }
 
 /**
@@ -633,33 +646,33 @@ function readingAForeignForm(): void {
  * stops before the contract is reached and says so.
  */
 function whenAFormIsRejected(): void {
-  console.log("\n--- when a form is rejected ---\n");
+  console.log('\n--- when a form is rejected ---\n');
 
   const serializer = new ArvoContractSerializer();
-  const DIALECT = "https://json-schema.org/draft/2020-12/schema";
-  const objectSchema = { $schema: DIALECT, type: "object", properties: {} };
+  const DIALECT = 'https://json-schema.org/draft/2020-12/schema';
+  const objectSchema = { $schema: DIALECT, type: 'object', properties: {} };
   const show = (label: string, json: string): void => {
     const result = serializer.tryDeserialize(json);
     console.log(`${label}:`);
     if (result.ok) {
-      console.log("  read without complaint");
+      console.log('  read without complaint');
       return;
     }
     console.log(indent(result.error.message));
-    if (result.error.cause) console.log("  cause:", result.error.cause.name);
+    if (result.error.cause) console.log('  cause:', result.error.cause.name);
     console.log();
   };
 
-  show("not JSON at all", "{ not json");
+  show('not JSON at all', '{ not json');
 
   // Several contract rules broken at once, all reported together.
   show(
-    "three contract rules broken",
+    'three contract rules broken',
     JSON.stringify({
-      type: "com_a_b",
-      domain: "Bad_Domain",
+      type: 'com_a_b',
+      domain: 'Bad_Domain',
       versions: {
-        "01.0.0": { accepts: objectSchema, emits: { Bad_Key: objectSchema } },
+        '01.0.0': { accepts: objectSchema, emits: { Bad_Key: objectSchema } },
       },
     }),
   );
@@ -667,12 +680,12 @@ function whenAFormIsRejected(): void {
   // A form-level fault stops the run: the contract's rules would report the
   // same position in different words, so the form answers first.
   show(
-    "a schema position that is not an object",
+    'a schema position that is not an object',
     JSON.stringify({
-      type: "com_a_b",
-      domain: "Bad_Domain",
+      type: 'com_a_b',
+      domain: 'Bad_Domain',
       versions: {
-        "1.0.0": { accepts: { $schema: DIALECT, type: "string" }, emits: {} },
+        '1.0.0': { accepts: { $schema: DIALECT, type: 'string' }, emits: {} },
       },
     }),
   );
@@ -680,15 +693,15 @@ function whenAFormIsRejected(): void {
   // Legal JSON Schema this implementation cannot read. Named, never admitted
   // as a contract enforcing less than the form declares.
   show(
-    "a construct the conversion refuses",
+    'a construct the conversion refuses',
     JSON.stringify({
-      type: "com_a_b",
+      type: 'com_a_b',
       versions: {
-        "1.0.0": {
+        '1.0.0': {
           accepts: {
             $schema: DIALECT,
-            type: "object",
-            properties: { a: { type: "string" } },
+            type: 'object',
+            properties: { a: { type: 'string' } },
             unevaluatedProperties: false,
           },
           emits: {},
@@ -696,6 +709,149 @@ function whenAFormIsRejected(): void {
       },
     }),
   );
+}
+
+/**
+ * Asserting an event against a contract.
+ *
+ * A contract answers what an event is; a version with an expected type gives
+ * the payload a type. Either way the event that comes back is the event that
+ * went in -- asserting reads, it does not rewrite.
+ */
+function assertingEvents(): void {
+  section('Asserting an event against a contract');
+
+  const orders = new ArvoContract({
+    type: 'com_order_create',
+    versions: {
+      '1.0.0': {
+        accepts: z.object({ items: z.array(z.string()) }),
+        emits: { com_order_created: z.object({ order_id: z.string() }) },
+      },
+      '1.1.0': {
+        accepts: z.object({ items: z.array(z.string()), tier: z.string() }),
+        emits: { com_order_shipped: z.object({ eta: z.string() }) },
+      },
+    },
+  });
+
+  const arriving = (
+    type: string,
+    data: Record<string, unknown>,
+    version: keyof typeof orders.versions = '1.0.0',
+  ) =>
+    new ArvoEvent({
+      source: 'com.playground',
+      subject: 'order-42',
+      type,
+      dataschema: `${orders.uri}/${version}`,
+      data,
+    });
+
+  // Asking. Facts, not types: which version, which scope, and the event.
+  const asked = orders.assert(
+    arriving('com_order_created', { order_id: 'o-1' }),
+  );
+  console.log(`  asking:    version ${asked.version}, scope ${asked.scope}`);
+
+  // Expecting a type, straight to the version. The payload is typed.
+  const v1 = orders.versions['1.0.0'];
+  const expected = v1.assert(
+    arriving('com_order_created', { order_id: 'o-2' }),
+    'com_order_created',
+  );
+
+  console.log(
+    `  expecting: order_id ${expected.event.data.order_id}, scope ${expected.scope}`,
+  );
+
+  // The event is the one that went in.
+  const supplied = arriving('com_order_create', { items: ['book'] });
+  console.log(`  same event back: ${v1.assert(supplied).event === supplied}`);
+
+  // Discovery, then typed access. The version must be narrowed to a literal
+  // first: the expected-type overload is not callable on a union of version
+  // contracts at all.
+  const found = orders.assert(
+    arriving('com_order_shipped', { eta: 'tuesday' }, '1.1.0'),
+  );
+  if (found.version === '1.1.0' && found.scope === 'emits') {
+    const shipped = orders.versions['1.1.0'].assert(
+      found.event,
+      'com_order_shipped',
+    );
+    console.log(`  narrowed:  eta ${shipped.event.data.eta}`);
+  }
+
+  // Each failure reports its own position, so a caller compares a field
+  // rather than reading a message.
+  console.log('\n  every way this can fail, and where it is reported:');
+  const failures: Array<[string, () => unknown]> = [
+    [
+      'expecting a type the version does not declare',
+      () =>
+        v1.tryAssert(
+          arriving('com_order_create', { items: [] }),
+          'com_order_shipped' as never,
+        ),
+    ],
+    [
+      'a dataschema that is not {uri}/{version}',
+      () =>
+        v1.tryAssert(
+          new ArvoEvent({
+            source: 'com.playground',
+            subject: 'order-42',
+            type: 'com_order_create',
+            dataschema: 'noseparator',
+            data: { items: [] },
+          }),
+        ),
+    ],
+    [
+      'an event from another contract',
+      () =>
+        v1.tryAssert(
+          new ArvoEvent({
+            source: 'com.playground',
+            subject: 'order-42',
+            type: 'com_order_create',
+            dataschema: '#/com/other/thing/1.0.0',
+            data: { items: [] },
+          }),
+        ),
+    ],
+    [
+      'an event from a version this is not',
+      () => v1.tryAssert(arriving('com_order_create', { items: [] }, '1.1.0')),
+    ],
+    [
+      'a type none of the shapes declare',
+      () => v1.tryAssert(arriving('com_order_cancelled', {})),
+    ],
+    [
+      'a payload the schema rejects',
+      () => v1.tryAssert(arriving('com_order_create', { items: [1] })),
+    ],
+  ];
+
+  for (const [name, run] of failures) {
+    const attempt = run() as {
+      ok: boolean;
+      error?: ArvoContractAssertionError;
+    };
+    const issue = attempt.error?.issues[0];
+    console.log(`    ${name}\n      -> ${issue?.path}: ${issue?.message}`);
+  }
+
+  // The throwing companion carries the same failure.
+  try {
+    v1.assert(arriving('com_order_cancelled', {}));
+  } catch (error) {
+    console.log(
+      `\n  throwing companion: ${error instanceof ArvoContractAssertionError}`,
+    );
+  }
 }
 
 const indent = (text: string): string =>
@@ -718,6 +874,7 @@ async function main(): Promise<void> {
   whatACrossingCosts();
   readingAForeignForm();
   whenAFormIsRejected();
+  assertingEvents();
 }
 
 await main();

@@ -1,12 +1,12 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { ArvoEvent } from '../../src/ArvoEvent/index.js';
-import { CloudEventTransformationError } from '../../src/cloudevent/errors.js';
-import { CloudEventConverter } from '../../src/cloudevent/index.js';
+import { ArvoEvent } from '../../../src/ArvoEvent/index.js';
+import { CloudEventTransformationError } from '../../../src/serializers/cloudevent/errors.js';
+import { CloudEventConverter } from '../../../src/serializers/cloudevent/index.js';
 import type {
   IArvoEventTransformer,
   ICloudEventConverter,
-} from '../../src/cloudevent/interface.js';
-import { CloudEvent } from '../../src/cloudevent/types.js';
+} from '../../../src/serializers/cloudevent/interface.js';
+import { CloudEvent } from '../../../src/serializers/cloudevent/types.js';
 
 const baseEvent = () =>
   new ArvoEvent({
@@ -464,7 +464,7 @@ describe('CloudEventConverter', () => {
         [
           CloudEvent,
           (
-            | import('../../src/cloudevent/types.js').ForeignCloudEventFallback
+            | import('../../../src/cloudevent/types.js').ForeignCloudEventFallback
             | undefined
           ),
         ]

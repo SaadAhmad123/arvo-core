@@ -1,4 +1,4 @@
-import { ErrorIssue } from '../../../utils/error-issue.js';
+import { ErrorIssue } from '../../../../utils/error-issue.js';
 import type { CloudEvent, ForeignCloudEventFallback } from '../../types.js';
 import type { Decoded } from './index.js';
 

@@ -38,3 +38,6 @@ export const handlerErrorContract = <T extends string>(
     type: handlerErrorType(type),
     schema: HANDLER_ERROR_SCHEMA,
   });
+
+/** The payload of a handler error, as it arrives on the wire. */
+export type HandlerErrorPayload = z.input<typeof HANDLER_ERROR_SCHEMA>;

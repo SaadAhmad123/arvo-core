@@ -1,12 +1,12 @@
 import { err, ok } from 'neverthrow';
 import { ArvoEvent } from '../../ArvoEvent/index.js';
-import { CloudEventTransformationError } from '../../cloudevent/errors.js';
-import { CloudEventConverter } from '../../cloudevent/index.js';
-import type { ForeignCloudEventFallback } from '../../cloudevent/types.js';
-import { CloudEvent } from '../../cloudevent/types.js';
 import { fromNeverthrow } from '../../result.js';
 import type { AsyncResult } from '../../types.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
+import { CloudEventTransformationError } from '../cloudevent/errors.js';
+import { CloudEventConverter } from '../cloudevent/index.js';
+import type { ForeignCloudEventFallback } from '../cloudevent/types.js';
+import { CloudEvent } from '../cloudevent/types.js';
 import { ArvoEventSerializerError } from './errors.js';
 
 /**

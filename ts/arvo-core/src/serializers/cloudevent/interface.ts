@@ -1,4 +1,4 @@
-import type { ArvoEvent } from '../ArvoEvent/index.js';
+import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { CloudEvent, ForeignCloudEventFallback } from './types.js';
 
 /**

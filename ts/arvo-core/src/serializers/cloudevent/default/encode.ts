@@ -1,4 +1,4 @@
-import type { ArvoEvent } from '../../ArvoEvent/index.js';
+import type { ArvoEvent } from '../../../ArvoEvent/index.js';
 import { CloudEvent } from '../types.js';
 import { DepthCodec } from './codecs/depth.js';
 import { ExecutionUnitsCodec } from './codecs/execution-units.js';

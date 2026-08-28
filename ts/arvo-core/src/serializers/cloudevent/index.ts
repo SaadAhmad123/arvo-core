@@ -1,7 +1,7 @@
 import { okAsync, ResultAsync } from 'neverthrow';
-import type { ArvoEvent } from '../ArvoEvent/index.js';
-import { fromNeverthrowAsync } from '../result.js';
-import type { AsyncResult } from '../types.js';
+import type { ArvoEvent } from '../../ArvoEvent/index.js';
+import { fromNeverthrowAsync } from '../../result.js';
+import type { AsyncResult } from '../../types.js';
 import { ArvoToCloudEventConverter } from './default/index.js';
 import { CloudEventTransformationError } from './errors.js';
 import type {
