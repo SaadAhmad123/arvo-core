@@ -182,9 +182,9 @@ The event cloned SHALL NOT be altered.
 
 ### Requirement: The Trace Context Of A Clone
 
-Where an event is cloned, the system SHALL resolve the clone's trace context by precedence: a span supplied among the replacements first, then trace headers supplied among the replacements, then the trace context the cloned event carries.
+Where an event is cloned, the system SHALL resolve the clone's trace context by precedence: a span supplied among the replacements first, then a trace header supplied among the replacements, then the header the cloned event carries.
 
-Where a span is supplied, the clone's trace context SHALL be derived wholly from that span, and the cloned event's own trace context SHALL NOT be carried across in part.
+A span SHALL replace the trace context whole, the cloned event's own contributing nothing. A supplied header SHALL replace only itself, the other being carried across.
 
 #### Scenario: A span supplied among the replacements
 - **WHEN** an event carrying a trace context is cloned with a span supplied
@@ -194,12 +194,17 @@ Where a span is supplied, the clone's trace context SHALL be derived wholly from
 - **WHEN** an event carrying both trace headers is cloned with a span carrying no trace state
 - **THEN** the clone reports no trace state, rather than the cloned event's
 
-#### Scenario: Trace headers supplied among the replacements
-- **WHEN** an event carrying a trace context is cloned with trace headers supplied
-- **THEN** the clone carries the supplied headers
+#### Scenario: Both headers supplied
+- **WHEN** an event carrying a trace context is cloned with both trace headers supplied
+- **THEN** the clone carries both supplied headers
+
+#### Scenario: One header supplied
+- **WHEN** an event carrying both trace headers is cloned with only one of them supplied
+- **THEN** the clone carries the supplied one
+- **AND** carries the cloned event's own for the other
 
 #### Scenario: Neither supplied
-- **WHEN** an event carrying a trace context is cloned with no span and no trace headers supplied
+- **WHEN** an event carrying a trace context is cloned with no span and no trace header supplied
 - **THEN** the clone carries the cloned event's trace context
 
 #### Scenario: Nothing to carry and nothing supplied
