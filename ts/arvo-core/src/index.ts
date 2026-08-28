@@ -15,6 +15,11 @@ export type {
 } from './ArvoContract/types.js';
 export { VersionedArvoContract } from './ArvoContract/versioned/index.js';
 export type { VersionedArvoContractParam } from './ArvoContract/versioned/types.js';
+export { ArvoDomain } from './ArvoDomain/index.js';
+export type {
+  ArvoDomainInput,
+  ArvoDomainSymbol,
+} from './ArvoDomain/types.js';
 export { ArvoEventValidationError } from './ArvoEvent/errors.js';
 export { ArvoEvent } from './ArvoEvent/index.js';
 export type {

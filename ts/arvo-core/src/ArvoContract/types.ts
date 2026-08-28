@@ -2,7 +2,7 @@ import type * as z from 'zod/v4/core';
 import type { ArvoEvent } from '../ArvoEvent/index.js';
 import type { ArvoSemanticVersion } from '../semver/index.js';
 import type { JSONObject } from '../types.js';
-import type { HandlerErrorPayload } from './handler-error.js';
+import type { HandlerErrorPayload, HandlerErrorType } from './handler-error.js';
 
 /** What one version of a contract accepts, and every event type it may emit. */
 export type ArvoContractVersionParam = {
@@ -121,7 +121,7 @@ export type ScopeOf<
   C extends ArvoContractVersionParam,
 > = E extends T
   ? 'accepts'
-  : E extends `handler_${T}_error`
+  : E extends HandlerErrorType<T>
     ? 'handlerError'
     : E extends keyof C['emits']
       ? 'emits'
@@ -140,7 +140,7 @@ export type PayloadFor<
   C extends ArvoContractVersionParam,
 > = E extends T
   ? z.input<C['accepts']>
-  : E extends `handler_${T}_error`
+  : E extends HandlerErrorType<T>
     ? HandlerErrorPayload
     : E extends keyof C['emits']
       ? z.input<C['emits'][E & keyof C['emits']]>
@@ -158,4 +158,4 @@ export type PayloadFor<
 export type AssertableType<
   T extends string,
   C extends ArvoContractVersionParam,
-> = T | (keyof C['emits'] & string) | `handler_${T}_error`;
+> = T | (keyof C['emits'] & string) | HandlerErrorType<T>;

@@ -39,5 +39,14 @@ export const handlerErrorContract = <T extends string>(
     schema: HANDLER_ERROR_SCHEMA,
   });
 
+/**
+ * The event type of the handler error a contract of this `type` carries.
+ *
+ * The one place this string's shape is written at the type level, so a rule
+ * about how it is formed has a single copy.
+ */
+export type HandlerErrorType<T extends string = string> =
+  HandlerErrorContract<T>['type'];
+
 /** The payload of a handler error, as it arrives on the wire. */
 export type HandlerErrorPayload = z.input<typeof HANDLER_ERROR_SCHEMA>;
