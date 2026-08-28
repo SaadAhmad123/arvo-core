@@ -68,6 +68,14 @@ An earlier draft threaded the class's own three parameters — `<T, V, C>` — b
 
 *One deliberate wording:* each payload issue's message carries a suffix naming which schema judged it — "(against the contract's accepts)", "(against the contract's emits[com_order_created])" — because the same payload shape can exist under several keys and the position alone does not say which declaration was consulted.
 
+### `.for` addresses the event; `.by` and `.error` do not
+
+`.for` defaults `to` to `contract.type` when the caller says nothing. The event it builds is a request, Arvo routes by type, and the handler bound to this contract is who accepts events of that type — so the destination is a fact the contract holds, the same category of knowledge as `type` and `dataschema`, not a placeholder invented on the caller's behalf.
+
+`.by` and `.error` default nothing. Where an emitted event or an error goes is fully the caller's decision: the contract knows what those events *are*, not who is waiting for them, and a default aimed at `contract.type` would address them back at the very handler that produced them.
+
+*Why this does not break the fills-in rule:* the rule bans filling a field with a value nothing knows. `to` on `.for` is a value the contract does know — the line stays where it was, between supplied knowledge and invented placeholders.
+
 ### `domain` is absent, a value, or an instruction
 
 Omitted, the event has no domain — nothing is inherited silently, including the contract's own. A string is used as it stands. One of `ArvoDomain`'s symbols is resolved before the event is built: the factory supplies the contract it already holds as the event-contract source, and the caller supplies the other two sources — the building handler's contract, the triggering event — in `options.domainCtx`. A symbol whose source is absent resolves to `null`, which becomes omission at the constructor.

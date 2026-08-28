@@ -23,7 +23,8 @@ No ADR governs building an event from a contract. [ADR-001](../../../../docs/adr
 
 - **These are utilities.** Each does exactly what its name says and decides nothing on the caller's behalf. What a caller does with the event afterwards is theirs.
 - **All three contract-aware variants check the payload against the version's own schema**, the handler error's included, and what the check produces is what the event carries — so a value the schema declares a default for is present even when the caller omitted it.
-- **`.for`, `.by` and `.error` supply `type` and `dataschema`** from the contract. The caller never writes either, except that `.by` names which emit it means.
+- **`.for`, `.by` and `.error` supply `type` and `dataschema`** from the contract. The caller never writes either, except that `.by` names which emit `type` it means.
+- **`.for` also defaults `to`** — the event it builds is a request, and the handler bound to this contract is who accepts it, so `to` falls back to `contract.type` when the caller says nothing. `.by` and `.error` default nothing: where an emitted event or an error goes is fully the caller's decision.
 - **`domain` takes a value or an instruction.** Omitted means the event has no domain. A string is used as it stands. One of `ArvoDomain`'s symbols is resolved before the event is built — `FROM_EVENT_CONTRACT` reads the contract the factory already holds; `FROM_SELF_CONTRACT` and `FROM_TRIGGERING_EVENT` read sources the caller supplies in the options. The `ArvoDomain` module already ships; this change consumes it.
 - **Only one field is ever filled in silently**, and only where nothing could supply it: `subject`, whose omission means this event starts its own execution.
 - **New `ArvoEventFactoryError`** — one error for the operation, rather than stretching `ArvoEventValidationError`, whose own documentation states it does not mean a payload failed contract validation.
@@ -123,6 +124,8 @@ const requested = createArvoEvent.for(orders.versions['1.0.0'], {
 });
 requested.type;           // 'com_order_create'
 requested.dataschema;     // '#/com/order/create/1.0.0'
+requested.to;             // 'com_order_create' — a request is addressed to
+                          // the handler that accepts it, unless `to` is passed
 requested.data.currency;  // 'GBP', from the schema's default
 ```
 
