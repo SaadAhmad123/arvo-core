@@ -147,3 +147,39 @@ describe('a schema whose output is not what it was given', () => {
     );
   });
 });
+
+describe('a position the payload does not reach', () => {
+  it('reports no value rather than walking into one that is not there', () => {
+    // A schema may report a position deeper than the payload goes. The value
+    // is fetched by walking, and a walk that runs out has nothing to report.
+    const refining = createArvoEventFactory(
+      new ArvoContract({
+        type: 'com_order_create',
+        versions: {
+          '1.0.0': {
+            accepts: z
+              .object({ items: z.array(z.string()) })
+              .superRefine((_value, ctx) => {
+                ctx.addIssue({
+                  code: 'custom',
+                  path: ['absent', 'deeper'],
+                  message: 'must be settled elsewhere',
+                });
+              }),
+            emits: {},
+          },
+        },
+      }).versions['1.0.0'],
+    );
+
+    const attempt = refining.tryCreateAccepted({
+      source: 'com.web',
+      data: { items: [] },
+    });
+
+    expect(attempt.ok).toBe(false);
+    if (attempt.ok) return;
+    expect(attempt.error.issues[0]?.path).toBe('data.absent.deeper');
+    expect(attempt.error.issues[0]?.received).toBeUndefined();
+  });
+});

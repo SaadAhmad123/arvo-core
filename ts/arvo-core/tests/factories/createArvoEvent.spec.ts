@@ -62,6 +62,22 @@ describe('an event from its fields', () => {
     expect(attempt.error.issues[0]?.path).toBe('to');
   });
 
+  it('lets an unexpected failure through rather than reporting it', () => {
+    // The error channel claims a specific kind of failure. A hostile input
+    // makes the spread itself throw, which is not an invalid event, so it
+    // goes up as it arrived rather than being dressed as one.
+    const hostile = new Proxy(required, {
+      ownKeys() {
+        throw new TypeError('boom');
+      },
+    });
+
+    expect(() => tryCreateArvoEvent(hostile)).toThrow(TypeError);
+    expect(() => tryCreateArvoEvent(hostile)).not.toThrow(
+      ArvoEventValidationError,
+    );
+  });
+
   it('throws from the throwing form what the other reports', () => {
     const reported = tryCreateArvoEvent({ ...required, to: '' });
     if (reported.ok) throw new Error('expected a failure');

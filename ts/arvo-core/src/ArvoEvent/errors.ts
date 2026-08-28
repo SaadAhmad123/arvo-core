@@ -4,11 +4,17 @@ import {
 } from '../utils/error-issue.js';
 
 /**
- * Thrown when an event is structurally invalid.
+ * Thrown when an event could not be brought into being.
  *
- * This means the event itself is malformed — a missing field, a value of the
- * wrong shape, or a combination of fields that cannot occur together. It does
- * not mean the payload failed contract validation, which is a separate check.
+ * Usually the event is malformed — a missing field, a value of the wrong
+ * shape, or a combination of fields that cannot occur together. Where the
+ * event was built from a contract, it also covers a payload that failed that
+ * contract's schema: the declaration is part of what creating such an event
+ * means, so a rejected payload is the event failing to exist rather than a
+ * separate check. `issues` beneath `data` are that case.
+ *
+ * An event that already exists and does not match a contract is a different
+ * question, reported separately when one is asserted against the other.
  *
  * The message names every rule that was broken, so it can be acted on without
  * reading this source. {@link issues} carries the same information

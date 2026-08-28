@@ -1,3 +1,4 @@
+import type { Span, SpanContext } from '@opentelemetry/api';
 import type * as z from 'zod/v4/core';
 import type {
   ArvoDomainContext,
@@ -12,6 +13,25 @@ import type { ArvoEventParam } from '../../ArvoEvent/types.js';
  * it than an event does — a value, or one of `ArvoDomain`'s symbols.
  */
 export type SuppliedByContract = 'type' | 'dataschema' | 'data' | 'domain';
+
+/**
+ * An event's trace context, as its own input spells it: the W3C header pair or
+ * a span to derive them from, never both.
+ *
+ * Restated here because `Omit` collapses it — the two arms share no key, so
+ * omitting anything from `ArvoEventParam` drops the whole union.
+ */
+type TraceContextParam =
+  | {
+      /** Raw W3C `traceparent`. Mutually exclusive with `span`. */
+      traceparent?: string;
+      /** Raw W3C `tracestate`. Mutually exclusive with `span`. */
+      tracestate?: string;
+    }
+  | {
+      /** A span to derive `traceparent`/`tracestate` from. */
+      span?: Span | SpanContext;
+    };
 
 /**
  * What a contract-aware factory accepts beyond the event's own fields.
@@ -41,11 +61,12 @@ export type ContractEventOptions = {
  */
 export type ContractEventParam<S extends z.$ZodType> = Partial<
   Omit<ArvoEventParam, SuppliedByContract>
-> & {
-  source: string;
-  data: z.input<S>;
-  domain?: ArvoDomainInput;
-};
+> &
+  TraceContextParam & {
+    source: string;
+    data: z.input<S>;
+    domain?: ArvoDomainInput;
+  };
 
 /**
  * The fields a caller passes for a handler error event.
@@ -54,8 +75,9 @@ export type ContractEventParam<S extends z.$ZodType> = Partial<
  */
 export type ErrorEventParam = Partial<
   Omit<ArvoEventParam, SuppliedByContract>
-> & {
-  source: string;
-  error: Error;
-  domain?: ArvoDomainInput;
-};
+> &
+  TraceContextParam & {
+    source: string;
+    error: Error;
+    domain?: ArvoDomainInput;
+  };

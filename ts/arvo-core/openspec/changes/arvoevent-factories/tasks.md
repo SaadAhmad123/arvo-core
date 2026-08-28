@@ -44,8 +44,10 @@
 
 ## 7. The error's documentation
 
-- [ ] 7.1 Amend one sentence of `ArvoEventValidationError`'s TSDoc in `src/ArvoEvent/errors.ts`. It says a payload failing contract validation "is a separate check", which the factories end: for an event built from a contract, the declaration's schema is part of what creation means. This replaces existing documentation rather than adding to it.
-- [ ] 7.2 Confirm no new error type was introduced anywhere under `src/factories/`.
+- [x] 7.1 Amend one sentence of `ArvoEventValidationError`'s TSDoc in `src/ArvoEvent/errors.ts`. It says a payload failing contract validation "is a separate check", which the factories end: for an event built from a contract, the declaration's schema is part of what creation means. This replaces existing documentation rather than adding to it.
+- [x] 7.2 Confirm no new error type was introduced anywhere under `src/factories/`.
+
+- [x] 7.3 Restore the trace context to `ContractEventParam` and `ErrorEventParam`. `Omit` collapses the union `ArvoEventParam` uses for it — the two arms share no key, so omitting anything dropped the whole thing and no contract-aware builder accepted `traceparent`, `tracestate` or `span` at all. Restated as its own union so the two stay mutually exclusive.
 
 ## 8. Public surface
 
