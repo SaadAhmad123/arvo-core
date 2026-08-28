@@ -64,7 +64,18 @@ An earlier draft threaded the class's own three parameters — `<T, V, C>` — b
 
 *Consequence for the types:* `param.data` is the schema's **input** side and the event's `data` is its **output** side, and `checkPayload<S>` returning `z.output<S>` is what carries the second half — an earlier draft returned `Record<string, any>` and threw away exactly what the check had established.
 
-*Consequence worth a test:* a transform can produce a value that is not JSON — `z.coerce.date()` yields a `Date`. That reaches the constructor, whose payload walk rejects it. So a transform-bearing schema can fail here where hand-building would have succeeded. That is honest — the contract declared a payload its own canonical form cannot express, per ADR-005's account of authoring-time richness — but the failure has to be legible rather than a crash.
+*Consequence worth a test, and it splits in two.* Probed rather than assumed, because the two halves behave differently:
+
+| the transform produces | what happens |
+|---|---|
+| a value with a JSON form — a `Date` | the event's payload walk serializes it, and the event is built carrying a string |
+| a value with none — a `Set` | the walk reports it, at the position within the payload |
+
+The second is the honest failure the design wanted: the contract declared a payload its own canonical form cannot express, per ADR-005's account of authoring-time richness, and the caller is told where.
+
+The first is a type lie and the more dangerous of the two. `z.output` types the field as `Date`, the built event holds the serialized string, and a caller writing `event.data.at.getTime()` compiles and fails at runtime.
+
+*Why it is accepted rather than fixed:* the only fix at the type level is to describe the payload with the schema's input side, and that breaks the common case — a declared default is present on the built event, so typing it optional would be a second lie in the opposite direction. No single type is right for both, and a default is the reason this feature exists while a transform is a contract author's own choice. So the payload keeps its output type, the divergence is documented where a caller meets it, and both halves are pinned by tests so neither can drift into looking accidental.
 
 *One deliberate wording:* each payload issue's message carries a suffix naming which schema judged it — "(against the contract's accepts)", "(against the contract's emits[com_order_created])" — because the same payload shape can exist under several keys and the position alone does not say which declaration was consulted.
 
