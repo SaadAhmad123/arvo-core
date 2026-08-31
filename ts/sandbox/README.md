@@ -13,10 +13,53 @@ cd ../sandbox && pnpm install
 
 ## Use
 
-Edit `src/playground.ts`, then:
-
 ```bash
-pnpm run play
+pnpm run play              # every chapter, in order
+pnpm run play contract     # only chapters whose title matches
+pnpm run play 10           # only chapter 10
 ```
+
+## Conventions
+
+The tour is what a reader copies from, so it is written the way a consumer of the package should write it.
+
+**Build things with the factories, never with `new`.** `createArvoEvent`, `createArvoContract` and `createArvoEventFactory` -- and their `tryCreate*` twins where a failure is worth handling as a value. The classes are exported because their types are part of the surface, not as an invitation to construct one directly.
+
+| instead of | use |
+|---|---|
+| `new ArvoEvent({ ... })` | `createArvoEvent({ ... })` |
+| `new ArvoContract({ ... })` | `createArvoContract({ ... })` |
+| `new ArvoEventFactory(version)` | `createArvoEventFactory(version)` |
+
+Three things still take `new`, because no factory exists for them and none is implied: `ArvoEventSerializer`, `ArvoContractSerializer` and `CloudEventConverter` are long-lived objects you configure once and reuse, and `CloudEvent` is a foreign type this package reads rather than one it produces.
+
+There is no factory for a single contract version either. You read one off the contract -- `contract.versions["1.0.0"]` -- rather than building one.
+
+**Pass `executionid` along explicitly when one event follows another.** It defaults to the event's own `subject`, which is right for the event that starts an execution and wrong for every event after it. [`10-building-events-from-a-contract.ts`](src/tour/10-building-events-from-a-contract.ts) shows both, and what the default does once a handler gives its output a subject of its own.
+
+**The sandbox is formatted by `arvo-core`'s Biome config**, so `cd ../arvo-core && npx biome check ../sandbox/src` should be clean. There is no lint script here, and `pnpm lint` in `ts/arvo-core` does not reach this directory -- run it against the path when you have finished editing.
+
+## The tour
+
+`src/playground.ts` is a runner and nothing else. The material lives in `src/tour/`, one chapter per file, in the order they are worth reading:
+
+| | |
+|---|---|
+| [`01-events.ts`](src/tour/01-events.ts) | building an event, what is defaulted, why `data` is frozen, what a rejected one tells you |
+| [`02-throwing-vs-result.ts`](src/tour/02-throwing-vs-result.ts) | the `try`-prefixed twin every fallible operation has |
+| [`03-serializing-events.ts`](src/tour/03-serializing-events.ts) | a round trip, and `cloudevent` mode versus `arvoevent` mode |
+| [`04-cloudevents.ts`](src/tour/04-cloudevents.ts) | the CloudEvent boundary directly, and adapting a foreign one |
+| [`05-semantic-versions.ts`](src/tour/05-semantic-versions.ts) | `ArvoSemanticVersion` as a type, a guard, and a `Result` |
+| [`06-declaring-contracts.ts`](src/tour/06-declaring-contracts.ts) | what a contract holds, types per version, and broken declarations |
+| [`07-contracts-as-json.ts`](src/tour/07-contracts-as-json.ts) | the canonical form, and what a crossing to JSON Schema costs |
+| [`08-reading-a-foreign-form.ts`](src/tour/08-reading-a-foreign-form.ts) | JSON from elsewhere becoming a contract, and every way that fails |
+| [`09-asserting-events.ts`](src/tour/09-asserting-events.ts) | judging an event against a contract, and narrowing to a typed payload |
+| [`10-building-events-from-a-contract.ts`](src/tour/10-building-events-from-a-contract.ts) | the event factory: input, outputs, handler error |
+| [`11-domains.ts`](src/tour/11-domains.ts) | where a domain comes from, including the `ArvoDomain` symbols |
+| [`12-standalone-events-and-clones.ts`](src/tour/12-standalone-events-and-clones.ts) | an event no contract declares, and copying one |
+
+Every chapter is standalone — it declares whatever contracts and events it needs, so you can read one on its own, or copy it into a file of your own and change it until it breaks. To add one, write it in `src/tour/` and list it in [`src/tour/index.ts`](src/tour/index.ts).
+
+Spans go to the console via `ConsoleSpanExporter` ([`src/otel.ts`](src/otel.ts)), batched so they arrive at the end of the run rather than interrupting the chapter that made them.
 
 If you change `ts/arvo-core/src/`, re-run `pnpm run build` there before the change shows up here — this sandbox imports the built `dist/` output, the same way a real consumer would, not `src/` directly.

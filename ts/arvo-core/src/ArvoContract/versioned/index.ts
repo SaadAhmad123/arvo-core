@@ -34,7 +34,7 @@ import type { VersionedArvoContractParam } from './types.js';
  * ```ts
  * const v = contract.versions['1.0.0'];
  * v.dataschema;      // '#/com/order/create/1.0.0'
- * v.handlerError;    // always present, whatever emits declares
+ * v.error;           // always present, whatever outputs declares
  * ```
  *
  * Throws {@link ArvoContractValidationError} if anything is wrong,
@@ -45,7 +45,7 @@ export class VersionedArvoContract<
   V extends ArvoSemanticVersion = ArvoSemanticVersion,
   C extends ArvoContractVersionParam = ArvoContractVersionParam,
 > {
-  /** The event type a handler bound to this contract accepts. */
+  /** The event type a handler bound to this contract takes in. */
   readonly type: T;
   /** The version this contract is for. */
   readonly version: V;
@@ -55,11 +55,11 @@ export class VersionedArvoContract<
   readonly domain: string | null;
   readonly metadata: JSONObject;
   /** The payload a handler bound to this version receives. */
-  readonly accepts: C['accepts'];
+  readonly input: C['input'];
   /** Every event type this version may produce, keyed by event type. */
-  readonly emits: C['emits'];
-  /** Always present, including when {@link emits} is empty. */
-  readonly handlerError: HandlerErrorContract<T>;
+  readonly outputs: C['outputs'];
+  /** Always present, including when {@link outputs} is empty. */
+  readonly error: HandlerErrorContract<T>;
 
   /** `uri` and `version` joined — what an event of this version carries. */
   get dataschema(): `${string}/${V}` {
@@ -87,7 +87,7 @@ export class VersionedArvoContract<
    *
    * @example Asking
    * const asserted = v.tryAssert(event);
-   * if (asserted.ok) asserted.value.scope;  // 'accepts' | 'emits' | 'handlerError'
+   * if (asserted.ok) asserted.value.scope;  // 'input' | 'output' | 'error'
    *
    * @example Expecting a type
    * const asserted = v.tryAssert(event, 'com_order_created');
@@ -114,9 +114,9 @@ export class VersionedArvoContract<
           type: this.type,
           uri: this.uri,
           version: this.version,
-          accepts: this.accepts,
-          emits: this.emits,
-          handlerError: this.handlerError,
+          input: this.input,
+          outputs: this.outputs,
+          error: this.error,
           expectedType,
         }),
         (scope) => ({ version: this.version, scope, event }),
@@ -156,9 +156,9 @@ export class VersionedArvoContract<
     this.description = param.description;
     this.domain = param.domain;
     this.metadata = Object.freeze({ ...param.metadata });
-    this.accepts = param.accepts;
-    this.emits = Object.freeze({ ...param.emits }) as C['emits'];
-    this.handlerError = handlerErrorContract(param.type);
+    this.input = param.input;
+    this.outputs = Object.freeze({ ...param.outputs }) as C['outputs'];
+    this.error = handlerErrorContract(param.type);
 
     Object.freeze(this);
   }

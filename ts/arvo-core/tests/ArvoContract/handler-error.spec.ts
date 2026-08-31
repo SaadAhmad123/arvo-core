@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import * as z from 'zod/v4/core';
 import {
   HANDLER_ERROR_SCHEMA,
   handlerErrorContract,
   handlerErrorType,
 } from '../../src/ArvoContract/handler-error.js';
+
+/**
+ * The schema is a core schema, which carries no methods of its own, so it is
+ * parsed the way every other contract schema in this package is.
+ */
+const parse = (data: unknown) => z.parse(HANDLER_ERROR_SCHEMA, data);
 
 describe('handlerErrorType', () => {
   it('wraps a multi-segment type', () => {
@@ -34,7 +41,7 @@ describe('handlerErrorType', () => {
 
 describe('HANDLER_ERROR_SCHEMA', () => {
   it('accepts a fully populated error', () => {
-    const parsed = HANDLER_ERROR_SCHEMA.parse({
+    const parsed = parse({
       error_name: 'TypeError',
       error_message: 'boom',
       error_stack: 'at foo()',
@@ -44,7 +51,7 @@ describe('HANDLER_ERROR_SCHEMA', () => {
 
   it('accepts a null stack', () => {
     expect(
-      HANDLER_ERROR_SCHEMA.parse({
+      parse({
         error_name: 'Error',
         error_message: 'boom',
         error_stack: null,
@@ -54,7 +61,7 @@ describe('HANDLER_ERROR_SCHEMA', () => {
 
   it('rejects a missing stack, which is nullable rather than optional', () => {
     expect(() =>
-      HANDLER_ERROR_SCHEMA.parse({
+      parse({
         error_name: 'Error',
         error_message: 'boom',
       }),
@@ -63,14 +70,14 @@ describe('HANDLER_ERROR_SCHEMA', () => {
 
   it('rejects a non-string name or message', () => {
     expect(() =>
-      HANDLER_ERROR_SCHEMA.parse({
+      parse({
         error_name: 42,
         error_message: 'boom',
         error_stack: null,
       }),
     ).toThrow();
     expect(() =>
-      HANDLER_ERROR_SCHEMA.parse({
+      parse({
         error_name: 'Error',
         error_message: null,
         error_stack: null,

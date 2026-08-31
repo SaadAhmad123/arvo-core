@@ -7,12 +7,12 @@ const contract = new ArvoContract({
   type: 'com_order_create',
   versions: {
     '1.0.0': {
-      accepts: z.object({ items: z.array(z.string()) }),
-      emits: { com_order_created: z.object({ order_id: z.string() }) },
+      input: z.object({ items: z.array(z.string()) }),
+      outputs: { com_order_created: z.object({ order_id: z.string() }) },
     },
     '1.1.0': {
-      accepts: z.object({ items: z.array(z.string()), tier: z.string() }),
-      emits: {},
+      input: z.object({ items: z.array(z.string()), tier: z.string() }),
+      outputs: {},
     },
   },
 });
@@ -22,7 +22,7 @@ const explicitUri = new ArvoContract({
   type: 'com_user_register',
   uri: '#/services/identity/user/registration',
   versions: {
-    '1.0.0': { accepts: z.object({ email: z.string() }), emits: {} },
+    '1.0.0': { input: z.object({ email: z.string() }), outputs: {} },
   },
 });
 
@@ -49,7 +49,7 @@ describe('a contract routes by the event dataschema', () => {
       ),
     );
     expect(asserted.version).toBe('1.1.0');
-    expect(asserted.scope).toBe('accepts');
+    expect(asserted.scope).toBe('input');
   });
 
   it('names the version it selected, not the others', () => {

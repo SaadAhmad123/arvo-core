@@ -21,12 +21,12 @@ const form = JSON.stringify({
   type: 'com_a_b',
   versions: {
     '1.0.0': {
-      accepts: {
+      input: {
         $schema: 'https://json-schema.org/draft/2020-12/schema',
         type: 'object',
         properties: {},
       },
-      emits: {},
+      outputs: {},
     },
   },
 });

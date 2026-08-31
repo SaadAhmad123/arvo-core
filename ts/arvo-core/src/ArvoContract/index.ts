@@ -20,7 +20,7 @@ import { validateArvoContract } from './validator.js';
 import { VersionedArvoContract } from './versioned/index.js';
 
 /**
- * A versioned declaration of what a handler accepts and what it may emit.
+ * A versioned declaration of what a handler takes in and what it may put out.
  *
  * Reach a version by indexing `versions`. Only declared versions exist, and
  * each keeps its own schema types, so `z.infer` differs between them.
@@ -35,8 +35,8 @@ import { VersionedArvoContract } from './versioned/index.js';
  *   type: 'com_order_create',
  *   versions: {
  *     '1.0.0': {
- *       accepts: z.object({ items: z.array(z.string()) }),
- *       emits: { com_order_created: z.object({ order_id: z.string() }) },
+ *       input: z.object({ items: z.array(z.string()) }),
+ *       outputs: { com_order_created: z.object({ order_id: z.string() }) },
  *     },
  *   },
  * });
@@ -48,19 +48,19 @@ import { VersionedArvoContract } from './versioned/index.js';
  * const contract = new ArvoContract({
  *   type: 'com_order_create',
  *   versions: {
- *     '1.0.0': { accepts: z.object({ items: z.array(z.string()) }), emits: {} },
+ *     '1.0.0': { input: z.object({ items: z.array(z.string()) }), outputs: {} },
  *     '1.1.0': {
- *       accepts: z.object({
+ *       input: z.object({
  *         items: z.array(z.string()),
  *         shipping_tier: z.enum(['standard', 'express']),
  *       }),
- *       emits: {},
+ *       outputs: {},
  *     },
  *   },
  * });
  *
- * type V1 = z.infer<typeof contract.versions['1.0.0']['accepts']>;
- * type V11 = z.infer<typeof contract.versions['1.1.0']['accepts']>;
+ * type V1 = z.infer<typeof contract.versions['1.0.0']['input']>;
+ * type V11 = z.infer<typeof contract.versions['1.1.0']['input']>;
  * contract.versions['9.9.9'];  // compile error -- never declared
  *
  * @example Every field supplied, with an explicit uri
@@ -70,31 +70,31 @@ import { VersionedArvoContract } from './versioned/index.js';
  *   description: 'Handles user registration',
  *   domain: 'identity_priority',
  *   metadata: { owner: 'team_identity' },
- *   versions: { '1.0.0': { accepts: z.object({ email: z.string() }), emits: {} } },
+ *   versions: { '1.0.0': { input: z.object({ email: z.string() }), outputs: {} } },
  * });
  *
  * @example A handler emitting either a declared event or its error
  * const v = contract.versions['1.0.0'];
- * v.emits.com_order_created;  // declared
- * v.handlerError;             // always present, even if emits is empty
+ * v.outputs.com_order_created;  // declared
+ * v.error;             // always present, even if outputs is empty
  *
  * @example Every problem reported in one attempt
  * new ArvoContract({
  *   type: 'Com_Order_Create',      // not lowercase_snake_case
  *   versions: {
  *     '01.0.0': {                  // leading zero
- *       accepts: z.string(),       // not an object schema
- *       emits: { Bad_Key: z.object({}) },  // not lowercase_snake_case
+ *       input: z.string(),       // not an object schema
+ *       outputs: { Bad_Key: z.object({}) },  // not lowercase_snake_case
  *     },
  *   },
  * });
- * // throws, naming all four with paths like versions["01.0.0"].emits["Bad_Key"]
+ * // throws, naming all four with paths like versions["01.0.0"].outputs["Bad_Key"]
  */
 export class ArvoContract<
   T extends string = string,
   M extends ArvoContractVersionMapParam = ArvoContractVersionMapParam,
 > {
-  /** The event type a handler bound to this contract accepts. */
+  /** The event type a handler bound to this contract takes in. */
   readonly type: T;
   /** Base of every `dataschema` this contract's versions produce. */
   readonly uri: string;
@@ -187,8 +187,8 @@ export class ArvoContract<
         description: this.description,
         domain: this.domain,
         metadata: this.metadata,
-        accepts: definition.accepts,
-        emits: definition.emits,
+        input: definition.input,
+        outputs: definition.outputs,
       });
     }
 

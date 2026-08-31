@@ -10,7 +10,7 @@ const of = (properties: Record<string, unknown>, extra = {}) => ({
   ...extra,
 });
 
-const read = (schema: unknown) => convertFromJSONSchema(schema, 'accepts');
+const read = (schema: unknown) => convertFromJSONSchema(schema, 'input');
 
 describe('a construct the conversion refuses', () => {
   // Each of these is legal JSON Schema 2020-12 that the conversion cannot
@@ -54,7 +54,7 @@ describe('a construct the conversion refuses', () => {
   it('names the position it refused', () => {
     const result = read(of({ a: { not: { type: 'number' } } }));
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.path).toBe('accepts');
+    if (!result.ok) expect(result.error.path).toBe('input');
   });
 
   it('names the construct it could not read', () => {
@@ -85,9 +85,7 @@ describe('a constraint the conversion drops without saying so', () => {
       expect(result.value.losses.map((l) => l.message).join(' ')).toContain(
         'minLength',
       );
-      expect(result.value.losses[0]?.path).toBe(
-        'accepts.properties.a.allOf[1]',
-      );
+      expect(result.value.losses[0]?.path).toBe('input.properties.a.allOf[1]');
     }
   });
 
@@ -100,7 +98,7 @@ describe('a constraint the conversion drops without saying so', () => {
       expect(result.value.losses.map((l) => l.message).join(' ')).toContain(
         'propertyNames',
       );
-      expect(result.value.losses[0]?.path).toBe('accepts.properties.a');
+      expect(result.value.losses[0]?.path).toBe('input.properties.a');
     }
   });
 
@@ -193,7 +191,7 @@ describe('an annotation keyword states no check', () => {
     if (result.ok) {
       expect(result.value.losses).toHaveLength(1);
       expect(result.value.losses[0]?.message).toContain('documentation only');
-      expect(result.value.losses[0]?.path).toBe('accepts.properties.u');
+      expect(result.value.losses[0]?.path).toBe('input.properties.u');
     }
   });
 
@@ -226,7 +224,7 @@ describe('an annotation keyword states no check', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.losses[0]?.path).toBe(
-        'accepts.properties.a.properties.u',
+        'input.properties.a.properties.u',
       );
     }
   });

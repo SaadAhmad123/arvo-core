@@ -26,11 +26,11 @@ const userContract = createArvoContract({
   type: 'user.create',
   versions: {
     '1.0.0': {
-      accepts: z.object({
+      input: z.object({
         email: z.string().email(),
         name: z.string()
       }),
-      emits: {
+      outputs: {
         'evt.user.create.success': z.object({
           userId: z.string(),
           timestamp: z.string()
@@ -43,7 +43,7 @@ const userContract = createArvoContract({
 // Create events with type safety
 const factory = createArvoEventFactory(userContract.version('1.0.0'));
 
-const event = factory.accepts({
+const event = factory.createInput({
   source: 'api/users',
   data: {
     email: 'user@example.com',

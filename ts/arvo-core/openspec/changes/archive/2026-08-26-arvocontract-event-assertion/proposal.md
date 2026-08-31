@@ -1,8 +1,8 @@
 ## Why
 
-A contract declares what a handler accepts and what it may emit. Nothing in the package uses that declaration to answer the question every consumer of it actually has: *given this event, is it mine, and which of my shapes is it?*
+A contract declares what a handler takes in and what it may put out. Nothing in the package uses that declaration to answer the question every consumer of it actually has: *given this event, is it mine, and which of my shapes is it?*
 
-Today a caller holding an `ArvoEvent` and an `ArvoContract` has to do that work themselves — split `dataschema` to find the version, index `versions`, decide whether `event.type` is the accepts type or an emit key or the handler error, reach for the right schema, and check the payload against it. Every one of those steps is derivable from the contract, and every consumer would derive them the same way. Doing it at each call site is how two consumers end up disagreeing about what a contract permits.
+Today a caller holding an `ArvoEvent` and an `ArvoContract` has to do that work themselves — split `dataschema` to find the version, index `versions`, decide whether `event.type` is the accepts type or an output key or the handler error, reach for the right schema, and check the payload against it. Every one of those steps is derivable from the contract, and every consumer would derive them the same way. Doing it at each call site is how two consumers end up disagreeing about what a contract permits.
 
 [ADR-005](../../../../docs/adr/005-arvocontract-structure.md) governs what a contract *is* and deliberately does not settle handler behaviour. This change does not settle it either — see **Out of Scope** for exactly where the line is drawn and why an exact-version lookup sits on the near side of it.
 
@@ -15,7 +15,7 @@ That reading is worth naming because part of it is the kind of thing an ADR woul
 ## What Changes
 
 - **Modified capability**: `arvo-contract` gains event assertion. No new capability — this is a contract answering questions about its own declaration, which is what the capability already covers.
-- **`VersionedArvoContract.tryAssert` / `.assert`** — checks an event against this one interface and reports which of its three scopes matched: `accepts`, one of `emits`, or the handler error.
+- **`VersionedArvoContract.tryAssert` / `.assert`** — checks an event against this one interface and reports which of its three scopes matched: `input`, one of `outputs`, or the handler error.
 - **`ArvoContract.tryAssert` / `.assert`** — resolves which version an event belongs to from its `dataschema`, then delegates. It checks that `dataschema` against the versions it declares; what it does not do is re-implement the type-and-payload check, so there is one implementation of what "matches" means rather than two that can drift.
 - **Both levels check `dataschema`, each against what it alone knows** — the container against the set of versions it declares, the version against its own single version. A caller reaching straight for `contract.versions['1.0.0']` is checked by the thing best placed to check them.
 - **A result carries the version that validated it**, so a caller holding a result does not need the contract to know which interface was in effect.
@@ -78,7 +78,7 @@ Illustrative, not normative — the spec governs. Types are indicative; the real
 
 ```ts
 /** Which of a version's three declared shapes an event matched. */
-type ArvoContractEventAssertionScope = 'accepts' | 'emits' | 'handlerError';
+type ArvoContractEventAssertionScope = 'input' | 'output' | 'error';
 
 /**
  * What an assertion reports when no type was expected.
@@ -96,15 +96,15 @@ type AssertedArvoEvent<V extends ArvoSemanticVersion> = {
 /**
  * Which scope an expected type belongs to.
  *
- * Expecting the contract's `type` can only mean `accepts`, the handler error
- * type can only mean `handlerError`, and an emit key can only mean `emits`.
+ * Expecting the contract's `type` can only mean `input`, the handler error
+ * type can only mean `error`, and an output key can only mean `outputs`.
  * The caller has already established which; returning the three-way union
  * would hand back less than they supplied.
  */
 type ScopeOf<E extends string, T extends string, C> =
-  E extends T ? 'accepts'
-  : E extends `handler_${T}_error` ? 'handlerError'
-  : E extends keyof C['emits'] ? 'emits'
+  E extends T ? 'input'
+  : E extends `handler_${T}_error` ? 'error'
+  : E extends keyof C['output'] ? 'output'
   : never;
 
 /**
@@ -115,9 +115,9 @@ type ScopeOf<E extends string, T extends string, C> =
  * output type describe a value that was never produced.
  */
 type PayloadFor<E extends string, T extends string, C> =
-  E extends T ? z.input<C['accepts']>
+  E extends T ? z.input<C['input']>
   : E extends `handler_${T}_error` ? HandlerErrorPayload
-  : E extends keyof C['emits'] ? z.input<C['emits'][E]>
+  : E extends keyof C['output'] ? z.input<C['output'][E]>
   : never;
 
 /**
@@ -135,7 +135,7 @@ type NarrowedAssertedArvoEvent<V extends ArvoSemanticVersion, E extends string, 
 ```ts
 class VersionedArvoContract<T, V, C, …> {
   /** Every type this version may legitimately carry. */
-  type AssertableType = T | keyof C['emits'] | `handler_${T}_error`;
+  type AssertableType = T | keyof C['output'] | `handler_${T}_error`;
 
   /** Ask: which of my shapes is this? */
   tryAssert(event: ArvoEvent): Result<
@@ -176,7 +176,7 @@ class ArvoContract<T, M, …> {
 }
 ```
 
-Three notes on the sketch. `expectedType` is **not** widened with `string` — a union including `string` swallows the literal members and collapses the parameter to `string`, giving an expectation that type-checks against anything and narrows nothing. `scope` narrows when a type is expected, since the contract's `type` implies `'accepts'`, an emit key implies `'emits'`, and the handler error type implies `'handlerError'`. And payload types are a schema's *input* side, because the payload returned is the one that arrived.
+Three notes on the sketch. `expectedType` is **not** widened with `string` — a union including `string` swallows the literal members and collapses the parameter to `string`, giving an expectation that type-checks against anything and narrows nothing. `scope` narrows when a type is expected, since the contract's `type` implies `'input'`, an output key implies `'output'`, and the handler error type implies `'error'`. And payload types are a schema's *input* side, because the payload returned is the one that arrived.
 
 ## Proposed usage
 
@@ -184,7 +184,7 @@ Three notes on the sketch. `expectedType` is **not** widened with `string` — a
 // Asking. Facts, not types: which version, which scope, and the event.
 const { version, scope, event } = contract.assert(incoming);
 
-if (scope === 'handlerError') {
+if (scope === 'error') {
   logger.error(`${version} failed`, event.data);
   return;
 }
@@ -197,11 +197,11 @@ const v1 = contract.versions['1.0.0'];
 const { event, scope } = v1.assert(incoming, 'com_order_created');
 
 event.data.order_id; // typed
-scope;               // 'emits' — not the three-way union
+scope;               // 'output' — not the three-way union
 
 // Which is the point of narrowing it. Without it, a caller who already said
 // what they expected would still have to write a check that cannot fail:
-//   if (scope === 'emits') { ... }
+//   if (scope === 'output') { ... }
 ```
 
 ```ts
@@ -214,10 +214,10 @@ asserted.event === incoming; // true
 // Discovery then typed access. The version must be narrowed to a literal
 // first: indexing `versions` with the union gives a union of version
 // contracts, and the expected-type overload is not callable on a union at
-// all — you cannot name an emit before knowing which version declares it.
+// all — you cannot name an output before knowing which version declares it.
 const found = contract.assert(incoming);
 
-if (found.version === '1.1.0' && found.scope === 'emits') {
+if (found.version === '1.1.0' && found.scope === 'output') {
   const { event } = contract.versions['1.1.0'].assert(
     found.event,
     'com_order_created',
@@ -299,7 +299,7 @@ Nothing here re-implements a check zod already performs, or paraphrases what it 
 
 **Dependencies**
 
-None added. `zod`'s standalone `safeParse` is used to check a payload against a schema, since a version's `accepts` is a core schema without parse methods of its own. Only its verdict and its issues are used; the value it produces is discarded, the event being returned as it arrived.
+None added. `zod`'s standalone `safeParse` is used to check a payload against a schema, since a version's `input` is a core schema without parse methods of its own. Only its verdict and its issues are used; the value it produces is discarded, the event being returned as it arrived.
 
 **Not touched**
 

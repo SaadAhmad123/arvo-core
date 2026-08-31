@@ -56,7 +56,7 @@ Independently, the round trips differ in direction. Measured with `{ a: 'x', ext
 
 ADR-005 permits a "true, if weaker" materialization. It does not permit a stricter one — a contract that rejects what its author's contract accepts is not a weaker subset, it is a different contract. So `'input'` is the only setting whose drift points in the sanctioned direction.
 
-One wrinkle it dissolves: `accepts` and `emits` might have seemed to want different settings. They do not. Both describe a wire payload, and a wire payload is always the input to whoever validates it.
+One wrinkle it dissolves: `input` and `outputs` might have seemed to want different settings. They do not. Both describe a wire payload, and a wire payload is always the input to whoever validates it.
 
 ### `cycles: 'ref'`, not `'throw'`
 

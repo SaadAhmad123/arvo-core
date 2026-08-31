@@ -15,6 +15,11 @@ export type {
 } from './ArvoContract/types.js';
 export { VersionedArvoContract } from './ArvoContract/versioned/index.js';
 export type { VersionedArvoContractParam } from './ArvoContract/versioned/types.js';
+export { ArvoDomain } from './ArvoDomain/index.js';
+export type {
+  ArvoDomainInput,
+  ArvoDomainSymbol,
+} from './ArvoDomain/types.js';
 export { ArvoEventValidationError } from './ArvoEvent/errors.js';
 export { ArvoEvent } from './ArvoEvent/index.js';
 export type {
@@ -22,6 +27,28 @@ export type {
   ArvoEventParam,
   ArvoEventValidationOptions,
 } from './ArvoEvent/types.js';
+export {
+  ArvoEventFactory,
+  createArvoEventFactory,
+  tryCreateArvoEventFactory,
+} from './factories/ArvoEventFactory/index.js';
+export type {
+  ContractEventOptions,
+  ContractEventParam,
+  ErrorEventParam,
+} from './factories/ArvoEventFactory/types.js';
+export {
+  cloneArvoEvent,
+  tryCloneArvoEvent,
+} from './factories/cloneArvoEvent.js';
+export {
+  createArvoContract,
+  tryCreateArvoContract,
+} from './factories/createArvoContract.js';
+export {
+  createArvoEvent,
+  tryCreateArvoEvent,
+} from './factories/createArvoEvent.js';
 export { ArvoSemanticVersionCheckError } from './semver/errors.js';
 export { ArvoSemanticVersion } from './semver/index.js';
 export { ArvoContractSerializerError } from './serializers/ArvoContractSerializer/errors.js';
