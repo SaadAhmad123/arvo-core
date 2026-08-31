@@ -43,8 +43,11 @@ export const tryCreateArvoEvent = <
     return fromNeverthrow(
       ok(
         new ArvoEvent<T, D>({
-          subject: crypto.randomUUID(),
           ...param,
+          // Defaulted after the spread, not before it: a caller who passes
+          // `subject: undefined` is saying nothing about the subject, and a
+          // spread would let that nothing win over the generated one.
+          subject: param.subject ?? crypto.randomUUID(),
         }),
       ),
     );

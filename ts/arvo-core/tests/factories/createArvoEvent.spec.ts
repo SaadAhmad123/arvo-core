@@ -34,6 +34,18 @@ describe('an event from its fields', () => {
     );
   });
 
+  it('generates one where a subject is given as undefined', () => {
+    // A caller building the param object computes some fields, so a key
+    // present and undefined is how "I have no subject" arrives. It means the
+    // same as omitting it, rather than defeating the default.
+    expect(
+      createArvoEvent({ ...required, subject: undefined }).subject,
+    ).toBeTypeOf('string');
+    expect(
+      createArvoEvent({ ...required, subject: undefined }).subject,
+    ).not.toBe(createArvoEvent({ ...required, subject: undefined }).subject);
+  });
+
   it('defaults every other field as the constructor does', () => {
     const event = createArvoEvent(required);
     expect(event.executionid).toBe(event.subject);
