@@ -87,7 +87,13 @@ TSDoc is written for the **package consumer**, not the contributor. Someone who 
 
 The reasoning is not lost by keeping it out of source — it is recorded in the ADRs and in `openspec/`. Duplicating it into shipped comments creates a second copy that drifts and can only be corrected by cutting a release.
 
-This governs the package's **public export surface** — what `src/index.ts` re-exports, and therefore what a consumer's editor can ever surface. An internal module that is never exported may carry full contributor-facing reasoning at its top, in the same register as `design.md`, because no consumer's tooling will ever show it to them. Point to `design.md` for the canonical record rather than duplicating it — the same cite-don't-copy rule that governs everything else here.
+Comments inside a body are a different thing from TSDoc, and are governed separately:
+
+- **A body comment earns its place only by stopping the next edit from reintroducing a bug** — an invariant the code cannot state, a guard whose absence looks harmless. State the trap, not the history.
+- **One line, and never longer than the code it annotates.** A reason needing a paragraph is not a comment: it belongs in the commit message, attached to the diff that decided it, and in `design.md`.
+- **Do not restate what the code does, argue for the design, or explain the language.** Assume a reader who knows TypeScript and can see the lines below.
+
+The TSDoc rules above govern the package's **public export surface** — what `src/index.ts` re-exports, and therefore what a consumer's editor can ever surface. An internal module that is never exported may carry full contributor-facing reasoning at its top, in the same register as `design.md`, because no consumer's tooling will ever show it to them. Point to `design.md` for the canonical record rather than duplicating it — the same cite-don't-copy rule that governs everything else here.
 
 ### Errors
 

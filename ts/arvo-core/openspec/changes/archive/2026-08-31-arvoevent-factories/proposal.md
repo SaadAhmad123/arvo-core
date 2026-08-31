@@ -164,11 +164,15 @@ catch (caught) {
 orders.createInput({ source, data });                                   // no domain
 orders.createInput({ source, data, domain: 'orders_priority' });        // this one
 orders.createInput({ source, data, domain: ArvoDomain.FROM_EVENT_CONTRACT });
-// A symbol's other two sources are bound on the factory, once, not per event.
-const orders = createArvoEventFactory(contract.versions['1.0.0'], {
+```
+
+```ts
+// A symbol's other two sources are bound on the factory, once, not per event,
+// so a factory reading the triggering event belongs to one invocation.
+const forThisInvocation = createArvoEventFactory(contract.versions['1.0.0'], {
   domainCtx: { triggeringEvent: incoming },
 });
-orders.createOutput({
+forThisInvocation.createOutput({
   type: 'com_order_created', source, data, domain: ArvoDomain.FROM_TRIGGERING_EVENT,
 });
 ```

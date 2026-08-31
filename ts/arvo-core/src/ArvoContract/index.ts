@@ -120,7 +120,7 @@ export class ArvoContract<
    * `VersionedArvoContract.tryAssert`.
    *
    * Beyond finding the version this checks nothing of its own, so an event
-   * this input is exactly an event one of its versions input.
+   * this accepts is exactly an event one of its versions accepts.
    *
    * @example
    * const asserted = contract.tryAssert(event);

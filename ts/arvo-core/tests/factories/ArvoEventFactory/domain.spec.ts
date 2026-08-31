@@ -152,6 +152,60 @@ describe('options bound on the factory', () => {
   });
 });
 
+describe("options bound on the factory are the factory's own", () => {
+  // The spec says two events of one binding cannot resolve the same request
+  // differently, so the binding cannot be a window onto a caller's object.
+  const laterEvent = new ArvoEvent({
+    source: 'com.elsewhere',
+    subject: 'order-99',
+    type: 'com_order_create',
+    dataschema: '#/com/order/create/1.0.0',
+    data: {},
+    domain: 'elsewhere',
+  });
+  const param = {
+    source: 'com.web',
+    data: {},
+    domain: ArvoDomain.FROM_TRIGGERING_EVENT,
+  };
+
+  it('ignores a source swapped after it was bound', () => {
+    const ctx = { triggeringEvent };
+    const bound = createArvoEventFactory(version('orders'), {
+      domainCtx: ctx,
+    });
+
+    const before = bound.createInput(param).domain;
+    ctx.triggeringEvent = laterEvent;
+    const after = bound.createInput(param).domain;
+
+    expect(before).toBe('inbound');
+    expect(after).toBe('inbound');
+  });
+
+  it('ignores a whole context replaced after it was bound', () => {
+    const options: { domainCtx?: { triggeringEvent: ArvoEvent } } = {
+      domainCtx: { triggeringEvent },
+    };
+    const bound = createArvoEventFactory(version('orders'), options);
+
+    options.domainCtx = { triggeringEvent: laterEvent };
+
+    expect(bound.createInput(param).domain).toBe('inbound');
+  });
+
+  it('holds options that name no source at all', () => {
+    // Bound, but with nothing in them -- a symbol has nothing to read.
+    const bound = createArvoEventFactory(version('orders'), {});
+    expect(bound.options).toEqual({});
+    expect(bound.createInput(param).domain).toBeNull();
+  });
+
+  it('holds nothing where nothing was bound', () => {
+    expect(createArvoEventFactory(version('orders')).options).toBeUndefined();
+  });
+});
+
 describe('a source with nothing to give', () => {
   it('reads none from a contract declaring none', () => {
     expect(

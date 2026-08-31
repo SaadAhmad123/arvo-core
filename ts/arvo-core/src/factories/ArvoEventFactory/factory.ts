@@ -73,7 +73,12 @@ export class ArvoEventFactory<
    */
   constructor(contract: V, options?: ContractEventOptions) {
     this.contract = contract;
-    this.options = options;
+    this.options =
+      options &&
+      Object.freeze({
+        ...options,
+        domainCtx: options.domainCtx && Object.freeze({ ...options.domainCtx }),
+      });
     Object.freeze(this);
   }
 
