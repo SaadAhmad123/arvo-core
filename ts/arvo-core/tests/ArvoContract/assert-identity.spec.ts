@@ -7,11 +7,11 @@ const contract = new ArvoContract({
   type: 'com_order_create',
   versions: {
     '1.0.0': {
-      accepts: z.object({
+      input: z.object({
         items: z.array(z.string()),
         currency: z.string().default('GBP'),
       }),
-      emits: { com_order_created: z.object({ order_id: z.string() }) },
+      outputs: { com_order_created: z.object({ order_id: z.string() }) },
     },
   },
 });
@@ -60,7 +60,7 @@ describe('schema defaults are not applied', () => {
   it('accepts a payload that only satisfies the schema once defaulted', () => {
     // The schema is satisfied because `currency` has a default, so the check
     // passes -- but the value the check produced is discarded.
-    expect(v1.assert(event({ items: [] })).scope).toBe('accepts');
+    expect(v1.assert(event({ items: [] })).scope).toBe('input');
   });
 });
 

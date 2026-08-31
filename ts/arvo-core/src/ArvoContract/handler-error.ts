@@ -37,12 +37,12 @@ export const handlerErrorType = <T extends string>(
 ): `handler_${T}_error` => `handler_${type}_error`;
 
 /**
- * The error a handler emits when its own code fails, or when it cannot do
+ * The error a handler puts out when its own code fails, or when it cannot do
  * what its contract declared.
  *
- * Shaped like an entry of `emits` so a handler can treat everything it may
- * emit the same way, but it never appears in `emits`: every version has one,
- * including a version declaring no emits at all. Its `dataschema` is that of
+ * Shaped like an entry of `outputs` so a handler can treat everything it may
+ * put out the same way, but it never appears in `outputs`: every version has
+ * one, including a version declaring none at all. Its `dataschema` is that of
  * the version that produced it, so a caught error still says which version
  * was running.
  */

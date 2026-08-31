@@ -21,8 +21,8 @@ const version = new ArvoContract({
   type: 'com_order_create',
   versions: {
     '1.0.0': {
-      accepts: z.object({ items: z.array(z.string()) }),
-      emits: { com_order_created: z.object({ order_id: z.string() }) },
+      input: z.object({ items: z.array(z.string()) }),
+      outputs: { com_order_created: z.object({ order_id: z.string() }) },
     },
   },
 }).versions['1.0.0'];
@@ -81,34 +81,34 @@ const pairs = [
     () => tryCloneArvoEvent(event, { to: '' }),
   ],
   [
-    'createAccepted',
-    () => orders.createAccepted({ source: 's', data: { items: [] } }),
-    () => orders.tryCreateAccepted({ source: 's', data: { items: [] } }),
-    () => orders.createAccepted({ source: 's', data: {} as never }),
-    () => orders.tryCreateAccepted({ source: 's', data: {} as never }),
+    'createInput',
+    () => orders.createInput({ source: 's', data: { items: [] } }),
+    () => orders.tryCreateInput({ source: 's', data: { items: [] } }),
+    () => orders.createInput({ source: 's', data: {} as never }),
+    () => orders.tryCreateInput({ source: 's', data: {} as never }),
   ],
   [
-    'createEmitted',
+    'createOutput',
     () =>
-      orders.createEmitted({
+      orders.createOutput({
         type: 'com_order_created',
         source: 's',
         data: { order_id: 'o' },
       }),
     () =>
-      orders.tryCreateEmitted({
+      orders.tryCreateOutput({
         type: 'com_order_created',
         source: 's',
         data: { order_id: 'o' },
       }),
     () =>
-      orders.createEmitted({
+      orders.createOutput({
         type: 'com_order_created',
         source: 's',
         data: {} as never,
       }),
     () =>
-      orders.tryCreateEmitted({
+      orders.tryCreateOutput({
         type: 'com_order_created',
         source: 's',
         data: {} as never,

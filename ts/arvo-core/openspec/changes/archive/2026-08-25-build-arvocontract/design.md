@@ -2,7 +2,7 @@
 
 See `proposal.md` — Why. The constraints that shape the approach:
 
-- **Zod is the authoring surface**, already a peer dependency at `^4.0.0`. Contracts are authored in TypeScript, and `z.infer` flowing from a version's `accepts` to a handler's payload type is most of what makes the package worth using. Whatever shape the classes take, that inference must survive.
+- **Zod is the authoring surface**, already a peer dependency at `^4.0.0`. Contracts are authored in TypeScript, and `z.infer` flowing from a version's `input` to a handler's payload type is most of what makes the package worth using. Whatever shape the classes take, that inference must survive.
 - **The package already has the parts this needs.** `ErrorIssue` and `buildErrorIssueMessage` (`src/utils/error-issue.ts`) for reporting every failure at once, `ArvoSemanticVersion.tryCheck` for version keys, and `src/ArvoEvent/validator.ts` as the established shape for a validator that normalizes then collects.
 - **The canonical form is deferred but must not be foreclosed.** Nothing stored may be derived, and every optional field is materialized at its default so a future exporter is a pure projection of stored state.
 - `src/proposal/ArvoContract/` is a sketch communicating intent. It is not a starting point to edit; `src-v3/ArvoContract/` predates ADR-005 entirely.
@@ -25,7 +25,7 @@ See `proposal.md` — Why. The constraints that shape the approach:
 
 ### Two classes, container and version
 
-`ArvoContract` holds the authored declaration; `VersionedArvoContract` is what downstream code holds. Construction explodes the `versions` map into one version contract per key, each copying the container's `uri`, `type`, `domain`, `description`, and `metadata` alongside its own `accepts`/`emits`.
+`ArvoContract` holds the authored declaration; `VersionedArvoContract` is what downstream code holds. Construction explodes the `versions` map into one version contract per key, each copying the container's `uri`, `type`, `domain`, `description`, and `metadata` alongside its own `input`/`outputs`.
 
 The copying looks redundant and is the point: ADR-005's **Isolation** says a version is "a complete, standalone contract," so a handler bound to one must never need a reference back to a container to know its own `uri` or build its own `dataschema`.
 
@@ -37,9 +37,9 @@ Constructors only. `createArvoContract` and ADR-005's "authoring sugar" presets 
 
 ### Literal version keys are preserved — verified, not assumed
 
-`Record<ArvoSemanticVersion, …>` keys on a template literal type, which TypeScript can collapse to an index signature. If it did, `contract.versions['9.9.9']` would type-check and every version's `accepts` would widen to the same type, making the generics worthless.
+`Record<ArvoSemanticVersion, …>` keys on a template literal type, which TypeScript can collapse to an index signature. If it did, `contract.versions['9.9.9']` would type-check and every version's `input` would widen to the same type, making the generics worthless.
 
-Probed against the exact generic shape before adopting it. Both properties hold: indexing an undeclared key is `TS7053`, and two versions' `accepts` types remain mutually non-assignable, so `z.infer` differs per version. No `const` type parameters are needed.
+Probed against the exact generic shape before adopting it. Both properties hold: indexing an undeclared key is `TS7053`, and two versions' `input` types remain mutually non-assignable, so `z.infer` differs per version. No `const` type parameters are needed.
 
 *Residual sharp edge:* inference depends on the versions map reaching the constructor as an object literal (or a `const` whose type was inferred). A consumer who annotates their map as `ArvoContractVersionMapParam` collapses the keys themselves and loses both properties. Worth a doc comment; not something the type system can prevent.
 
@@ -52,7 +52,7 @@ Order matters and is fixed: defaults are applied and `uri` derived **before** an
 The rules split in two:
 
 - **Contract-level** — `type` grammar, `uri` non-empty and canonical, `domain` grammar, `versions` non-empty, every version key a bare semver triple.
-- **Version-level** — `emits` key grammar, object-shaped `accepts` and emits, `emits` colliding with `type` or the handler error type.
+- **Version-level** — `outputs` key grammar, object-shaped `input` and emits, `outputs` colliding with `type` or the handler error type.
 
 Both classes run the **same** version-level function. That is what makes the spec's *"a contract's own materialization never fails version validation"* true by construction rather than by two rule sets being kept in sync by hand. `ArvoContract` runs it across every version and collects, so a contract broken in two versions reports both; `VersionedArvoContract` runs it on itself, which matters only for direct construction and is a no-op re-check on the container path.
 
@@ -62,7 +62,7 @@ Both classes run the **same** version-level function. That is what makes the spe
 
 `type` is validated before anything derives from it. If it fails, that issue is returned alone and nothing else runs.
 
-Three things are computed from `type`: `uri` when not supplied, the handler error type, and the "an `emits` key must not reuse the contract type" comparison. Each currently guards against a non-string `type` by substituting `''` and carrying on, in three separate places. That placeholder is what produces `uri: must be a non-empty string (received "")` for a caller who never supplied a `uri` — a fabricated finding quoting a value they never wrote, sitting directly beneath the true one.
+Three things are computed from `type`: `uri` when not supplied, the handler error type, and the "an `outputs` key must not reuse the contract type" comparison. Each currently guards against a non-string `type` by substituting `''` and carrying on, in three separate places. That placeholder is what produces `uri: must be a non-empty string (received "")` for a caller who never supplied a `uri` — a fabricated finding quoting a value they never wrote, sitting directly beneath the true one.
 
 The validator already has this concept. A non-object `versions` and an empty `versions` both stop the run and return early, because nothing further can be judged. `type` is the same kind of failure and was simply never treated as one. This is an existing rule applied consistently, not a new mechanism.
 
@@ -90,7 +90,7 @@ The argument for doing it anyway was timing: it changes public type signatures, 
 
 ### Issue paths address the declaration
 
-`ErrorIssue.path` uses the shape of the authored object: `type`, `uri`, `versions.1.0.0.emits.Bad_Key`, `versions.1.0.0.accepts`. A reader should be able to go from the message to the line without a second lookup.
+`ErrorIssue.path` uses the shape of the authored object: `type`, `uri`, `versions.1.0.0.outputs.Bad_Key`, `versions.1.0.0.input`. A reader should be able to go from the message to the line without a second lookup.
 
 Version-key failures from `ArvoSemanticVersion.tryCheck` are folded in with their paths re-anchored under `versions.<key>`, reusing that grammar rather than restating it.
 
@@ -104,7 +104,7 @@ The check inspects zod's own schema definition for an object type rather than us
 
 ADR-005 fixes the payload as `error_name`/`error_message`/`error_stack`, invariant across versions and contracts. Only the *type string* varies, and only with `type`. So the schema is one module-level frozen value reused by every version; only `handler_{type}_error` is computed per contract.
 
-It is exposed in the same shape as an entry of `emits` — a type and a schema — so a handler can treat everything it may emit uniformly, without a special case for the error channel. It remains absent from `emits` itself, per ADR-005.
+It is exposed in the same shape as an entry of `outputs` — a type and a schema — so a handler can treat everything it may emit uniformly, without a special case for the error channel. It remains absent from `outputs` itself, per ADR-005.
 
 ### `dataschema` is derived, never stored
 
@@ -120,7 +120,7 @@ One new `ArvoContractValidationError`: `_tag` discriminant, frozen `issues`, mes
 
 ### Immutability is shallow-plus
 
-`Object.freeze` on both instances, and additionally on `metadata`, the `versions` map, and each version's `emits` map — the containers a consumer could otherwise mutate through. Zod schema objects are left alone: freezing them risks breaking zod's own internals, and a consumer mutating a schema they authored is outside what this can defend.
+`Object.freeze` on both instances, and additionally on `metadata`, the `versions` map, and each version's `outputs` map — the containers a consumer could otherwise mutate through. Zod schema objects are left alone: freezing them risks breaking zod's own internals, and a consumer mutating a schema they authored is outside what this can defend.
 
 ## Risks / Trade-offs
 

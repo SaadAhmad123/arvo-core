@@ -11,7 +11,7 @@ import type { ArvoContractVersionParam } from '../types.js';
  *
  * @template T - The contract's `type`, as a literal.
  * @template V - This contract's version, as a literal.
- * @template C - This version's `accepts`/`emits` types.
+ * @template C - This version's `input`/`outputs` types.
  */
 export type VersionedArvoContractParam<
   T extends string = string,
@@ -24,6 +24,6 @@ export type VersionedArvoContractParam<
   description: string | null;
   domain: string | null;
   metadata: JSONObject;
-  accepts: C['accepts'];
-  emits: C['emits'];
+  input: C['input'];
+  outputs: C['outputs'];
 };

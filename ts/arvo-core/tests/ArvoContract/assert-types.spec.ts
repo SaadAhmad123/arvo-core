@@ -7,12 +7,12 @@ const contract = new ArvoContract({
   type: 'com_order_create',
   versions: {
     '1.0.0': {
-      accepts: z.object({ items: z.array(z.string()) }),
-      emits: { com_order_created: z.object({ order_id: z.string() }) },
+      input: z.object({ items: z.array(z.string()) }),
+      outputs: { com_order_created: z.object({ order_id: z.string() }) },
     },
     '1.1.0': {
-      accepts: z.object({ items: z.array(z.string()) }),
-      emits: { com_order_shipped: z.object({ eta: z.string() }) },
+      input: z.object({ items: z.array(z.string()) }),
+      outputs: { com_order_shipped: z.object({ eta: z.string() }) },
     },
   },
 });
@@ -30,16 +30,16 @@ const event = (type: string, data: Record<string, unknown>) =>
 
 describe('what an expectation narrows', () => {
   it('narrows the scope to one literal per shape', () => {
-    const accepts = v1.assert(
+    const input = v1.assert(
       event('com_order_create', { items: [] }),
       'com_order_create',
     );
-    const emits = v1.assert(
+    const outputs = v1.assert(
       event('com_order_created', { order_id: 'o' }),
       'com_order_created',
     );
     const failed = v1.assert(
-      event(v1.handlerError.type, {
+      event(v1.error.type, {
         error_name: 'E',
         error_message: 'm',
         error_stack: null,
@@ -47,9 +47,9 @@ describe('what an expectation narrows', () => {
       'handler_com_order_create_error',
     );
 
-    expectTypeOf(accepts.scope).toEqualTypeOf<'accepts'>();
-    expectTypeOf(emits.scope).toEqualTypeOf<'emits'>();
-    expectTypeOf(failed.scope).toEqualTypeOf<'handlerError'>();
+    expectTypeOf(input.scope).toEqualTypeOf<'input'>();
+    expectTypeOf(outputs.scope).toEqualTypeOf<'output'>();
+    expectTypeOf(failed.scope).toEqualTypeOf<'error'>();
   });
 
   it('gives the payload the expected shape declares', () => {
@@ -63,9 +63,7 @@ describe('what an expectation narrows', () => {
 
   it('leaves the scope wide and the payload unparameterised without one', () => {
     const asked = v1.assert(event('com_order_create', { items: [] }));
-    expectTypeOf(asked.scope).toEqualTypeOf<
-      'accepts' | 'emits' | 'handlerError'
-    >();
+    expectTypeOf(asked.scope).toEqualTypeOf<'input' | 'output' | 'error'>();
     expectTypeOf(asked.version).toEqualTypeOf<'1.0.0'>();
   });
 
@@ -103,7 +101,7 @@ describe('what a contract reports', () => {
           event('com_order_created', { order_id: 'o' }),
           'com_order_created',
         ).scope,
-      ).toEqualTypeOf<'emits'>();
+      ).toEqualTypeOf<'output'>();
     }
   });
 });

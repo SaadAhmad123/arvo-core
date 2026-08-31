@@ -10,8 +10,8 @@ const contract = (over: Record<string, unknown> = {}) =>
     type: 'com_order_create',
     versions: {
       '1.0.0': {
-        accepts: z.object({ amount: z.number() }),
-        emits: { com_order_created: z.object({ id: z.string() }) },
+        input: z.object({ amount: z.number() }),
+        outputs: { com_order_created: z.object({ id: z.string() }) },
       },
     },
     ...over,
@@ -27,20 +27,20 @@ describe('the canonical form', () => {
         type: 'com_order_create',
         versions: {
           '1.0.0': {
-            accepts: z.object({ a: z.string() }),
-            emits: { com_a: z.object({ x: z.string() }) },
+            input: z.object({ a: z.string() }),
+            outputs: { com_a: z.object({ x: z.string() }) },
           },
           '1.1.0': {
-            accepts: z.object({ b: z.string() }),
-            emits: { com_b: z.object({ y: z.string() }) },
+            input: z.object({ b: z.string() }),
+            outputs: { com_b: z.object({ y: z.string() }) },
           },
         },
       }),
     );
     for (const version of ['1.0.0', '1.1.0']) {
-      expect(form.versions[version].accepts.$schema).toBe(DIALECT);
+      expect(form.versions[version].input.$schema).toBe(DIALECT);
       for (const emit of Object.values<{ $schema: string }>(
-        form.versions[version].emits,
+        form.versions[version].outputs,
       )) {
         expect(emit.$schema).toBe(DIALECT);
       }
@@ -87,14 +87,14 @@ describe('the canonical form', () => {
     );
   });
 
-  it('keeps an empty emits as an empty object', () => {
+  it('keeps an empty outputs as an empty object', () => {
     const form = formOf(
       new ArvoContract({
         type: 'com_a_b',
-        versions: { '1.0.0': { accepts: z.object({}), emits: {} } },
+        versions: { '1.0.0': { input: z.object({}), outputs: {} } },
       }),
     );
-    expect(form.versions['1.0.0'].emits).toEqual({});
+    expect(form.versions['1.0.0'].outputs).toEqual({});
   });
 
   it('expresses a recursive schema by reference rather than refusing it', () => {
@@ -107,10 +107,10 @@ describe('the canonical form', () => {
     const form = formOf(
       new ArvoContract({
         type: 'com_tree_create',
-        versions: { '1.0.0': { accepts: Node as never, emits: {} } },
+        versions: { '1.0.0': { input: Node as never, outputs: {} } },
       }),
     );
-    expect(JSON.stringify(form.versions['1.0.0'].accepts)).toContain('$ref');
+    expect(JSON.stringify(form.versions['1.0.0'].input)).toContain('$ref');
   });
 });
 
@@ -119,8 +119,8 @@ describe('what the crossing cost', () => {
     type: 'com_a_b',
     versions: {
       '1.0.0': {
-        accepts: z.object({ at: z.date(), amount: z.number() }),
-        emits: {},
+        input: z.object({ at: z.date(), amount: z.number() }),
+        outputs: {},
       },
     },
   });
@@ -133,14 +133,14 @@ describe('what the crossing cost', () => {
   it('names the position the constraint occupied', () => {
     const { warnings } = new ArvoContractSerializer().serialize(lossy);
     expect(warnings.map((w) => w.path)).toContain(
-      'versions["1.0.0"].accepts.properties.at',
+      'versions["1.0.0"].input.properties.at',
     );
   });
 
   it('leaves the expressible constraints alone', () => {
     const { warnings } = new ArvoContractSerializer().serialize(lossy);
     expect(warnings.map((w) => w.path)).not.toContain(
-      'versions["1.0.0"].accepts.properties.amount',
+      'versions["1.0.0"].input.properties.amount',
     );
   });
 
@@ -148,7 +148,7 @@ describe('what the crossing cost', () => {
     const form = JSON.parse(
       new ArvoContractSerializer().serialize(lossy).schema,
     );
-    expect(form.versions['1.0.0'].accepts.properties.at).toEqual({});
+    expect(form.versions['1.0.0'].input.properties.at).toEqual({});
   });
 
   it('reports nothing, and no message, when nothing was lost', () => {
@@ -159,20 +159,20 @@ describe('what the crossing cost', () => {
     expect(warningString).toBeNull();
   });
 
-  it('reports a loss inside an emit as well as in accepts', () => {
+  it('reports a loss inside an emit as well as in input', () => {
     const { warnings } = new ArvoContractSerializer().serialize(
       new ArvoContract({
         type: 'com_a_b',
         versions: {
           '1.0.0': {
-            accepts: z.object({}),
-            emits: { com_a_done: z.object({ at: z.date() }) },
+            input: z.object({}),
+            outputs: { com_a_done: z.object({ at: z.date() }) },
           },
         },
       }),
     );
     expect(warnings.map((w) => w.path)).toContain(
-      'versions["1.0.0"].emits["com_a_done"].properties.at',
+      'versions["1.0.0"].outputs["com_a_done"].properties.at',
     );
   });
 
@@ -189,8 +189,8 @@ describe('what the crossing cost', () => {
         type: 'com_a_b',
         versions: {
           '1.0.0': {
-            accepts: z.object({ u: z.unknown(), a: z.any() }),
-            emits: {},
+            input: z.object({ u: z.unknown(), a: z.any() }),
+            outputs: {},
           },
         },
       }),
@@ -206,40 +206,40 @@ describe('what the crossing cost', () => {
         type: 'com_a_b',
         versions: {
           '1.0.0': {
-            accepts: z.object({ at: z.date().optional() }),
-            emits: {},
+            input: z.object({ at: z.date().optional() }),
+            outputs: {},
           },
         },
       }),
     );
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]?.path).toBe('versions["1.0.0"].accepts.properties.at');
+    expect(warnings[0]?.path).toBe('versions["1.0.0"].input.properties.at');
   });
 
   it('reports a format with no pattern as documentation only', () => {
-    // z.url() emits `format: "uri"` alone. Nothing may enforce an annotation,
+    // z.url() outputs `format: "uri"` alone. Nothing may enforce an annotation,
     // so the check the author wrote becomes documentation in the form.
     const { warnings } = new ArvoContractSerializer().serialize(
       new ArvoContract({
         type: 'com_a_b',
         versions: {
-          '1.0.0': { accepts: z.object({ u: z.url() }), emits: {} },
+          '1.0.0': { input: z.object({ u: z.url() }), outputs: {} },
         },
       }),
     );
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.message).toContain('documentation only');
-    expect(warnings[0]?.path).toBe('versions["1.0.0"].accepts.properties.u');
+    expect(warnings[0]?.path).toBe('versions["1.0.0"].input.properties.u');
   });
 
   it('does not report a format that keeps its pattern', () => {
-    // zod emits `pattern` beside `format` for these, so the assertion still
+    // zod outputs `pattern` beside `format` for these, so the assertion still
     // carries the enforcement and nothing has been demoted.
     const { warnings } = new ArvoContractSerializer().serialize(
       new ArvoContract({
         type: 'com_a_b',
         versions: {
-          '1.0.0': { accepts: z.object({ e: z.email() }), emits: {} },
+          '1.0.0': { input: z.object({ e: z.email() }), outputs: {} },
         },
       }),
     );
@@ -256,7 +256,7 @@ describe('conversion options', () => {
       new ArvoContract({
         type: 'com_a_b',
         versions: {
-          '1.0.0': { accepts: z.object({ at: z.date() }), emits: {} },
+          '1.0.0': { input: z.object({ at: z.date() }), outputs: {} },
         },
       }),
     );
@@ -270,7 +270,7 @@ describe('conversion options', () => {
       new ArvoContract({
         type: 'com_a_b',
         versions: {
-          '1.0.0': { accepts: z.object({ at: z.date() }), emits: {} },
+          '1.0.0': { input: z.object({ at: z.date() }), outputs: {} },
         },
       }),
     );
@@ -285,7 +285,7 @@ describe('conversion options', () => {
       new ArvoContract({
         type: 'com_a_b',
         versions: {
-          '1.0.0': { accepts: z.object({ at: z.date() }), emits: {} },
+          '1.0.0': { input: z.object({ at: z.date() }), outputs: {} },
         },
       }),
     );
@@ -298,7 +298,7 @@ describe('conversion options', () => {
     });
     const withADate = new ArvoContract({
       type: 'com_a_b',
-      versions: { '1.0.0': { accepts: z.object({ at: z.date() }), emits: {} } },
+      versions: { '1.0.0': { input: z.object({ at: z.date() }), outputs: {} } },
     });
     const reported = refusing.trySerialize(withADate);
     expect(reported.ok).toBe(false);
@@ -315,6 +315,6 @@ describe('conversion options', () => {
     const form = formOf(contract(), {
       serialize: { target: 'draft-07' },
     } as never);
-    expect(form.versions['1.0.0'].accepts.$schema).toBe(DIALECT);
+    expect(form.versions['1.0.0'].input.$schema).toBe(DIALECT);
   });
 });

@@ -6,7 +6,7 @@ const DIALECT = 'https://json-schema.org/draft/2020-12/schema';
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** A map key rendered for an issue path, matching what serialization emits. */
+/** A map key rendered for an issue path, matching what serialization writes. */
 const at = (key: string): string => `[${JSON.stringify(key)}]`;
 
 const push = (
@@ -61,15 +61,15 @@ const checkVersion = (
     return;
   }
 
-  checkSchemaPosition(definition.accepts, `${path}.accepts`, issues);
+  checkSchemaPosition(definition.input, `${path}.input`, issues);
 
-  const { emits } = definition;
-  if (!isRecord(emits)) {
-    push(issues, `${path}.emits`, 'must be an object', emits);
+  const { outputs } = definition;
+  if (!isRecord(outputs)) {
+    push(issues, `${path}.outputs`, 'must be an object', outputs);
     return;
   }
-  for (const [type, schema] of Object.entries(emits)) {
-    checkSchemaPosition(schema, `${path}.emits${at(type)}`, issues);
+  for (const [type, schema] of Object.entries(outputs)) {
+    checkSchemaPosition(schema, `${path}.outputs${at(type)}`, issues);
   }
 };
 

@@ -17,7 +17,7 @@ const form = (over: Record<string, unknown> = {}) => ({
   domain: null,
   metadata: {},
   versions: {
-    '1.0.0': { accepts: objectSchema(), emits: {} },
+    '1.0.0': { input: objectSchema(), outputs: {} },
   },
   ...over,
 });
@@ -30,14 +30,14 @@ describe('a well-formed canonical form', () => {
     expect(validateCanonicalForm(form())).toEqual([]);
   });
 
-  it('reports nothing for a version declaring emits', () => {
+  it('reports nothing for a version declaring outputs', () => {
     expect(
       validateCanonicalForm(
         form({
           versions: {
             '1.0.0': {
-              accepts: objectSchema(),
-              emits: { com_order_created: objectSchema() },
+              input: objectSchema(),
+              outputs: { com_order_created: objectSchema() },
             },
           },
         }),
@@ -88,8 +88,8 @@ describe('the container', () => {
 });
 
 describe('a schema position', () => {
-  const withAccepts = (accepts: unknown) =>
-    form({ versions: { '1.0.0': { accepts, emits: {} } } });
+  const withAccepts = (input: unknown) =>
+    form({ versions: { '1.0.0': { input, outputs: {} } } });
 
   it('rejects one describing an object without the literal keyword', () => {
     // Legal JSON Schema, and rejected on purpose: once converted there is no
@@ -98,7 +98,7 @@ describe('a schema position', () => {
       $schema: DIALECT,
       allOf: [{ properties: { a: { type: 'string' } } }],
     };
-    expect(paths(withAccepts(composed))).toContain('versions["1.0.0"].accepts');
+    expect(paths(withAccepts(composed))).toContain('versions["1.0.0"].input');
   });
 
   it('names the keyword it wanted', () => {
@@ -110,14 +110,12 @@ describe('a schema position', () => {
 
   it('rejects one describing a non-object', () => {
     expect(paths(withAccepts({ $schema: DIALECT, type: 'array' }))).toContain(
-      'versions["1.0.0"].accepts',
+      'versions["1.0.0"].input',
     );
   });
 
   it('rejects one that is not a schema object', () => {
-    expect(paths(withAccepts('a string'))).toContain(
-      'versions["1.0.0"].accepts',
-    );
+    expect(paths(withAccepts('a string'))).toContain('versions["1.0.0"].input');
   });
 
   it('rejects a missing dialect declaration', () => {
@@ -137,31 +135,31 @@ describe('a schema position', () => {
     expect(issues.map((i) => i.message).join(' ')).toContain('$schema');
   });
 
-  it('checks every emit, not only accepts', () => {
+  it('checks every emit, not only input', () => {
     expect(
       paths(
         form({
           versions: {
             '1.0.0': {
-              accepts: objectSchema(),
-              emits: { com_a_done: { $schema: DIALECT, type: 'string' } },
+              input: objectSchema(),
+              outputs: { com_a_done: { $schema: DIALECT, type: 'string' } },
             },
           },
         }),
       ),
-    ).toContain('versions["1.0.0"].emits["com_a_done"]');
+    ).toContain('versions["1.0.0"].outputs["com_a_done"]');
   });
 
   it('checks every version, not only the first', () => {
     const reported = paths(
       form({
         versions: {
-          '1.0.0': { accepts: objectSchema(), emits: {} },
-          '1.1.0': { accepts: { $schema: DIALECT, type: 'string' }, emits: {} },
+          '1.0.0': { input: objectSchema(), outputs: {} },
+          '1.1.0': { input: { $schema: DIALECT, type: 'string' }, outputs: {} },
         },
       }),
     );
-    expect(reported).toContain('versions["1.1.0"].accepts');
+    expect(reported).toContain('versions["1.1.0"].input');
   });
 
   it('rejects a version that is not an object', () => {
@@ -170,12 +168,12 @@ describe('a schema position', () => {
     );
   });
 
-  it('rejects a non-object emits', () => {
+  it('rejects a non-object outputs', () => {
     expect(
       paths(
-        form({ versions: { '1.0.0': { accepts: objectSchema(), emits: 3 } } }),
+        form({ versions: { '1.0.0': { input: objectSchema(), outputs: 3 } } }),
       ),
-    ).toContain('versions["1.0.0"].emits');
+    ).toContain('versions["1.0.0"].outputs');
   });
 });
 
@@ -188,8 +186,8 @@ describe('what it leaves to the contract', () => {
         type: 'Com_Order_Create',
         versions: {
           '1.0.0': {
-            accepts: objectSchema(),
-            emits: { Bad_Key: objectSchema() },
+            input: objectSchema(),
+            outputs: { Bad_Key: objectSchema() },
           },
         },
       }),
@@ -201,7 +199,7 @@ describe('what it leaves to the contract', () => {
     expect(
       validateCanonicalForm(
         form({
-          versions: { '01.0.0': { accepts: objectSchema(), emits: {} } },
+          versions: { '01.0.0': { input: objectSchema(), outputs: {} } },
         }),
       ),
     ).toEqual([]);

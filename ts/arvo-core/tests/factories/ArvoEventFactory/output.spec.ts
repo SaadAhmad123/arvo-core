@@ -7,13 +7,13 @@ const contract = new ArvoContract({
   type: 'com_order_create',
   versions: {
     '1.0.0': {
-      accepts: z.object({}),
-      emits: {
+      input: z.object({}),
+      outputs: {
         com_order_created: z.object({ order_id: z.string() }),
         com_order_shipped: z.object({ eta: z.string() }),
       },
     },
-    '1.1.0': { accepts: z.object({}), emits: {} },
+    '1.1.0': { input: z.object({}), outputs: {} },
   },
 });
 
@@ -22,7 +22,7 @@ const emitless = createArvoEventFactory(contract.versions['1.1.0']);
 
 describe('an event a version emits', () => {
   it('carries the type named and the version dataschema', () => {
-    const event = orders.createEmitted({
+    const event = orders.createOutput({
       type: 'com_order_created',
       source: 'com.order.service',
       data: { order_id: 'o-1' },
@@ -33,7 +33,7 @@ describe('an event a version emits', () => {
 
   it('invents no recipient', () => {
     expect(
-      orders.createEmitted({
+      orders.createOutput({
         type: 'com_order_created',
         source: 'com.svc',
         data: { order_id: 'o-1' },
@@ -44,7 +44,7 @@ describe('an event a version emits', () => {
   it('judges the payload by the named type, not a sibling', () => {
     // `eta` belongs to com_order_shipped; against com_order_created it is
     // `order_id` that is missing, so the declaration consulted is named.
-    const attempt = orders.tryCreateEmitted({
+    const attempt = orders.tryCreateOutput({
       type: 'com_order_created',
       source: 'com.svc',
       data: { eta: 'tuesday' } as never,
@@ -53,12 +53,12 @@ describe('an event a version emits', () => {
     if (attempt.ok) return;
     expect(attempt.error.issues[0]?.path).toBe('data.order_id');
     expect(attempt.error.issues[0]?.message).toContain(
-      'emits[com_order_created]',
+      'outputs[com_order_created]',
     );
   });
 
   it('judges each declared type by its own schema', () => {
-    const shipped = orders.createEmitted({
+    const shipped = orders.createOutput({
       type: 'com_order_shipped',
       source: 'com.svc',
       data: { eta: 'tuesday' },
@@ -69,7 +69,7 @@ describe('an event a version emits', () => {
 
 describe('a type the version does not emit', () => {
   it('reports it at the type, naming what is declared', () => {
-    const attempt = orders.tryCreateEmitted({
+    const attempt = orders.tryCreateOutput({
       // Only reachable without types: the parameter admits no other key.
       type: 'com_order_refunded' as 'com_order_created',
       source: 'com.svc',
@@ -84,7 +84,7 @@ describe('a type the version does not emit', () => {
   });
 
   it('says so in its own words for a version declaring none', () => {
-    const attempt = emitless.tryCreateEmitted({
+    const attempt = emitless.tryCreateOutput({
       type: 'anything' as never,
       source: 'com.svc',
       data: {} as never,
@@ -96,7 +96,7 @@ describe('a type the version does not emit', () => {
   });
 
   it('refuses the handler error, which is derived rather than emitted', () => {
-    const attempt = orders.tryCreateEmitted({
+    const attempt = orders.tryCreateOutput({
       type: 'handler_com_order_create_error' as 'com_order_created',
       source: 'com.svc',
       data: {} as never,

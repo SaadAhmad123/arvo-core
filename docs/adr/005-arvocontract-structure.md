@@ -26,7 +26,7 @@ Once accepted, this structure changes only by a superseding ADR.
 
 ADR-000 already treats **ArvoContract** as a first-class AAM concept — "a versioned capability and interface declaration describing the events a node accepts and emits... the boundary through which independently implemented participants compose" — and lists "ArvoContract identities, versions, and declared event capabilities" among the things that must remain consistent across every implementation. It also names "ArvoContract structure, dependency declaration, event capabilities, resolution, and version compatibility" as a Deferred Decision requiring its own ADR. Until now, nothing has settled the first half of that list.
 
-Every implementation to date has defined a contract entirely as executable code native to one language: `accepts` and `emits` as that language's own schema-validation objects, embedded directly in source. That has never been separated from what a contract *is* — "the contract" and "a schema object in one specific validation library" have been the same thing. With more than one language implementation now governed by ADR-004, that conflation stops being incidental: an ADR that described ArvoContract in terms of any one language's validation library would be making that library a model requirement, exactly what ADR-000 says Arvo "avoids letting... become model requirements." This ADR separates the two — it defines what a contract structurally is, independent of any validation library, so that a contract authored in one language is the same contract when read in another.
+Every implementation to date has defined a contract entirely as executable code native to one language: `input` and `outputs` as that language's own schema-validation objects, embedded directly in source. That has never been separated from what a contract *is* — "the contract" and "a schema object in one specific validation library" have been the same thing. With more than one language implementation now governed by ADR-004, that conflation stops being incidental: an ADR that described ArvoContract in terms of any one language's validation library would be making that library a model requirement, exactly what ADR-000 says Arvo "avoids letting... become model requirements." This ADR separates the two — it defines what a contract structurally is, independent of any validation library, so that a contract authored in one language is the same contract when read in another.
 
 ## Decision
 
@@ -36,7 +36,7 @@ There is exactly one ArvoContract structure. A naming convention that pre-fills 
 
 ### Canonical representation
 
-An ArvoContract's canonical form is a plain object, representable as JSON, in which every schema-bearing position — a version's `accepts` and each entry in a version's `emits` — is expressed as [JSON Schema, 2020-12](https://json-schema.org/draft/2020-12) specifically, not as any language-specific validation library's native representation.
+An ArvoContract's canonical form is a plain object, representable as JSON, in which every schema-bearing position — a version's `input` and each entry in a version's `outputs` — is expressed as [JSON Schema, 2020-12](https://json-schema.org/draft/2020-12) specifically, not as any language-specific validation library's native representation.
 
 The handler error (see **Handler error**) is deliberately not one of these stored positions: its type, `dataschema`, and payload are each fully determined by `type` and the producing version, so every implementation computes it identically rather than storing a copy of something a fixed rule already determines.
 
@@ -56,7 +56,7 @@ The same rule governs the inbound direction. A canonical form may contain a cons
 
 **Optional fields are materialized, not omitted.** A contract's canonical form MUST include every field defined in **Fields**, including an optional field left at its default — `"description": null` and `"metadata": {}` appear explicitly even when a contract author never set them, rather than being absent keys a reader resolves from the default table. Two contracts that differ only in whether a field was explicitly set to its default value or never touched at all are the same contract, and the canonical form MUST NOT let that distinction produce a different JSON shape. This does not by itself make two canonical forms byte-identical — key ordering and number/string formatting are a separate, unaddressed question; see **Left deferred**.
 
-A machine-readable JSON Schema describing what a well-formed ArvoContract-as-JSON looks like — the shape of the container itself, not the `accepts`/`emits` schemas inside a particular contract — SHOULD be developed alongside this ADR's implementation and published, the same discipline [ADR-003](./003-arvoevent-cloudevent-transformation.md) already applies to the CloudEvent data-wrapper schema.
+A machine-readable JSON Schema describing what a well-formed ArvoContract-as-JSON looks like — the shape of the container itself, not the `input`/`outputs` schemas inside a particular contract — SHOULD be developed alongside this ADR's implementation and published, the same discipline [ADR-003](./003-arvoevent-cloudevent-transformation.md) already applies to the CloudEvent data-wrapper schema.
 
 ### Fields
 
@@ -99,28 +99,28 @@ A map from semantic version string to a version definition:
 
 | Field | Type | Required |
 |---|---|---|
-| `accepts` | schema | yes |
-| `emits` | object (event type → schema) | yes |
+| `input` | schema | yes |
+| `outputs` | object (event type → schema) | yes |
 
 Each key of `versions` MUST be a bare `MAJOR.MINOR.PATCH` triple — three dot-separated non-negative integers without leading zeros, with no pre-release suffix (`1.0.0-beta`) and no build metadata (`1.0.0+build`). The exclusion is not stylistic: semantic versioning excludes build metadata from ordering, so admitting it would allow two distinct keys (`1.0.0+a`, `1.0.0+b`) that compare equal, breaking the total order **Isolation** below names as a reason the semver shape is required at all. `versions` MUST contain at least one entry — a contract declaring none has no schema for any handler to implement and nothing for `uri` or `type` to attach to, so it is not well formed.
 
-**Isolation.** Each version is a complete, standalone contract. Nothing about version `1.1.0` is implied by, inherited from, or required to be compatible with version `1.0.0` — they coexist as entirely separate interfaces sharing only `uri`, `type`, `domain`, `description`, and `metadata`. A handler bound to this contract implements every declared version's `accepts`/`emits` fully and independently; nothing here defines partial or inherited implementation.
+**Isolation.** Each version is a complete, standalone contract. Nothing about version `1.1.0` is implied by, inherited from, or required to be compatible with version `1.0.0` — they coexist as entirely separate interfaces sharing only `uri`, `type`, `domain`, `description`, and `metadata`. A handler bound to this contract implements every declared version's `input`/`outputs` fully and independently; nothing here defines partial or inherited implementation.
 
 Isolation means semantic versioning's usual job — letting a consumer reason about compatibility from the number alone, the way a dependency range like `^1.2.0` does — has nothing to compute here: no two versions are ever compatible by construction, so no MAJOR/MINOR/PATCH boundary is more or less breaking than any other. The `MAJOR.MINOR.PATCH` shape is required anyway, for two narrower reasons: it gives every implementation the same well-defined total order for free, which version resolution needs; and it remains a familiar magnitude signal for a reader reading a version list, even though nothing here enforces that the signal is accurate. That last property is informational, not a guarantee this ADR makes or a rule an implementation checks.
 
-**Totality of `emits`.** A version's `emits` MUST enumerate every event type a handler bound to it may produce for that version — there is no wildcard emission. ADR-000 already requires that "every event type [a handler] may emit must be permitted by its own contract or a declared dependency"; an `emits` that did not enumerate its possibilities exhaustively would make that requirement unenforceable.
+**Totality of `outputs`.** A version's `outputs` MUST enumerate every event type a handler bound to it may produce for that version — there is no wildcard emission. ADR-000 already requires that "every event type [a handler] may emit must be permitted by its own contract or a declared dependency"; an `outputs` that did not enumerate its possibilities exhaustively would make that requirement unenforceable.
 
-An empty `emits` (`{}`) is permitted, for a handler that produces no declared response of its own. This does not mean the handler can never emit anything at all: the handler error (**Handler error**) exists independent of `emits` and remains available to every version regardless of what it declares.
+An empty `outputs` (`{}`) is permitted, for a handler that produces no declared response of its own. This does not mean the handler can never emit anything at all: the handler error (**Handler error**) exists independent of `outputs` and remains available to every version regardless of what it declares.
 
-**Object-shaped payloads.** A version's `accepts` schema, and every schema in its `emits`, MUST carry the literal keyword `"type": "object"` at its top level. The keyword itself is required, not merely its effect: a rule stated as "must not permit a non-object" cannot be checked mechanically — a schema built from `allOf` composition can permit only objects while carrying no top-level `type` at all, and two implementations could then disagree about whether the same contract is declarable. Requiring the keyword makes the check a lookup every implementation performs identically; richer composition remains available inside the schema's own `properties`. The rule exists because `ArvoEvent.data` is always an object of JSON values, per ADR-001 — a schema permitting anything else describes a shape `data` can never actually take, making the contract unsatisfiable by any real event. A schema without the keyword MUST be rejected at declaration, not discovered later at validation time.
+**Object-shaped payloads.** A version's `input` schema, and every schema in its `outputs`, MUST carry the literal keyword `"type": "object"` at its top level. The keyword itself is required, not merely its effect: a rule stated as "must not permit a non-object" cannot be checked mechanically — a schema built from `allOf` composition can permit only objects while carrying no top-level `type` at all, and two implementations could then disagree about whether the same contract is declarable. Requiring the keyword makes the check a lookup every implementation performs identically; richer composition remains available inside the schema's own `properties`. The rule exists because `ArvoEvent.data` is always an object of JSON values, per ADR-001 — a schema permitting anything else describes a shape `data` can never actually take, making the contract unsatisfiable by any real event. A schema without the keyword MUST be rejected at declaration, not discovered later at validation time.
 
-**No collisions.** A version's `emits` MUST NOT use `type` as one of its own keys. It also MUST NOT use the handler error type (`handler_{type}_error`, see **Handler error**) as one of its own keys.
+**No collisions.** A version's `outputs` MUST NOT use `type` as one of its own keys. It also MUST NOT use the handler error type (`handler_{type}_error`, see **Handler error**) as one of its own keys.
 
-The first is ambiguous by itself: an event carrying this contract's `type` could then mean either "the request this handler accepts" or "one of its own declared responses," and nothing about the event says which. The second is a real duplicate, not just confusing wording: the handler error's `dataschema` matches the same version that produced it, so an `emits` entry reusing that key would give one exact `type` + `dataschema` pair two different schemas — the version's own, and the fixed handler-error shape — with nothing left to tell them apart. Both MUST be rejected when a contract is declared, not discovered later at validation time.
+The first is ambiguous by itself: an event carrying this contract's `type` could then mean either "the request this handler accepts" or "one of its own declared responses," and nothing about the event says which. The second is a real duplicate, not just confusing wording: the handler error's `dataschema` matches the same version that produced it, so an `outputs` entry reusing that key would give one exact `type` + `dataschema` pair two different schemas — the version's own, and the fixed handler-error shape — with nothing left to tell them apart. Both MUST be rejected when a contract is declared, not discovered later at validation time.
 
 ### Contract-declared identifier grammar
 
-`type`, every key of a version's `emits`, the generated handler error type (see **Handler error**), and `domain` (when not `null`) MUST match `^[a-z0-9]+(_[a-z0-9]+)*$` — one or more lowercase ASCII letters or digits, optionally followed by any number of further such groups, each separated by exactly one underscore. Concretely: the identifier MUST start and end with a lowercase letter or digit, never an underscore, and MUST NOT contain two or more consecutive underscores — an underscore is only ever a separator between two alphanumeric segments, never a character with meaning on its own. `com_payment_process` is valid; `_com_payment`, `com_payment_`, and `com__payment` are not.
+`type`, every key of a version's `outputs`, the generated handler error type (see **Handler error**), and `domain` (when not `null`) MUST match `^[a-z0-9]+(_[a-z0-9]+)*$` — one or more lowercase ASCII letters or digits, optionally followed by any number of further such groups, each separated by exactly one underscore. Concretely: the identifier MUST start and end with a lowercase letter or digit, never an underscore, and MUST NOT contain two or more consecutive underscores — an underscore is only ever a separator between two alphanumeric segments, never a character with meaning on its own. `com_payment_process` is valid; `_com_payment`, `com_payment_`, and `com__payment` are not.
 
 Uppercase is excluded, not merely unneeded: allowing it would just relocate the same casing-inconsistency problem this grammar exists to remove — two contracts could otherwise name what's meant to be the same style of identifier `Com_Payment_Process` and `com_payment_process` and be silently different strings.
 
@@ -128,11 +128,11 @@ This is deliberately more restrictive than CloudEvents itself requires. A dotted
 
 This constrains only what an ArvoContract may declare. It does not alter `ArvoEvent.type`'s or `ArvoEvent.domain`'s own domain as ADR-001 and ADR-002 define them: an event from a foreign producer, adapted through the CloudEvent-transformation's foreign path, keeps whatever `type` or `domain` value it arrived with, dots included. The grammar above binds Arvo-authored contracts, not every value `ArvoEvent.type`/`domain` can ever hold.
 
-**Scope within the contract itself.** This grammar governs Arvo-defined protocol-level identifiers only — `type`, `emits` keys, the handler error type, `domain`. It does not reach into the payload data a version's `accepts`/`emits` schemas define for their own business data. The handler error payload (**Handler error**, below) or any other payload definition declared by Arvo package(s) follows the same `snake_case` convention because Arvo itself authors that shape; a contract author's own payload key names SHOULD follow the same convention, for the same cross-language ergonomics this grammar exists for, but this ADR does not mandate or validate it. Payload data modeling is the contract author's own concern, not a protocol-level identifier this ADR controls.
+**Scope within the contract itself.** This grammar governs Arvo-defined protocol-level identifiers only — `type`, `outputs` keys, the handler error type, `domain`. It does not reach into the payload data a version's `input`/`outputs` schemas define for their own business data. The handler error payload (**Handler error**, below) or any other payload definition declared by Arvo package(s) follows the same `snake_case` convention because Arvo itself authors that shape; a contract author's own payload key names SHOULD follow the same convention, for the same cross-language ergonomics this grammar exists for, but this ADR does not mandate or validate it. Payload data modeling is the contract author's own concern, not a protocol-level identifier this ADR controls.
 
 ### Handler error
 
-Every version of a contract carries a standardized handler error event, in addition to that version's own declared `accepts`/`emits`. It represents exactly one thing: the handler bound to this contract failed to execute its own logic, or could not do what it was declared to do. It is not a general system- or infrastructure-failure channel and does not attempt to cover every way an execution can fail — the broader taxonomy of error kinds in Arvo, and the mechanisms for each, is left to a dedicated, future ADR.
+Every version of a contract carries a standardized handler error event, in addition to that version's own declared `input`/`outputs`. It represents exactly one thing: the handler bound to this contract failed to execute its own logic, or could not do what it was declared to do. It is not a general system- or infrastructure-failure channel and does not attempt to cover every way an execution can fail — the broader taxonomy of error kinds in Arvo, and the mechanisms for each, is left to a dedicated, future ADR.
 
 Because it is an ordinary emit like any other, a handler error can be caught and acted on at the workflow level — by an orchestrator, another node, or a human — the same as any other event this contract permits. It carries no privileged, out-of-band handling path, consistent with ADR-000's Event-Only Communication.
 
@@ -142,7 +142,7 @@ Because it is an ordinary emit like any other, a handler error can be caught and
 
 The handler error is never part of a contract's stored canonical form (see **Canonical representation**): its type, `dataschema`, and payload are each a fixed function of `type` and the producing version alone, with no per-contract variation possible, so every implementation computes it identically rather than storing a copy of something a fixed rule already determines.
 
-The `handler_{type}_error` pattern is deliberately not reserved across contracts. A different contract may declare a `type` or an `emits` key that happens to match another contract's handler error type, and nothing rejects it. This creates no ambiguity the model does not already carry: no ADR claims `type` is unique across contracts — two unrelated contracts can already declare the identical ordinary `type` — and ADR-001 resolves an event by `type` and `dataschema` together, neither alone. A collision on a `handler_*_error`-shaped name is the same situation as a collision on any other name, disambiguated the same way. Avoiding confusing name reuse across a deployment's contracts is that deployment's own naming discipline, not contract structure.
+The `handler_{type}_error` pattern is deliberately not reserved across contracts. A different contract may declare a `type` or an `outputs` key that happens to match another contract's handler error type, and nothing rejects it. This creates no ambiguity the model does not already carry: no ADR claims `type` is unique across contracts — two unrelated contracts can already declare the identical ordinary `type` — and ADR-001 resolves an event by `type` and `dataschema` together, neither alone. A collision on a `handler_*_error`-shaped name is the same situation as a collision on any other name, disambiguated the same way. Avoiding confusing name reuse across a deployment's contracts is that deployment's own naming discipline, not contract structure.
 
 ### `description`, `metadata`
 
@@ -180,13 +180,13 @@ Anything richer — resolving a domain from the handler's own contract versus th
 
 **Leaving annotation-keyword enforcement to each implementation's own choice** — considered, not chosen. The same contract would then accept a payload in one language and reject it in another, with both implementations able to call themselves conformant — precisely the divergence ADR-004's conformance boundary exists to make impossible to wave away, and one no reader of the canonical form could detect from the bytes.
 
-**Reserving the `handler_*_error` name pattern across contracts, so no contract may declare a `type` or `emits` key matching another contract's handler error type** — considered, not chosen. Cross-contract name collisions are already possible for every ordinary `type` — no ADR makes `type` globally unique — and are already resolved by `type` and `dataschema` together. Reserving this one pattern would introduce the model's first cross-contract naming rule to prevent a collision no worse than ones the model already tolerates, and enforcing it would require every declaration site to know every other contract in existence, which nothing in Arvo requires or enables.
+**Reserving the `handler_*_error` name pattern across contracts, so no contract may declare a `type` or `outputs` key matching another contract's handler error type** — considered, not chosen. Cross-contract name collisions are already possible for every ordinary `type` — no ADR makes `type` globally unique — and are already resolved by `type` and `dataschema` together. Reserving this one pattern would introduce the model's first cross-contract naming rule to prevent a collision no worse than ones the model already tolerates, and enforcing it would require every declaration site to know every other contract in existence, which nothing in Arvo requires or enables.
 
 ## Conformance to ADR-000
 
 **Effect on AAM.** This ADR amends the AAM membership list, replacing *"ArvoContract identities, versions, and declared event capabilities"* with the fields, versioning model, identifier grammar, handler error convention, and canonical representation defined above. It addresses the "structure... and version compatibility" portion of ADR-000's Deferred Decision naming ArvoContract; "dependency declaration, event capabilities, resolution" — how a handler declares, binds to, and is permitted to use a contract — remains deferred to the handler-protocol ADR.
 
-**Invariants depended on.** *Explicit Contracts and Runtime Validation* — a contract expressible as portable JSON+JSON Schema is what lets "must not preclude cross-language participation" hold mechanically rather than by convention. *Event-Only Communication* — a contract's `emits` is the enumerated set of what a node bound to it may say.
+**Invariants depended on.** *Explicit Contracts and Runtime Validation* — a contract expressible as portable JSON+JSON Schema is what lets "must not preclude cross-language participation" hold mechanically rather than by convention. *Event-Only Communication* — a contract's `outputs` is the enumerated set of what a node bound to it may say.
 
 **Invariants strained.** None. The identifier-grammar restriction narrows past what CloudEvents itself requires, the same kind of deliberate narrowing ADR-002 and ADR-003 already applied elsewhere for a concrete payoff.
 
@@ -211,7 +211,7 @@ Only `type` and `versions` are supplied. `uri` is derived (`com_payment_process`
   "metadata": {},
   "versions": {
     "1.0.0": {
-      "accepts": {
+      "input": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
@@ -220,7 +220,7 @@ Only `type` and `versions` are supplied. `uri` is derived (`com_payment_process`
         },
         "required": ["amount", "currency"]
       },
-      "emits": {
+      "outputs": {
         "com_payment_process_completed": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
@@ -251,7 +251,7 @@ Only `type` and `versions` are supplied. `uri` is derived (`com_payment_process`
   },
   "versions": {
     "1.0.0": {
-      "accepts": {
+      "input": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
@@ -260,7 +260,7 @@ Only `type` and `versions` are supplied. `uri` is derived (`com_payment_process`
         },
         "required": ["email", "username"]
       },
-      "emits": {
+      "outputs": {
         "com_user_registered": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
@@ -278,7 +278,7 @@ Only `type` and `versions` are supplied. `uri` is derived (`com_payment_process`
 
 ### Example 3: Multi-version, isolated
 
-Two versions of the same contract, kept as two complete, independent definitions rather than one inheriting from the other — `1.1.0`'s `accepts` adds a new required field `1.0.0` doesn't have, and its `com_order_created` emit carries a different payload shape under the same event type name. Neither version's presence constrains or is derived from the other's.
+Two versions of the same contract, kept as two complete, independent definitions rather than one inheriting from the other — `1.1.0`'s `input` adds a new required field `1.0.0` doesn't have, and its `com_order_created` emit carries a different payload shape under the same event type name. Neither version's presence constrains or is derived from the other's.
 
 Note what is absent: no `handler_com_order_create_error` key appears anywhere, in either version. The handler error is never part of the stored canonical form (see **Handler error**) — every implementation computes it identically from `type` and the producing version, so it has no position to occupy here.
 
@@ -291,7 +291,7 @@ Note what is absent: no `handler_com_order_create_error` key appears anywhere, i
   "metadata": {},
   "versions": {
     "1.0.0": {
-      "accepts": {
+      "input": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
@@ -300,7 +300,7 @@ Note what is absent: no `handler_com_order_create_error` key appears anywhere, i
         },
         "required": ["items", "address"]
       },
-      "emits": {
+      "outputs": {
         "com_order_created": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
@@ -312,7 +312,7 @@ Note what is absent: no `handler_com_order_create_error` key appears anywhere, i
       }
     },
     "1.1.0": {
-      "accepts": {
+      "input": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
@@ -322,7 +322,7 @@ Note what is absent: no `handler_com_order_create_error` key appears anywhere, i
         },
         "required": ["items", "address", "shipping_tier"]
       },
-      "emits": {
+      "outputs": {
         "com_order_created": {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",

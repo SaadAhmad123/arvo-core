@@ -7,14 +7,14 @@ import {
 } from '../../src/ArvoContract/validator.js';
 import type { VersionedArvoContractParam } from '../../src/ArvoContract/versioned/types.js';
 
-const accepts = z.object({ amount: z.number() });
+const input = z.object({ amount: z.number() });
 const emit = z.object({ order_id: z.string() });
 
 /** A declaration that passes, so each test can break exactly one thing. */
 const valid = (over: Partial<ArvoContractParam> = {}): ArvoContractParam =>
   ({
     type: 'com_order_create',
-    versions: { '1.0.0': { accepts, emits: { com_order_created: emit } } },
+    versions: { '1.0.0': { input, outputs: { com_order_created: emit } } },
     ...over,
   }) as any;
 
@@ -181,25 +181,25 @@ describe('validateArvoContract', () => {
 
     it('rejects a pre-release version key', () => {
       expect(
-        paths({ versions: { '1.0.0-beta': { accepts, emits: {} } } as never }),
+        paths({ versions: { '1.0.0-beta': { input, outputs: {} } } as never }),
       ).toContain('versions["1.0.0-beta"]');
     });
 
     it('rejects build metadata in a version key', () => {
       expect(
-        paths({ versions: { '1.0.0+build': { accepts, emits: {} } } as never }),
+        paths({ versions: { '1.0.0+build': { input, outputs: {} } } as never }),
       ).toContain('versions["1.0.0+build"]');
     });
 
     it('rejects leading zeros in a version key', () => {
       expect(
-        paths({ versions: { '01.0.0': { accepts, emits: {} } } as never }),
+        paths({ versions: { '01.0.0': { input, outputs: {} } } as never }),
       ).toContain('versions["01.0.0"]');
     });
 
     it('rejects a partial version key', () => {
       expect(
-        paths({ versions: { '1.0': { accepts, emits: {} } } as never }),
+        paths({ versions: { '1.0': { input, outputs: {} } } as never }),
       ).toContain('versions["1.0"]');
     });
 
@@ -210,58 +210,58 @@ describe('validateArvoContract', () => {
     });
   });
 
-  describe('accepts and emits schemas', () => {
-    it('rejects a missing accepts', () => {
+  describe('input and outputs schemas', () => {
+    it('rejects a missing input', () => {
       expect(
-        paths({ versions: { '1.0.0': { emits: {} } } as never }),
-      ).toContain('versions["1.0.0"].accepts');
+        paths({ versions: { '1.0.0': { outputs: {} } } as never }),
+      ).toContain('versions["1.0.0"].input');
     });
 
-    it('rejects a non-object accepts schema', () => {
+    it('rejects a non-object input schema', () => {
       expect(
         paths({
-          versions: { '1.0.0': { accepts: z.string(), emits: {} } } as never,
+          versions: { '1.0.0': { input: z.string(), outputs: {} } } as never,
         }),
-      ).toContain('versions["1.0.0"].accepts');
+      ).toContain('versions["1.0.0"].input');
     });
 
-    it('rejects an array accepts schema', () => {
+    it('rejects an array input schema', () => {
       expect(
         paths({
           versions: {
-            '1.0.0': { accepts: z.array(z.string()), emits: {} },
+            '1.0.0': { input: z.array(z.string()), outputs: {} },
           } as never,
         }),
-      ).toContain('versions["1.0.0"].accepts');
+      ).toContain('versions["1.0.0"].input');
     });
 
     it('rejects a value that is not a schema at all', () => {
       expect(
         paths({
-          versions: { '1.0.0': { accepts: { a: 1 }, emits: {} } } as never,
+          versions: { '1.0.0': { input: { a: 1 }, outputs: {} } } as never,
         }),
-      ).toContain('versions["1.0.0"].accepts');
+      ).toContain('versions["1.0.0"].input');
     });
 
-    it('rejects a non-object emits schema', () => {
+    it('rejects a non-object outputs schema', () => {
       expect(
         paths({
           versions: {
-            '1.0.0': { accepts, emits: { com_order_created: z.string() } },
+            '1.0.0': { input, outputs: { com_order_created: z.string() } },
           } as never,
         }),
-      ).toContain('versions["1.0.0"].emits["com_order_created"]');
+      ).toContain('versions["1.0.0"].outputs["com_order_created"]');
     });
 
-    it('rejects a non-object emits map', () => {
+    it('rejects a non-object outputs map', () => {
       expect(
-        paths({ versions: { '1.0.0': { accepts, emits: 5 } } as never }),
-      ).toContain('versions["1.0.0"].emits');
+        paths({ versions: { '1.0.0': { input, outputs: 5 } } as never }),
+      ).toContain('versions["1.0.0"].outputs');
     });
 
-    it('permits an empty emits', () => {
+    it('permits an empty outputs', () => {
       expect(
-        issuesOf({ versions: { '1.0.0': { accepts, emits: {} } } }),
+        issuesOf({ versions: { '1.0.0': { input, outputs: {} } } }),
       ).toEqual([]);
     });
   });
@@ -270,24 +270,24 @@ describe('validateArvoContract', () => {
     it('rejects a dotted emit key', () => {
       expect(
         paths({
-          versions: { '1.0.0': { accepts, emits: { 'com.created': emit } } },
+          versions: { '1.0.0': { input, outputs: { 'com.created': emit } } },
         }),
-      ).toContain('versions["1.0.0"].emits["com.created"]');
+      ).toContain('versions["1.0.0"].outputs["com.created"]');
     });
 
     it('rejects an uppercase emit key', () => {
       expect(
         paths({
-          versions: { '1.0.0': { accepts, emits: { Com_Created: emit } } },
+          versions: { '1.0.0': { input, outputs: { Com_Created: emit } } },
         }),
-      ).toContain('versions["1.0.0"].emits["Com_Created"]');
+      ).toContain('versions["1.0.0"].outputs["Com_Created"]');
     });
 
     it('rejects an emit key equal to the contract type', () => {
       expect(
         issuesOf({
           versions: {
-            '1.0.0': { accepts, emits: { com_order_create: emit } },
+            '1.0.0': { input, outputs: { com_order_create: emit } },
           },
         }),
       ).toContainEqual(
@@ -300,8 +300,8 @@ describe('validateArvoContract', () => {
         issuesOf({
           versions: {
             '1.0.0': {
-              accepts,
-              emits: { handler_com_order_create_error: emit },
+              input,
+              outputs: { handler_com_order_create_error: emit },
             },
           },
         }),
@@ -315,8 +315,8 @@ describe('validateArvoContract', () => {
         issuesOf({
           versions: {
             '1.0.0': {
-              accepts,
-              emits: { handler_com_payment_process_error: emit },
+              input,
+              outputs: { handler_com_payment_process_error: emit },
             },
           },
         }),
@@ -332,7 +332,7 @@ describe('validateArvoContract', () => {
       const reported = issuesOf({
         domain: 'Bad_Domain',
         versions: {
-          '01.0.0': { accepts, emits: { Bad_Key: emit, 'also.bad': emit } },
+          '01.0.0': { input, outputs: { Bad_Key: emit, 'also.bad': emit } },
         } as never,
       });
       expect(reported).toContainEqual(expect.stringContaining('domain:'));
@@ -340,22 +340,22 @@ describe('validateArvoContract', () => {
         expect.stringContaining('versions["01.0.0"]:'),
       );
       expect(reported).toContainEqual(
-        expect.stringContaining('emits["Bad_Key"]'),
+        expect.stringContaining('outputs["Bad_Key"]'),
       );
       expect(reported).toContainEqual(
-        expect.stringContaining('emits["also.bad"]'),
+        expect.stringContaining('outputs["also.bad"]'),
       );
     });
 
     it('reports problems in both versions', () => {
       const reported = paths({
         versions: {
-          '1.0.0': { accepts, emits: { Bad_One: emit } },
-          '2.0.0': { accepts, emits: { Bad_Two: emit } },
+          '1.0.0': { input, outputs: { Bad_One: emit } },
+          '2.0.0': { input, outputs: { Bad_Two: emit } },
         },
       });
-      expect(reported).toContain('versions["1.0.0"].emits["Bad_One"]');
-      expect(reported).toContain('versions["2.0.0"].emits["Bad_Two"]');
+      expect(reported).toContain('versions["1.0.0"].outputs["Bad_One"]');
+      expect(reported).toContain('versions["2.0.0"].outputs["Bad_Two"]');
     });
 
     it('shows the offending value alongside the rule', () => {
@@ -416,8 +416,8 @@ describe('validateVersionedArvoContract', () => {
       description: null,
       domain: null,
       metadata: {},
-      accepts,
-      emits: { com_order_created: emit },
+      input,
+      outputs: { com_order_created: emit },
       ...over,
     }) as any;
 
@@ -427,15 +427,15 @@ describe('validateVersionedArvoContract', () => {
 
   it('applies the same emit-key rule as a contract does', () => {
     const issues = validateVersionedArvoContract(
-      validVersion({ emits: { Bad_Key: emit } }),
+      validVersion({ outputs: { Bad_Key: emit } }),
     ).issues;
-    expect(issues.map((i) => i.path)).toContain('emits["Bad_Key"]');
+    expect(issues.map((i) => i.path)).toContain('outputs["Bad_Key"]');
   });
 
   it('applies the same collision rules', () => {
     expect(
       validateVersionedArvoContract(
-        validVersion({ emits: { com_order_create: emit } }),
+        validVersion({ outputs: { com_order_create: emit } }),
       ).issues.map((i) => i.message),
     ).toContainEqual(expect.stringContaining('must not reuse the contract'));
   });
@@ -452,15 +452,15 @@ describe('validateVersionedArvoContract', () => {
 
   it('does not crash deriving the error type when type is not a string', () => {
     const issues = validateVersionedArvoContract(
-      validVersion({ type: 42 as never, emits: { com_order_created: emit } }),
+      validVersion({ type: 42 as never, outputs: { com_order_created: emit } }),
     ).issues;
     expect(issues.map((i) => i.path)).toContain('type');
   });
 
   it('reports paths without a versions prefix, since there is no container', () => {
     const issues = validateVersionedArvoContract(
-      validVersion({ accepts: z.string() as never }),
+      validVersion({ input: z.string() as never }),
     ).issues;
-    expect(issues.map((i) => i.path)).toContain('accepts');
+    expect(issues.map((i) => i.path)).toContain('input');
   });
 });

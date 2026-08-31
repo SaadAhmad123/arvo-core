@@ -96,9 +96,9 @@ export const unknownVersionIssue = (
 /** Every type one version may legitimately carry, in reporting order. */
 const declaredTypes = (
   type: string,
-  emits: Record<string, unknown>,
+  outputs: Record<string, unknown>,
   handlerErrorType: string,
-): string[] => [type, ...Object.keys(emits), handlerErrorType];
+): string[] => [type, ...Object.keys(outputs), handlerErrorType];
 
 /**
  * Which of a version's three shapes a type names, or `null` for none.
@@ -111,12 +111,12 @@ const declaredTypes = (
 export const scopeOfType = (
   candidate: string,
   type: string,
-  emits: Record<string, unknown>,
+  outputs: Record<string, unknown>,
   handlerErrorType: string,
 ): ArvoContractEventAssertionScope | null => {
-  if (candidate === type) return 'accepts';
-  if (candidate === handlerErrorType) return 'handlerError';
-  if (Object.hasOwn(emits, candidate)) return 'emits';
+  if (candidate === type) return 'input';
+  if (candidate === handlerErrorType) return 'error';
+  if (Object.hasOwn(outputs, candidate)) return 'output';
   return null;
 };
 
@@ -124,13 +124,13 @@ export const scopeOfType = (
 const schemaForScope = (
   scope: ArvoContractEventAssertionScope,
   eventType: string,
-  accepts: z.$ZodType,
-  emits: Record<string, z.$ZodType>,
-  handlerError: HandlerErrorContract,
+  input: z.$ZodType,
+  outputs: Record<string, z.$ZodType>,
+  error: HandlerErrorContract,
 ): z.$ZodType => {
-  if (scope === 'accepts') return accepts;
-  if (scope === 'handlerError') return handlerError.schema;
-  return emits[eventType];
+  if (scope === 'input') return input;
+  if (scope === 'error') return error.schema;
+  return outputs[eventType];
 };
 
 /** Reports an expected type this version does not declare. */
@@ -276,8 +276,8 @@ const resolveScope = (
  * Checks an event against one version's declaration.
  *
  * The single definition of "this event matches this version", reached by both
- * a contract and a version contract, so an event a contract accepts is
- * exactly an event one of its versions accepts.
+ * a contract and a version contract, so an event a contract input is
+ * exactly an event one of its versions input.
  *
  * Five checks run in one order, and the first to fail is reported alone,
  * because each one establishes what the next is judged against:
@@ -299,34 +299,26 @@ const resolveScope = (
 export const checkAgainstVersion = (param: {
   /** The event to check. Returned by the caller as it arrived. */
   event: ArvoEvent;
-  /** The contract's `type`, whose payload is its `accepts`. */
+  /** The contract's `type`, whose payload is its `input`. */
   type: string;
   /** The contract's identifier, compared for equality and never parsed. */
   uri: string;
   /** The one version this check is against. */
   version: string;
-  accepts: z.$ZodType;
-  emits: Record<string, z.$ZodType>;
+  input: z.$ZodType;
+  outputs: Record<string, z.$ZodType>;
   /** Supplied, never derived: the caller already holds it. */
-  handlerError: HandlerErrorContract;
+  error: HandlerErrorContract;
   /** What the caller expects the event to be, if they said. */
   expectedType?: string;
 }): Result<ArvoContractEventAssertionScope, ErrorIssue[]> => {
-  const {
-    event,
-    type,
-    uri,
-    version,
-    accepts,
-    emits,
-    handlerError,
-    expectedType,
-  } = param;
+  const { event, type, uri, version, input, outputs, error, expectedType } =
+    param;
 
-  const declared = declaredTypes(type, emits, handlerError.type);
+  const declared = declaredTypes(type, outputs, error.type);
   /** What is being checked against: the expectation, else the event itself. */
   const wanted = expectedType ?? event.type;
-  const wantedScope = scopeOfType(wanted, type, emits, handlerError.type);
+  const wantedScope = scopeOfType(wanted, type, outputs, error.type);
 
   const blocking =
     checkExpectation(expectedType, wantedScope, declared) ??
@@ -343,7 +335,7 @@ export const checkAgainstVersion = (param: {
   if (!scope.ok) return fromNeverthrow(err([scope.error]));
 
   const issues = checkPayload(
-    schemaForScope(scope.value, event.type, accepts, emits, handlerError),
+    schemaForScope(scope.value, event.type, input, outputs, error),
     event.data,
   );
   return fromNeverthrow(issues.length > 0 ? err(issues) : ok(scope.value));

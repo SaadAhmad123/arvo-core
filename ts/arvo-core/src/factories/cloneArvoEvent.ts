@@ -59,7 +59,7 @@ export const tryCloneArvoEvent = <
   };
 
   // An event holds `null` where its input spells absence, and normalization
-  // accepts either, so the fields cross over as they stand.
+  // input either, so the fields cross over as they stand.
   return tryCreateArvoEvent<T, D>({
     ...event,
     ...replaced,

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# arvoevent-construction Specification
+
+## Purpose
+
+An ArvoEvent may be built on its own, or built from the version of a contract that declares it. This capability defines what each builder supplies on a caller's behalf, what it checks before an event exists, how a domain is decided, how an existing event is copied, and what a failure to build reports.
+
+## Requirements
 
 ### Requirement: Building An Event From Its Fields
 
@@ -27,9 +33,9 @@ Every other field SHALL be defaulted exactly as constructing an event directly d
 - **WHEN** an event is built with a field that breaks a structural rule of an event
 - **THEN** building fails on that rule, as constructing the event directly would
 
-### Requirement: Building The Event A Version Accepts
+### Requirement: Building The Event A Version Takes In
 
-The system SHALL build, from a version of a contract, the event that version accepts.
+The system SHALL build, from a version of a contract, the event that version takes in.
 
 Its type and its dataschema SHALL be the version's own, and a caller SHALL NOT supply either.
 
@@ -48,16 +54,16 @@ Its recipient SHALL default to the contract's type, that being the type whose ha
 - **WHEN** an event is built for a version with a recipient supplied
 - **THEN** it carries the supplied recipient
 
-### Requirement: Building An Event A Version Emits
+### Requirement: Building An Event A Version Puts Out
 
-The system SHALL build, from a version of a contract, any event that version declares it emits, the caller naming which one.
+The system SHALL build, from a version of a contract, any event that version declares it puts out, the caller naming which one.
 
-Only a type that version declares among its emitted events SHALL be accepted. Its dataschema SHALL be the version's own.
+Only a type that version declares among its outputs SHALL be accepted. Its dataschema SHALL be the version's own.
 
 No recipient SHALL be defaulted: where an emitted event goes is the caller's to state.
 
 #### Scenario: An emitted event
-- **WHEN** an event is built for a type the version declares it emits
+- **WHEN** an event is built for a type the version declares it puts out
 - **THEN** its type is that type
 - **AND** its dataschema is that version's dataschema
 
@@ -66,7 +72,7 @@ No recipient SHALL be defaulted: where an emitted event goes is the caller's to 
 - **THEN** the payload is checked against the declaration of the type named, not of the other
 
 #### Scenario: A type the version does not emit
-- **WHEN** an event is built for a type the version does not declare among its emitted events
+- **WHEN** an event is built for a type the version does not declare among its outputs
 - **THEN** building fails
 - **AND** the failure reports the type as the position, naming the types that version does declare
 

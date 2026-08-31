@@ -1,70 +1,4 @@
-## Purpose
-
-An ArvoContract is the versioned interface declaration through which independently built participants agree on what a handler takes in and what it may put out. This capability defines a contract's field set, its defaults, the per-version isolation model, the grammar its declared identifiers must follow, the handler error every version carries, and what makes a declaration valid or rejected.
-
-## ADDED Requirements
-
-### Requirement: Contract Field Set
-
-A contract SHALL consist of exactly six fields and no others: `uri`, `type`, `versions`, `description`, `domain`, `metadata`.
-
-#### Scenario: Contract exposes exactly the defined fields
-- **WHEN** a contract is declared successfully
-- **THEN** it carries all six fields
-- **AND** it carries no additional field
-
-### Requirement: Required and Defaulted Inputs
-
-The system SHALL require `type` and `versions` to be supplied. The system SHALL default `uri` to the value derived from `type`, `description` to null, `domain` to null, and `metadata` to an empty object.
-
-#### Scenario: Minimal declaration
-- **WHEN** a contract is declared with only `type` and a non-empty `versions`
-- **THEN** declaration succeeds
-- **AND** `description` is null
-- **AND** `domain` is null
-- **AND** `metadata` is an empty object
-
-#### Scenario: A required input is omitted
-- **WHEN** `type` or `versions` is absent
-- **THEN** declaration fails
-- **AND** the failure names the missing field
-
-#### Scenario: Defaults are materialized, not absent
-- **WHEN** a contract is declared without `description`, `domain`, or `metadata`
-- **THEN** each is present at its default value rather than undefined
-
-### Requirement: URI Derivation
-
-When `uri` is not supplied, the system SHALL derive it from `type` by replacing every occurrence of `_` with `/` and prepending `#/`. A supplied `uri` SHALL be stored as given and SHALL NOT be overridden by derivation.
-
-#### Scenario: Every underscore is replaced, not only the first
-- **WHEN** a contract is declared with `type` of `com_payment_process` and no `uri`
-- **THEN** `uri` is `#/com/payment/process`
-
-#### Scenario: Single-segment type
-- **WHEN** a contract is declared with `type` of `payment` and no `uri`
-- **THEN** `uri` is `#/payment`
-
-#### Scenario: Explicit uri wins over derivation
-- **WHEN** a contract is declared with `type` of `com_user_register` and an explicit `uri` of `#/services/identity/user/registration`
-- **THEN** `uri` is `#/services/identity/user/registration`
-
-### Requirement: URI Validity
-
-The system SHALL require `uri` to be a non-empty, valid RFC 3986 URI-reference in canonical form. A non-canonical value SHALL be rejected rather than normalized.
-
-#### Scenario: Empty uri
-- **WHEN** a contract is declared with an explicit empty-string `uri`
-- **THEN** declaration fails
-
-#### Scenario: Non-canonical uri
-- **WHEN** a contract is declared with a `uri` whose percent-encoding, case, or dot-segments are not already canonical
-- **THEN** declaration fails
-- **AND** the value is not silently normalized
-
-#### Scenario: Derived uri is canonical
-- **WHEN** `uri` is derived from a valid `type`
-- **THEN** the derived value satisfies this requirement without further adjustment
+## MODIFIED Requirements
 
 ### Requirement: Contract-Declared Identifier Grammar
 
@@ -96,34 +30,6 @@ This grammar SHALL constrain only what a contract declares. It SHALL NOT constra
 - **WHEN** an ArvoEvent carries a dotted `type` or `domain` from a foreign producer
 - **THEN** this grammar does not apply to it
 - **AND** the event remains valid under its own rules
-
-### Requirement: Version Keys
-
-The system SHALL require every key of `versions` to be a bare `MAJOR.MINOR.PATCH` triple of non-negative integers without leading zeros, carrying no pre-release suffix and no build metadata. The system SHALL require `versions` to contain at least one entry.
-
-#### Scenario: Valid version key
-- **WHEN** a version key is `1.0.0` or `0.0.0` or `10.20.30`
-- **THEN** it is accepted
-
-#### Scenario: Pre-release suffix
-- **WHEN** a version key is `1.0.0-beta`
-- **THEN** declaration fails
-
-#### Scenario: Build metadata
-- **WHEN** a version key is `1.0.0+build`
-- **THEN** declaration fails
-
-#### Scenario: Leading zeros
-- **WHEN** a version key is `01.0.0`
-- **THEN** declaration fails
-
-#### Scenario: Partial version
-- **WHEN** a version key is `1.0`
-- **THEN** declaration fails
-
-#### Scenario: No versions declared
-- **WHEN** `versions` is empty
-- **THEN** declaration fails
 
 ### Requirement: Version Definition
 
@@ -208,18 +114,6 @@ Versions of one contract SHALL be independent. The system SHALL NOT infer, inher
 - **THEN** declaration succeeds
 - **AND** each version retains its own schema for that key
 
-### Requirement: Version Dataschema
-
-A version contract SHALL expose a `dataschema` value formed as the contract's `uri`, a `/`, and that version.
-
-#### Scenario: Dataschema composition
-- **WHEN** a contract with `uri` of `#/com/order/create` declares version `1.0.0`
-- **THEN** that version's `dataschema` is `#/com/order/create/1.0.0`
-
-#### Scenario: Dataschema is per version
-- **WHEN** a contract declares versions `1.0.0` and `1.1.0`
-- **THEN** each version's `dataschema` ends with its own version
-
 ### Requirement: Handler Error
 
 Every version SHALL carry a handler error, available regardless of what that version's `outputs` declares. Its type SHALL be the contract's `type` in the pattern `handler_{type}_error`. Its payload SHALL be an object with `error_name` (string), `error_message` (string), and `error_stack` (string or null), invariant across versions. Its `dataschema` SHALL be that of the version that carries it.
@@ -269,33 +163,6 @@ A rule SHALL NOT be reported when the value it would judge could not be establis
 - **WHEN** a contract with a valid `type` is declared with faults in several other positions
 - **THEN** the failure names every one of them
 
-### Requirement: Prerequisite Validity Of `type`
-
-`type` SHALL be validated before any rule that depends on it. When `type` is invalid, the system SHALL report that failure alone and SHALL NOT evaluate the remaining rules. The reported failure SHALL state that the remaining rules were not evaluated, so a reader is not left to infer that nothing else is wrong.
-
-This SHALL apply wherever a contract or a standalone version contract is declared.
-
-#### Scenario: An invalid `type` is reported alone
-- **WHEN** a contract is declared with an invalid `type` and faults in other positions
-- **THEN** declaration fails
-- **AND** the only reported failure is the one naming `type`
-
-#### Scenario: The reader is told the run stopped
-- **WHEN** declaration fails because `type` is invalid
-- **THEN** the failure states that the remaining rules were not evaluated
-
-#### Scenario: A derived `uri` is not reported when it could not be derived
-- **WHEN** a contract is declared with an invalid `type` and no `uri`
-- **THEN** no failure names `uri`
-
-#### Scenario: A supplied `uri` is still the caller's to answer for
-- **WHEN** a contract is declared with a valid `type` and an invalid `uri`
-- **THEN** the failure names `uri`
-
-#### Scenario: A standalone version contract behaves the same way
-- **WHEN** a version contract is declared directly with an invalid `type` and faults in other positions
-- **THEN** the only reported failure is the one naming `type`
-
 ### Requirement: Standalone Version Declaration
 
 A version contract SHALL be declarable directly, without a containing contract, and SHALL be validated by the same version-level rules applied when it is materialized from a contract.
@@ -312,10 +179,58 @@ A version contract SHALL be declarable directly, without a containing contract, 
 - **WHEN** a contract is declared successfully
 - **THEN** every version it materializes satisfies the version-level rules
 
-### Requirement: Immutability
+### Requirement: Asserting An Event Against A Version
 
-A declared contract and its version contracts SHALL NOT be mutable after declaration.
+A version contract SHALL determine whether an event matches one of the three shapes it declares — its `input`, one of its `outputs`, or its handler error — and SHALL report which of the three matched.
 
-#### Scenario: Mutating a declared contract
-- **WHEN** any field of a declared contract or version contract is assigned
-- **THEN** the assignment does not take effect
+#### Scenario: An event matching the input
+- **WHEN** an event whose `type` is the contract's `type` and whose payload satisfies that version's `input` is asserted
+- **THEN** the assertion succeeds
+- **AND** the result reports the scope as the accepted request
+
+#### Scenario: An event matching a declared output
+- **WHEN** an event whose `type` is one of the version's `outputs` keys and whose payload satisfies that emit's schema is asserted
+- **THEN** the assertion succeeds
+- **AND** the result reports the scope as an output
+
+#### Scenario: An event matching the handler error
+- **WHEN** an event whose `type` is the version's handler error type and whose payload satisfies the handler error shape is asserted
+- **THEN** the assertion succeeds
+- **AND** the result reports the scope as the handler error
+
+#### Scenario: The handler error is assertable for a version declaring no outputs
+- **WHEN** a version declaring an empty `outputs` asserts its handler error event
+- **THEN** the assertion succeeds
+
+#### Scenario: An event matching none of the three
+- **WHEN** an event whose `type` is none of the version's declared types is asserted
+- **THEN** the assertion fails
+- **AND** the failure names the type it was given
+
+### Requirement: Expecting A Particular Type
+
+A version contract SHALL accept an optional statement of which type the caller expects, and SHALL confirm or contradict it.
+
+What may be expected SHALL be limited to what that version declares: its `type`, one of its `outputs` keys, or its handler error type. Expecting anything else SHALL fail.
+
+A contract SHALL NOT accept such a statement.
+
+#### Scenario: A correct expectation
+- **WHEN** an event is asserted against the type the event actually carries
+- **THEN** the assertion succeeds
+
+#### Scenario: An expectation the event contradicts
+- **WHEN** an event is asserted against a type this version declares but the event does not carry
+- **THEN** the assertion fails
+- **AND** the failure names both what was expected and what was found
+- **AND** the failure is reported at the event's type, the expectation itself being declarable
+
+#### Scenario: An expectation the version does not declare
+- **WHEN** an event is asserted against a type the version does not declare
+- **THEN** the assertion fails
+- **AND** the failure identifies the expectation as the problem
+
+#### Scenario: Asserting without an expectation
+- **WHEN** an event is asserted with no expected type supplied
+- **THEN** any of the version's three shapes may match
+- **AND** the result reports which one did

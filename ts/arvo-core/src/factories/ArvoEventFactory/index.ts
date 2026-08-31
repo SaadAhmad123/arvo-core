@@ -31,7 +31,7 @@ export { ArvoEventFactory } from './factory.js';
  * const built = tryCreateArvoEventFactory(contract.versions['1.0.0']);
  * if (!built.ok) return built.error;
  *
- * const requested = built.value.createAccepted({
+ * const requested = built.value.createInput({
  *   source: 'com.web.checkout',
  *   subject: 'order-42',
  *   data: { items: ['book'] },
@@ -77,7 +77,7 @@ export const tryCreateArvoEventFactory = <V extends VersionedArvoContract>(
  * @example
  * const orders = createArvoEventFactory(contract.versions['1.0.0']);
  *
- * const requested = orders.createAccepted({
+ * const requested = orders.createInput({
  *   source: 'com.web.checkout',
  *   subject: 'order-42',
  *   data: { items: ['book'] },

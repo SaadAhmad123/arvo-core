@@ -6,7 +6,7 @@ See `proposal.md` — Why. The constraints that shape the approach:
 - **The parts to reuse exist.** `ErrorIssue` as the shared reporting vocabulary, `ArvoContractValidationError` as the shape a new assertion error is modelled on, and the prerequisite-then-aggregate pattern the declaration validator already uses.
 - **No ADR governs this check.** ADR-001 defers contract validation of data and its trust boundaries; ADR-005 defers handler behaviour. See `proposal.md` — Whose rules these are. Nothing below may quietly settle either deferral.
 - **ADR-005 defers handler behaviour, and this sits next to that line.** Reading a declaration is not handler protocol; selecting among versions by range is. The design has to hold that distinction rather than blur it.
-- **`accepts` and `emits` are core zod schemas.** They have no `safeParse` method of their own — checking goes through zod's standalone form. A consumer hitting this is the reason it is worth stating.
+- **`input` and `outputs` are core zod schemas.** They have no `safeParse` method of their own — checking goes through zod's standalone form. A consumer hitting this is the reason it is worth stating.
 
 ## Goals / Non-Goals
 
@@ -180,13 +180,13 @@ The sketch in `proposal.md` deliberately omits `string` from the union. Includin
 
 ### `scope`, and why it is not called a category
 
-`scope` names which part of a version's declaration an event belongs to: its `accepts`, one of its `emits`, or its handler error. "Category" reads as a property of the event itself, which it is not — an event carries a `type`, and the same `type` string means nothing until a contract is named. What is being reported is where the event sits within *this* declaration, which is a scope rather than a classification.
+`scope` names which part of a version's declaration an event belongs to: its `input`, one of its `outputs`, or its handler error. "Category" reads as a property of the event itself, which it is not — an event carries a `type`, and the same `type` string means nothing until a contract is named. What is being reported is where the event sits within *this* declaration, which is a scope rather than a classification.
 
-The narrowing decision that goes with it: expecting the contract's `type` implies `'accepts'`, an emit key implies `'emits'`, the handler error type implies `'handlerError'`. So `scope` is derivable from an expected type and could be left as the three-way union instead.
+The narrowing decision that goes with it: expecting the contract's `type` implies `'input'`, an output key implies `'output'`, the handler error type implies `'error'`. So `scope` is derivable from an expected type and could be left as the three-way union instead.
 
-**Decision: narrow it.** A conditional type mapping the expected type to its scope is a handful of lines, and the alternative hands back a value less precise than the input justifies — a caller who named an emit key still has to prove to the compiler that `scope` is not `'handlerError'`.
+**Decision: narrow it.** A conditional type mapping the expected type to its scope is a handful of lines, and the alternative hands back a value less precise than the input justifies — a caller who named an output key still has to prove to the compiler that `scope` is not `'error'`.
 
-Probed before adoption, the same way literal version keys were: the contract's `type`, an emit key, and the handler error type each narrow `scope` to a single literal, and an undeclared type is rejected at the call site.
+Probed before adoption, the same way literal version keys were: the contract's `type`, an output key, and the handler error type each narrow `scope` to a single literal, and an undeclared type is rejected at the call site.
 
 *What the spec should say about it:* nothing. How precisely a result is typed is not spec material — specs here describe observable behaviour rather than type shapes, the way `arvo-event`'s spec never mentions a TypeScript type. This belongs here and in a type-level test.
 
@@ -202,9 +202,9 @@ The ask overload is not generic, so it *is* callable on the union, and its resul
 
 ### Checking goes through zod's standalone form
 
-A version's `accepts` is typed as a core zod schema, which carries no `safeParse` method. So checking a payload uses `z.safeParse(schema, data)` rather than a method call.
+A version's `input` is typed as a core zod schema, which carries no `safeParse` method. So checking a payload uses `z.safeParse(schema, data)` rather than a method call.
 
-Worth recording because a consumer will hit the same thing the moment they touch `accepts` themselves, and because it is the sort of detail that looks like an oversight when it is a consequence of keeping the schema type narrow at the contract boundary.
+Worth recording because a consumer will hit the same thing the moment they touch `input` themselves, and because it is the sort of detail that looks like an oversight when it is a consequence of keeping the schema type narrow at the contract boundary.
 
 ## Risks / Trade-offs
 

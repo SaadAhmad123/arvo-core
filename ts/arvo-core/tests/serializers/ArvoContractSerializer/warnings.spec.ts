@@ -13,10 +13,10 @@ describe('buildWarningFromErrorIssues', () => {
 
   it('renders a single loss without pluralising', () => {
     const message = buildWarningFromErrorIssues([
-      droppedConstraint('versions["1.0.0"].accepts.createdAt', 'a Date'),
+      droppedConstraint('versions["1.0.0"].input.createdAt', 'a Date'),
     ]);
     expect(message).toContain('One constraint did not survive');
-    expect(message).toContain('versions["1.0.0"].accepts.createdAt');
+    expect(message).toContain('versions["1.0.0"].input.createdAt');
     expect(message).toContain('a Date');
   });
 
@@ -42,8 +42,8 @@ describe('buildWarningFromErrorIssues', () => {
 });
 
 describe('a drop and a demotion read differently', () => {
-  const dropped = droppedConstraint('accepts.a', 'a BigInt');
-  const demoted = demotedCheck('accepts.email', 'format: email');
+  const dropped = droppedConstraint('input.a', 'a BigInt');
+  const demoted = demotedCheck('input.email', 'format: email');
 
   it('a drop says the constraint is gone', () => {
     expect(dropped.toString()).toContain('dropped');
@@ -60,8 +60,8 @@ describe('a drop and a demotion read differently', () => {
   });
 
   it('both carry the position they came from', () => {
-    expect(dropped.path).toBe('accepts.a');
-    expect(demoted.path).toBe('accepts.email');
+    expect(dropped.path).toBe('input.a');
+    expect(demoted.path).toBe('input.email');
   });
 
   it('neither is blocking — a loss does not stop the crossing', () => {

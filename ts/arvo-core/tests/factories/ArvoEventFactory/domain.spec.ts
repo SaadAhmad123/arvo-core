@@ -9,7 +9,7 @@ const version = (domain?: string) =>
   new ArvoContract({
     type: 'com_order_create',
     ...(domain === undefined ? {} : { domain }),
-    versions: { '1.0.0': { accepts: z.object({}), emits: {} } },
+    versions: { '1.0.0': { input: z.object({}), outputs: {} } },
   }).versions['1.0.0'];
 
 const withDomain = createArvoEventFactory(version('orders'));
@@ -27,8 +27,8 @@ const triggeringEvent = new ArvoEvent({
 });
 
 const built = (
-  ...args: Parameters<typeof withDomain.createAccepted>
-): string | null => withDomain.createAccepted(...args).domain;
+  ...args: Parameters<typeof withDomain.createInput>
+): string | null => withDomain.createInput(...args).domain;
 
 describe('a domain not supplied', () => {
   it('leaves the event with none, even where the contract declares one', () => {
@@ -45,7 +45,7 @@ describe('a domain supplied outright', () => {
   });
 
   it('reaches validation when empty rather than being swallowed', () => {
-    const attempt = withDomain.tryCreateAccepted({
+    const attempt = withDomain.tryCreateInput({
       source: 'com.web',
       data: {},
       domain: '',
@@ -75,7 +75,7 @@ describe('a domain read from a named source', () => {
 
   it("reads the building contract's, supplied in the options", () => {
     expect(
-      withDomain.createAccepted(
+      withDomain.createInput(
         { source: 'com.web', data: {}, domain: ArvoDomain.FROM_SELF_CONTRACT },
         { domainCtx: { selfContract } },
       ).domain,
@@ -84,7 +84,7 @@ describe('a domain read from a named source', () => {
 
   it("reads the triggering event's, supplied in the options", () => {
     expect(
-      withDomain.createAccepted(
+      withDomain.createInput(
         {
           source: 'com.web',
           data: {},
@@ -99,7 +99,7 @@ describe('a domain read from a named source', () => {
 describe('a source with nothing to give', () => {
   it('reads none from a contract declaring none', () => {
     expect(
-      withoutDomain.createAccepted({
+      withoutDomain.createInput({
         source: 'com.web',
         data: {},
         domain: ArvoDomain.FROM_EVENT_CONTRACT,

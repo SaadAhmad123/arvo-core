@@ -57,11 +57,11 @@ const contract = new ArvoContract({
   domain: 'orders',
   versions: {
     '1.0.0': {
-      accepts: z.object({
+      input: z.object({
         items: z.array(z.string()),
         currency: z.string().default('GBP'),
       }),
-      emits: { com_order_created: z.object({ order_id: z.string() }) },
+      outputs: { com_order_created: z.object({ order_id: z.string() }) },
     },
   },
 });
@@ -108,8 +108,8 @@ const nothingDefaulted = (event: ArvoEvent) => {
   expect(event.baggage).not.toEqual(untouched.baggage);
 };
 
-describe('createAccepted, given every field', () => {
-  const event = orders.createAccepted({
+describe('createInput, given every field', () => {
+  const event = orders.createInput({
     ...everything,
     domain: 'orders_priority',
     data: { items: ['book'], currency: 'USD' },
@@ -147,8 +147,8 @@ describe('createAccepted, given every field', () => {
   });
 });
 
-describe('createEmitted, given every field', () => {
-  const event = orders.createEmitted({
+describe('createOutput, given every field', () => {
+  const event = orders.createOutput({
     ...everything,
     type: 'com_order_created',
     domain: ArvoDomain.FROM_EVENT_CONTRACT,
@@ -274,7 +274,7 @@ describe('a span in place of the trace headers', () => {
   const { traceparent: _tp, tracestate: _ts, ...withoutHeaders } = everything;
 
   it('derives both headers for an accepted event', () => {
-    const event = orders.createAccepted({
+    const event = orders.createInput({
       ...withoutHeaders,
       span,
       data: { items: [] },
@@ -284,7 +284,7 @@ describe('a span in place of the trace headers', () => {
   });
 
   it('derives both headers for an emitted event', () => {
-    const event = orders.createEmitted({
+    const event = orders.createOutput({
       ...withoutHeaders,
       span,
       type: 'com_order_created',
