@@ -2,7 +2,7 @@
 
 ## Purpose
 
-An ArvoContract is the versioned interface declaration through which independently built participants agree on what a handler accepts and what it may emit. This capability defines a contract's field set, its defaults, the per-version isolation model, the grammar its declared identifiers must follow, the handler error every version carries, what makes a declaration valid or rejected, and how an event is checked against a declaration.
+An ArvoContract is the versioned interface declaration through which independently built participants agree on the event a handler takes in and the events it may put out. This capability defines a contract's field set, its defaults, the per-version isolation model, the grammar its declared identifiers must follow, the handler error every version carries, what makes a declaration valid or rejected, and how an event is checked against a declaration.
 
 ## Requirements
 
@@ -70,7 +70,7 @@ The system SHALL require `uri` to be a non-empty, valid RFC 3986 URI-reference i
 
 ### Requirement: Contract-Declared Identifier Grammar
 
-The system SHALL require `type`, every key of a version's `emits`, and `domain` when not null to match `^[a-z0-9]+(_[a-z0-9]+)*$`.
+The system SHALL require `type`, every key of a version's `outputs`, and `domain` when not null to match `^[a-z0-9]+(_[a-z0-9]+)*$`.
 
 This grammar SHALL constrain only what a contract declares. It SHALL NOT constrain the values `ArvoEvent.type` or `ArvoEvent.domain` may hold.
 
@@ -129,33 +129,33 @@ The system SHALL require every key of `versions` to be a bare `MAJOR.MINOR.PATCH
 
 ### Requirement: Version Definition
 
-The system SHALL require each version definition to supply `accepts` and `emits`.
+The system SHALL require each version definition to supply `input` and `outputs`.
 
 #### Scenario: Both supplied
-- **WHEN** a version supplies an `accepts` schema and an `emits` map
+- **WHEN** a version supplies an `input` schema and an `outputs` map
 - **THEN** the version is accepted
 
 #### Scenario: Either omitted
-- **WHEN** a version omits `accepts` or omits `emits`
+- **WHEN** a version omits `input` or omits `outputs`
 - **THEN** declaration fails
 - **AND** the failure names the version and the missing field
 
 ### Requirement: Object-Shaped Payloads
 
-The system SHALL require a version's `accepts` schema, and every schema in its `emits`, to describe an object at its top level. A schema that does not SHALL be rejected at declaration rather than at validation time.
+The system SHALL require a version's `input` schema, and every schema in its `outputs`, to describe an object at its top level. A schema that does not SHALL be rejected at declaration rather than at validation time.
 
 #### Scenario: Object schema
-- **WHEN** a version's `accepts` describes an object
+- **WHEN** a version's `input` describes an object
 - **THEN** the version is accepted
 
 #### Scenario: Non-object schema
-- **WHEN** a version's `accepts` or any emit describes a string, number, array, or any other non-object
+- **WHEN** a version's `input` or any emit describes a string, number, array, or any other non-object
 - **THEN** declaration fails
 - **AND** the failure names the offending position
 
-### Requirement: Emit Key Collisions
+### Requirement: Output Key Collisions
 
-The system SHALL reject a version whose `emits` uses the contract's own `type` as a key, or uses the handler error type for that contract as a key.
+The system SHALL reject a version whose `outputs` uses the contract's own `type` as a key, or uses the handler error type for that contract as a key.
 
 #### Scenario: Emit key equals the contract type
 - **WHEN** a contract of `type` `com_order_create` declares an emit keyed `com_order_create`
@@ -170,23 +170,23 @@ The system SHALL reject a version whose `emits` uses the contract's own `type` a
 - **THEN** declaration succeeds
 - **AND** no cross-contract name reservation is applied
 
-### Requirement: Empty Emits
+### Requirement: Empty Outputs
 
-The system SHALL permit a version to declare an empty `emits`.
+The system SHALL permit a version to declare an empty `outputs`.
 
-#### Scenario: Version declaring no emits
-- **WHEN** a version declares `emits` as an empty map
+#### Scenario: Version declaring no outputs
+- **WHEN** a version declares `outputs` as an empty map
 - **THEN** declaration succeeds
 - **AND** the version's handler error remains available
 
 ### Requirement: Per-Version Materialization
 
-The system SHALL materialize each declared version as a standalone version contract carrying that version's `accepts` and `emits` together with the contract's `uri`, `type`, `domain`, `description`, and `metadata`. Each declared version SHALL be individually addressable by its version key.
+The system SHALL materialize each declared version as a standalone version contract carrying that version's `input` and `outputs` together with the contract's `uri`, `type`, `domain`, `description`, and `metadata`. Each declared version SHALL be individually addressable by its version key.
 
 #### Scenario: Version carries the contract's identity
 - **WHEN** a contract declaring version `1.0.0` is declared
 - **THEN** that version exposes the contract's `uri`, `type`, `domain`, `description`, and `metadata`
-- **AND** it exposes its own `accepts` and `emits`
+- **AND** it exposes its own `input` and `outputs`
 - **AND** it exposes its own version
 
 #### Scenario: Declared version is addressable
@@ -202,7 +202,7 @@ The system SHALL materialize each declared version as a standalone version contr
 Versions of one contract SHALL be independent. The system SHALL NOT infer, inherit, or require compatibility between any two versions.
 
 #### Scenario: Versions may differ arbitrarily
-- **WHEN** version `1.1.0` declares an `accepts` with a required field absent from version `1.0.0`
+- **WHEN** version `1.1.0` declares an `input` with a required field absent from version `1.0.0`
 - **THEN** declaration succeeds
 
 #### Scenario: Same emit type, different payload
@@ -224,9 +224,9 @@ A version contract SHALL expose a `dataschema` value formed as the contract's `u
 
 ### Requirement: Handler Error
 
-Every version SHALL carry a handler error, available regardless of what that version's `emits` declares. Its type SHALL be the contract's `type` in the pattern `handler_{type}_error`. Its payload SHALL be an object with `error_name` (string), `error_message` (string), and `error_stack` (string or null), invariant across versions. Its `dataschema` SHALL be that of the version that carries it.
+Every version SHALL carry a handler error, available regardless of what that version's `outputs` declares. Its type SHALL be the contract's `type` in the pattern `handler_{type}_error`. Its payload SHALL be an object with `error_name` (string), `error_message` (string), and `error_stack` (string or null), invariant across versions. Its `dataschema` SHALL be that of the version that carries it.
 
-The handler error SHALL be derived from `type` and the version rather than declared, and SHALL NOT be a stored entry of `emits`.
+The handler error SHALL be derived from `type` and the version rather than declared, and SHALL NOT be a stored entry of `outputs`.
 
 #### Scenario: Handler error type
 - **WHEN** a contract of `type` `com_payment_process` is declared
@@ -240,13 +240,13 @@ The handler error SHALL be derived from `type` and the version rather than decla
 - **WHEN** version `1.1.0` of a contract with `uri` `#/com/order/create` carries a handler error
 - **THEN** that handler error's `dataschema` is `#/com/order/create/1.1.0`
 
-#### Scenario: Handler error is available to a version declaring no emits
-- **WHEN** a version declares an empty `emits`
+#### Scenario: Handler error is available to a version declaring no outputs
+- **WHEN** a version declares an empty `outputs`
 - **THEN** its handler error is still available
 
-#### Scenario: Handler error is not a declared emit
+#### Scenario: Handler error is not a declared output
 - **WHEN** a version is declared
-- **THEN** its `emits` does not contain the handler error
+- **THEN** its `outputs` does not contain the handler error
 
 ### Requirement: Declaration-Time Rejection Reports Every Failure
 
@@ -255,7 +255,7 @@ The system SHALL validate a contract when it is declared, and SHALL report every
 A rule SHALL NOT be reported when the value it would judge could not be established because a prerequisite failed — see **Prerequisite Validity Of `type`**. The system SHALL NOT report a derived value as a failure when that value could not be derived.
 
 #### Scenario: Multiple independent failures
-- **WHEN** a contract is declared with a malformed `domain`, two malformed `emits` keys, and a malformed version key
+- **WHEN** a contract is declared with a malformed `domain`, two malformed `outputs` keys, and a malformed version key
 - **THEN** declaration fails
 - **AND** the failure names all four problems
 
@@ -303,7 +303,7 @@ This SHALL apply wherever a contract or a standalone version contract is declare
 A version contract SHALL be declarable directly, without a containing contract, and SHALL be validated by the same version-level rules applied when it is materialized from a contract.
 
 #### Scenario: Valid standalone version
-- **WHEN** a version contract is declared directly with a valid type, uri, version, accepts, and emits
+- **WHEN** a version contract is declared directly with a valid type, uri, version, input, and outputs
 - **THEN** declaration succeeds
 
 #### Scenario: Invalid standalone version
@@ -324,15 +324,15 @@ A declared contract and its version contracts SHALL NOT be mutable after declara
 
 ### Requirement: Asserting An Event Against A Version
 
-A version contract SHALL determine whether an event matches one of the three shapes it declares — its `accepts`, one of its `emits`, or its handler error — and SHALL report which of the three matched.
+A version contract SHALL determine whether an event matches one of the three shapes it declares — its `input`, one of its `outputs`, or its handler error — and SHALL report which of the three matched.
 
-#### Scenario: An event matching accepts
-- **WHEN** an event whose `type` is the contract's `type` and whose payload satisfies that version's `accepts` is asserted
+#### Scenario: An event matching the input
+- **WHEN** an event whose `type` is the contract's `type` and whose payload satisfies that version's `input` is asserted
 - **THEN** the assertion succeeds
 - **AND** the result reports the scope as the accepted request
 
 #### Scenario: An event matching a declared emit
-- **WHEN** an event whose `type` is one of the version's `emits` keys and whose payload satisfies that emit's schema is asserted
+- **WHEN** an event whose `type` is one of the version's `outputs` keys and whose payload satisfies that emit's schema is asserted
 - **THEN** the assertion succeeds
 - **AND** the result reports the scope as an emit
 
@@ -341,8 +341,8 @@ A version contract SHALL determine whether an event matches one of the three sha
 - **THEN** the assertion succeeds
 - **AND** the result reports the scope as the handler error
 
-#### Scenario: The handler error is assertable for a version declaring no emits
-- **WHEN** a version declaring an empty `emits` asserts its handler error event
+#### Scenario: The handler error is assertable for a version declaring no outputs
+- **WHEN** a version declaring an empty `outputs` asserts its handler error event
 - **THEN** the assertion succeeds
 
 #### Scenario: An event matching none of the three
@@ -452,7 +452,7 @@ Beyond checking the `dataschema` against the versions it declares, the contract 
 
 A version contract SHALL accept an optional statement of which type the caller expects, and SHALL confirm or contradict it.
 
-What may be expected SHALL be limited to what that version declares: its `type`, one of its `emits` keys, or its handler error type. Expecting anything else SHALL fail.
+What may be expected SHALL be limited to what that version declares: its `type`, one of its `outputs` keys, or its handler error type. Expecting anything else SHALL fail.
 
 A contract SHALL NOT accept such a statement.
 

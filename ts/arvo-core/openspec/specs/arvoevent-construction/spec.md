@@ -33,9 +33,9 @@ Every other field SHALL be defaulted exactly as constructing an event directly d
 - **WHEN** an event is built with a field that breaks a structural rule of an event
 - **THEN** building fails on that rule, as constructing the event directly would
 
-### Requirement: Building The Event A Version Accepts
+### Requirement: Building The Event A Version Takes In
 
-The system SHALL build, from a version of a contract, the event that version accepts.
+The system SHALL build, from a version of a contract, the event that version takes in.
 
 Its type and its dataschema SHALL be the version's own, and a caller SHALL NOT supply either.
 
@@ -54,7 +54,7 @@ Its recipient SHALL default to the contract's type, that being the type whose ha
 - **WHEN** an event is built for a version with a recipient supplied
 - **THEN** it carries the supplied recipient
 
-### Requirement: Building An Event A Version Emits
+### Requirement: Building An Event A Version Puts Out
 
 The system SHALL build, from a version of a contract, any event that version declares it emits, the caller naming which one.
 
