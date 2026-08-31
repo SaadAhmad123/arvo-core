@@ -5,7 +5,7 @@
  * speaks CloudEvents, say.
  */
 
-import { ArvoEvent, CloudEvent, CloudEventConverter } from "arvo-core";
+import { CloudEvent, CloudEventConverter, createArvoEvent } from "arvo-core";
 import { type Chapter, heading, indent } from "../display.js";
 
 /**
@@ -17,7 +17,7 @@ const bothDirections = async (): Promise<void> => {
 	heading("out to a CloudEvent, and back");
 
 	const converter = new CloudEventConverter();
-	const event = new ArvoEvent({
+	const event = createArvoEvent({
 		subject: "order-42",
 		source: "order-service",
 		type: "order.created",

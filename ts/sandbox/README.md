@@ -19,6 +19,22 @@ pnpm run play contract     # only chapters whose title matches
 pnpm run play 10           # only chapter 10
 ```
 
+## Conventions
+
+The tour is what a reader copies from, so it is written the way a consumer of the package should write it.
+
+**Build things with the factories, never with `new`.** `createArvoEvent`, `createArvoContract` and `createArvoEventFactory` -- and their `tryCreate*` twins where a failure is worth handling as a value. The classes are exported because their types are part of the surface, not as an invitation to construct one directly.
+
+| instead of | use |
+|---|---|
+| `new ArvoEvent({ ... })` | `createArvoEvent({ ... })` |
+| `new ArvoContract({ ... })` | `createArvoContract({ ... })` |
+| `new ArvoEventFactory(version)` | `createArvoEventFactory(version)` |
+
+Three things still take `new`, because no factory exists for them and none is implied: `ArvoEventSerializer`, `ArvoContractSerializer` and `CloudEventConverter` are long-lived objects you configure once and reuse, and `CloudEvent` is a foreign type this package reads rather than one it produces.
+
+There is no factory for a single contract version either. You read one off the contract -- `contract.versions["1.0.0"]` -- rather than building one.
+
 ## The tour
 
 `src/playground.ts` is a runner and nothing else. The material lives in `src/tour/`, one chapter per file, in the order they are worth reading:

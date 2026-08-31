@@ -5,7 +5,6 @@
  */
 
 import {
-	ArvoContract,
 	ArvoContractValidationError,
 	createArvoContract,
 	tryCreateArvoContract,
@@ -13,7 +12,7 @@ import {
 import { z } from "zod";
 import { type Chapter, heading, indent } from "../display.js";
 
-const orders = new ArvoContract({
+const orders = createArvoContract({
 	type: "com_order_create",
 	versions: {
 		"1.0.0": {
@@ -80,15 +79,16 @@ const typesPerVersion = (): void => {
 };
 
 /**
- * `new ArvoContract()` and `createArvoContract()` are the same thing; the
- * function form exists so a declaration can be written inline. `try` reports
- * an invalid one instead of throwing.
+ * Two ways to declare one, and no third: `createArvoContract` throws an
+ * invalid declaration, `tryCreateArvoContract` reports it. Reach for the
+ * factory rather than `new ArvoContract()` -- see the conventions in the
+ * sandbox README.
  *
- * There is no factory for a single version: you read one off the contract
- * (`contract.versions["1.0.0"]`) rather than building one.
+ * There is no factory for a single version either: you read one off the
+ * contract (`contract.versions["1.0.0"]`) rather than building one.
  */
-const threeWaysToDeclare = (): void => {
-	heading("three ways to declare one");
+const twoWaysToDeclare = (): void => {
+	heading("two ways to declare one");
 
 	const version = {
 		"1.0.0": { input: z.object({ sku: z.string() }), outputs: {} },
@@ -115,7 +115,7 @@ const whenItIsInvalid = (): void => {
 	heading("when a declaration is broken");
 
 	try {
-		new ArvoContract({
+		createArvoContract({
 			type: "com_order_create",
 			domain: "Bad_Domain", // must be lowercase_snake_case
 			versions: {
@@ -144,7 +144,7 @@ const oneFaultStopsTheRest = (): void => {
 	heading("the one fault that stops the rest");
 
 	try {
-		new ArvoContract({
+		createArvoContract({
 			type: "Com_Order_Create", // must be lowercase_snake_case
 			domain: "Bad_Domain",
 			versions: {
@@ -167,7 +167,7 @@ export const chapter: Chapter = {
 	run: () => {
 		whatItHolds();
 		typesPerVersion();
-		threeWaysToDeclare();
+		twoWaysToDeclare();
 		whenItIsInvalid();
 		oneFaultStopsTheRest();
 	},

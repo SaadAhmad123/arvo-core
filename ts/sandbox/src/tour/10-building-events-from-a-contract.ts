@@ -4,15 +4,15 @@
  */
 
 import {
-	ArvoContract,
-	ArvoEventValidationError,
+	type ArvoEventValidationError,
+	createArvoContract,
 	createArvoEventFactory,
 	tryCreateArvoEventFactory,
 } from "arvo-core";
 import { z } from "zod";
 import { type Chapter, heading } from "../display.js";
 
-const orders = new ArvoContract({
+const orders = createArvoContract({
 	type: "com_order_create",
 	domain: "orders",
 	versions: {

@@ -8,8 +8,9 @@ import { type Chapter, heading } from "../display.js";
 import { tracer } from "../otel.js";
 
 /**
- * `createArvoEvent` is `new ArvoEvent()` in function form, for an event no
- * contract declares -- an audit record, a probe, a one-off.
+ * `createArvoEvent` builds an event no contract declares -- an audit record,
+ * a probe, a one-off. Nothing checks the payload, because there is no schema
+ * to check it against.
  */
 const standalone = (): void => {
 	heading("an event no contract declares");

@@ -4,16 +4,17 @@
  */
 
 import {
-	ArvoEvent,
+	type ArvoEvent,
 	ArvoEventSerializer,
 	CloudEventTransformationError,
+	createArvoEvent,
 } from "arvo-core";
 import { type Chapter, heading } from "../display.js";
 import { tracer } from "../otel.js";
 
 const anEvent = (): ArvoEvent => {
 	const span = tracer.startSpan("order.created");
-	const event = new ArvoEvent({
+	const event = createArvoEvent({
 		subject: "order-42",
 		source: "order-service",
 		type: "order.created",

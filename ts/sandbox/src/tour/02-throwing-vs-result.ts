@@ -4,11 +4,16 @@
  * same errors, different control flow -- so the caller picks, not the library.
  */
 
-import { ArvoEvent, ArvoEventSerializer, ArvoSemanticVersion } from "arvo-core";
+import {
+	ArvoEventSerializer,
+	ArvoSemanticVersion,
+	type ArvoEvent,
+	createArvoEvent,
+} from "arvo-core";
 import { type Chapter, heading, indent } from "../display.js";
 
 const anEvent = (): ArvoEvent =>
-	new ArvoEvent({
+	createArvoEvent({
 		subject: "order-42",
 		source: "order-service",
 		type: "order.created",

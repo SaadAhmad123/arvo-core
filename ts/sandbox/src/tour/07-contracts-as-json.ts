@@ -4,7 +4,7 @@
  * survives the crossing and what does not is worth seeing directly.
  */
 
-import { ArvoContract, ArvoContractSerializer } from "arvo-core";
+import { ArvoContractSerializer, createArvoContract } from "arvo-core";
 import { z } from "zod";
 import { type Chapter, heading, indent } from "../display.js";
 
@@ -14,7 +14,7 @@ const serializer = new ArvoContractSerializer();
 const theRoundTrip = (): void => {
 	heading("a contract as JSON");
 
-	const contract = new ArvoContract({
+	const contract = createArvoContract({
 		type: "com_order_create",
 		description: "Creates orders",
 		versions: {
@@ -51,7 +51,7 @@ const whatACrossingCosts = (): void => {
 
 	// A Date has no JSON Schema equivalent, so the position ends up carrying
 	// nothing. The contract still serializes.
-	const withDate = new ArvoContract({
+	const withDate = createArvoContract({
 		type: "com_report_run",
 		versions: {
 			"1.0.0": {
@@ -72,7 +72,7 @@ const whatACrossingCosts = (): void => {
 
 	// A url() check survives as documentation. Nothing may enforce an
 	// annotation keyword, so the check stops working while staying readable.
-	const withUrl = new ArvoContract({
+	const withUrl = createArvoContract({
 		type: "com_link_check",
 		versions: {
 			"1.0.0": { input: z.object({ target: z.url() }), outputs: {} },
@@ -93,7 +93,7 @@ const whatACrossingCosts = (): void => {
 
 	// An email() keeps working, because zod writes a pattern beside the
 	// annotation and a pattern is enforced by everyone.
-	const withEmail = new ArvoContract({
+	const withEmail = createArvoContract({
 		type: "com_user_invite",
 		versions: {
 			"1.0.0": { input: z.object({ to: z.email() }), outputs: {} },
@@ -111,7 +111,7 @@ const whatACrossingCosts = (): void => {
 	);
 
 	// Nothing lost at all: the usual case.
-	const plain = new ArvoContract({
+	const plain = createArvoContract({
 		type: "com_order_place",
 		versions: {
 			"1.0.0": {

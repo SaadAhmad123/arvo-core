@@ -4,7 +4,7 @@
  * carry one somewhere.
  */
 
-import { ArvoEvent, ArvoEventValidationError } from "arvo-core";
+import { ArvoEventValidationError, createArvoEvent } from "arvo-core";
 import { type Chapter, heading, indent } from "../display.js";
 import { tracer } from "../otel.js";
 
@@ -18,7 +18,7 @@ const buildingOne = (): void => {
 	const span = tracer.startSpan("order.created");
 	span.setAttribute("order.id", "order-42");
 
-	const event = new ArvoEvent({
+	const event = createArvoEvent({
 		subject: "order-42",
 		source: "order-service",
 		type: "order.created",
@@ -43,7 +43,7 @@ const buildingOne = (): void => {
 const immutability = (): void => {
 	heading("an event does not change");
 
-	const event = new ArvoEvent({
+	const event = createArvoEvent({
 		subject: "order-42",
 		source: "order-service",
 		type: "order.created",
@@ -60,14 +60,14 @@ const immutability = (): void => {
 };
 
 /**
- * The constructor names *every* broken rule, not just the first one it hits.
+ * `createArvoEvent` names *every* broken rule, not just the first one it hits.
  * `.issues` carries the same information as data, for rendering it yourself.
  */
 const whenItIsInvalid = (): void => {
 	heading("when it is invalid");
 
 	try {
-		new ArvoEvent({
+		createArvoEvent({
 			subject: "", // must be non-empty
 			source: "order-service",
 			type: "order.created",

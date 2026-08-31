@@ -6,11 +6,16 @@
  * went in -- asserting reads, it does not rewrite.
  */
 
-import { ArvoContract, ArvoContractAssertionError, ArvoEvent } from "arvo-core";
+import {
+	ArvoContractAssertionError,
+	type ArvoEvent,
+	createArvoContract,
+	createArvoEvent,
+} from "arvo-core";
 import { z } from "zod";
 import { type Chapter, heading } from "../display.js";
 
-const orders = new ArvoContract({
+const orders = createArvoContract({
 	type: "com_order_create",
 	versions: {
 		"1.0.0": {
@@ -30,7 +35,7 @@ const arriving = (
 	data: Record<string, unknown>,
 	version: keyof typeof orders.versions = "1.0.0",
 ): ArvoEvent =>
-	new ArvoEvent({
+	createArvoEvent({
 		source: "com.playground",
 		subject: "order-42",
 		type,
@@ -95,7 +100,7 @@ const everyWayItFails = (): void => {
 
 	const v1 = orders.versions["1.0.0"];
 	const bare = (type: string, dataschema: string): ArvoEvent =>
-		new ArvoEvent({
+		createArvoEvent({
 			source: "com.playground",
 			subject: "order-42",
 			type,
