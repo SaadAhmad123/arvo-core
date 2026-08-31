@@ -32,6 +32,16 @@ const triggeringEvent = createArvoEvent({
   domain: 'inbound_traffic',
 });
 
+/**
+ * The same version, with the sources a symbol reads from bound on it. They go
+ * here rather than at each call, so a factory that reads the triggering event
+ * belongs to one invocation -- in a real handler, built where the event
+ * arrives rather than once at the top of a module.
+ */
+const forThisInvocation = createArvoEventFactory(orders.versions['1.0.0'], {
+  domainCtx: { triggeringEvent },
+});
+
 const whereADomainComesFrom = (): void => {
   heading('where a domain comes from');
 
@@ -66,12 +76,7 @@ const whereADomainComesFrom = (): void => {
     ],
     [
       'FROM_TRIGGERING_EVENT',
-      // The sources a symbol reads from are bound on the factory, not passed
-      // here -- so this needs a factory built where the triggering event is
-      // known, which in a real handler is per invocation.
-      createArvoEventFactory(orders.versions['1.0.0'], {
-        domainCtx: { triggeringEvent },
-      }).createInput({
+      forThisInvocation.createInput({
         source: 's',
         data: { items: [] },
         domain: ArvoDomain.FROM_TRIGGERING_EVENT,

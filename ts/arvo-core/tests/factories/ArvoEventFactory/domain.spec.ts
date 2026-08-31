@@ -9,16 +9,6 @@ const version = (domain?: string) =>
   new ArvoContract({
     type: 'com_order_create',
     ...(domain === undefined ? {} : { domain }),
-    versions: { '1.0.0': { input: z.object({}), outputs: {} } },
-  }).versions['1.0.0'];
-
-const withDomain = createArvoEventFactory(version('orders'));
-const withoutDomain = createArvoEventFactory(version());
-
-const versionWithOutput = (domain?: string) =>
-  new ArvoContract({
-    type: 'com_order_create',
-    ...(domain === undefined ? {} : { domain }),
     versions: {
       '1.0.0': {
         input: z.object({}),
@@ -26,6 +16,9 @@ const versionWithOutput = (domain?: string) =>
       },
     },
   }).versions['1.0.0'];
+
+const withDomain = createArvoEventFactory(version('orders'));
+const withoutDomain = createArvoEventFactory(version());
 
 const selfContract = version('services');
 
@@ -114,7 +107,7 @@ describe('a domain read from a named source', () => {
 
 describe('options bound on the factory', () => {
   // Bound once, so they have to reach every builder and not just the first.
-  const bound = createArvoEventFactory(versionWithOutput('orders'), {
+  const bound = createArvoEventFactory(version('orders'), {
     domainCtx: { triggeringEvent },
   });
   const param = { source: 'com.web', domain: ArvoDomain.FROM_TRIGGERING_EVENT };
@@ -136,18 +129,8 @@ describe('options bound on the factory', () => {
     ).toBe('inbound');
   });
 
-  it('are the same for every event built, not passed per call', () => {
-    const first = bound.createInput({ ...param, data: {} });
-    const second = bound.createOutput({
-      ...param,
-      type: 'com_order_created',
-      data: {},
-    });
-    expect(second.domain).toBe(first.domain);
-  });
-
   it('leave a symbol unresolved when the factory was given none', () => {
-    const unbound = createArvoEventFactory(versionWithOutput('orders'));
+    const unbound = createArvoEventFactory(version('orders'));
     expect(unbound.createInput({ ...param, data: {} }).domain).toBeNull();
   });
 });

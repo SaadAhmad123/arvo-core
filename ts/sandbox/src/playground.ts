@@ -16,14 +16,20 @@
  * breaks.
  */
 
-import { banner } from './display.js';
+import { banner, type Chapter } from './display.js';
 import { shutdownOtel } from './otel.js';
 import { chapters } from './tour/index.js';
 
 const filter = process.argv[2]?.toLowerCase();
 
+/** A number selects that chapter; anything else matches against the title. */
+const matches = (chapter: Chapter, against: string): boolean =>
+  /^\d+$/.test(against)
+    ? Number(chapter.title.split('.')[0]) === Number(against)
+    : chapter.title.toLowerCase().includes(against);
+
 const selected = filter
-  ? chapters.filter((chapter) => chapter.title.toLowerCase().includes(filter))
+  ? chapters.filter((chapter) => matches(chapter, filter))
   : chapters;
 
 if (selected.length === 0) {
@@ -32,9 +38,13 @@ if (selected.length === 0) {
   process.exit(1);
 }
 
-for (const chapter of selected) {
-  banner(chapter.title);
-  await chapter.run();
+try {
+  for (const chapter of selected) {
+    banner(chapter.title);
+    await chapter.run();
+  }
+} finally {
+  // Flushed even where a chapter threw, or the spans of every chapter that
+  // did finish are lost with it.
+  await shutdownOtel();
 }
-
-await shutdownOtel();
