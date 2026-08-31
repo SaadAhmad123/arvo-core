@@ -35,6 +35,10 @@ Three things still take `new`, because no factory exists for them and none is im
 
 There is no factory for a single contract version either. You read one off the contract -- `contract.versions["1.0.0"]` -- rather than building one.
 
+**Pass `executionid` along explicitly when one event follows another.** It defaults to the event's own `subject`, which is right for the event that starts an execution and wrong for every event after it. [`10-building-events-from-a-contract.ts`](src/tour/10-building-events-from-a-contract.ts) shows both, and what the default does once a handler gives its output a subject of its own.
+
+**The sandbox is formatted by `arvo-core`'s Biome config**, so `cd ../arvo-core && npx biome check ../sandbox/src` should be clean. There is no lint script here, and `pnpm lint` in `ts/arvo-core` does not reach this directory -- run it against the path when you have finished editing.
+
 ## The tour
 
 `src/playground.ts` is a runner and nothing else. The material lives in `src/tour/`, one chapter per file, in the order they are worth reading:

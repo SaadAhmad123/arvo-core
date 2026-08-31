@@ -16,25 +16,25 @@
  * breaks.
  */
 
-import { banner } from "./display.js";
-import { shutdownOtel } from "./otel.js";
-import { chapters } from "./tour/index.js";
+import { banner } from './display.js';
+import { shutdownOtel } from './otel.js';
+import { chapters } from './tour/index.js';
 
 const filter = process.argv[2]?.toLowerCase();
 
 const selected = filter
-	? chapters.filter((chapter) => chapter.title.toLowerCase().includes(filter))
-	: chapters;
+  ? chapters.filter((chapter) => chapter.title.toLowerCase().includes(filter))
+  : chapters;
 
 if (selected.length === 0) {
-	console.error(`No chapter matches ${JSON.stringify(filter)}. Available:\n`);
-	for (const chapter of chapters) console.error(`  ${chapter.title}`);
-	process.exit(1);
+  console.error(`No chapter matches ${JSON.stringify(filter)}. Available:\n`);
+  for (const chapter of chapters) console.error(`  ${chapter.title}`);
+  process.exit(1);
 }
 
 for (const chapter of selected) {
-	banner(chapter.title);
-	await chapter.run();
+  banner(chapter.title);
+  await chapter.run();
 }
 
 await shutdownOtel();
