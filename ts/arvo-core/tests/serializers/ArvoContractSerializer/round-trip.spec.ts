@@ -6,54 +6,54 @@ import { ArvoContractSerializer } from '../../../src/serializers/ArvoContractSer
 const serializer = new ArvoContractSerializer();
 
 /** Sends a contract out to its canonical form and reads it straight back. */
-const crossOnce = (accepts: z.ZodType): ArvoContract => {
+const crossOnce = (input: z.ZodType): ArvoContract => {
   const original = new ArvoContract({
     type: 'com_a_b',
-    versions: { '1.0.0': { accepts: accepts as never, emits: {} } },
+    versions: { '1.0.0': { input: input as never, outputs: {} } },
   });
   return serializer.deserialize(serializer.serialize(original).schema).contract;
 };
 
-const accepts = (contract: ArvoContract) =>
-  contract.versions['1.0.0']?.accepts as z.ZodType;
+const input = (contract: ArvoContract) =>
+  contract.versions['1.0.0']?.input as z.ZodType;
 
 describe('one crossing keeps what the form can express', () => {
   // One crossing only. Repeated crossings are deliberately not covered — see
   // the note at the bottom of this file.
 
   it('keeps a string length bound', () => {
-    const back = accepts(crossOnce(z.object({ a: z.string().min(3) })));
+    const back = input(crossOnce(z.object({ a: z.string().min(3) })));
     expect(back.safeParse({ a: 'abc' }).success).toBe(true);
     expect(back.safeParse({ a: 'ab' }).success).toBe(false);
   });
 
   it('keeps a numeric range', () => {
-    const back = accepts(crossOnce(z.object({ a: z.number().min(1).max(10) })));
+    const back = input(crossOnce(z.object({ a: z.number().min(1).max(10) })));
     expect(back.safeParse({ a: 5 }).success).toBe(true);
     expect(back.safeParse({ a: 0 }).success).toBe(false);
     expect(back.safeParse({ a: 11 }).success).toBe(false);
   });
 
   it('keeps set membership', () => {
-    const back = accepts(crossOnce(z.object({ a: z.enum(['x', 'y']) })));
+    const back = input(crossOnce(z.object({ a: z.enum(['x', 'y']) })));
     expect(back.safeParse({ a: 'x' }).success).toBe(true);
     expect(back.safeParse({ a: 'z' }).success).toBe(false);
   });
 
   it('keeps a required field required', () => {
-    const back = accepts(crossOnce(z.object({ a: z.string() })));
+    const back = input(crossOnce(z.object({ a: z.string() })));
     expect(back.safeParse({ a: 'x' }).success).toBe(true);
     expect(back.safeParse({}).success).toBe(false);
   });
 
   it('keeps an integer an integer', () => {
-    const back = accepts(crossOnce(z.object({ a: z.int() })));
+    const back = input(crossOnce(z.object({ a: z.int() })));
     expect(back.safeParse({ a: 1 }).success).toBe(true);
     expect(back.safeParse({ a: 1.5 }).success).toBe(false);
   });
 
   it('keeps a pattern', () => {
-    const back = accepts(
+    const back = input(
       crossOnce(z.object({ a: z.string().regex(/^[a-z]+$/) })),
     );
     expect(back.safeParse({ a: 'abc' }).success).toBe(true);
@@ -61,15 +61,13 @@ describe('one crossing keeps what the form can express', () => {
   });
 
   it('keeps an array length bound', () => {
-    const back = accepts(
-      crossOnce(z.object({ a: z.array(z.string()).min(2) })),
-    );
+    const back = input(crossOnce(z.object({ a: z.array(z.string()).min(2) })));
     expect(back.safeParse({ a: ['x', 'y'] }).success).toBe(true);
     expect(back.safeParse({ a: ['x'] }).success).toBe(false);
   });
 
   it('keeps a nested constraint', () => {
-    const back = accepts(
+    const back = input(
       crossOnce(z.object({ a: z.object({ b: z.number().min(1) }) })),
     );
     expect(back.safeParse({ a: { b: 1 } }).success).toBe(true);
@@ -78,7 +76,7 @@ describe('one crossing keeps what the form can express', () => {
 
   it('accepts what the original accepted', () => {
     const original = z.object({ a: z.string().min(2), b: z.number() });
-    const back = accepts(crossOnce(original));
+    const back = input(crossOnce(original));
     const payload = { a: 'ok', b: 1 };
     expect(original.safeParse(payload).success).toBe(true);
     expect(back.safeParse(payload).success).toBe(true);
@@ -94,12 +92,12 @@ describe('a recursive schema survives a crossing', () => {
   });
 
   it('serializes and reads back', () => {
-    const back = accepts(crossOnce(Node));
+    const back = input(crossOnce(Node));
     expect(back.safeParse({ name: 'a', children: [] }).success).toBe(true);
   });
 
   it('still describes the recursion', () => {
-    const back = accepts(crossOnce(Node));
+    const back = input(crossOnce(Node));
     expect(
       back.safeParse({ name: 'a', children: [{ name: 'b', children: [] }] })
         .success,
@@ -111,7 +109,7 @@ describe('what one crossing does not promise', () => {
   it('reports the loss when a constraint could not cross', () => {
     const original = new ArvoContract({
       type: 'com_a_b',
-      versions: { '1.0.0': { accepts: z.object({ at: z.date() }), emits: {} } },
+      versions: { '1.0.0': { input: z.object({ at: z.date() }), outputs: {} } },
     });
     const { schema, warningString } = serializer.serialize(original);
     expect(warningString).toContain('date');

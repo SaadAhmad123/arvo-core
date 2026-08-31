@@ -23,7 +23,7 @@ import { demotedCheck, droppedConstraint } from './warnings.js';
  *
  * This list is ours to keep, and it is the safe kind to own. Missing an entry
  * costs a warning that should have been raised; it never changes what a
- * contract accepts.
+ * contract declares as its input.
  */
 const CONSTRAINT_KEYWORDS = new Set([
   'type',
@@ -241,7 +241,7 @@ type CheckedForm = {
   metadata?: unknown;
   versions: Record<
     string,
-    { accepts: unknown; emits: Record<string, unknown> }
+    { input: unknown; outputs: Record<string, unknown> }
   >;
 };
 
@@ -256,32 +256,32 @@ const blocking = (issue: ErrorIssue): ErrorIssue =>
 
 /** Converts one version's schemas, collecting refusals and losses apart. */
 const readVersion = (
-  definition: { accepts: unknown; emits: Record<string, unknown> },
+  definition: { input: unknown; outputs: Record<string, unknown> },
   at: string,
   issues: ErrorIssue[],
   losses: ErrorIssue[],
-): { accepts: unknown; emits: Record<string, unknown> } | null => {
-  const emits: Record<string, unknown> = {};
-  for (const [type, schema] of Object.entries(definition.emits)) {
+): { input: unknown; outputs: Record<string, unknown> } | null => {
+  const outputs: Record<string, unknown> = {};
+  for (const [type, schema] of Object.entries(definition.outputs)) {
     const converted = convertFromJSONSchema(
       schema,
-      `${at}.emits[${JSON.stringify(type)}]`,
+      `${at}.outputs[${JSON.stringify(type)}]`,
     );
     if (converted.ok) {
-      emits[type] = converted.value.schema;
+      outputs[type] = converted.value.schema;
       losses.push(...converted.value.losses);
     } else {
       issues.push(converted.error);
     }
   }
 
-  const accepts = convertFromJSONSchema(definition.accepts, `${at}.accepts`);
-  if (!accepts.ok) {
-    issues.push(accepts.error);
+  const input = convertFromJSONSchema(definition.input, `${at}.input`);
+  if (!input.ok) {
+    issues.push(input.error);
     return null;
   }
-  losses.push(...accepts.value.losses);
-  return { accepts: accepts.value.schema, emits };
+  losses.push(...input.value.losses);
+  return { input: input.value.schema, outputs };
 };
 
 /**

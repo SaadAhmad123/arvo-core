@@ -4,22 +4,22 @@ import type { ArvoSemanticVersion } from '../semver/index.js';
 import type { JSONObject } from '../types.js';
 import type { HandlerErrorPayload, HandlerErrorType } from './handler-error.js';
 
-/** What one version of a contract accepts, and every event type it may emit. */
+/** The event one version of a contract takes in, and every one it may put out. */
 export type ArvoContractVersionParam = {
   /** The payload a handler bound to this version receives. */
-  accepts: z.$ZodObject;
+  input: z.$ZodObject;
   /**
    * Every event type this version may produce, keyed by event type. May be
    * empty. The handler error is always available and is not listed here.
    */
-  emits: Record<string, z.$ZodObject>;
+  outputs: Record<string, z.$ZodObject>;
 };
 
 /**
  * Constraint for a `versions` map. Do not annotate a map with this type.
  *
  * Annotating widens the keys and you lose two things: an undeclared version
- * stops being a compile error, and every version's `accepts` collapses to
+ * stops being a compile error, and every version's `input` collapses to
  * the same type, so `z.infer` no longer differs between versions. Pass the
  * map inline, or hold it in a `const` with no type annotation.
  */
@@ -39,7 +39,7 @@ export type ArvoContractParam<
   T extends string = string,
   M extends ArvoContractVersionMapParam = ArvoContractVersionMapParam,
 > = {
-  /** The event type a handler bound to this contract accepts. */
+  /** The event type a handler bound to this contract takes in. */
   type: T;
   /**
    * Base of every `dataschema` this contract's versions produce. Defaults
@@ -64,10 +64,7 @@ export type ArvoContractParam<
  * means nothing until a contract is named. This is where the event sits
  * within one version's declaration.
  */
-export type ArvoContractEventAssertionScope =
-  | 'accepts'
-  | 'emits'
-  | 'handlerError';
+export type ArvoContractEventAssertionScope = 'input' | 'output' | 'error';
 
 /**
  * What an assertion reports when no type was expected.
@@ -109,8 +106,8 @@ export type NarrowedAssertedArvoEvent<
 /**
  * Which scope an expected type belongs to.
  *
- * The contract's `type` can only mean `accepts`, its handler error type can
- * only mean `handlerError`, and an emit key can only mean `emits` — so a
+ * The contract's `type` can only mean the input, its handler error type can
+ * only mean the error, and an output key can only mean an output — so a
  * caller who named one has already established which, and returning the
  * three-way union would hand back less than they supplied. `never` for a
  * type the version does not declare.
@@ -120,11 +117,11 @@ export type ScopeOf<
   T extends string,
   C extends ArvoContractVersionParam,
 > = E extends T
-  ? 'accepts'
+  ? 'input'
   : E extends HandlerErrorType<T>
-    ? 'handlerError'
-    : E extends keyof C['emits']
-      ? 'emits'
+    ? 'error'
+    : E extends keyof C['outputs']
+      ? 'output'
       : never;
 
 /**
@@ -139,16 +136,16 @@ export type PayloadFor<
   T extends string,
   C extends ArvoContractVersionParam,
 > = E extends T
-  ? z.input<C['accepts']>
+  ? z.input<C['input']>
   : E extends HandlerErrorType<T>
     ? HandlerErrorPayload
-    : E extends keyof C['emits']
-      ? z.input<C['emits'][E & keyof C['emits']]>
+    : E extends keyof C['outputs']
+      ? z.input<C['outputs'][E & keyof C['outputs']]>
       : never;
 
 /**
  * Every type one version may legitimately carry: its contract's `type`, one
- * of its `emits` keys, or its handler error type.
+ * of its `outputs` keys, or its handler error type.
  *
  * Deliberately not widened with `string`. A union including `string` swallows
  * every literal member and collapses to `string`, giving an expectation that
@@ -158,4 +155,4 @@ export type PayloadFor<
 export type AssertableType<
   T extends string,
   C extends ArvoContractVersionParam,
-> = T | (keyof C['emits'] & string) | HandlerErrorType<T>;
+> = T | (keyof C['outputs'] & string) | HandlerErrorType<T>;

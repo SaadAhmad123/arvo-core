@@ -150,18 +150,18 @@ export const buildCanonicalForm = (
 
   for (const [version, definition] of Object.entries(contract.versions)) {
     const at = `versions[${JSON.stringify(version)}]`;
-    const emits: JSONObject = {};
-    for (const [type, schema] of Object.entries(definition.emits)) {
-      emits[type] = convert(
+    const outputs: JSONObject = {};
+    for (const [type, schema] of Object.entries(definition.outputs)) {
+      outputs[type] = convert(
         schema,
-        `${at}.emits[${JSON.stringify(type)}]`,
+        `${at}.outputs[${JSON.stringify(type)}]`,
         options,
         warnings,
       );
     }
     versions[version] = {
-      accepts: convert(definition.accepts, `${at}.accepts`, options, warnings),
-      emits,
+      input: convert(definition.input, `${at}.input`, options, warnings),
+      outputs,
     };
   }
 

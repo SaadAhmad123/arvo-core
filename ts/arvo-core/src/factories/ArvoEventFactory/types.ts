@@ -9,7 +9,7 @@ import type { ArvoEventParam } from '../../ArvoEvent/types.js';
 /**
  * The fields a contract supplies, which a caller therefore never passes.
  *
- * `domain` is here because a contract-aware factory accepts a wider input for
+ * `domain` is here because a contract-aware factory input a wider input for
  * it than an event does — a value, or one of `ArvoDomain`'s symbols.
  */
 export type SuppliedByContract = 'type' | 'dataschema' | 'data' | 'domain';
@@ -34,7 +34,7 @@ type TraceContextParam =
     };
 
 /**
- * What a contract-aware factory accepts beyond the event's own fields.
+ * What a contract-aware factory input beyond the event's own fields.
  *
  * `domainCtx` carries the sources `ArvoDomain`'s symbols read from that a
  * factory cannot know: the contract of whoever is building the event, and the

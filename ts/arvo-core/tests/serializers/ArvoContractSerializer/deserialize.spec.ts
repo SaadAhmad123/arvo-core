@@ -20,7 +20,7 @@ const form = (over: Record<string, unknown> = {}) =>
     description: null,
     domain: null,
     metadata: {},
-    versions: { '1.0.0': { accepts: objectSchema(), emits: {} } },
+    versions: { '1.0.0': { input: objectSchema(), outputs: {} } },
     ...over,
   });
 
@@ -38,10 +38,10 @@ describe('a form this serializer produced', () => {
     metadata: { owner: 'team_orders' },
     versions: {
       '1.0.0': {
-        accepts: z.object({ amount: z.number().min(1) }),
-        emits: { com_order_created: z.object({ id: z.string() }) },
+        input: z.object({ amount: z.number().min(1) }),
+        outputs: { com_order_created: z.object({ id: z.string() }) },
       },
-      '1.1.0': { accepts: z.object({ amount: z.number() }), emits: {} },
+      '1.1.0': { input: z.object({ amount: z.number() }), outputs: {} },
     },
   });
 
@@ -71,16 +71,16 @@ describe('a form this serializer produced', () => {
   });
 
   it('computes the handler error rather than reading it', () => {
-    expect(contract.versions['1.0.0']?.handlerError.type).toBe(
+    expect(contract.versions['1.0.0']?.error.type).toBe(
       'handler_com_order_create_error',
     );
   });
 
-  it('keeps the declared emits', () => {
-    expect(Object.keys(contract.versions['1.0.0']?.emits ?? {})).toEqual([
+  it('keeps the declared outputs', () => {
+    expect(Object.keys(contract.versions['1.0.0']?.outputs ?? {})).toEqual([
       'com_order_created',
     ]);
-    expect(contract.versions['1.1.0']?.emits).toEqual({});
+    expect(contract.versions['1.1.0']?.outputs).toEqual({});
   });
 
   it('reports no losses', () => {
@@ -98,8 +98,8 @@ describe('a form this serializer did not produce', () => {
       form({
         versions: {
           '2.0.0': {
-            accepts: objectSchema({ email: { type: 'string' } }),
-            emits: { com_order_created: objectSchema() },
+            input: objectSchema({ email: { type: 'string' } }),
+            outputs: { com_order_created: objectSchema() },
           },
         },
       }),
@@ -113,7 +113,7 @@ describe('a form this serializer did not produce', () => {
       JSON.stringify({
         uri: '#/com/a/b',
         type: 'com_a_b',
-        versions: { '1.0.0': { accepts: objectSchema(), emits: {} } },
+        versions: { '1.0.0': { input: objectSchema(), outputs: {} } },
       }),
     );
     expect(contract.description).toBeNull();
@@ -127,7 +127,7 @@ describe('a form that omitted its uri', () => {
     const { contract } = serializer.deserialize(
       JSON.stringify({
         type: 'com_order_create',
-        versions: { '1.0.0': { accepts: objectSchema(), emits: {} } },
+        versions: { '1.0.0': { input: objectSchema(), outputs: {} } },
       }),
     );
     expect(contract.uri).toBe('#/com/order/create');
@@ -155,20 +155,20 @@ describe("failure of the contract's own rules", () => {
       form({
         versions: {
           '1.0.0': {
-            accepts: objectSchema(),
-            emits: { Bad_Key: objectSchema() },
+            input: objectSchema(),
+            outputs: { Bad_Key: objectSchema() },
           },
         },
       }),
     );
     expect(error.issues.map((i) => i.path)).toContain(
-      'versions["1.0.0"].emits["Bad_Key"]',
+      'versions["1.0.0"].outputs["Bad_Key"]',
     );
   });
 
   it('names a malformed version key', () => {
     const error = failureOf(
-      form({ versions: { '01.0.0': { accepts: objectSchema(), emits: {} } } }),
+      form({ versions: { '01.0.0': { input: objectSchema(), outputs: {} } } }),
     );
     expect(error.issues.map((i) => i.path)).toContain('versions["01.0.0"]');
   });
@@ -179,8 +179,8 @@ describe("failure of the contract's own rules", () => {
         domain: 'Bad_Domain',
         versions: {
           '01.0.0': {
-            accepts: objectSchema(),
-            emits: { Bad_Key: objectSchema() },
+            input: objectSchema(),
+            outputs: { Bad_Key: objectSchema() },
           },
         },
       }),
@@ -188,7 +188,7 @@ describe("failure of the contract's own rules", () => {
     const paths = error.issues.map((i) => i.path);
     expect(paths).toContain('domain');
     expect(paths).toContain('versions["01.0.0"]');
-    expect(paths).toContain('versions["01.0.0"].emits["Bad_Key"]');
+    expect(paths).toContain('versions["01.0.0"].outputs["Bad_Key"]');
   });
 
   it('carries no cause, the failure being about positions', () => {
@@ -203,14 +203,14 @@ describe('a malformed form stops before the contract is checked', () => {
     form({
       domain: 'Bad_Domain',
       versions: {
-        '1.0.0': { accepts: { $schema: S, type: 'string' }, emits: {} },
+        '1.0.0': { input: { $schema: S, type: 'string' }, outputs: {} },
       },
     }),
   );
 
   it('reports the form fault', () => {
     expect(error.issues.map((i) => i.path)).toContain(
-      'versions["1.0.0"].accepts',
+      'versions["1.0.0"].input',
     );
   });
 
@@ -230,8 +230,8 @@ describe('a malformed form stops before the contract is checked', () => {
 });
 
 describe('a construct that cannot be read', () => {
-  const refusedFor = (accepts: unknown) =>
-    failureOf(form({ versions: { '1.0.0': { accepts, emits: {} } } }));
+  const refusedFor = (input: unknown) =>
+    failureOf(form({ versions: { '1.0.0': { input, outputs: {} } } }));
 
   it('names one the conversion refuses', () => {
     const error = refusedFor({
@@ -240,7 +240,7 @@ describe('a construct that cannot be read', () => {
       properties: { a: { type: 'string' } },
       unevaluatedProperties: false,
     });
-    expect(error.issues[0]?.path).toBe('versions["1.0.0"].accepts');
+    expect(error.issues[0]?.path).toBe('versions["1.0.0"].input');
     expect(error.issues[0]?.message).toContain('unevaluatedProperties');
   });
 
@@ -253,17 +253,17 @@ describe('a construct that cannot be read', () => {
       allOf: [{ properties: { a: { type: 'string' } } }],
     });
     expect(error.issues.map((i) => i.path)).toContain(
-      'versions["1.0.0"].accepts',
+      'versions["1.0.0"].input',
     );
   });
 
-  it('names one inside an emits entry, not only in accepts', () => {
+  it('names one inside an outputs entry, not only in input', () => {
     const error = failureOf(
       form({
         versions: {
           '1.0.0': {
-            accepts: objectSchema(),
-            emits: {
+            input: objectSchema(),
+            outputs: {
               com_a_done: {
                 $schema: S,
                 type: 'object',
@@ -276,7 +276,7 @@ describe('a construct that cannot be read', () => {
       }),
     );
     expect(error.issues.map((i) => i.path)).toContain(
-      'versions["1.0.0"].emits["com_a_done"]',
+      'versions["1.0.0"].outputs["com_a_done"]',
     );
   });
 
@@ -287,7 +287,7 @@ describe('a construct that cannot be read', () => {
       patternProperties: { '^x-': { type: 'string' } },
     });
     expect(error.issues.map((i) => i.path)).toContain(
-      'versions["1.0.0"].accepts',
+      'versions["1.0.0"].input',
     );
   });
 });
@@ -329,7 +329,7 @@ describe('the primitive and its companion', () => {
   it('holds for the outbound pair too', () => {
     const contract = new ArvoContract({
       type: 'com_a_b',
-      versions: { '1.0.0': { accepts: z.object({}), emits: {} } },
+      versions: { '1.0.0': { input: z.object({}), outputs: {} } },
     });
     const primitive = serializer.trySerialize(contract);
     expect(primitive.ok).toBe(true);

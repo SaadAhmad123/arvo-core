@@ -134,28 +134,28 @@ const checkVersionKey = (
  * version contract accepting the same values can never disagree.
  */
 const checkVersionInterface = (
-  params: { type: string; accepts: unknown; emits: unknown },
+  params: { type: string; input: unknown; outputs: unknown },
   prefix: string,
   issues: ErrorIssue[],
 ): void => {
-  checkObjectSchema(params.accepts, `${prefix}accepts`, issues);
+  checkObjectSchema(params.input, `${prefix}input`, issues);
 
-  const { emits } = params;
-  if (!isRecord(emits)) {
-    push(issues, `${prefix}emits`, 'must be an object', emits);
+  const { outputs } = params;
+  if (!isRecord(outputs)) {
+    push(issues, `${prefix}outputs`, 'must be an object', outputs);
     return;
   }
 
   const errorType = handlerErrorType(params.type);
-  for (const [key, schema] of Object.entries(emits)) {
-    const path = `${prefix}emits${at(key)}`;
+  for (const [key, schema] of Object.entries(outputs)) {
+    const path = `${prefix}outputs${at(key)}`;
     checkIdentifier(key, path, issues);
     checkObjectSchema(schema, path, issues);
     if (key === params.type) {
       push(
         issues,
         path,
-        'must not reuse the contract type, which already names what this contract accepts',
+        "must not reuse the contract type, which already names this contract's input",
       );
     }
     if (key === errorType) {
@@ -210,7 +210,7 @@ const normalize = (param: ArvoContractParam): NormalizedContract => ({
  * explanation whichever one rejected their declaration.
  */
 const TYPE_IS_LOAD_BEARING =
-  'the uri, the handler error type, and the rule against an emits key reusing the contract type are all derived from it';
+  'the uri, the handler error type, and the rule against an outputs key reusing the contract type are all derived from it';
 
 /**
  * The outcome of validating a contract declaration.
@@ -229,7 +229,7 @@ export type ArvoContractValidation =
  * holds every broken rule, so one attempt reports all of them.
  *
  * The exception is `type`, which is checked first and on its own. The `uri`,
- * the handler error type, and the rule against an `emits` key reusing the
+ * the handler error type, and the rule against an `outputs` key reusing the
  * contract type are all computed from it, so with `type` broken those rules
  * would judge values the declaration never established. Reporting them would
  * mean quoting values the caller never supplied.
@@ -273,8 +273,8 @@ export const validateArvoContract = (
     checkVersionInterface(
       {
         type: value.type,
-        accepts: definition.accepts,
-        emits: definition.emits,
+        input: definition.input,
+        outputs: definition.outputs,
       },
       `${path}.`,
       issues,
@@ -309,8 +309,8 @@ export const validateVersionedArvoContract = (
   checkVersionInterface(
     {
       type: param.type,
-      accepts: param.accepts,
-      emits: param.emits,
+      input: param.input,
+      outputs: param.outputs,
     },
     '',
     issues,

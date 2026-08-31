@@ -7,10 +7,10 @@ const contract = new ArvoContract({
   type: 'com_order_create',
   versions: {
     '1.0.0': {
-      accepts: z.object({ items: z.array(z.string()) }),
-      emits: { com_order_created: z.object({ order_id: z.string() }) },
+      input: z.object({ items: z.array(z.string()) }),
+      outputs: { com_order_created: z.object({ order_id: z.string() }) },
     },
-    '1.1.0': { accepts: z.object({ items: z.array(z.string()) }), emits: {} },
+    '1.1.0': { input: z.object({ items: z.array(z.string()) }), outputs: {} },
   },
 });
 
@@ -33,38 +33,38 @@ const event = (
 describe('asserting an event against a version', () => {
   it('matches the accepted request', () => {
     const asserted = v1.assert(event('com_order_create', { items: ['a'] }));
-    expect(asserted.scope).toBe('accepts');
+    expect(asserted.scope).toBe('input');
     expect(asserted.version).toBe('1.0.0');
   });
 
   it('matches a declared emit', () => {
     const asserted = v1.assert(event('com_order_created', { order_id: 'o-1' }));
-    expect(asserted.scope).toBe('emits');
+    expect(asserted.scope).toBe('output');
   });
 
   it('matches the handler error', () => {
     const asserted = v1.assert(
-      event(v1.handlerError.type, {
+      event(v1.error.type, {
         error_name: 'Error',
         error_message: 'boom',
         error_stack: null,
       }),
     );
-    expect(asserted.scope).toBe('handlerError');
+    expect(asserted.scope).toBe('error');
   });
 
-  it('matches the handler error for a version declaring no emits', () => {
+  it('matches the handler error for a version declaring no outputs', () => {
     const v11 = contract.versions['1.1.0'];
     const asserted = v11.assert(
       new ArvoEvent({
         source: 'com.test.suite',
         subject: 'order-1',
-        type: v11.handlerError.type,
+        type: v11.error.type,
         dataschema: v11.dataschema,
         data: { error_name: 'E', error_message: 'm', error_stack: null },
       }),
     );
-    expect(asserted.scope).toBe('handlerError');
+    expect(asserted.scope).toBe('error');
   });
 
   it('reports a type matching none of the three, naming what it got', () => {
@@ -83,7 +83,7 @@ describe('expecting a particular type', () => {
       event('com_order_created', { order_id: 'o-1' }),
       'com_order_created',
     );
-    expect(asserted.scope).toBe('emits');
+    expect(asserted.scope).toBe('output');
     expect(asserted.event.data.order_id).toBe('o-1');
   });
 
@@ -113,10 +113,10 @@ describe('expecting a particular type', () => {
 
   it('lets any of the three match when nothing is expected', () => {
     expect(v1.assert(event('com_order_create', { items: [] })).scope).toBe(
-      'accepts',
+      'input',
     );
     expect(v1.assert(event('com_order_created', { order_id: 'o' })).scope).toBe(
-      'emits',
+      'output',
     );
   });
 });
@@ -179,7 +179,7 @@ describe('the payload', () => {
       type: 'com_order_create',
       versions: {
         '1.0.0': {
-          accepts: z.object({ items: z.array(z.string()) }).check((ctx) =>
+          input: z.object({ items: z.array(z.string()) }).check((ctx) =>
             ctx.issues.push({
               code: 'custom',
               message: 'items must be priced',
@@ -187,7 +187,7 @@ describe('the payload', () => {
               input: ctx.value,
             }),
           ),
-          emits: {},
+          outputs: {},
         },
       },
     });

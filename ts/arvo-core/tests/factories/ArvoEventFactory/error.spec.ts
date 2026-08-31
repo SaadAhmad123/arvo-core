@@ -6,7 +6,7 @@ import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/
 const orders = createArvoEventFactory(
   new ArvoContract({
     type: 'com_order_create',
-    versions: { '1.0.0': { accepts: z.object({}), emits: {} } },
+    versions: { '1.0.0': { input: z.object({}), outputs: {} } },
   }).versions['1.0.0'],
 );
 

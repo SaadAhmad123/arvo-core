@@ -9,18 +9,18 @@ import { ArvoEvent } from '../../src/ArvoEvent/index.js';
 const withDomain = new ArvoContract({
   type: 'com_order_create',
   domain: 'orders',
-  versions: { '1.0.0': { accepts: z.object({}), emits: {} } },
+  versions: { '1.0.0': { input: z.object({}), outputs: {} } },
 }).versions['1.0.0'];
 
 const withoutDomain = new ArvoContract({
   type: 'com_order_create',
-  versions: { '1.0.0': { accepts: z.object({}), emits: {} } },
+  versions: { '1.0.0': { input: z.object({}), outputs: {} } },
 }).versions['1.0.0'];
 
 const selfContract = new ArvoContract({
   type: 'com_order_service',
   domain: 'services',
-  versions: { '1.0.0': { accepts: z.object({}), emits: {} } },
+  versions: { '1.0.0': { input: z.object({}), outputs: {} } },
 }).versions['1.0.0'];
 
 const triggeringEvent = new ArvoEvent({

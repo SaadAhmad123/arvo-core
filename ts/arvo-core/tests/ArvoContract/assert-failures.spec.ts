@@ -8,10 +8,10 @@ const contract = new ArvoContract({
   type: 'com_order_create',
   versions: {
     '1.0.0': {
-      accepts: z.object({ items: z.array(z.string()) }),
-      emits: { com_order_created: z.object({ order_id: z.string() }) },
+      input: z.object({ items: z.array(z.string()) }),
+      outputs: { com_order_created: z.object({ order_id: z.string() }) },
     },
-    '1.1.0': { accepts: z.object({ items: z.array(z.string()) }), emits: {} },
+    '1.1.0': { input: z.object({ items: z.array(z.string()) }), outputs: {} },
   },
 });
 

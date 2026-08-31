@@ -8,12 +8,12 @@ const serializer = new ArvoContractSerializer();
 /** A contract carrying a construct JSON Schema cannot express, so a loss. */
 const lossy = new ArvoContract({
   type: 'com_a_b',
-  versions: { '1.0.0': { accepts: z.object({ at: z.date() }), emits: {} } },
+  versions: { '1.0.0': { input: z.object({ at: z.date() }), outputs: {} } },
 });
 
 const clean = new ArvoContract({
   type: 'com_a_b',
-  versions: { '1.0.0': { accepts: z.object({ a: z.string() }), emits: {} } },
+  versions: { '1.0.0': { input: z.object({ a: z.string() }), outputs: {} } },
 });
 
 describe('a serialization result', () => {

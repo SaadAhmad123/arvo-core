@@ -5,7 +5,7 @@ import { HANDLER_ERROR_SCHEMA } from '../../src/ArvoContract/handler-error.js';
 import { VersionedArvoContract } from '../../src/ArvoContract/versioned/index.js';
 import type { VersionedArvoContractParam } from '../../src/ArvoContract/versioned/types.js';
 
-const accepts = z.object({ amount: z.number() });
+const input = z.object({ amount: z.number() });
 const emit = z.object({ order_id: z.string() });
 
 const param = (
@@ -18,8 +18,8 @@ const param = (
     description: null,
     domain: null,
     metadata: {},
-    accepts,
-    emits: { com_order_created: emit },
+    input,
+    outputs: { com_order_created: emit },
     ...over,
   }) as any;
 
@@ -33,8 +33,8 @@ describe('VersionedArvoContract', () => {
       expect(v.description).toBeNull();
       expect(v.domain).toBeNull();
       expect(v.metadata).toEqual({});
-      expect(v.accepts).toBe(accepts);
-      expect(Object.keys(v.emits)).toEqual(['com_order_created']);
+      expect(v.input).toBe(input);
+      expect(Object.keys(v.outputs)).toEqual(['com_order_created']);
     });
 
     it('keeps a supplied description, domain, and metadata', () => {
@@ -74,21 +74,21 @@ describe('VersionedArvoContract', () => {
 
   describe('handler error', () => {
     it('is derived from the contract type', () => {
-      expect(new VersionedArvoContract(param()).handlerError.type).toBe(
+      expect(new VersionedArvoContract(param()).error.type).toBe(
         'handler_com_order_create_error',
       );
     });
 
-    it('is present when emits is empty', () => {
-      const v = new VersionedArvoContract(param({ emits: {} }));
-      expect(Object.keys(v.emits)).toEqual([]);
-      expect(v.handlerError.type).toBe('handler_com_order_create_error');
-      expect(v.handlerError.schema).toBe(HANDLER_ERROR_SCHEMA);
+    it('is present when outputs is empty', () => {
+      const v = new VersionedArvoContract(param({ outputs: {} }));
+      expect(Object.keys(v.outputs)).toEqual([]);
+      expect(v.error.type).toBe('handler_com_order_create_error');
+      expect(v.error.schema).toBe(HANDLER_ERROR_SCHEMA);
     });
 
-    it('is not one of the declared emits', () => {
+    it('is not one of the declared outputs', () => {
       const v = new VersionedArvoContract(param());
-      expect(Object.keys(v.emits)).not.toContain(
+      expect(Object.keys(v.outputs)).not.toContain(
         'handler_com_order_create_error',
       );
     });
@@ -96,7 +96,7 @@ describe('VersionedArvoContract', () => {
     it('carries the same payload shape across versions', () => {
       const a = new VersionedArvoContract(param({ version: '1.0.0' }));
       const b = new VersionedArvoContract(param({ version: '2.0.0' }));
-      expect(a.handlerError.schema).toBe(b.handlerError.schema);
+      expect(a.error.schema).toBe(b.error.schema);
     });
   });
 
@@ -127,39 +127,39 @@ describe('VersionedArvoContract', () => {
       expect(rejects({ domain: 'order.priority' })).toContain('domain');
     });
 
-    it('rejects a non-object accepts', () => {
-      expect(rejects({ accepts: z.string() as never })).toContain('accepts');
+    it('rejects a non-object input', () => {
+      expect(rejects({ input: z.string() as never })).toContain('input');
     });
 
     it('rejects a malformed emit key', () => {
-      expect(rejects({ emits: { Bad_Key: emit } })).toContain(
-        'emits["Bad_Key"]',
+      expect(rejects({ outputs: { Bad_Key: emit } })).toContain(
+        'outputs["Bad_Key"]',
       );
     });
 
     it('rejects an emit key reusing the contract type', () => {
-      expect(rejects({ emits: { com_order_create: emit } })).toContain(
-        'emits["com_order_create"]',
+      expect(rejects({ outputs: { com_order_create: emit } })).toContain(
+        'outputs["com_order_create"]',
       );
     });
 
     it('rejects an emit key reusing the handler error type', () => {
       expect(
-        rejects({ emits: { handler_com_order_create_error: emit } }),
-      ).toContain('emits["handler_com_order_create_error"]');
+        rejects({ outputs: { handler_com_order_create_error: emit } }),
+      ).toContain('outputs["handler_com_order_create_error"]');
     });
 
     it('reports every problem at once', () => {
       // Not `type` -- that blocks the run by design, so it would assert the
       // opposite of the prerequisite rule.
       expect(
-        rejects({ domain: 'Bad', uri: '', emits: { Bad_Key: emit } }).length,
+        rejects({ domain: 'Bad', uri: '', outputs: { Bad_Key: emit } }).length,
       ).toBeGreaterThanOrEqual(3);
     });
 
     it('reports an invalid type alone, and says the list is partial', () => {
       expect(
-        rejects({ type: 'Bad', uri: '', emits: { Bad_Key: emit } }),
+        rejects({ type: 'Bad', uri: '', outputs: { Bad_Key: emit } }),
       ).toEqual(['type']);
     });
 
@@ -184,9 +184,9 @@ describe('VersionedArvoContract', () => {
       expect(Object.isFrozen(v.metadata)).toBe(true);
     });
 
-    it('freezes emits', () => {
+    it('freezes outputs', () => {
       const v = new VersionedArvoContract(param());
-      expect(Object.isFrozen(v.emits)).toBe(true);
+      expect(Object.isFrozen(v.outputs)).toBe(true);
     });
 
     it('copies metadata, so mutating the input afterwards does not change it', () => {
@@ -196,11 +196,11 @@ describe('VersionedArvoContract', () => {
       expect(v.metadata).toEqual({ a: 1 });
     });
 
-    it('copies emits, so mutating the input afterwards does not change it', () => {
-      const emits: Record<string, typeof emit> = { com_order_created: emit };
-      const v = new VersionedArvoContract(param({ emits }));
-      emits.com_order_shipped = emit;
-      expect(Object.keys(v.emits)).toEqual(['com_order_created']);
+    it('copies outputs, so mutating the input afterwards does not change it', () => {
+      const outputs: Record<string, typeof emit> = { com_order_created: emit };
+      const v = new VersionedArvoContract(param({ outputs }));
+      outputs.com_order_shipped = emit;
+      expect(Object.keys(v.outputs)).toEqual(['com_order_created']);
     });
   });
 });

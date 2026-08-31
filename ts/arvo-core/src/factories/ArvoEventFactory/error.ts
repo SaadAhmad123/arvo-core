@@ -37,31 +37,30 @@ export const buildError = <V extends VersionedArvoContract>(
   param: ErrorEventParam,
   options?: ContractEventOptions,
 ): Result<
-  ArvoEvent<V['handlerError']['type'], z.output<V['handlerError']['schema']>>,
+  ArvoEvent<V['error']['type'], z.output<V['error']['schema']>>,
   ArvoEventValidationError
 > => {
   const { error, domain, ...fields } = param;
 
-  const checked = checkPayload<V['handlerError']['schema']>(
-    contract.handlerError.schema,
+  const checked = checkPayload<V['error']['schema']>(
+    contract.error.schema,
     {
       error_name: error?.name,
       error_message: error?.message,
       error_stack: error?.stack ?? null,
     },
-    'handler error payload',
+    'error payload',
   );
 
   if (!checked.ok) return fromNeverthrow(err(checked.error));
 
-  return tryCreateArvoEvent<
-    V['handlerError']['type'],
-    z.output<V['handlerError']['schema']>
-  >({
-    ...fields,
-    type: contract.handlerError.type,
-    dataschema: contract.dataschema,
-    domain: domainFor(contract, domain, options),
-    data: checked.value,
-  });
+  return tryCreateArvoEvent<V['error']['type'], z.output<V['error']['schema']>>(
+    {
+      ...fields,
+      type: contract.error.type,
+      dataschema: contract.dataschema,
+      domain: domainFor(contract, domain, options),
+      data: checked.value,
+    },
+  );
 };

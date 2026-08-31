@@ -12,8 +12,8 @@ const valid = {
   type: 'com_order_create',
   versions: {
     '1.0.0': {
-      accepts: z.object({ items: z.array(z.string()) }),
-      emits: { com_order_created: z.object({ order_id: z.string() }) },
+      input: z.object({ items: z.array(z.string()) }),
+      outputs: { com_order_created: z.object({ order_id: z.string() }) },
     },
   },
 } as const;
@@ -21,7 +21,7 @@ const valid = {
 /** Not lowercase_snake_case, and a version key with a leading zero. */
 const invalid = {
   type: 'Com_Order_Create',
-  versions: { '01.0.0': { accepts: z.object({}), emits: {} } },
+  versions: { '01.0.0': { input: z.object({}), outputs: {} } },
 } as unknown as ArvoContractParam;
 
 describe('tryCreateArvoContract', () => {
@@ -77,18 +77,18 @@ describe('tryCreateArvoContract', () => {
       type: 'com_order_create',
       versions: {
         '1.0.0': {
-          accepts: z.object({ items: z.array(z.string()) }),
-          emits: {},
+          input: z.object({ items: z.array(z.string()) }),
+          outputs: {},
         },
-        '1.1.0': { accepts: z.object({ tier: z.string() }), emits: {} },
+        '1.1.0': { input: z.object({ tier: z.string() }), outputs: {} },
       },
     });
     if (!declared.ok) throw declared.error;
     expectTypeOf<
-      z.infer<(typeof declared.value.versions)['1.0.0']['accepts']>
+      z.infer<(typeof declared.value.versions)['1.0.0']['input']>
     >().toEqualTypeOf<{ items: string[] }>();
     expectTypeOf<
-      z.infer<(typeof declared.value.versions)['1.1.0']['accepts']>
+      z.infer<(typeof declared.value.versions)['1.1.0']['input']>
     >().toEqualTypeOf<{ tier: string }>();
   });
 });
