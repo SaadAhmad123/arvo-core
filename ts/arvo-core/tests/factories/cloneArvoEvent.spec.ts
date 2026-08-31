@@ -90,6 +90,39 @@ describe('a clone of an event', () => {
     expect(clone.executionunits).toBeNull();
   });
 
+  describe('a replacement given as undefined', () => {
+    // A caller assembling the overrides from computed values produces keys
+    // that are present and undefined. Each of these wiped the field before.
+    it('keeps the address', () => {
+      expect(cloneArvoEvent(source, { to: undefined }).to).toBe(source.to);
+    });
+
+    it('keeps the identity', () => {
+      expect(cloneArvoEvent(source, { id: undefined }).id).toBe(source.id);
+    });
+
+    it('keeps the subject, so the clone stays valid', () => {
+      expect(cloneArvoEvent(source, { subject: undefined }).subject).toBe(
+        source.subject,
+      );
+    });
+
+    it('replaces nothing at all where every key is undefined', () => {
+      const clone = cloneArvoEvent(source, {
+        to: undefined,
+        id: undefined,
+        subject: undefined,
+        domain: undefined,
+      });
+      expect(clone.toString()).toBe(cloneArvoEvent(source).toString());
+    });
+
+    it('still clears a field given as null', () => {
+      // `undefined` means "no replacement"; clearing is what null is for.
+      expect(cloneArvoEvent(source, { to: null }).to).toBeNull();
+    });
+  });
+
   it('leaves the event it cloned unchanged', () => {
     const before = source.toString();
     cloneArvoEvent(source, { to: 'com.audit.log' });

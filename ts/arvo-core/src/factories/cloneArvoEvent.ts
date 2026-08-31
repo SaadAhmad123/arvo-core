@@ -32,7 +32,8 @@ const traceOf = <T extends string, D extends Record<string, any>>(
  * included — a clone sent alongside its source needs a new `id`, consumers
  * deduplicating on that field alone. Nothing is derived: a clone is not a
  * child of its source, and `parentid`, `initid` and `depth` come across as
- * they stand.
+ * they stand. A field you give as `undefined` replaces nothing, the same as
+ * leaving it out; pass `null` to clear one that may be absent.
  *
  * Trace context takes a replacement `span` first, then a replacement
  * `traceparent` or `tracestate` field by field, then the cloned event's own. A
@@ -58,11 +59,13 @@ export const tryCloneArvoEvent = <
     span?: Span | SpanContext;
   };
 
-  // An event holds `null` where its input spells absence, and normalization
-  // input either, so the fields cross over as they stand.
+  const replacements = Object.fromEntries(
+    Object.entries(replaced).filter(([, value]) => value !== undefined),
+  );
+
   return tryCreateArvoEvent<T, D>({
     ...event,
-    ...replaced,
+    ...replacements,
     ...traceOf(event, overrides),
   } as Parameters<typeof tryCreateArvoEvent<T, D>>[0]);
 };
@@ -76,7 +79,8 @@ export const tryCloneArvoEvent = <
  * included — a clone sent alongside its source needs a new `id`, consumers
  * deduplicating on that field alone. Nothing is derived: a clone is not a
  * child of its source, and `parentid`, `initid` and `depth` come across as
- * they stand.
+ * they stand. A field you give as `undefined` replaces nothing, the same as
+ * leaving it out; pass `null` to clear one that may be absent.
  *
  * Trace context takes a replacement `span` first, then a replacement
  * `traceparent` or `tracestate` field by field, then the cloned event's own. A

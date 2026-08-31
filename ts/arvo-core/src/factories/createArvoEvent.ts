@@ -44,9 +44,6 @@ export const tryCreateArvoEvent = <
       ok(
         new ArvoEvent<T, D>({
           ...param,
-          // Defaulted after the spread, not before it: a caller who passes
-          // `subject: undefined` is saying nothing about the subject, and a
-          // spread would let that nothing win over the generated one.
           subject: param.subject ?? crypto.randomUUID(),
         }),
       ),
