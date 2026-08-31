@@ -32,15 +32,15 @@
 
 ## 6. Documentation and the archive
 
-- [ ] 6.1 `ts/arvo-core/README.md` — the contract example.
-- [ ] 6.2 `ts/sandbox/src/playground.ts` — declaration shapes, property reads, and five reads of parsed canonical JSON that only work if the wire key moved. Requires `pnpm build` here then `pnpm install` in the sandbox.
-- [ ] 6.3 `openspec/changes/archive/**` — normalize the text in place, dated directory names unchanged, so no record anywhere names a field that does not exist.
-- [ ] 6.4 `py/arvo-core/**` — seven prose mentions. No code impact; the Python package has no contract layer.
+- [x] 6.1 `ts/arvo-core/README.md` — the contract example.
+- [x] 6.2 `ts/sandbox/src/playground.ts` — declaration shapes, property reads, and five reads of parsed canonical JSON that only work if the wire key moved. Requires `pnpm build` here then `pnpm install` in the sandbox.
+- [x] 6.3 `openspec/changes/archive/**` — normalize the text in place, dated directory names unchanged, so no record anywhere names a field that does not exist.
+- [x] 6.4 `py/arvo-core/**` — checked and nothing to do. Every occurrence there is the English verb, about `ArvoEvent` or `json.loads` accepting a value; the Python package names no contract field.
 
 ## 7. Close out
 
-- [ ] 7.1 `npx tsc --noEmit`, `pnpm lint`, `pnpm test:coverage` — 1141 tests and 100% on all four metrics. Coverage is what proves no renamed branch was dropped.
-- [ ] 7.2 `openspec validate --specs` and `openspec validate rename-contract-declaration-fields --strict`.
-- [ ] 7.3 Run the sandbox playground end to end, confirming the canonical-form sections read the renamed keys back out of parsed JSON.
-- [ ] 7.4 Grep the repository for `accepts`, `emits` and `handlerError` outside `src-v3/`. Every surviving hit must be ordinary English, ADR-005's untouched **Handler error** section, or one of the deliberately-kept `HandlerError*` names. Read them all rather than trusting the count.
-- [ ] 7.5 Confirm nothing behavioural changed: no test expectation was weakened, and the three model-level handler-error rules are exactly as ADR-005 had them.
+- [x] 7.1 `npx tsc --noEmit`, `pnpm lint`, `pnpm test:coverage` — 1141 tests and 100% on all four metrics. Coverage is what proves no renamed branch was dropped.
+- [x] 7.2 `openspec validate --specs` and `openspec validate rename-contract-declaration-fields --strict`.
+- [x] 7.3 Run the sandbox playground end to end, confirming the canonical-form sections read the renamed keys back out of parsed JSON.
+- [x] 7.4 Grep the repository for `accepts`, `emits` and `handlerError` outside `src-v3/`. Every surviving hit must be ordinary English, ADR-005's untouched **Handler error** section, or one of the deliberately-kept `HandlerError*` names. Read them all rather than trusting the count.
+- [x] 7.5 Confirm nothing behavioural changed: no test expectation was weakened, and the three model-level handler-error rules are exactly as ADR-005 had them.

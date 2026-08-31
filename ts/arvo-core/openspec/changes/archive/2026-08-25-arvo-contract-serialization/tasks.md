@@ -37,14 +37,14 @@
 - [x] 6.1 Call `validateArvoContract` on the assembled param rather than constructing an `ArvoContract` and catching, merging its issues with the serializer's own into one report.
 - [x] 6.2 Construct the contract when nothing is reported, and return `{ contract, warnings, warningString }` frozen to its leaves.
 - [x] 6.3 Implement `deserialize` and `serialize` as throwing wrappers with no logic beyond unwrapping their primitive.
-- [x] 6.4 Add `tests/serializers/ArvoContractSerializer/deserialize.spec.ts`: a form this system produced reads back with identity fields and version keys intact; a form it did not produce reads back; a bad `emits` key is rejected and named; a non-JSON string fails at this boundary with the original parse failure retrievable.
+- [x] 6.4 Add `tests/serializers/ArvoContractSerializer/deserialize.spec.ts`: a form this system produced reads back with identity fields and version keys intact; a form it did not produce reads back; a bad `outputs` key is rejected and named; a non-JSON string fails at this boundary with the original parse failure retrievable.
 - [x] 6.5 Add the aggregation test: a form breaking a form-level rule *and* an evaluable contract-level rule reports both in one attempt.
 - [x] 6.6 Add the pair tests: each primitive does not raise for an expected failure, each companion raises what its primitive reported, and both agree on the same input.
 
 ## 7. Round trip
 
 - [x] 7.1 Add `tests/serializers/ArvoContractSerializer/round-trip.spec.ts` pinning that one crossing is faithful: string length, numeric range, and set membership each still reject a violating payload after serialize-then-deserialize, and a payload the original accepts is accepted after.
-- [x] 7.2 Add the recursive round trip: a self-referencing `accepts` serializes and reads back.
+- [x] 7.2 Add the recursive round trip: a self-referencing `input` serializes and reads back.
 - [x] 7.3 Do **not** add a test asserting repeated crossings preserve constraints. They do not — `email` and `uuid` stop being enforced after two. Record that in a comment beside the single-crossing tests so the absence reads as deliberate rather than as missing coverage.
 
 ## 8. Immutability

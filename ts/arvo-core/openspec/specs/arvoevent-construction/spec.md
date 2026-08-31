@@ -56,14 +56,14 @@ Its recipient SHALL default to the contract's type, that being the type whose ha
 
 ### Requirement: Building An Event A Version Puts Out
 
-The system SHALL build, from a version of a contract, any event that version declares it emits, the caller naming which one.
+The system SHALL build, from a version of a contract, any event that version declares it puts out, the caller naming which one.
 
-Only a type that version declares among its emitted events SHALL be accepted. Its dataschema SHALL be the version's own.
+Only a type that version declares among its outputs SHALL be accepted. Its dataschema SHALL be the version's own.
 
 No recipient SHALL be defaulted: where an emitted event goes is the caller's to state.
 
 #### Scenario: An emitted event
-- **WHEN** an event is built for a type the version declares it emits
+- **WHEN** an event is built for a type the version declares it puts out
 - **THEN** its type is that type
 - **AND** its dataschema is that version's dataschema
 
@@ -72,7 +72,7 @@ No recipient SHALL be defaulted: where an emitted event goes is the caller's to 
 - **THEN** the payload is checked against the declaration of the type named, not of the other
 
 #### Scenario: A type the version does not emit
-- **WHEN** an event is built for a type the version does not declare among its emitted events
+- **WHEN** an event is built for a type the version does not declare among its outputs
 - **THEN** building fails
 - **AND** the failure reports the type as the position, naming the types that version does declare
 

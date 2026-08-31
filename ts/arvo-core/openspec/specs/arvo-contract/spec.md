@@ -157,16 +157,16 @@ The system SHALL require a version's `input` schema, and every schema in its `ou
 
 The system SHALL reject a version whose `outputs` uses the contract's own `type` as a key, or uses the handler error type for that contract as a key.
 
-#### Scenario: Emit key equals the contract type
-- **WHEN** a contract of `type` `com_order_create` declares an emit keyed `com_order_create`
+#### Scenario: Output key equals the contract type
+- **WHEN** a contract of `type` `com_order_create` declares an output keyed `com_order_create`
 - **THEN** declaration fails
 
-#### Scenario: Emit key equals the handler error type
-- **WHEN** a contract of `type` `com_order_create` declares an emit keyed `handler_com_order_create_error`
+#### Scenario: Output key equals the handler error type
+- **WHEN** a contract of `type` `com_order_create` declares an output keyed `handler_com_order_create_error`
 - **THEN** declaration fails
 
 #### Scenario: An unrelated handler-error-shaped key is permitted
-- **WHEN** a contract of `type` `com_order_create` declares an emit keyed `handler_com_payment_process_error`
+- **WHEN** a contract of `type` `com_order_create` declares an output keyed `handler_com_payment_process_error`
 - **THEN** declaration succeeds
 - **AND** no cross-contract name reservation is applied
 
@@ -205,8 +205,8 @@ Versions of one contract SHALL be independent. The system SHALL NOT infer, inher
 - **WHEN** version `1.1.0` declares an `input` with a required field absent from version `1.0.0`
 - **THEN** declaration succeeds
 
-#### Scenario: Same emit type, different payload
-- **WHEN** two versions declare the same emit key with different payload schemas
+#### Scenario: Same output type, different payload
+- **WHEN** two versions declare the same output key with different payload schemas
 - **THEN** declaration succeeds
 - **AND** each version retains its own schema for that key
 
@@ -264,7 +264,7 @@ A rule SHALL NOT be reported when the value it would judge could not be establis
 - **THEN** the failure names the problem in both versions
 
 #### Scenario: Failure positions are identified
-- **WHEN** a version's emit key is malformed
+- **WHEN** a version's output key is malformed
 - **THEN** the reported failure identifies the version and the offending key
 
 #### Scenario: Aggregation is unaffected when `type` is valid
@@ -307,7 +307,7 @@ A version contract SHALL be declarable directly, without a containing contract, 
 - **THEN** declaration succeeds
 
 #### Scenario: Invalid standalone version
-- **WHEN** a version contract is declared directly with a malformed emit key
+- **WHEN** a version contract is declared directly with a malformed output key
 - **THEN** declaration fails on the same rule that would have rejected it within a contract
 
 #### Scenario: A contract's own materialization never fails version validation
@@ -331,10 +331,10 @@ A version contract SHALL determine whether an event matches one of the three sha
 - **THEN** the assertion succeeds
 - **AND** the result reports the scope as the accepted request
 
-#### Scenario: An event matching a declared emit
+#### Scenario: An event matching a declared output
 - **WHEN** an event whose `type` is one of the version's `outputs` keys and whose payload satisfies that emit's schema is asserted
 - **THEN** the assertion succeeds
-- **AND** the result reports the scope as an emit
+- **AND** the result reports the scope as an output
 
 #### Scenario: An event matching the handler error
 - **WHEN** an event whose `type` is the version's handler error type and whose payload satisfies the handler error shape is asserted

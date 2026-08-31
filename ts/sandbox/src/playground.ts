@@ -320,7 +320,7 @@ function semanticVersions(): void {
 /**
  * 9. Contracts.
  *
- * A contract declares what a handler accepts and everything it may emit,
+ * A contract declares what a handler takes in and everything it may put out,
  * one complete interface per version. Versions are independent -- 1.1.0 is
  * a separate interface from 1.0.0, not an extension of it.
  */
@@ -331,15 +331,15 @@ function contracts(): void {
 		type: "com_order_create",
 		versions: {
 			"1.0.0": {
-				accepts: z.object({ items: z.array(z.string()) }),
-				emits: { com_order_created: z.object({ order_id: z.string() }) },
+				input: z.object({ items: z.array(z.string()) }),
+				outputs: { com_order_created: z.object({ order_id: z.string() }) },
 			},
 			"1.1.0": {
-				accepts: z.object({
+				input: z.object({
 					items: z.array(z.string()),
 					shipping_tier: z.enum(["standard", "express"]),
 				}),
-				emits: {
+				outputs: {
 					com_order_created: z.object({
 						order_id: z.string(),
 						estimated_delivery: z.string(),
@@ -362,19 +362,19 @@ function contracts(): void {
 
 	// Payload types differ per version, so this is a compile error on 1.1.0
 	// and fine on 1.0.0.
-	type OrderV1 = z.infer<typeof v1.accepts>;
-	type OrderV11 = z.infer<typeof v11.accepts>;
+	type OrderV1 = z.infer<typeof v1.input>;
+	type OrderV11 = z.infer<typeof v11.input>;
 	const orderV1: OrderV1 = { items: ["sku-1"] };
 	const orderV11: OrderV11 = { items: ["sku-1"], shipping_tier: "express" };
-	console.log("1.0.0 accepts:", JSON.stringify(orderV1));
-	console.log("1.1.0 accepts:", JSON.stringify(orderV11));
+	console.log("1.0.0 input:", JSON.stringify(orderV1));
+	console.log("1.1.0 input:", JSON.stringify(orderV11));
 
 	// Indexing a version you did not declare is a compile error:
 	// contract.versions["9.9.9"];
 
-	// Every version carries a handler error, whatever its emits declares.
-	console.log("handler error:  ", v1.handlerError.type);
-	console.log("declared emits: ", Object.keys(v1.emits).join(", "));
+	// Every version carries a handler error, whatever its outputs declares.
+	console.log("handler error:  ", v1.error.type);
+	console.log("declared outputs: ", Object.keys(v1.outputs).join(", "));
 
 	// A broken declaration reports every problem at once, not the first.
 	try {
@@ -384,8 +384,8 @@ function contracts(): void {
 			versions: {
 				// biome-ignore lint/suspicious/noExplicitAny: deliberately wrong
 				"01.0.0": {
-					accepts: z.object({ a: z.string() }),
-					emits: { Bad_Key: z.object({ b: z.string() }) },
+					input: z.object({ a: z.string() }),
+					outputs: { Bad_Key: z.object({ b: z.string() }) },
 					// biome-ignore lint/suspicious/noExplicitAny: deliberately wrong
 				} as any,
 				// biome-ignore lint/suspicious/noExplicitAny: deliberately wrong
@@ -407,7 +407,7 @@ function contracts(): void {
 			domain: "Bad_Domain",
 			versions: {
 				// biome-ignore lint/suspicious/noExplicitAny: deliberately wrong
-				"01.0.0": { accepts: z.object({ a: z.string() }), emits: {} } as any,
+				"01.0.0": { input: z.object({ a: z.string() }), outputs: {} } as any,
 				// biome-ignore lint/suspicious/noExplicitAny: deliberately wrong
 			} as any,
 		});
@@ -428,8 +428,8 @@ function contractsAsJson(): void {
 		description: "Creates orders",
 		versions: {
 			"1.0.0": {
-				accepts: z.object({ amount: z.number().min(1) }),
-				emits: { com_order_created: z.object({ order_id: z.string() }) },
+				input: z.object({ amount: z.number().min(1) }),
+				outputs: { com_order_created: z.object({ order_id: z.string() }) },
 			},
 		},
 	});
@@ -443,12 +443,12 @@ function contractsAsJson(): void {
 	const { contract: back } = serializer.deserialize(schema);
 	console.log("\n  read back:      ", back.uri, Object.keys(back.versions));
 	console.log("  dataschema:     ", back.versions["1.0.0"].dataschema);
-	console.log("  handler error:  ", back.versions["1.0.0"].handlerError.type);
-	// `accepts` is a core zod schema, so parsing goes through zod's standalone
+	console.log("  handler error:  ", back.versions["1.0.0"].error.type);
+	// `input` is a core zod schema, so parsing goes through zod's standalone
 	// form rather than a method on it.
 	console.log(
 		"  still rejects amount 0?",
-		!z.safeParse(back.versions["1.0.0"].accepts, { amount: 0 }).success,
+		!z.safeParse(back.versions["1.0.0"].input, { amount: 0 }).success,
 	);
 
 	// JSON Schema cannot carry every constraint zod can. What it cannot carry
@@ -457,8 +457,8 @@ function contractsAsJson(): void {
 		type: "com_report_run",
 		versions: {
 			"1.0.0": {
-				accepts: z.object({ from: z.date(), label: z.string() }),
-				emits: {},
+				input: z.object({ from: z.date(), label: z.string() }),
+				outputs: {},
 			},
 		},
 	});
@@ -472,13 +472,13 @@ function contractsAsJson(): void {
 		type: "com_a_b",
 		versions: {
 			"1.0.0": {
-				accepts: {
+				input: {
 					$schema: "https://json-schema.org/draft/2020-12/schema",
 					type: "object",
 					properties: { a: { type: "string" } },
 					unevaluatedProperties: false,
 				},
-				emits: {},
+				outputs: {},
 			},
 		},
 	});
@@ -507,18 +507,18 @@ function whatACrossingCosts(): void {
 		type: "com_report_run",
 		versions: {
 			"1.0.0": {
-				accepts: z.object({ from: z.date(), label: z.string().min(2) }),
-				emits: {},
+				input: z.object({ from: z.date(), label: z.string().min(2) }),
+				outputs: {},
 			},
 		},
 	});
 	const dated = serializer.serialize(withDate);
-	console.log("a Date in accepts:");
+	console.log("a Date in input:");
 	console.log(indent(dated.warningString ?? "nothing lost"));
 	console.log(
 		"  the position now carries:",
 		JSON.stringify(
-			JSON.parse(dated.schema).versions["1.0.0"].accepts.properties.from,
+			JSON.parse(dated.schema).versions["1.0.0"].input.properties.from,
 		),
 	);
 
@@ -527,7 +527,7 @@ function whatACrossingCosts(): void {
 	const withUrl = new ArvoContract({
 		type: "com_link_check",
 		versions: {
-			"1.0.0": { accepts: z.object({ target: z.url() }), emits: {} },
+			"1.0.0": { input: z.object({ target: z.url() }), outputs: {} },
 		},
 	});
 	const linked = serializer.serialize(withUrl);
@@ -536,11 +536,11 @@ function whatACrossingCosts(): void {
 	const { contract: linkedBack } = serializer.deserialize(linked.schema);
 	console.log(
 		"  original rejects 'nope'? ",
-		!z.safeParse(withUrl.versions["1.0.0"].accepts, { target: "nope" }).success,
+		!z.safeParse(withUrl.versions["1.0.0"].input, { target: "nope" }).success,
 	);
 	console.log(
 		"  read back rejects it?    ",
-		!z.safeParse(linkedBack.versions["1.0.0"].accepts, { target: "nope" })
+		!z.safeParse(linkedBack.versions["1.0.0"].input, { target: "nope" })
 			.success,
 	);
 
@@ -549,7 +549,7 @@ function whatACrossingCosts(): void {
 	const withEmail = new ArvoContract({
 		type: "com_user_invite",
 		versions: {
-			"1.0.0": { accepts: z.object({ to: z.email() }), emits: {} },
+			"1.0.0": { input: z.object({ to: z.email() }), outputs: {} },
 		},
 	});
 	const mailed = serializer.serialize(withEmail);
@@ -558,7 +558,7 @@ function whatACrossingCosts(): void {
 	console.log(
 		"  read back rejects 'nope'?",
 		!z.safeParse(
-			serializer.deserialize(mailed.schema).contract.versions["1.0.0"].accepts,
+			serializer.deserialize(mailed.schema).contract.versions["1.0.0"].input,
 			{ to: "nope" },
 		).success,
 	);
@@ -568,8 +568,8 @@ function whatACrossingCosts(): void {
 		type: "com_order_place",
 		versions: {
 			"1.0.0": {
-				accepts: z.object({ sku: z.string(), qty: z.int().min(1) }),
-				emits: {},
+				input: z.object({ sku: z.string(), qty: z.int().min(1) }),
+				outputs: {},
 			},
 		},
 	});
@@ -595,7 +595,7 @@ function readingAForeignForm(): void {
 		type: "com_payment_process",
 		versions: {
 			"1.0.0": {
-				accepts: {
+				input: {
 					$schema: DIALECT,
 					type: "object",
 					properties: {
@@ -604,7 +604,7 @@ function readingAForeignForm(): void {
 					},
 					required: ["amount", "currency"],
 				},
-				emits: {
+				outputs: {
 					com_payment_processed: {
 						$schema: DIALECT,
 						type: "object",
@@ -620,25 +620,22 @@ function readingAForeignForm(): void {
 	console.log("uri derived from type:", contract.uri);
 	console.log("description/domain:   ", contract.description, contract.domain);
 	console.log("dataschema:           ", contract.versions["1.0.0"].dataschema);
-	console.log(
-		"handler error:        ",
-		contract.versions["1.0.0"].handlerError.type,
-	);
+	console.log("handler error:        ", contract.versions["1.0.0"].error.type);
 	console.log("losses:               ", warningString ?? "none");
 
-	const accepts = contract.versions["1.0.0"].accepts;
+	const input = contract.versions["1.0.0"].input;
 	console.log("\nthe constraints still hold:");
 	console.log(
 		"  { amount: 5, currency: 'GBP' } ->",
-		z.safeParse(accepts, { amount: 5, currency: "GBP" }).success,
+		z.safeParse(input, { amount: 5, currency: "GBP" }).success,
 	);
 	console.log(
 		"  { amount: 0, currency: 'GBP' } ->",
-		z.safeParse(accepts, { amount: 0, currency: "GBP" }).success,
+		z.safeParse(input, { amount: 0, currency: "GBP" }).success,
 	);
 	console.log(
 		"  { amount: 5, currency: 'GB' }  ->",
-		z.safeParse(accepts, { amount: 5, currency: "GB" }).success,
+		z.safeParse(input, { amount: 5, currency: "GB" }).success,
 	);
 }
 
@@ -676,7 +673,7 @@ function whenAFormIsRejected(): void {
 			type: "com_a_b",
 			domain: "Bad_Domain",
 			versions: {
-				"01.0.0": { accepts: objectSchema, emits: { Bad_Key: objectSchema } },
+				"01.0.0": { input: objectSchema, outputs: { Bad_Key: objectSchema } },
 			},
 		}),
 	);
@@ -689,7 +686,7 @@ function whenAFormIsRejected(): void {
 			type: "com_a_b",
 			domain: "Bad_Domain",
 			versions: {
-				"1.0.0": { accepts: { $schema: DIALECT, type: "string" }, emits: {} },
+				"1.0.0": { input: { $schema: DIALECT, type: "string" }, outputs: {} },
 			},
 		}),
 	);
@@ -702,13 +699,13 @@ function whenAFormIsRejected(): void {
 			type: "com_a_b",
 			versions: {
 				"1.0.0": {
-					accepts: {
+					input: {
 						$schema: DIALECT,
 						type: "object",
 						properties: { a: { type: "string" } },
 						unevaluatedProperties: false,
 					},
-					emits: {},
+					outputs: {},
 				},
 			},
 		}),
@@ -729,12 +726,12 @@ function assertingEvents(): void {
 		type: "com_order_create",
 		versions: {
 			"1.0.0": {
-				accepts: z.object({ items: z.array(z.string()) }),
-				emits: { com_order_created: z.object({ order_id: z.string() }) },
+				input: z.object({ items: z.array(z.string()) }),
+				outputs: { com_order_created: z.object({ order_id: z.string() }) },
 			},
 			"1.1.0": {
-				accepts: z.object({ items: z.array(z.string()), tier: z.string() }),
-				emits: { com_order_shipped: z.object({ eta: z.string() }) },
+				input: z.object({ items: z.array(z.string()), tier: z.string() }),
+				outputs: { com_order_shipped: z.object({ eta: z.string() }) },
 			},
 		},
 	});
@@ -779,7 +776,7 @@ function assertingEvents(): void {
 	const found = orders.assert(
 		arriving("com_order_shipped", { eta: "tuesday" }, "1.1.0"),
 	);
-	if (found.version === "1.1.0" && found.scope === "emits") {
+	if (found.version === "1.1.0" && found.scope === "output") {
 		const shipped = orders.versions["1.1.0"].assert(
 			found.event,
 			"com_order_shipped",
@@ -872,20 +869,20 @@ function buildingEventsFromAContract(): void {
 		domain: "orders",
 		versions: {
 			"1.0.0": {
-				accepts: z.object({
+				input: z.object({
 					items: z.array(z.string()),
 					currency: z.string().default("GBP"),
 				}),
-				emits: { com_order_created: z.object({ order_id: z.string() }) },
+				outputs: { com_order_created: z.object({ order_id: z.string() }) },
 			},
 		},
 	});
 
 	const factory = createArvoEventFactory(orders.versions["1.0.0"]);
 
-	// The event the version accepts. Type, dataschema and recipient come from
+	// The event the version input. Type, dataschema and recipient come from
 	// the contract; the schema's default arrives filled in.
-	const requested = factory.createAccepted({
+	const requested = factory.createInput({
 		source: "com.web.checkout",
 		subject: "order-42",
 		data: { items: ["book"] },
@@ -894,9 +891,9 @@ function buildingEventsFromAContract(): void {
 	console.log(`    dataschema ${requested.dataschema}`);
 	console.log(`    data       ${JSON.stringify(requested.data)}`);
 
-	// One it emits. Only a declared emit key compiles, and no recipient is
+	// One it outputs. Only a declared emit key compiles, and no recipient is
 	// invented — where an emitted event goes is the caller's to say.
-	const emitted = factory.createEmitted({
+	const emitted = factory.createOutput({
 		type: "com_order_created",
 		source: "com.order.service",
 		subject: requested.subject,
@@ -923,11 +920,11 @@ function buildingEventsFromAContract(): void {
 	const domains: Array<[string, string | null]> = [
 		[
 			"omitted",
-			factory.createAccepted({ source: "s", data: { items: [] } }).domain,
+			factory.createInput({ source: "s", data: { items: [] } }).domain,
 		],
 		[
 			"a literal",
-			factory.createAccepted({
+			factory.createInput({
 				source: "s",
 				data: { items: [] },
 				domain: "orders_priority",
@@ -935,7 +932,7 @@ function buildingEventsFromAContract(): void {
 		],
 		[
 			"ArvoDomain.LOCAL",
-			factory.createAccepted({
+			factory.createInput({
 				source: "s",
 				data: { items: [] },
 				domain: ArvoDomain.LOCAL,
@@ -943,7 +940,7 @@ function buildingEventsFromAContract(): void {
 		],
 		[
 			"FROM_EVENT_CONTRACT",
-			factory.createAccepted({
+			factory.createInput({
 				source: "s",
 				data: { items: [] },
 				domain: ArvoDomain.FROM_EVENT_CONTRACT,
@@ -951,7 +948,7 @@ function buildingEventsFromAContract(): void {
 		],
 		[
 			"FROM_TRIGGERING_EVENT",
-			factory.createAccepted(
+			factory.createInput(
 				{
 					source: "s",
 					data: { items: [] },
@@ -974,7 +971,7 @@ function buildingEventsFromAContract(): void {
 		],
 		[
 			"FROM_TRIGGERING_EVENT, none supplied",
-			factory.createAccepted({
+			factory.createInput({
 				source: "s",
 				data: { items: [] },
 				domain: ArvoDomain.FROM_TRIGGERING_EVENT,
@@ -1006,7 +1003,7 @@ function buildingEventsFromAContract(): void {
 		[
 			"a payload the schema rejects",
 			() =>
-				factory.tryCreateAccepted({
+				factory.tryCreateInput({
 					source: "s",
 					data: { items: [42] } as never,
 				}),
@@ -1014,7 +1011,7 @@ function buildingEventsFromAContract(): void {
 		[
 			"an emit type the version does not declare",
 			() =>
-				factory.tryCreateEmitted({
+				factory.tryCreateOutput({
 					type: "com_order_refunded" as "com_order_created",
 					source: "s",
 					data: {} as never,

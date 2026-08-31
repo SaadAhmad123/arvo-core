@@ -6,13 +6,13 @@ A contract's portable identity is its canonical JSON form, not the code that dec
 
 ### Requirement: Canonical Form Production
 
-The system SHALL produce a contract's canonical form as JSON, with every schema-bearing position — a version's `accepts` and each entry in its `emits` — expressed as JSON Schema 2020-12 per [ADR-005](../../../../../docs/adr/005-arvocontract-structure.md).
+The system SHALL produce a contract's canonical form as JSON, with every schema-bearing position — a version's `input` and each entry in its `outputs` — expressed as JSON Schema 2020-12 per [ADR-005](../../../../../docs/adr/005-arvocontract-structure.md).
 
 The system SHALL declare `"$schema": "https://json-schema.org/draft/2020-12/schema"` explicitly at every schema-bearing position. The system SHALL NOT emit a form targeting any other dialect, and SHALL NOT accept a caller instruction to do so.
 
 #### Scenario: Every schema position declares the dialect
-- **WHEN** a contract with two versions, each declaring emits, is serialized
-- **THEN** every `accepts` and every emit schema carries the 2020-12 `$schema` declaration
+- **WHEN** a contract with two versions, each declaring outputs, is serialized
+- **THEN** every `input` and every emit schema carries the 2020-12 `$schema` declaration
 
 #### Scenario: The dialect is not caller-selectable
 - **WHEN** a caller supplies conversion options
@@ -51,7 +51,7 @@ The system SHALL apply the contract's own declaration rules to the reconstructed
 - **THEN** a contract is produced
 
 #### Scenario: Declaration rules still apply on the way in
-- **WHEN** a form carries an `emits` key that violates the contract-declared identifier grammar
+- **WHEN** a form carries an `outputs` key that violates the contract-declared identifier grammar
 - **THEN** deserialization fails
 - **AND** the failure names that key
 
@@ -60,7 +60,7 @@ The system SHALL apply the contract's own declaration rules to the reconstructed
 The system SHALL check a form's own structural rules against the JSON, before converting any schema to a native representation. This SHALL include the literal `"type": "object"` keyword required at each schema-bearing position.
 
 #### Scenario: A schema position without the literal keyword is rejected
-- **WHEN** a form's `accepts` describes an object but carries no top-level `"type": "object"` keyword
+- **WHEN** a form's `input` describes an object but carries no top-level `"type": "object"` keyword
 - **THEN** deserialization fails
 - **AND** the failure names that position
 
@@ -77,7 +77,7 @@ A lost constraint SHALL NOT be reported as a failure. Conversion is best-effort 
 The system SHALL distinguish a constraint **dropped** from a check **demoted** — one that survives in the form as an annotation no implementation is permitted to enforce.
 
 #### Scenario: An unrepresentable type is reported, not raised
-- **WHEN** a contract whose `accepts` contains a constraint JSON Schema 2020-12 cannot express is serialized
+- **WHEN** a contract whose `input` contains a constraint JSON Schema 2020-12 cannot express is serialized
 - **THEN** serialization succeeds
 - **AND** the result reports that constraint and the position it occupied
 
@@ -170,8 +170,8 @@ Where a caller supplies its own handling of unrepresentable constructs, that han
 
 The system SHALL express a self-referencing schema by reference rather than refusing to produce a form for it.
 
-#### Scenario: A recursive accepts schema serializes
-- **WHEN** a contract whose `accepts` refers to itself is serialized
+#### Scenario: A recursive input schema serializes
+- **WHEN** a contract whose `input` refers to itself is serialized
 - **THEN** serialization succeeds
 - **AND** the form expresses the recursion by reference
 
@@ -195,7 +195,7 @@ The system SHALL preserve, across a single outbound-then-inbound crossing, every
 The system does not guarantee that repeated crossings preserve a constraint.
 
 #### Scenario: A constraint survives one crossing
-- **WHEN** a contract whose `accepts` constrains a string's length, a number's range, or a value's membership of a set is serialized and deserialized once
+- **WHEN** a contract whose `input` constrains a string's length, a number's range, or a value's membership of a set is serialized and deserialized once
 - **THEN** the reconstructed contract still rejects a payload violating that constraint
 
 #### Scenario: A payload valid before a crossing is valid after

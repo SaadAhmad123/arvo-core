@@ -2,25 +2,25 @@
 
 ### Requirement: Asserting An Event Against A Version
 
-A version contract SHALL determine whether an event matches one of the three shapes it declares — its `accepts`, one of its `emits`, or its handler error — and SHALL report which of the three matched.
+A version contract SHALL determine whether an event matches one of the three shapes it declares — its `input`, one of its `outputs`, or its handler error — and SHALL report which of the three matched.
 
-#### Scenario: An event matching accepts
-- **WHEN** an event whose `type` is the contract's `type` and whose payload satisfies that version's `accepts` is asserted
+#### Scenario: An event matching the input
+- **WHEN** an event whose `type` is the contract's `type` and whose payload satisfies that version's `input` is asserted
 - **THEN** the assertion succeeds
 - **AND** the result reports the scope as the accepted request
 
-#### Scenario: An event matching a declared emit
-- **WHEN** an event whose `type` is one of the version's `emits` keys and whose payload satisfies that emit's schema is asserted
+#### Scenario: An event matching a declared output
+- **WHEN** an event whose `type` is one of the version's `outputs` keys and whose payload satisfies that emit's schema is asserted
 - **THEN** the assertion succeeds
-- **AND** the result reports the scope as an emit
+- **AND** the result reports the scope as an output
 
 #### Scenario: An event matching the handler error
 - **WHEN** an event whose `type` is the version's handler error type and whose payload satisfies the handler error shape is asserted
 - **THEN** the assertion succeeds
 - **AND** the result reports the scope as the handler error
 
-#### Scenario: The handler error is assertable for a version declaring no emits
-- **WHEN** a version declaring an empty `emits` asserts its handler error event
+#### Scenario: The handler error is assertable for a version declaring no outputs
+- **WHEN** a version declaring an empty `outputs` asserts its handler error event
 - **THEN** the assertion succeeds
 
 #### Scenario: An event matching none of the three
@@ -130,7 +130,7 @@ Beyond checking the `dataschema` against the versions it declares, the contract 
 
 A version contract SHALL accept an optional statement of which type the caller expects, and SHALL confirm or contradict it.
 
-What may be expected SHALL be limited to what that version declares: its `type`, one of its `emits` keys, or its handler error type. Expecting anything else SHALL fail.
+What may be expected SHALL be limited to what that version declares: its `type`, one of its `outputs` keys, or its handler error type. Expecting anything else SHALL fail.
 
 A contract SHALL NOT accept such a statement, the version it would be checked against not yet being known.
 
