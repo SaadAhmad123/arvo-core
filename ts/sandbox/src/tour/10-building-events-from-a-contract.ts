@@ -74,12 +74,12 @@ const theThreeKinds = (): void => {
   // Its handler error, composed from the error itself.
   try {
     throw new Error('the payment gateway timed out');
-  } catch (caught) {
+  } catch (error) {
     const failed = factory.createError({
       source: 'com.order.service',
       subject: requested.subject,
       executionid: requested.executionid,
-      error: caught as Error,
+      error: error as Error,
     });
     console.log(`  error:  ${failed.type}`);
     console.log(`    message     ${failed.data.error_message}`);
