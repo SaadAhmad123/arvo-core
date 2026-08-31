@@ -34,7 +34,7 @@ No ADR governs building an event from a contract. [ADR-001](../../../../docs/adr
 - **All three contract-aware variants check the payload against the version's own schema**, the handler error's included, and what the check produces is what the event carries — so a value the schema declares a default for is present even when the caller omitted it.
 - **The factory's three supply `type` and `dataschema`** from the version. The caller never writes either, except that `createOutput` names which emitted `type` it means.
 - **`createInput` also defaults `to`** — the event it builds is a request, and the handler bound to that contract is who accepts it, so `to` falls back to the contract's `type` when the caller says nothing. `createOutput` and `createError` default nothing: where an emitted event or an error goes is fully the caller's decision.
-- **`domain` takes a value or an instruction.** Omitted means the event has no domain. A string is used as it stands. One of `ArvoDomain`'s symbols is resolved before the event is built — `FROM_EVENT_CONTRACT` reads the contract the factory already holds; `FROM_SELF_CONTRACT` and `FROM_TRIGGERING_EVENT` read sources the caller supplies in the options. The `ArvoDomain` module already ships; this change consumes it.
+- **`domain` takes a value or an instruction.** Omitted means the event has no domain. A string is used as it stands. One of `ArvoDomain`'s symbols is resolved before the event is built — `FROM_EVENT_CONTRACT` reads the contract the factory already holds; `FROM_SELF_CONTRACT` and `FROM_TRIGGERING_EVENT` read sources the caller binds on the factory. The `ArvoDomain` module already ships; this change consumes it.
 - **Only one field is ever filled in silently**, and only where nothing could supply it: `subject`, whose omission means this event starts its own execution.
 - **No new error type.** A factory does exactly two things — build an event and validate its creation — and both are the event failing to come into being, so every failure is the event's own `ArvoEventValidationError`. Its documentation currently says a payload failing contract validation is a separate check; that sentence is amended by this change, since here the contract's schema is part of what creation means.
 - **BREAKING**: none. Additive.
@@ -58,28 +58,27 @@ const tryCloneArvoEvent: <T extends string, D extends Record<string, any>>(
 /** Standalone: a factory bound to one version. */
 const tryCreateArvoEventFactory: <V extends VersionedArvoContract>(
   contract: V,
+  options?: ContractEventOptions,
 ) => Result<ArvoEventFactory<V>, ArvoContractValidationError>;
 
-/** The version is held, so it is not an argument again. */
+/** The version and the domain sources are held, so neither is an argument again. */
 class ArvoEventFactory<V extends VersionedArvoContract> {
   readonly contract: V;
+  readonly options?: ContractEventOptions;
 
   /** The event this version takes in. */
   tryCreateInput(
     param: ContractEventParam<V['input']>,
-    options?: ContractEventOptions,
   ): Result<ArvoEvent<V['type'], z.output<V['input']>>, ArvoEventValidationError>;
 
   /** One this version puts out. Its handler error is not among them. */
-  tryCreateOutput<E extends keyof V['output'] & string>(
-    param: { type: E } & ContractEventParam<V['output'][E]>,
-    options?: ContractEventOptions,
-  ): Result<ArvoEvent<E, z.output<V['output'][E]>>, ArvoEventValidationError>;
+  tryCreateOutput<E extends keyof V['outputs'] & string>(
+    param: { type: E } & ContractEventParam<V['outputs'][E]>,
+  ): Result<ArvoEvent<E, z.output<V['outputs'][E]>>, ArvoEventValidationError>;
 
   /** This version's handler error, from the error itself. */
   tryCreateError(
     param: ErrorEventParam,
-    options?: ContractEventOptions,
   ): Result<
     ArvoEvent<V['error']['type'], z.output<V['error']['schema']>>,
     ArvoEventValidationError
@@ -165,10 +164,13 @@ catch (caught) {
 orders.createInput({ source, data });                                   // no domain
 orders.createInput({ source, data, domain: 'orders_priority' });        // this one
 orders.createInput({ source, data, domain: ArvoDomain.FROM_EVENT_CONTRACT });
-orders.createOutput(
-  { type: 'com_order_created', source, data, domain: ArvoDomain.FROM_TRIGGERING_EVENT },
-  { domainCtx: { triggeringEvent: incoming } },   // the symbol's source
-);
+// A symbol's other two sources are bound on the factory, once, not per event.
+const orders = createArvoEventFactory(contract.versions['1.0.0'], {
+  domainCtx: { triggeringEvent: incoming },
+});
+orders.createOutput({
+  type: 'com_order_created', source, data, domain: ArvoDomain.FROM_TRIGGERING_EVENT,
+});
 ```
 
 ```ts
@@ -198,7 +200,7 @@ createArvoEvent ─────────────────────�
 
 - **`tryCreateArvoEvent`** hands the constructor everything it was given plus a generated `subject`, converts the constructor's validation throw into the error channel, and rethrows anything unexpected.
 - **`checkPayload`** runs zod's standalone `safeParse` — a version's schemas are `zod/v4/core` schemas and carry no methods of their own — and returns the schema's output, which becomes the event's payload. Its issues carry zod's path beneath `data`, zod's message as it stands, and the value found at that position, which zod does not report and is fetched by walking the payload.
-- **`domainFor`** resolves the `domain` input through the `ArvoDomain` resolver, with the factory's own contract as the event-contract source and the caller's `options.domainCtx` supplying the other two. A missing source reads as `null`, and `null` becomes omission on the way into the constructor.
+- **`domainFor`** resolves the `domain` input through the `ArvoDomain` resolver, with the factory's own contract as the event-contract source and the `domainCtx` bound on the factory supplying the other two. A missing source reads as `null`, and `null` becomes omission on the way into the constructor.
 - **`createOutput` guards its schema lookup at runtime.** An undeclared `type` cannot compile, but JavaScript callers exist, and without the guard the missing schema reaches the payload check, which throws — out of a function whose purpose is to report.
 - **`createError` checks the payload it built itself.** `error?.name` on something that is not an `Error` yields `undefined`, and the check reports it — the alternative is a `TypeError` thrown from a `tryX`.
 - **`tryCreateArvoEventFactory` guards its contract.** Anything that is not a version of a contract is reported rather than surfacing later as a `TypeError` from whichever method was called first.

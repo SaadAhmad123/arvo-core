@@ -276,7 +276,7 @@ const resolveScope = (
  * Checks an event against one version's declaration.
  *
  * The single definition of "this event matches this version", reached by both
- * a contract and a version contract, so an event a contract input is
+ * a contract and a version contract, so an event a contract takes in is
  * exactly an event one of its versions input.
  *
  * Five checks run in one order, and the first to fail is reported alone,

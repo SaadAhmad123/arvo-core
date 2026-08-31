@@ -89,11 +89,13 @@ The first is a type lie and the more dangerous of the two. `z.output` types the 
 
 ### `domain` is absent, a value, or an instruction
 
-Omitted, the event has no domain — nothing is inherited silently, including the contract's own. A string is used as it stands. One of `ArvoDomain`'s symbols is resolved before the event is built: the factory supplies the contract it already holds as the event-contract source, and the caller supplies the other two sources — the building handler's contract, the triggering event — in `options.domainCtx`. A symbol whose source is absent resolves to `null`, which becomes omission at the constructor.
+Omitted, the event has no domain — nothing is inherited silently, including the contract's own. A string is used as it stands. One of `ArvoDomain`'s symbols is resolved before the event is built: the factory supplies the contract it already holds as the event-contract source, and the other two sources — the building handler's contract, the triggering event — are bound on the factory in `options.domainCtx`. A symbol whose source is absent resolves to `null`, which becomes omission at the constructor.
 
 *Why omission is not the contract's domain:* an earlier draft defaulted it that way, leaning on ADR-005's line that the field exists so factory-built events can inherit it. But that makes omission mean something, and a caller who wants the contract's domain can say so in one symbol — `ArvoDomain.FROM_EVENT_CONTRACT`. Explicit beats inherited, and the guard is `domain === undefined` rather than falsiness, so an empty string still reaches the resolver and fails validation loudly instead of being swallowed.
 
 *Why the sources live in `options`, not the param:* the param is the event's fields. `selfContract` and `triggeringEvent` are machinery for resolving one field and never appear on an event — putting them beside `subject` and `data` makes the param two things at once. `error` stays in the param for the opposite reason: it *is* the payload.
+
+*Why `options` is bound on the factory, not passed per call:* both sources describe whoever is building, not the event being built, so they are the same for every event of one invocation. Accepting them per call would mean repeating a constant at each site, where omitting it once silently degrades a symbol to `null` rather than failing, and would leave two places to supply one thing with a precedence rule invisible at the site that omits it. The consequence is deliberate: `triggeringEvent` is the event that arrived, so a factory holding one belongs to a single invocation rather than to module scope.
 
 ### Nothing derived is derived twice
 

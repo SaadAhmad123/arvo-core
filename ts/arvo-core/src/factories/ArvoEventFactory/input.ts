@@ -11,7 +11,7 @@ import { checkPayload } from './payload.js';
 import type { ContractEventOptions, ContractEventParam } from './types.js';
 
 /**
- * The event a version input, built from that version.
+ * The event a version takes in, built from that version.
  *
  * `type` and `dataschema` come from the contract, so neither is passed. The
  * payload is checked against the version's `input`, and what that check
@@ -19,7 +19,7 @@ import type { ContractEventOptions, ContractEventParam } from './types.js';
  * default for is present even where the caller omitted it.
  *
  * `to` defaults to the contract's `type`: a request is addressed to the
- * handler that input it. Pass one to address it elsewhere.
+ * handler that takes it in. Pass one to address it elsewhere.
  *
  * `domain` omitted means the event has no domain. Pass a string to set one, or
  * one of `ArvoDomain`'s symbols to read one from somewhere — supplying that

@@ -225,6 +225,8 @@ A domain not supplied SHALL mean the event has no domain. A value supplied SHALL
 
 The sources a request may name SHALL be: no domain at all, the domain of the contract the event is built from, the domain of the contract of whoever is building it, and the domain of the event that caused it.
 
+The sources a request may read from SHALL be supplied once, where the version is bound for building, and SHALL apply to every event built from that binding. They SHALL NOT be accepted per event, so no two events of one binding can resolve the same request differently.
+
 A request naming a source the caller did not supply SHALL resolve to no domain.
 
 The built event's domain SHALL always be a plain value or absent; a request SHALL never reach the event.
@@ -252,6 +254,10 @@ The built event's domain SHALL always be a plain value or absent; a request SHAL
 #### Scenario: Read from the causing event
 - **WHEN** an event is built requesting the domain of the event that caused it, and that event is supplied
 - **THEN** the built event carries that event's domain
+
+#### Scenario: Sources bound once serve every event built
+- **WHEN** several events are built from one binding that was given a source, each requesting a domain from it
+- **THEN** every built event carries that source's domain
 
 #### Scenario: Requested from a source that was not supplied
 - **WHEN** an event is built requesting a domain from a source the caller did not supply

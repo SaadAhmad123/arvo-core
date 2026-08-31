@@ -25,6 +25,13 @@ const unwrap = <R>(built: Result<R, ArvoEventValidationError>): R => {
  * each event's `type` and `dataschema`, and its own schema checks each payload.
  * Reach one through {@link createArvoEventFactory}.
  *
+ * The sources an `ArvoDomain` symbol reads from are bound here too, as the
+ * second argument. They describe whoever is building rather than the event
+ * being built, so they are the same for every event of one invocation — which
+ * is also where a factory using them belongs. `triggeringEvent` is the event
+ * that arrived, so a factory holding one is per invocation, not per module.
+ * Without domain symbols there is nothing to bind and either place will do.
+ *
  * Every method comes in two forms. `createX` returns the event and throws if it
  * would be invalid; `tryCreateX` reports the failure as a value instead — for
  * a payload from outside, where a failure is an outcome rather than a bug.
@@ -55,17 +62,26 @@ export class ArvoEventFactory<
   /** The version every event built here belongs to. */
   readonly contract: V;
 
-  /** @param contract - The version to build events for. */
-  constructor(contract: V) {
+  /** The sources every `ArvoDomain` symbol resolved here reads from. */
+  readonly options?: ContractEventOptions;
+
+  /**
+   * @param contract - The version to build events for.
+   * @param options - The sources an `ArvoDomain` symbol may name. Bound here
+   * rather than per call, since they describe the invocation rather than the
+   * event; see the class doc for what that means for where you build one.
+   */
+  constructor(contract: V, options?: ContractEventOptions) {
     this.contract = contract;
+    this.options = options;
     Object.freeze(this);
   }
 
   /**
-   * The event this version input, throwing if it would be invalid.
+   * The event this version takes in, throwing if it would be invalid.
    *
    * `type` and `dataschema` come from the contract. `to` defaults to the
-   * contract's `type` — a request is addressed to the handler that input it —
+   * contract's `type` — a request is addressed to the handler that takes it in —
    * and a `to` you pass wins. `domain` omitted means the event has no domain;
    * pass a string, or an `ArvoDomain` symbol to read one from somewhere.
    *
@@ -90,17 +106,16 @@ export class ArvoEventFactory<
    */
   createInput(
     param: ContractEventParam<V['input']>,
-    options?: ContractEventOptions,
   ): ArvoEvent<V['type'], z.output<V['input']>> {
-    return unwrap(buildInput(this.contract, param, options));
+    return unwrap(buildInput(this.contract, param, this.options));
   }
 
   /**
-   * The event this version input, reporting an invalid one rather than
+   * The event this version takes in, reporting an invalid one rather than
    * throwing.
    *
    * `type` and `dataschema` come from the contract. `to` defaults to the
-   * contract's `type` — a request is addressed to the handler that input it —
+   * contract's `type` — a request is addressed to the handler that takes it in —
    * and a `to` you pass wins. `domain` omitted means the event has no domain;
    * pass a string, or an `ArvoDomain` symbol to read one from somewhere.
    *
@@ -120,12 +135,11 @@ export class ArvoEventFactory<
    */
   tryCreateInput(
     param: ContractEventParam<V['input']>,
-    options?: ContractEventOptions,
   ): Result<
     ArvoEvent<V['type'], z.output<V['input']>>,
     ArvoEventValidationError
   > {
-    return buildInput(this.contract, param, options);
+    return buildInput(this.contract, param, this.options);
   }
 
   /**
@@ -156,9 +170,8 @@ export class ArvoEventFactory<
    */
   createOutput<E extends keyof V['outputs'] & string>(
     param: { type: E } & ContractEventParam<V['outputs'][E]>,
-    options?: ContractEventOptions,
   ): ArvoEvent<E, z.output<V['outputs'][E]>> {
-    return unwrap(buildOutput(this.contract, param, options));
+    return unwrap(buildOutput(this.contract, param, this.options));
   }
 
   /**
@@ -187,9 +200,8 @@ export class ArvoEventFactory<
    */
   tryCreateOutput<E extends keyof V['outputs'] & string>(
     param: { type: E } & ContractEventParam<V['outputs'][E]>,
-    options?: ContractEventOptions,
   ): Result<ArvoEvent<E, z.output<V['outputs'][E]>>, ArvoEventValidationError> {
-    return buildOutput(this.contract, param, options);
+    return buildOutput(this.contract, param, this.options);
   }
 
   /**
@@ -216,9 +228,8 @@ export class ArvoEventFactory<
    */
   createError(
     param: ErrorEventParam,
-    options?: ContractEventOptions,
   ): ArvoEvent<V['error']['type'], z.output<V['error']['schema']>> {
-    return unwrap(buildError(this.contract, param, options));
+    return unwrap(buildError(this.contract, param, this.options));
   }
 
   /**
@@ -243,11 +254,10 @@ export class ArvoEventFactory<
    */
   tryCreateError(
     param: ErrorEventParam,
-    options?: ContractEventOptions,
   ): Result<
     ArvoEvent<V['error']['type'], z.output<V['error']['schema']>>,
     ArvoEventValidationError
   > {
-    return buildError(this.contract, param, options);
+    return buildError(this.contract, param, this.options);
   }
 }

@@ -66,14 +66,16 @@ const whereADomainComesFrom = (): void => {
     ],
     [
       'FROM_TRIGGERING_EVENT',
-      factory.createInput(
-        {
-          source: 's',
-          data: { items: [] },
-          domain: ArvoDomain.FROM_TRIGGERING_EVENT,
-        },
-        { domainCtx: { triggeringEvent } },
-      ).domain,
+      // The sources a symbol reads from are bound on the factory, not passed
+      // here -- so this needs a factory built where the triggering event is
+      // known, which in a real handler is per invocation.
+      createArvoEventFactory(orders.versions['1.0.0'], {
+        domainCtx: { triggeringEvent },
+      }).createInput({
+        source: 's',
+        data: { items: [] },
+        domain: ArvoDomain.FROM_TRIGGERING_EVENT,
+      }).domain,
     ],
     [
       // A symbol whose source is missing resolves to nothing, rather than

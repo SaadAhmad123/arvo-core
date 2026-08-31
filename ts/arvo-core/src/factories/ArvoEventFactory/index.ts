@@ -5,6 +5,7 @@ import { fromNeverthrow } from '../../result.js';
 import type { Result } from '../../types.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
 import { ArvoEventFactory } from './factory.js';
+import type { ContractEventOptions } from './types.js';
 
 export { ArvoEventFactory } from './factory.js';
 
@@ -26,6 +27,9 @@ export { ArvoEventFactory } from './factory.js';
  *
  * @param contract - The version to build events for, reached as
  * `contract.versions['1.0.0']`.
+ * @param options - The sources an `ArvoDomain` symbol may name, bound once
+ * for every event this factory builds. `triggeringEvent` is the event that
+ * arrived, so a factory given one belongs to a single invocation.
  *
  * @example
  * const built = tryCreateArvoEventFactory(contract.versions['1.0.0']);
@@ -39,6 +43,7 @@ export { ArvoEventFactory } from './factory.js';
  */
 export const tryCreateArvoEventFactory = <V extends VersionedArvoContract>(
   contract: V,
+  options?: ContractEventOptions,
 ): Result<ArvoEventFactory<V>, ArvoContractValidationError> => {
   if (!(contract instanceof VersionedArvoContract)) {
     return fromNeverthrow(
@@ -54,7 +59,7 @@ export const tryCreateArvoEventFactory = <V extends VersionedArvoContract>(
     );
   }
 
-  return fromNeverthrow(ok(new ArvoEventFactory(contract)));
+  return fromNeverthrow(ok(new ArvoEventFactory(contract, options)));
 };
 
 /**
@@ -70,6 +75,9 @@ export const tryCreateArvoEventFactory = <V extends VersionedArvoContract>(
  *
  * @param contract - The version to build events for, reached as
  * `contract.versions['1.0.0']`.
+ * @param options - The sources an `ArvoDomain` symbol may name, bound once
+ * for every event this factory builds. `triggeringEvent` is the event that
+ * arrived, so a factory given one belongs to a single invocation.
  *
  * @throws {ArvoContractValidationError} If `contract` is not a version of a
  * contract — reachable only from a caller without types.
@@ -91,8 +99,9 @@ export const tryCreateArvoEventFactory = <V extends VersionedArvoContract>(
  */
 export const createArvoEventFactory = <V extends VersionedArvoContract>(
   contract: V,
+  options?: ContractEventOptions,
 ): ArvoEventFactory<V> => {
-  const built = tryCreateArvoEventFactory(contract);
+  const built = tryCreateArvoEventFactory(contract, options);
   if (built.ok) return built.value;
   throw built.error;
 };
