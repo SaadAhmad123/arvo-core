@@ -40,16 +40,11 @@ export const buildOutput = <
   ArvoEvent<E, z.output<V['outputs'][E]>>,
   ArvoEventValidationError
 > => {
-  // Indexing a generic's own property does not carry the mapped type: here
-  // `outputs` is only known to hold schemas, so the lookup widens to one.
-  // Restated, because the value fetched is exactly `E`'s schema.
-  const schema = contract.outputs[param.type] as V['outputs'][E] | undefined;
-
   // Unreachable from TypeScript, which rejects a `type` this version does not
   // declare. Reachable from JavaScript, and from anything that casts — and
   // without this the missing schema reaches `safeParse`, which throws, out of
   // a function whose whole purpose is to report rather than throw.
-  if (schema === undefined) {
+  if (!Object.hasOwn(contract.outputs, param.type)) {
     return fromNeverthrow(
       err(
         new ArvoEventValidationError([
@@ -62,6 +57,8 @@ export const buildOutput = <
       ),
     );
   }
+
+  const schema = contract.outputs[param.type] as V['outputs'][E];
 
   const checked = checkPayload<V['outputs'][E]>(
     schema,

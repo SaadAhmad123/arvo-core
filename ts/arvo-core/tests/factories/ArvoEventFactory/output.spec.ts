@@ -95,6 +95,35 @@ describe('a type the version does not emit', () => {
     expect(attempt.error.issues[0]?.message).toContain('declares none');
   });
 
+  it.each(['constructor', 'toString', 'hasOwnProperty', '__proto__'])(
+    'reports the inherited name %s rather than crashing on it',
+    (inherited) => {
+      // Every object inherits these, so a lookup finds something real while
+      // the version declares nothing of the sort. Judged by what is returned,
+      // the check for a missing schema passed and the non-schema reached the
+      // parser, which threw out of a function that must only report.
+      const attempt = orders.tryCreateOutput({
+        type: inherited as 'com_order_created',
+        source: 'com.svc',
+        data: {} as never,
+      });
+      expect(attempt.ok).toBe(false);
+      if (attempt.ok) return;
+      expect(attempt.error.issues[0]?.path).toBe('type');
+      expect(attempt.error.issues[0]?.received).toBe(inherited);
+    },
+  );
+
+  it('throws the same failure from the throwing twin', () => {
+    expect(() =>
+      orders.createOutput({
+        type: 'constructor' as 'com_order_created',
+        source: 'com.svc',
+        data: {} as never,
+      }),
+    ).toThrow(/must be one of this version's outputs/);
+  });
+
   it('refuses the handler error, which is derived rather than emitted', () => {
     const attempt = orders.tryCreateOutput({
       type: 'handler_com_order_create_error' as 'com_order_created',
