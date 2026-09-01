@@ -13,7 +13,7 @@ Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-a
 
 This ADR defines what an **ArvoEventHandler** is and how one is entered, resumed, and completed: how it declares the contracts it implements and depends on, how an execution is identified, what an execution durably remembers, how an incoming event is classified, how outstanding responses are collected, how failure is categorized, and what a handler requires of whatever runs it.
 
-It defines the handler as a **pure function of a delivered event, a prior execution record, and its resolved dependencies**, returning emitted events and the next execution record. The handler holds nothing between deliveries and reaches no store.
+It defines the handler as a **pure function of a delivered event, a prior execution record, its resolved dependencies, and which attempt this delivery is**, returning emitted events and the next execution record. The handler holds nothing between deliveries and reaches no store.
 
 Several things are deliberately not defined here:
 
@@ -209,6 +209,7 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `cas_version` | Non-negative integer, starting at 0 and incremented by the handler on every write. Exists so a mechanism can compare-and-swap. |
 | `lifecycle` | `init`, `waiting`, `success`, `error`, or `cancelled`. |
 | `lifecycle_description` | Free text explaining how the execution reached its current `lifecycle`, or `null`. |
+| `retry_metrics` | What this execution knows about being retried. See **Retry**. |
 | `event_ids` | Every event the execution has touched, each as an `id` and a `direction` of `received` or `emitted`, relative to this handler. |
 | `init_event_id` | The `id` of the init event. |
 | `init_event_source` | The `source` of the init event — the caller a completion returns to. |
@@ -258,9 +259,39 @@ This is deliberately narrower than migration, which **Version authority** prohib
 
 Removing a version from a deployed handler therefore strands its in-flight executions, permanently. A version is drained before it is removed, and that is the whole of the migration story.
 
-**Hydration.** On entering a delivery, a handler MUST validate the whole record — a fixed envelope, composed with the executor's own declared schema at `data` — and MUST restore every event the record holds to an event value before any executor code runs. A record that fails either is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
+**Hydration.** On entering a delivery, a handler MUST refresh `retry_metrics` from the attempt number the delivery carries, validate the whole record — a fixed envelope, composed with the executor's own declared schema at `data` — and MUST restore every event the record holds to an event value before any executor code runs. A record that fails either is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
 
 **Serializability of `data`.** A handler MUST verify that `data` survives a JSON round trip when an executor returns, and report a fault if it does not. This is the executor author's obligation and cannot be prevented by a declared schema, which will not catch a native date or class instance passed through a permissive schema position. Checking at return keeps the failure attributable to the executor that caused it.
+
+### Retry
+
+A handler cannot retry itself. It is stateless and runs only when something delivers to it, so a retry is a redelivery and the decision to make one belongs to whatever runs the handler. What this ADR settles is that the handler is not blind to it.
+
+**Every delivery carries which attempt it is.** The mechanism supplies an attempt number alongside the event, the record and the dependencies, and the handler writes it into the record so an executor can see it without being told twice:
+
+```
+retry_metrics
+    current_retry_attempt       this delivery's attempt number
+    total_retry_attempts        attempts this execution has seen in total
+    max_retry_attempts_allowed  from the version's options; 3 unless set
+    is_retry_exhausted          current_retry_attempt >= max_retry_attempts_allowed
+```
+
+These MUST be recomputed on every delivery rather than carried forward, so the record always describes the delivery in hand rather than a previous one.
+
+**A version MAY set two options** governing what a mechanism should do:
+
+```
+maxRetryAttempts   number, default 3
+retryDelay         number of milliseconds
+                   or  f(event, state) → milliseconds
+```
+
+`retryDelay` in its function form **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute an internal default of 300ms rather than propagate the failure. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
+
+**Exhaustion ends retrying, and the handler says so.** Where `is_retry_exhausted` holds, a fault that would otherwise be retry safe MUST be reported as no longer retry safe, so a mechanism stops rather than looping. A fault carries its retry-safety and, where it is retry safe, how long to wait — a mechanism should not have to consult a handler's declaration to learn either.
+
+**Where no record can be produced, retry and compensation belong to the runner.** A fault can prevent a record existing at all — a record that will not validate, an event that will not restore, a delivery that will not classify. There is then no execution to record an attempt against and nothing for the handler to reason with, so the mechanism owns what happens next entirely. This is the same boundary the two failure categories already draw, seen from the retry side.
 
 ### Collection
 
@@ -285,7 +316,7 @@ An execution's failures fall into two categories, and the distinction is which o
 
 **Handler failure** is the executor failing to fulfil its contract — its own code raising something the protocol did not define. It MUST be reported as the self contract version's **handler error event**, addressed as an own-contract emission, and the execution MUST reach `error`. This is a completed execution: it produced events and a record, and a mechanism has nothing to retry.
 
-**Execution fault** is a failure of the protocol or its surroundings: a record that will not validate, an event that will not restore, a delivery that will not classify, a version no longer declared, a payload an executor asked to emit that its contract rejects, a dependency that would not resolve. A fault MUST NOT become an event. It MUST carry whether it is **retry safe**, so a mechanism can retry, dead-letter, or escalate without inspecting a message.
+**Execution fault** is a failure of the protocol or its surroundings: a record that will not validate, an event that will not restore, a delivery that will not classify, a version no longer declared, a payload an executor asked to emit that its contract rejects, a dependency that would not resolve. A fault MUST NOT become an event. It MUST carry whether it is **retry safe** and, where it is, how long a mechanism should wait before the next attempt — so a mechanism can retry, dead-letter, or escalate without inspecting a message or consulting a handler's declaration. See **Retry**.
 
 | Fault | Retry safe |
 |---|---|
@@ -339,7 +370,7 @@ This is cooperative, and the guidance should say so plainly: an execution that n
 
 **Gained.** A handler becomes a function of an event, a record, and its dependencies, which makes it testable with literal values and no infrastructure — the property that most reliably decides whether resumable code can be reasoned about. Resumption is a single keyed read, so no mechanism needs a correlation index to participate. The capability set is closed and statically known, so a mechanism can determine what a handler may do before running it, and an implementation with a type system can reject an impermissible emission before it is deployed. The two failure categories give a mechanism an unambiguous rule for when to retry, which is the question adapters otherwise answer by guessing from an error message.
 
-**Paid for.** Durability moves entirely onto whatever runs a handler, and the obligations under **Required of infrastructure adapters** are strict enough that a naive mechanism — publish, then persist — is non-conformant rather than merely lossy. The default join makes concurrency invisible to an executor, and pays for it with an execution that waits indefinitely on a service that never answers, until a deadline decision exists. Eager hydration costs every stored event on every delivery, which a handler awaiting many responses pays repeatedly. Removing a contract version strands its in-flight executions permanently, with no migration path by design, so deployment acquires a drain step it did not previously have. And a handler must construct emitted events itself, which removes an executor's ability to hand back an event it built by hand — deliberately, since the addressing rule is not something a call site can be trusted with.
+**Paid for.** A mechanism must now supply an attempt number as well as an event, a record and dependencies, which is a fourth input and one it may not naturally track. Durability moves entirely onto whatever runs a handler, and the obligations under **Required of infrastructure adapters** are strict enough that a naive mechanism — publish, then persist — is non-conformant rather than merely lossy. The default join makes concurrency invisible to an executor, and pays for it with an execution that waits indefinitely on a service that never answers, until a deadline decision exists. Eager hydration costs every stored event on every delivery, which a handler awaiting many responses pays repeatedly. Removing a contract version strands its in-flight executions permanently, with no migration path by design, so deployment acquires a drain step it did not previously have. And a handler must construct emitted events itself, which removes an executor's ability to hand back an event it built by hand — deliberately, since the addressing rule is not something a call site can be trusted with.
 
 ## Considered Alternatives
 
@@ -384,3 +415,87 @@ Note what was and was not avoided. The terminal `cancelled` lifecycle exists eit
 Optimistic concurrency satisfies the third, and `cas_version` exists so it can. It is a good fit here: concurrent responses write different keys of the collection, so the contention is an artefact of storing one record rather than a semantic conflict, and a loser can simply redo its work. Where a response lands on an incomplete collection the executor is never entered, so a failed write has no side effect to undo. Where a response completes the collection, two writers can each believe they completed it and each enter the executor — which the first obligation resolves, since the loser's events and record fail to commit as one unit and nothing is published. This is why those two are stated together.
 
 **Left deferred.** The conditions under which a handler routes a failure to the workflow root, which ADR-001 deferred here and this ADR does not settle. Timers, deadlines, and any bound on how long an execution may rest at `waiting`. Execution capability profiles as a format, including how a handler would declare the three obligations above rather than have an ADR assert them. Error kinds beyond handler failure. Whether emitted event identifiers should be derived rather than freshly generated — unnecessary given the first adapter obligation, and available as defence in depth if a later decision wants it.
+
+
+## Appendix: An illustrative handler surface
+
+These sketches are illustrative only. They do not define the protocol and they are not a specification of any language's API — per ADR-004, API shape is each language's own choice. They exist to make the rules above concrete by showing them together, in a notation belonging to no language. Where prose and a sketch ever appear to disagree, the prose governs.
+
+**Declaring a handler.**
+
+```
+handler
+    self       com_order_create                     the contract this handler implements
+    services
+        payments   com_payment_charge @ 1.0.0       a contract it may send to
+
+    version 1.0.0
+        state                                       optional; omit for a stateless version
+            order_id   string
+            attempts   integer
+        options                                     all optional
+            maxRetryAttempts     5                  default 3
+            retryDelay           f(event, state) → 200 × attempt
+            handlerErrorDomain   "orders_failures"  default: no domain
+            collect              all                all | each; default all
+        execute(ctx) → [ event, ... ]
+
+    version 1.2.0
+        execute(ctx) → [ event, ... ]               stateless: the executor alone
+```
+
+**Inside an executor.** `ctx.entry` discriminates `ctx.triggeringEvent`, so a payload is only reachable once the case is settled.
+
+```
+execute(ctx):
+
+    ctx.entry               init | followup
+    ctx.initEvent           the event that opened this execution
+    ctx.triggeringEvent     what caused this delivery
+                              entry = init      → the init event
+                              entry = followup  → one of: a service's outputs,
+                                                  or a service's handler error event
+    ctx.dependencies        as resolved for this delivery
+    ctx.retry               current_retry_attempt, total_retry_attempts,
+                            max_retry_attempts_allowed, is_retry_exhausted
+    ctx.collected           for collect = each: which responses are in, which outstanding
+
+    ctx.state               present only where the version declared a schema
+    ctx.initState(value)    first write
+    ctx.setState(partial)   subsequent writes
+
+    ctx.createOutput(
+        type        one of: a service's input type
+                          | a key of this version's outputs
+                          | this version's handler error type
+        data        checked against whichever schema that type selects
+        domain      optional
+        executionunits optional
+        dangerously_set   optional; everything else, with the consequences
+                          in "What an executor may set"
+    ) → event
+
+    ctx.setCancel(description)   terminal; still answer your caller
+
+    ctx.fault(description, retrySafe)   raise an execution fault
+                                        retrySafe defaults to true
+
+    return [ ... ]          emitted; [] emits nothing and preserves the collection
+```
+
+**What the mechanism calls.** The handler is entered once per delivery and holds nothing between them.
+
+```
+tryExecute(
+    event          the delivered event
+    state          the execution record, or nothing on an init delivery
+    dependencies   a value, or a factory
+    attempt        which attempt this delivery is
+)
+    → produced { events, state }         includes the case where the executor failed
+                                          and the handler error event is among the events
+    → fault    { retrySafe, retryAfterMs, description }
+                                          never an event; nothing was produced
+```
+
+The asymmetry in that return is the failure model in one place. A handler failure comes back as `produced`, because it is a completed execution that happens to have emitted an error event. Only a fault comes back as `fault`, and only a fault is a mechanism's problem.
