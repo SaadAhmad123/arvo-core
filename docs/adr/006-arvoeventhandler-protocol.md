@@ -207,7 +207,7 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `source` | The self contract type this execution belongs to, and the `source` of every event it emits. |
 | `version` | The self contract version whose executor owns this execution. |
 | `cas_version` | Non-negative integer, starting at 0 and incremented by the handler on every write. Exists so a mechanism can compare-and-swap. |
-| `lifecycle` | `init`, `waiting`, `success`, `error`, or `cancelled`. |
+| `lifecycle` | `init`, `waiting`, `success`, `error`, `cancelled`, or `failure`. |
 | `lifecycle_description` | Free text explaining how the execution reached its current `lifecycle`, or `null`. |
 | `retry_metrics` | What this execution knows about being retried. See **Retry**. |
 | `event_ids` | Every event the execution has touched, each as an `id` and a `direction` of `received` or `emitted`, relative to this handler. |
@@ -234,6 +234,7 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `success` | Terminal. An own `outputs` event was emitted. |
 | `error` | Terminal. The handler error event was emitted. |
 | `cancelled` | Terminal. The executor marked the execution cancelled. |
+| `failure` | Terminal. Retries were exhausted and the execution could not proceed. |
 
 **An executor MUST be able to mark its own execution `cancelled`**, and doing so is terminal. It is how a cooperative wind-down records *why* an execution ended rather than leaving it indistinguishable from an ordinary completion. What it is called, and how it is reached, is API shape and each language's own choice (ADR-004).
 
@@ -270,14 +271,21 @@ A handler cannot retry itself. It is stateless and runs only when something deli
 **Every delivery carries which attempt it is.** The mechanism supplies an attempt number alongside the event, the record and the dependencies, and the handler writes it into the record so an executor can see it without being told twice:
 
 ```
-retry_metrics
+retry_metrics                   null unless a retry is actually in prospect
     current_retry_attempt       this delivery's attempt number
     total_retry_attempts        attempts this execution has seen in total
     max_retry_attempts_allowed  from the version's options; 3 unless set
     is_retry_exhausted          current_retry_attempt >= max_retry_attempts_allowed
+    retry_in_ms                 how long until the next attempt
+    current_time                when this delivery was processed
+    retry_at                    current_time + retry_in_ms
 ```
 
 These MUST be recomputed on every delivery rather than carried forward, so the record always describes the delivery in hand rather than a previous one.
+
+**`retry_metrics` is `null` unless a retry is in prospect.** Where the situation is not retry safe — or attempts are spent — there is nothing to describe and the field says so, rather than carrying figures that will never be acted on. A reader can therefore tell "will be retried" from "will not" by the field's presence alone.
+
+`current_time` and `retry_at` are instants and `retry_in_ms` a duration. Their precision is whatever the implementation can offer, with one constraint the durable format imposes: the record is JSON, and JSON holds integers exactly only up to 2^53−1. An epoch value in nanoseconds exceeds that and would be silently rounded, so an implementation offering sub-millisecond precision MUST carry these as strings rather than numbers. Millisecond epochs are comfortably inside the range and MAY be numbers. Whichever an implementation chooses, it MUST be consistent — a field that is sometimes a number and sometimes a string is not a durable format.
 
 **A version MAY set two options** governing what a mechanism should do:
 
@@ -290,6 +298,10 @@ retryDelay         number of milliseconds
 `retryDelay` in its function form **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute an internal default of 300ms rather than propagate the failure. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
 
 **Exhaustion ends retrying, and the handler says so.** Where `is_retry_exhausted` holds, a fault that would otherwise be retry safe MUST be reported as no longer retry safe, so a mechanism stops rather than looping. A fault carries its retry-safety and, where it is retry safe, how long to wait — a mechanism should not have to consult a handler's declaration to learn either.
+
+**An exhausted execution ends at `failure`, and only the mechanism can put it there.** This needs stating because it is the one lifecycle the handler cannot write. A fault produces no record, so the stored record still says `waiting` — and an execution abandoned after its retries are spent would otherwise be indistinguishable from one legitimately waiting on a slow service. On giving up, a mechanism MUST mark the record `failure` and put the failure's message in `lifecycle_description`. `failure` is terminal, and no delivery to it is ever processed.
+
+That obligation asks something new of a mechanism: it must be able to write a record's `lifecycle` and `lifecycle_description` without running the handler. This is deliberate. Every other write flows through the handler because every other write depends on the executor's own logic; this one exists precisely because the handler could not be reached.
 
 **Where no record can be produced, retry and compensation belong to the runner.** A fault can prevent a record existing at all — a record that will not validate, an event that will not restore, a delivery that will not classify. There is then no execution to record an attempt against and nothing for the handler to reason with, so the mechanism owns what happens next entirely. This is the same boundary the two failure categories already draw, seen from the retry side.
 
@@ -404,17 +416,18 @@ Note what was and was not avoided. The terminal `cancelled` lifecycle exists eit
 
 **Invariants depended on.** *Event-Only Communication* — every interaction here, including a handler's own failure, is an ArvoEvent governed by a contract. *Explicit Contracts and Runtime Validation* — the closed capability set and the record's validation both rest on a contract being a complete, checkable declaration. *Infrastructure Independence* — the handler reaches no store and names no transport. *Nondeterminism Is Permitted* — nothing here requires an executor to be deterministic; recovery republishes what was committed rather than recomputing it.
 
-**Invariants strained.** *Infrastructure Independence*, mildly and deliberately. **Required of infrastructure adapters** below places three hard obligations on any mechanism, which is a stronger demand than any prior ADR makes. The strain is contained: the obligations are stated as properties, not implementations, and ADR-000's *Downstream ADR Requirements* already anticipates that a downstream ADR states what it requires of adapters.
+**Invariants strained.** *Infrastructure Independence*, mildly and deliberately. **Required of infrastructure adapters** below places four hard obligations on any mechanism, which is a stronger demand than any prior ADR makes. The strain is contained: the obligations are stated as properties, not implementations, and ADR-000's *Downstream ADR Requirements* already anticipates that a downstream ADR states what it requires of adapters.
 
-**Required of infrastructure adapters.** Three obligations. The first and third are not sufficient alone — see below.
+**Required of infrastructure adapters.** Four obligations. The first and fourth are not sufficient alone — see below.
 
 1. **The emitted events and the next execution record MUST be preserved together.** A mechanism that publishes events but loses the record, or commits the record but drops the events, produces an execution whose own history describes traffic that never happened, and no handler-side behaviour can repair that from the inside.
 2. **An init delivery MUST NOT be dispatched where a record already exists for it.** The mechanism resolves the record first, computing the identifier from the init event by the rule in **Execution identity**. This is what makes a redelivered init resolve to its existing execution instead of reaching the handler as a fault.
-3. **Writes to one execution record MUST be serialized.** Two responses arriving concurrently otherwise read the same record and write disjoint entries, and the later write erases the earlier — leaving an execution awaiting a response it already received.
+3. **A record whose retries are exhausted MUST be marked `failure`.** Where a mechanism gives up on a retry-safe fault, it writes `failure` and the failure's message to the record itself. Without this an abandoned execution is indistinguishable from one still waiting, and nothing else is in a position to write it — the handler was never reached.
+4. **Writes to one execution record MUST be serialized.** Two responses arriving concurrently otherwise read the same record and write disjoint entries, and the later write erases the earlier — leaving an execution awaiting a response it already received.
 
-Optimistic concurrency satisfies the third, and `cas_version` exists so it can. It is a good fit here: concurrent responses write different keys of the collection, so the contention is an artefact of storing one record rather than a semantic conflict, and a loser can simply redo its work. Where a response lands on an incomplete collection the executor is never entered, so a failed write has no side effect to undo. Where a response completes the collection, two writers can each believe they completed it and each enter the executor — which the first obligation resolves, since the loser's events and record fail to commit as one unit and nothing is published. This is why those two are stated together.
+Optimistic concurrency satisfies the fourth, and `cas_version` exists so it can. It is a good fit here: concurrent responses write different keys of the collection, so the contention is an artefact of storing one record rather than a semantic conflict, and a loser can simply redo its work. Where a response lands on an incomplete collection the executor is never entered, so a failed write has no side effect to undo. Where a response completes the collection, two writers can each believe they completed it and each enter the executor — which the first obligation resolves, since the loser's events and record fail to commit as one unit and nothing is published. This is why those two are stated together.
 
-**Left deferred.** The conditions under which a handler routes a failure to the workflow root, which ADR-001 deferred here and this ADR does not settle. Timers, deadlines, and any bound on how long an execution may rest at `waiting`. Execution capability profiles as a format, including how a handler would declare the three obligations above rather than have an ADR assert them. Error kinds beyond handler failure. Whether emitted event identifiers should be derived rather than freshly generated — unnecessary given the first adapter obligation, and available as defence in depth if a later decision wants it.
+**Left deferred.** The conditions under which a handler routes a failure to the workflow root, which ADR-001 deferred here and this ADR does not settle. Timers, deadlines, and any bound on how long an execution may rest at `waiting`. Execution capability profiles as a format, including how a handler would declare the four obligations above rather than have an ADR assert them. Error kinds beyond handler failure. Whether emitted event identifiers should be derived rather than freshly generated — unnecessary given the first adapter obligation, and available as defence in depth if a later decision wants it.
 
 
 ## Appendix: An illustrative handler surface
@@ -456,8 +469,10 @@ execute(ctx):
                               entry = followup  → one of: a service's outputs,
                                                   or a service's handler error event
     ctx.dependencies        as resolved for this delivery
-    ctx.retry               current_retry_attempt, total_retry_attempts,
-                            max_retry_attempts_allowed, is_retry_exhausted
+    ctx.retry               null unless a retry is in prospect, else
+                            current_retry_attempt, total_retry_attempts,
+                            max_retry_attempts_allowed, is_retry_exhausted,
+                            retry_in_ms, current_time, retry_at
     ctx.collected           for collect = each: which responses are in, which outstanding
 
     ctx.state               present only where the version declared a schema
