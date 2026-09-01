@@ -111,21 +111,39 @@ The complete set of defaults:
 
 `init_event_id` and `init_event_source` are held on the record as their own fields rather than read from `init_event` each time. Both are needed to address a completion, and the record already keeps them stable for the life of the execution; carrying them directly means addressing a completion never depends on restoring an event, and a reader of a stored record can see where it will return to without parsing anything.
 
-**What an executor may override, and what it may not.** Every field above is a default, and an executor may replace most of them — `domain`, `executionunits`, `to`, the trace context, and the rest. Three are not the executor's to set:
+**What an executor may set.** Every value above is a default. Which of them an executor may replace freely, and which it may not, follows from one question: does getting it wrong break the protocol, or only the event?
 
-- **`baggage`** is written once, on the root event, and ADR-001 states that no handler may add a key, remove a key, or change a value. A handler carries it through unchanged and MUST NOT expose it for modification.
-- **`time`** is the moment of construction and is not a value a caller supplies.
-- **`category`**, for the reason already given: it reflects the declared role of what is being emitted, and ADR-001 assigns it through contract factories rather than handler or application code.
+An implementation SHOULD separate the two in its surface — the safe fields as ordinary parameters, the rest reachable only through a distinctly named, visibly unsafe group. The grouping is API shape and therefore each language's own choice (ADR-004); the classification is not.
 
-`domain` is absent by default — ADR-005 makes a contract's own `domain` a static default that is not inherited, so nothing is routed off the default path unless an executor says so. For the handler error event, which an executor does not construct field by field, an implementation SHOULD offer a per-version default so a handler's failures can be routed together.
+**Safe.** `type` and `data` are required rather than overrides: `type` selects both the destination and the schema, and `data` is validated against whichever schema it selects. Beyond those two, an executor may freely set exactly `domain` and `executionunits`. Neither is read by anything that routes, correlates, or identifies — `domain` selects a processing path the model already treats as the emitter's choice, and `executionunits` is accounting.
 
-`executionunits` defaults to `0` rather than absent, so that cost is a number a workflow can sum without every consumer handling a missing value.
+**Unsafe.** Everything else. Each of these is read by something other than the recipient's business logic, and a wrong value fails somewhere far from where it was set:
+
+| Field | What a wrong value breaks |
+|---|---|
+| `executionid` | The reply path. A callee stores it as its `parent_execution_id` and stamps it on its completion, so a wrong value sends the reply to an execution that does not exist and this one waits forever. |
+| `subject` | Workflow identity, and this handler's own entry validation — the callee's completion fails the `state.subject == event.subject` check and is rejected on arrival. |
+| `initid` | Response correlation. A caller matches a reply by `in_flight_event_map[response.initid]`, so a wrong value matches nothing and the reply is discarded as an orphan. |
+| `id` | Both the in-flight key and an input to the callee's identity derivation. A duplicate collapses two distinct calls onto one execution, which is why ADR-001 requires global uniqueness. |
+| `dataschema` | Which contract and version validate the payload, and the other input to the callee's identity derivation. |
+| `parentid` | Lineage, and rootness: `parentid == null` defines a root event, which must then satisfy `executionid == subject`. |
+| `source` | A callee stores it as `init_event_source` and addresses its completion to it, so a handler that misreports its source never receives its own replies. |
+| `category` | Classification, which is consulted before contract declarations. A wrong value makes a receiver reject the delivery or take an init for a followup. |
+| `depth` | The runaway-nesting signal, which ADR-001 states never decrements. Overriding hides unbounded recursion — the one thing the field exists to make visible. |
+| `to` | Delivery. Arvo's routing reads it, so a wrong value does not fail — it sends the event somewhere else. On a service emission no reply ever arrives and the execution waits forever; on a completion the caller never resumes. ADR-001 makes `to` "set fresh by the emitter", and the handler is that emitter; an executor replacing it is redirecting the protocol's own traffic. |
+| `traceparent` / `tracestate`, or a span | The trace. An emission carrying anything other than the execution's running context detaches from the causal chain, so a workflow's trace fragments into disconnected pieces exactly where a suspension makes it hardest to reconstruct. Trace context is inside the model (ADR-000), and the default already continues the delivered event's trace, so replacing it is nearly always a mistake. |
+| `time` | Nothing in the protocol; ADR-001 makes it descriptive and forbids using it for ordering. It is here because a value that is normally the moment of construction should not be quietly replaceable. |
+| `baggage` | Nothing mechanical, and everything the field is for. See below. |
+
+**`baggage` is reachable but prohibited, and those are not the same thing.** ADR-001 states that it "is written exactly once, on the root event. Handlers read it. No handler may add a key, remove a key, or change a value" — a MUST-level rule with a rationale this ADR does not disturb: write-once is what makes every event in a workflow carry an identical map, so no branch diverges, no fan-in needs a merge rule, and no coupling exists between two nodes without a contract declaring it.
+
+Exposing the field does not repeal that. An unsafe surface is an acknowledgement that an implementation cannot enforce every model rule at a type boundary, not a grant of permission — a handler that writes baggage violates ADR-001 whether or not its language made the field reachable. The name of the group is the warning, and this paragraph is the reason.
 
 ### Observability
 
 Trace context is inside the model (ADR-000). A handler MUST continue an existing trace rather than start a new one wherever it can: the span an execution runs under is derived from the delivered event's `traceparent` where one is present, and started fresh only where none is. Every event the handler emits carries that span's context by default, so causal chains survive suspension without an executor doing anything.
 
-An executor MAY override the trace context on an individual emission, supplying headers or a span of its own, and MUST be given the running span so it can record its own attributes and events on the same trace. An implementation SHOULD instrument the protocol itself — entry validation, hydration, classification, collection, emission — so that a handler is observable without an executor writing any instrumentation, and SHOULD make adding custom instrumentation a first-class part of its surface rather than something reached around the framework for.
+An executor MUST be given the running span so it can record its own attributes and events on the same trace. Replacing an emission's trace context is possible but unsafe, for the reason given above — it is one of the fields an implementation puts behind its unsafe surface, not an ordinary parameter. An implementation SHOULD instrument the protocol itself — entry validation, hydration, classification, collection, emission — so that a handler is observable without an executor writing any instrumentation, and SHOULD make adding custom instrumentation a first-class part of its surface rather than something reached around the framework for.
 
 Because `subject` is constant across a workflow, every record belonging to one workflow shares it, and a mechanism MAY use it to group them. Because `execution_id` identifies one execution, a mechanism MAY use it as the record's key.
 
