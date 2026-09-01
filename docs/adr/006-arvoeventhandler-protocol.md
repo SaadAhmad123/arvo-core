@@ -5,7 +5,7 @@
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)
 - **Supplies:** the `executionid` derivation and the event classification that [ADR-001](./001-arvoevent-structure.md) defers to "the handler protocol ADR"; the conditions for routing a failure to the workflow root remain deferred
-- **Addresses, in part:** ADR-000 Deferred Decisions — "ArvoEventHandler execution semantics" (settled here); "Handler state serialization, persistence, migration, and recovery" (settled here, migration by prohibiting it); "Handler concurrency and event-waiting patterns" (settled here). ADR-005 **Left deferred** — "dependency declaration, contract resolution, and binding" and "a handler's own runtime decision of which permitted event to emit and when" (settled here); orchestrator presets remain deferred.
+- **Addresses, in part:** ADR-000 Deferred Decisions — "ArvoEventHandler execution semantics" (settled here); "Handler state serialization, persistence, migration, and recovery" (settled here, migration by prohibiting it); "Handler concurrency and event-waiting patterns" (settled here). ADR-005 **Left deferred** — "dependency declaration, contract resolution, and binding" and "a handler's own runtime decision of which permitted event to emit and when" (settled here).
 
 Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-architectural-principles.md).
 
@@ -21,10 +21,9 @@ Several things are deliberately not defined here:
 - **Native API shape.** Per ADR-004, how a language exposes handler declaration, the execution context, or emission is that language's own choice. This ADR fixes semantics and the durable record's field names, not method names or type names.
 - **Migration of an execution record.** Not deferred — decided against. An execution record belongs to one contract version for its whole life and MUST NOT be moved to another (see **Version authority**).
 - **Timers, deadlines, and scheduling.** ADR-000 defers these. A consequence is stated under **Collection** and left unresolved rather than answered here.
-- **Cancellation, interruption, and compensation.** Deferred by ADR-000 and untouched here.
+- **Cancellation, interruption, and compensation as model primitives.** Decided against rather than deferred. Arvo defines no cancel event, no cancelled lifecycle, and no interruption mechanism; cancellation is cooperative and application-level, and **Dependencies** gives it the only hook it needs. This places the concern outside the model, amending ADR-000's Deferred Decision by explicit reference.
 - **Execution capability profiles.** ADR-000 defers their model. This ADR states the concrete requirements a handler places on a mechanism (**Required of infrastructure adapters**) without proposing the profile format that would carry it.
 - **Error taxonomy beyond handler failure.** As in ADR-005, exactly one standardized emit is in play — the handler error event. This ADR adds the non-event failure category an execution can be in, and no further error kinds.
-- **Orchestrator and simple-contract presets.** Still authoring sugar, still deferred.
 
 Once accepted, this protocol changes only by a superseding ADR.
 
@@ -219,7 +218,27 @@ The two categories are named distinctly on purpose. "Handler error" refers only 
 
 ### Dependencies
 
-An executor's implementation dependencies are outside the model (ADR-000) and MUST NOT be part of a handler's declaration as a runtime concern. They are supplied per delivery, and MUST be accepted in a deferred form so that nothing live is constructed until it is needed and nothing is captured across a suspension.
+An executor's implementation dependencies are outside the model (ADR-000) and are not part of a handler's declaration as a runtime concern. They are supplied per delivery, either as a value or as a factory:
+
+```
+dependencies?: D | (({ event, state }) => D | Promise<D>)
+```
+
+The factory form is what a resumable handler needs. Nothing live is constructed until a delivery needs it, so nothing is captured across a suspension — ADR-000 requires that no implementation dependency be relied upon to survive one. Passing it the delivered event and the current record lets a dependency be built *for this execution* rather than for the process, which is what makes the next section possible.
+
+A factory that fails is an **execution fault and is retry safe**: constructing a dependency is the one entry-path failure whose outcome may legitimately differ a moment later.
+
+### Cancellation
+
+**Arvo defines no cancellation primitive**, and this is a decision rather than an omission. There is no cancel event, no `cancelled` lifecycle, and no way for one node to interrupt another. A contract version declares exactly one `input`, so a handler's inbound events are its init event and its services' responses and nothing else; a cancel event would therefore have to be a second model-level derived event alongside the handler error, and interrupting a running execution would require a control path outside the event stream, which ADR-000's *Event-Only Communication* forbids.
+
+What the model provides instead is the hook, and cancellation is built on it by whoever needs it:
+
+- A dependency factory receives `{ event, state }`, so it can consult whatever cancellation signal an application maintains and expose the answer to the executor — conventionally as a flag on the dependencies it returns.
+- The executor reads that flag and winds itself down: emitting whatever compensating events its contracts already permit, then completing. Cancellation therefore terminates an execution the same way any other completion does, and needs no new lifecycle.
+- **Scope is the application's choice**, because the record carries both identifiers. Keyed on `execution_id`, a signal cancels one execution; keyed on `subject`, it cancels every execution of a workflow. Neither requires anything of the model, and both work through the same hook.
+
+This is cooperative, and the guidance should say so plainly: an execution that never receives another delivery never observes the signal, and an executor that does not check it is not cancellable. Arvo does not make a handler stoppable against its will. What it guarantees is that a handler which wants to be stoppable has somewhere to look, and that looking costs nothing when no one is cancelling.
 
 ## Consequences
 
@@ -245,13 +264,15 @@ The storage motivation survives intact under ADR-001's assignment, which is why 
 
 **Keeping the revision outside the record, as purely a mechanism's concern** — considered, not chosen. It keeps a storage concern out of a model-level format. But the handler is the only party that knows a write has occurred, and a mechanism that must invent its own revision cannot check it against what the handler intended. Putting it in the record makes incrementing it part of the handler's defined behaviour rather than a convention a mechanism supplies.
 
+**Defining cancellation as a model primitive — a derived cancel event on every contract, mirroring the handler error** — considered, not chosen. It is the only shape that would work event-natively, and it fits the machinery: `in_flight_event_map` already names exactly the children an execution would need to cancel, so propagation down the tree would need nothing new. It was rejected on cost against demand. It makes the handler error no longer the single standardized emit ADR-005 deliberately kept it as, it adds a terminal lifecycle and a third classification case that every implementation and every handler must then handle, and it makes cancellation a thing a node can have done *to* it — a meaningful shift in what a participant is, for a capability most handlers never use. The cooperative hook costs nothing when unused and is enough for the case that motivated asking.
+
 **Defining a migration path for an execution record, so a version could be removed without draining** — considered, not chosen. It is the obvious answer to the operational cost above, and every durable-execution system eventually grows one. It cannot be built on ADR-005's foundation: per-version isolation means there is no compatibility relation between two versions to migrate along, so any mapping would be one an implementation invented, applied to state whose meaning only the original executor knows. An honest prohibition is better than a mechanism that silently reinterprets state, and draining is a cost a deployment can see and plan for.
 
 **Requiring a specific concurrency mechanism, such as a named locking or transaction strategy** — considered, not chosen. It would make the guarantee concrete and testable. It would also make this ADR the first to require a particular infrastructure capability by name, which ADR-000 is explicit about avoiding. Stating the obligation and leaving the mechanism free preserves that.
 
 ## Conformance to ADR-000
 
-**Effect on AAM.** This ADR amends the AAM membership list, replacing *"handler interfaces and lifecycle semantics"* with the declaration model, execution identity, execution record, classification, collection, and failure categories defined above. The execution record's field names join the model as a durable format, for the same reason ADR-005 placed the canonical contract form there: durable data outlives the code that wrote it, and a record that means different things in two languages is not one model.
+**Effect on AAM.** This ADR amends the AAM membership list in three ways. It replaces *"handler interfaces and lifecycle semantics"* with the declaration model, execution identity, execution record, classification, collection, and failure categories defined above. It adds the execution record's field names as a durable format, for the same reason ADR-005 placed the canonical contract form inside the model: durable data outlives the code that wrote it, and a record that means different things in two languages is not one model. And it places **cancellation, interruption, and compensation outside the model** — ADR-000 lists them as a Deferred Decision, whose membership is therefore undetermined until decided, and this ADR decides it by explicit reference. Arvo defines no primitive for any of the three; the hook under **Cancellation** is a place for an application's own signal to be read, not a model concept.
 
 **Invariants depended on.** *Event-Only Communication* — every interaction here, including a handler's own failure, is an ArvoEvent governed by a contract. *Explicit Contracts and Runtime Validation* — the closed capability set and the record's validation both rest on a contract being a complete, checkable declaration. *Infrastructure Independence* — the handler reaches no store and names no transport. *Nondeterminism Is Permitted* — nothing here requires an executor to be deterministic; recovery republishes what was committed rather than recomputing it.
 
@@ -265,4 +286,4 @@ The storage motivation survives intact under ADR-001's assignment, which is why 
 
 Optimistic concurrency satisfies the third, and `cas_version` exists so it can. It is a good fit here: concurrent responses write different keys of the collection, so the contention is an artefact of storing one record rather than a semantic conflict, and a loser can simply redo its work. Where a response lands on an incomplete collection the executor is never entered, so a failed write has no side effect to undo. Where a response completes the collection, two writers can each believe they completed it and each enter the executor — which the first obligation resolves, since the loser's events and record fail to commit as one unit and nothing is published. This is why those two are stated together.
 
-**Left deferred.** The conditions under which a handler routes a failure to the workflow root, which ADR-001 deferred here and this ADR does not settle. Timers, deadlines, and any bound on how long an execution may rest at `waiting`. Cancellation, interruption, and compensation. Execution capability profiles as a format, including how a handler would declare the three obligations above rather than have an ADR assert them. Orchestrator and simple-contract presets, and the initialization/completion pairing they would formalize. Error kinds beyond handler failure. Whether emitted event identifiers should be derived rather than freshly generated — unnecessary given the first adapter obligation, and available as defence in depth if a later decision wants it.
+**Left deferred.** The conditions under which a handler routes a failure to the workflow root, which ADR-001 deferred here and this ADR does not settle. Timers, deadlines, and any bound on how long an execution may rest at `waiting`. Execution capability profiles as a format, including how a handler would declare the three obligations above rather than have an ADR assert them. Error kinds beyond handler failure. Whether emitted event identifiers should be derived rather than freshly generated — unnecessary given the first adapter obligation, and available as defence in depth if a later decision wants it.
