@@ -298,7 +298,14 @@ The two categories are named distinctly on purpose. "Handler error" refers only 
 
 ### Dependencies
 
-An executor's implementation dependencies are outside the model (ADR-000) and are not part of a handler's declaration as a runtime concern. They are supplied per delivery, and an implementation MUST accept them in two forms: as a value, or as a **factory** the handler calls with the delivered event and the current execution record. Where a language distinguishes asynchronous work, a factory MAY be asynchronous.
+An executor's implementation dependencies are outside the model (ADR-000) and are not part of a handler's declaration as a runtime concern. They are supplied per delivery, and an implementation MUST accept them in either of two forms:
+
+```
+dependencies  :  optional
+    either      D                            a value, used as given
+    or          factory(event, state) → D    called once per delivery
+                                             may be asynchronous where a language distinguishes it
+```
 
 The factory form is what a resumable handler needs. Nothing live is constructed until a delivery needs it, so nothing is captured across a suspension — ADR-000 requires that no implementation dependency be relied upon to survive one. Giving the factory the delivered event and the current record lets a dependency be built *for this execution* rather than for the process, which is what makes the next section possible.
 
