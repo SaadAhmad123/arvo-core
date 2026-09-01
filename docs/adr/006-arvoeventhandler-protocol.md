@@ -85,23 +85,45 @@ This execution's nesting level is recorded as `state.depth = init_event.depth`. 
 
 ### Addressing an emitted event
 
-Every event an execution emits is addressed by one rule, determined by where it is going:
+Every field of an emitted event is set by the handler, from the record and the event being answered. Two of them depend on where the event is going, and those two are the ones a mistake would misroute silently: `subject` is the same on everything, exactly as ADR-001 requires, while `executionid` is role-dependent — an execution stamps its own identity on what it sends downstream, and a completion carries its caller's identity rather than its own. ADR-001 states both; this ADR only makes them mechanical.
 
-| Emitting | `subject` | `executionid` |
+The complete set of defaults:
+
+| Field | To a service contract | Own `outputs`, or the handler error event |
 |---|---|---|
-| to a declared service contract | `state.subject` | `state.execution_id` |
-| its own `outputs`, or its handler error event | `state.subject` | `state.parent_execution_id` |
+| `subject` | `state.subject` | `state.subject` |
+| `executionid` | `state.execution_id` | `state.parent_execution_id` |
+| `depth` | `state.depth + 1` | `state.depth` |
+| `parentid` | the delivered event's `id` | the delivered event's `id` |
+| `initid` | `null` | `state.init_event_id` |
+| `category` | `io.arvo.init` | `io.arvo.complete` |
+| `source` | `state.source` | `state.source` |
+| `to` | the service contract's own `type` | `init_event.source` |
+| `baggage` | carried through unchanged | carried through unchanged |
+| `domain` | absent | absent, or a per-version default for the handler error event |
+| `executionunits` | `0` | `0` |
 
-`subject` is therefore the same on everything, exactly as ADR-001 requires. `executionid` is role-dependent: an execution stamps its own identity on what it sends downstream, and a completion carries its caller's identity rather than its own — ADR-001 states both, and this ADR only makes them mechanical.
+`initid` is set only on a completion, per ADR-001: "on a completion, the `id` of the init event that opened the execution being completed; `null` on every other event". It is what lets a caller match a response to the request it answers, and it is the value a caller looks up in `in_flight_event_map`. Setting it on a service emission would mean something different — the id of the init event that opened the *emitting* execution — and ADR-001 reserves the field against exactly that.
 
-Every emitted event MUST also carry the delivered event's `id` as its `parentid`, and its `depth` set as:
+`source` is the handler's own contract type, which identifies the producing node without inventing an identity scheme the model does not have. It is a valid URI-reference under ADR-002 and normalizes to itself, so it satisfies `source`'s format rule unchanged.
 
-| Emitting | `depth` |
-|---|---|
-| to a declared service contract | `state.depth + 1` |
-| its own `outputs`, or its handler error event | `state.depth` |
+`to` follows from that. A service emission is addressed to the contract that declares it, and a completion is addressed back to whoever opened this execution — which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults an executor may replace; a completion in particular may legitimately go somewhere other than its caller.
 
-Both follow ADR-001 directly: an event opening a new execution "carries one more than the level of the execution emitting it", and "every other event, including a completion, carries the emitting execution's own level". A completion therefore reports the level of the execution that produced it, not the level of the execution it returns to — `depth` is defined there as "the nesting level of the execution this event belongs to", and a completion belongs to its emitter. ADR-001 also states outright that `depth` never decrements, so a completion MUST NOT carry one less than its execution's level.
+**What an executor may override, and what it may not.** Every field above is a default, and an executor may replace most of them — `domain`, `executionunits`, `to`, the trace context, and the rest. Three are not the executor's to set:
+
+- **`baggage`** is written once, on the root event, and ADR-001 states that no handler may add a key, remove a key, or change a value. A handler carries it through unchanged and MUST NOT expose it for modification.
+- **`time`** is the moment of construction and is not a value a caller supplies.
+- **`category`**, for the reason already given: it reflects the declared role of what is being emitted, and ADR-001 assigns it through contract factories rather than handler or application code.
+
+`domain` is absent by default — ADR-005 makes a contract's own `domain` a static default that is not inherited, so nothing is routed off the default path unless an executor says so. For the handler error event, which an executor does not construct field by field, an implementation SHOULD offer a per-version default so a handler's failures can be routed together.
+
+`executionunits` defaults to `0` rather than absent, so that cost is a number a workflow can sum without every consumer handling a missing value.
+
+### Observability
+
+Trace context is inside the model (ADR-000). A handler MUST continue an existing trace rather than start a new one wherever it can: the span an execution runs under is derived from the delivered event's `traceparent` where one is present, and started fresh only where none is. Every event the handler emits carries that span's context by default, so causal chains survive suspension without an executor doing anything.
+
+An executor MAY override the trace context on an individual emission, supplying headers or a span of its own, and MUST be given the running span so it can record its own attributes and events on the same trace. An implementation SHOULD instrument the protocol itself — entry validation, hydration, classification, collection, emission — so that a handler is observable without an executor writing any instrumentation, and SHOULD make adding custom instrumentation a first-class part of its surface rather than something reached around the framework for.
 
 Because `subject` is constant across a workflow, every record belonging to one workflow shares it, and a mechanism MAY use it to group them. Because `execution_id` identifies one execution, a mechanism MAY use it as the record's key.
 
@@ -132,7 +154,7 @@ Before any executor code runs, a handler MUST perform the following checks in fu
 
    ```
    event.to           == handler's self contract type
-   state.type         == handler's self contract type
+   state.source       == handler's self contract type
    state.execution_id == event.executionid
    state.subject      == event.subject
    ```
@@ -151,11 +173,12 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `execution_id` | This execution. Record key. |
 | `parent_execution_id` | The execution that caused this one. |
 | `depth` | This execution's nesting level, from the init event that opened it. |
-| `type` | The self contract type this execution belongs to. |
+| `source` | The self contract type this execution belongs to, and the `source` of every event it emits. |
 | `version` | The self contract version whose executor owns this execution. |
 | `cas_version` | Non-negative integer, starting at 0 and incremented by the handler on every write. Exists so a mechanism can compare-and-swap. |
 | `lifecycle` | `init`, `waiting`, `success`, or `error`. |
 | `event_ids` | Every event the execution has touched, each as an id and a direction relative to this handler. |
+| `init_event_id` | The `id` of the init event, carried separately so a completion can be addressed without restoring the whole event. |
 | `init_event` | The event that began the execution. |
 | `triggering_event` | The event that caused the most recent delivery. |
 | `in_flight_event_map` | Keyed by the id of each event emitted to a service in the current round; the collected response, or absent while outstanding. |
