@@ -161,7 +161,7 @@ An implementation SHOULD separate the three in its surface, reaching the unsafe 
 | `source` | unsafe | The callee stores it as `init_event_source` and addresses its completion to it. | A handler that misreports its source never receives its own replies. | This execution, and whichever node is sent completions meant for it. | Whatever it names can receive this execution's completions and act on them. |
 | `parentid` | unsafe | Lineage, and rootness: `parentid == null` is what defines a root event. | A null claims rootness, which then requires `executionid == subject` and usually fails validation outright. | The receiver, and anyone reconstructing causality afterwards. | It names an event that genuinely caused this one, and is not `null` unless this really is a root — which then also requires `executionid == subject`. |
 | `category` | unsafe | Classification, consulted before contract declarations. ADR-001 assigns it "through contract event factories rather than handler or application code". | The receiver rejects the delivery, or takes an init for a followup. | The receiver. | It states the event's actual role, so the receiver's classification and its contract declarations agree. |
-| `depth` | unsafe | The runaway-nesting signal. ADR-001 states it never decrements. | Unbounded recursion stops being visible — the one thing the field exists for. | Operators, who lose the signal at the moment it matters. | It still counts real nesting from the root, and does not decrease. |
+| `depth` | unsafe | The runaway-nesting signal. ADR-001 states it never decrements, and it is what the execution-depth guard measures. | Unbounded recursion stops being visible — the one thing the field exists for. A value at or above the version's maximum also rejects the whole emission batch (see **Depth**). | Operators, who lose the signal at the moment it matters. | It still counts real nesting from the root, and does not decrease. |
 | `traceparent` / `tracestate` | unsafe | Trace context, inside the model per ADR-000. The default already continues the delivered event's trace. | The workflow's trace fragments into disconnected pieces, exactly where a suspension makes it hardest to reconstruct by hand. | Whoever debugs the workflow later. | It is a valid W3C context descending from this execution's own, so the chain still joins up. |
 | `time` | unsafe | The moment of construction. ADR-001 makes it descriptive and forbids using it to establish ordering. | Nothing in the protocol; a misleading timeline for everyone reading the event stream afterwards. | Whoever reads or audits the stream later. | It is a real RFC 3339 instant carrying an offset, and describes when the event actually occurred. |
 | `baggage` | unsafe | Written once, at the root. ADR-001: "no handler may add a key, remove a key, or change a value". | Every event in the workflow no longer carries an identical map. Branches diverge, fan-in needs a merge rule that does not exist, and two nodes couple without a contract declaring it. | Every participant in the workflow, downstream and in every other branch. | Nothing a handler can guarantee from where it stands. It would have to know every branch of the workflow, present and future, and that none fans back in. Only the root minter is in that position, and a handler never is. |
@@ -176,7 +176,7 @@ What it offers is reachability with the consequence named. A developer who cross
 
 Trace context is inside the model (ADR-000). A handler MUST continue an existing trace rather than begin a new one wherever it can: an execution's trace context is taken from the delivered event's `traceparent` and `tracestate` where a `traceparent` is present, and begun fresh only where none is. Every event the handler emits carries that context by default, so a causal chain survives suspension without an executor doing anything.
 
-An executor MUST be able to contribute to the execution's own trace rather than having to start a parallel one. How — the type it is handed, and what it can record on it — is API shape and each language's own choice (ADR-004).
+An executor MUST be able to contribute to the execution's own trace rather than having to start a parallel one, and it reaches it through the context alongside everything else it is given. The type it is handed, and what it can record on it, are API shape and each language's own choice (ADR-004).
 
 Replacing an emission's trace context is possible but unsafe, for the reason the table gives. An implementation SHOULD instrument the protocol itself — entry validation, hydration, classification, collection, emission — so that a handler is observable without an executor writing any instrumentation, and SHOULD make adding custom instrumentation a first-class part of its surface rather than something reached around the framework for.
 
@@ -251,17 +251,19 @@ Discarding a duplicate at step 5 is safe because the record that would have been
 
 ```
 max depth                  a number; 1000 unless set
-on max depth violation     'error' | 'event' | f(ctx, span) → event or events
+on max depth violation     'error' | 'event' | f({ ctx, violation }) → event or events
                            'event' unless set
 ```
 
 **The guard is checked on emission, not on delivery.** After the executor has run, the handler checks each event it wants to emit: an event that would open a new execution carries `state.depth + 1`, and where that reaches the maximum the emission is a violation.
 
+**One violating event rejects the whole batch.** Where any event an executor returns violates the guard, none of them is emitted and `on max depth violation` decides what happens instead. The alternative — emitting the permitted ones and handling only the violation — would leave an execution simultaneously waiting on real services and terminal at `error`, which no lifecycle can express and no caller could interpret. A batch is one decision by one executor, and it succeeds or is replaced as one.
+
 Checking here rather than at the gate matters. A delivered response necessarily arrives at `state.depth + 1`, because a completion carries the depth of the execution that produced it — so a gate that rejected on the incoming depth would reject *every* response to a handler sitting one below the limit, discarding work a service had already completed successfully. Nothing about refusing a reply prevents any depth; the nesting has already happened. Refusing the *emission* stops it before the doomed work runs, which is the only point at which stopping is worth anything.
 
 It also keeps a service's own depth violation deliverable. Where a service refuses at its limit and completes with its handler error event, that response reaches its caller normally and the caller's executor can do something about it, rather than tripping a gate and being replaced by the caller's own error one level further up.
 
-**An executor can see it coming.** The context exposes whether this execution has reached its limit — true when an event it emits could no longer increment `depth`. An executor that checks it can choose a different path, complete early, or explain itself, instead of discovering the refusal after the fact.
+**An executor can see it coming, which is why the outcome is its own.** The context exposes whether this execution has reached its limit — true when an event it emits could no longer increment `depth`. An executor that checks it can take a different path, complete early, or explain itself. Reaching a violation therefore takes a deliberate act: emitting to a service after being told the limit is reached, or overriding `depth` outright, which is already among the unsafe fields under **Addressing an emitted event**.
 
 **On a violation**, what happens is the version's to choose:
 
@@ -269,7 +271,22 @@ It also keeps a service's own depth violation deliverable. Where a service refus
 |---|---|
 | `'error'` | A non-retryable execution fault. Nothing is emitted, no record is written, and the mechanism decides what to do with a workflow that has run away. |
 | `'event'` | The default. The handler error event is emitted and the execution terminates at `error`. The caller learns the work will not be done, in the one shape it is already obliged to handle. |
-| a function | Called with the same context and trace the executor had. Whatever it returns is emitted and the execution terminates accordingly. |
+| a function | Called with the same context the executor had, plus a description of what was rejected. Whatever it returns is emitted and the execution terminates accordingly. |
+
+The function receives the context and a `violation`, so it can explain itself rather than guess:
+
+```
+violation
+    max_depth             the limit in force for this version
+    execution_depth       state.depth — where this execution sits
+    would_be_depth        the depth a new execution would have carried
+    rejected              for each event the executor returned:
+                              type      the event type
+                              depth     the depth it would have carried
+                              violating whether this event is one of the offenders
+```
+
+`rejected` lists the whole batch rather than only the offenders, because the batch was rejected whole and a diagnostic that showed only part of it would misrepresent what happened.
 
 **A function MAY return only the self contract's own `outputs` or its handler error event.** A service emission is refused, and the reason is the whole point: an execution stopped for being too deep must not go deeper.
 
@@ -564,19 +581,19 @@ handler
             handlerErrorDomain   "orders_failures"  default: no domain
             collect              all                all | each; default all
             maxDepth             250                default 1000
-            onMaxDepthViolation  event              error | event | f(ctx, span); default event
-        execute(ctx, span) → [ event, ... ]
+            onMaxDepthViolation  event              error | event | f({ctx, violation}); default event
+        execute(ctx) → [ event, ... ]
 
     version 1.2.0
-        execute(ctx, span) → [ event, ... ]         stateless: the executor alone
+        execute(ctx) → [ event, ... ]               stateless: the executor alone
 ```
 
 **Inside an executor.** `ctx.entry` discriminates `ctx.triggeringEvent`, so a payload is only reachable once the case is settled.
 
 ```
-execute(ctx, span):
+execute(ctx):
 
-    span                    the execution's own trace, to record against
+    ctx.span                the execution's own trace, to record against
     ctx.entry               init | followup
     ctx.initEvent           the event that opened this execution
     ctx.triggeringEvent     what caused this delivery
