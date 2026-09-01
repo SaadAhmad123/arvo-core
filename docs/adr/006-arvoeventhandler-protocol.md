@@ -22,7 +22,7 @@ Several things are deliberately not defined here:
 - **Migration of an execution record.** This ADR settles that resumption across contract versions is never attempted (see **Version authority**). How a record might be deliberately migrated to a later version belongs to a future decision.
 - **Timers, deadlines, and scheduling.** ADR-000 defers these. A consequence is stated under **Collection** and left unresolved rather than answered here.
 - **Cancellation, interruption, and compensation.** Deferred by ADR-000 and untouched here.
-- **Execution capability profiles.** ADR-000 defers their model. This ADR states one concrete requirement a handler places on a mechanism (**Required of infrastructure adapters**) without proposing the profile format that would carry it.
+- **Execution capability profiles.** ADR-000 defers their model. This ADR states the concrete requirements a handler places on a mechanism (**Required of infrastructure adapters**) without proposing the profile format that would carry it.
 - **Error taxonomy beyond handler failure.** As in ADR-005, exactly one standardized emit is in play — the handler error event. This ADR adds the non-event failure category an execution can be in, and no further error kinds.
 - **Orchestrator and simple-contract presets.** Still authoring sugar, still deferred.
 
@@ -114,18 +114,26 @@ Every delivery MUST resolve to init, followup, or a fault. There is no unclassif
 
 An init delivery derives a new execution. A followup delivery resolves the existing execution by the arriving event's `executionid`, which a completion carries as its caller's identity — that is, as this handler's own.
 
-**A resolved record MUST then be checked against the delivery before the executor is entered**, so that a misrouted or mismatched record fails loudly rather than executing against the wrong state:
-
-```
-event.to           == handler's self contract type
-state.type         == handler's self contract type
-state.execution_id == event.executionid
-state.subject      == event.subject
-```
-
-Any mismatch is a fault. Together these establish that the record is the one this delivery is addressed to.
-
 **A response is matched to what it answers by `initid`.** ADR-001 defines `initid` as "the `id` of the init event that opened the execution this event completes", and states that it "is the only field that answers *which request is this the answer to*" — `executionid` cannot, because every completion carries the caller's identity, and `parentid` cannot, because it degrades to noise across a suspension. A response is therefore recorded against `in_flight_event_map[response.initid]`, which is the id of the event this execution emitted to open that service's execution.
+
+### Entry validation
+
+Before any executor code runs, a handler MUST perform the following checks in full. **Every one of them fails as a non-retryable fault**, because each describes a delivery that would fail identically however many times it were repeated.
+
+1. **The delivered event is one this handler's contracts expect** — it classifies as an init or a followup under **Classification**, and its payload satisfies the schema the relevant contract declares for it.
+2. **The record is a well-formed execution record** — it validates against the fixed envelope composed with the executor's own declared schema at `data`, and every event it holds restores to an event value (see **Hydration**).
+3. **The record, the event and the handler agree.** A record that validates in isolation may still be the wrong record:
+
+   ```
+   event.to           == handler's self contract type
+   state.type         == handler's self contract type
+   state.execution_id == event.executionid
+   state.subject      == event.subject
+   ```
+
+4. **Presence matches classification.** An init delivery MUST be given no record — an init event opens a new execution, so a record already existing for it means the delivery is not what it claims to be. Every other delivery MUST be given a complete record. A missing record on a followup, or a present one on an init, is a fault.
+
+Rule 4 places one obligation on whatever runs the handler, and it is the reason the derivation in **Execution identity** is specified publicly rather than left internal. A mechanism MUST resolve the record *before* dispatch, computing the identifier from the init event by the same rule the handler would, and MUST NOT dispatch an init delivery for which a record already exists. That is how a redelivered init event "resolves to the existing execution rather than forking a new one", which ADR-001 gives as the reason for requiring deterministic derivation in the first place. Were the handler to absorb a duplicate init silently instead, the model would have no way to distinguish a redelivery from a genuine collision, and rule 4 would have nothing to catch.
 
 ### The execution record
 
@@ -191,7 +199,9 @@ An execution's failures fall into two categories, and the distinction is which o
 | the record fails validation | no |
 | an event in the record fails to restore | no |
 | the record's `version` is no longer declared | no |
-| the delivered event fails classification or validation | no |
+| the delivered event fails classification or its contract's schema | no |
+| an init delivery arrives with a record, or any other delivery without one | no |
+| the record does not match the delivery's addressing | no |
 | `data` does not survive a JSON round trip | no |
 | an emission the executor requested is not permitted, or its payload is rejected | no |
 | resolving the executor's dependencies fails | yes |
@@ -241,11 +251,12 @@ The storage motivation survives intact under ADR-001's assignment, which is why 
 
 **Invariants strained.** *Infrastructure Independence*, mildly and deliberately. **Required of infrastructure adapters** below places two hard obligations on any mechanism, which is a stronger demand than any prior ADR makes. The strain is contained: the obligations are stated as properties, not implementations, and ADR-000's *Downstream ADR Requirements* already anticipates that a downstream ADR states what it requires of adapters.
 
-**Required of infrastructure adapters.** Two obligations, and neither is sufficient alone.
+**Required of infrastructure adapters.** Three obligations. The first and third are not sufficient alone — see below.
 
 1. **The emitted events and the next execution record MUST be preserved together.** A mechanism that publishes events but loses the record, or commits the record but drops the events, produces an execution whose own history describes traffic that never happened, and no handler-side behaviour can repair that from the inside.
-2. **Writes to one execution record MUST be serialized.** Two responses arriving concurrently otherwise read the same record and write disjoint entries, and the later write erases the earlier — leaving an execution awaiting a response it already received.
+2. **An init delivery MUST NOT be dispatched where a record already exists for it.** The mechanism resolves the record first, computing the identifier from the init event by the rule in **Execution identity**. This is what makes a redelivered init resolve to its existing execution instead of reaching the handler as a fault.
+3. **Writes to one execution record MUST be serialized.** Two responses arriving concurrently otherwise read the same record and write disjoint entries, and the later write erases the earlier — leaving an execution awaiting a response it already received.
 
-Optimistic concurrency satisfies the second, and `cas_version` exists so it can. It is a good fit here: concurrent responses write different keys of the collection, so the contention is an artefact of storing one record rather than a semantic conflict, and a loser can simply redo its work. Where a response lands on an incomplete collection the executor is never entered, so a failed write has no side effect to undo. Where a response completes the collection, two writers can each believe they completed it and each enter the executor — which the first obligation resolves, since the loser's events and record fail to commit as one unit and nothing is published. This is why the two obligations are stated together.
+Optimistic concurrency satisfies the third, and `cas_version` exists so it can. It is a good fit here: concurrent responses write different keys of the collection, so the contention is an artefact of storing one record rather than a semantic conflict, and a loser can simply redo its work. Where a response lands on an incomplete collection the executor is never entered, so a failed write has no side effect to undo. Where a response completes the collection, two writers can each believe they completed it and each enter the executor — which the first obligation resolves, since the loser's events and record fail to commit as one unit and nothing is published. This is why those two are stated together.
 
-**Left deferred.** The conditions under which a handler routes a failure to the workflow root, which ADR-001 deferred here and this ADR does not settle. Migration of an execution record across contract versions; this ADR settles only that resumption across versions is not attempted. Timers, deadlines, and any bound on how long an execution may rest at `waiting`. Cancellation, interruption, and compensation. Execution capability profiles as a format, including how a handler would declare the two obligations above rather than have an ADR assert them. Orchestrator and simple-contract presets, and the initialization/completion pairing they would formalize. Error kinds beyond handler failure. Whether emitted event identifiers should be derived rather than freshly generated — unnecessary given the first adapter obligation, and available as defence in depth if a later decision wants it.
+**Left deferred.** The conditions under which a handler routes a failure to the workflow root, which ADR-001 deferred here and this ADR does not settle. Migration of an execution record across contract versions; this ADR settles only that resumption across versions is not attempted. Timers, deadlines, and any bound on how long an execution may rest at `waiting`. Cancellation, interruption, and compensation. Execution capability profiles as a format, including how a handler would declare the three obligations above rather than have an ADR assert them. Orchestrator and simple-contract presets, and the initialization/completion pairing they would formalize. Error kinds beyond handler failure. Whether emitted event identifiers should be derived rather than freshly generated — unnecessary given the first adapter obligation, and available as defence in depth if a later decision wants it.
