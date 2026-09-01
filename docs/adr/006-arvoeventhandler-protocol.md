@@ -285,7 +285,9 @@ These MUST be recomputed on every delivery rather than carried forward, so the r
 
 **`retry_metrics` is `null` unless a retry is in prospect.** Where the situation is not retry safe — or attempts are spent — there is nothing to describe and the field says so, rather than carrying figures that will never be acted on. A reader can therefore tell "will be retried" from "will not" by the field's presence alone.
 
-`current_time` and `retry_at` are instants and `retry_in_ms` a duration. Their precision is whatever the implementation can offer, with one constraint the durable format imposes: the record is JSON, and JSON holds integers exactly only up to 2^53−1. An epoch value in nanoseconds exceeds that and would be silently rounded, so an implementation offering sub-millisecond precision MUST carry these as strings rather than numbers. Millisecond epochs are comfortably inside the range and MAY be numbers. Whichever an implementation chooses, it MUST be consistent — a field that is sometimes a number and sometimes a string is not a durable format.
+`current_time` and `retry_at` are instants and `retry_in_ms` a duration. **All three are numbers**, and their precision is the finest an implementation can offer that is still exactly representable as a JSON number — integers up to 2^53−1, since the record is JSON and anything beyond that rounds silently.
+
+In practice that admits milliseconds and microseconds and rules out nanoseconds: a microsecond epoch is around 1.8×10^15 today and stays inside the range for centuries, while a nanosecond epoch is already around 1.8×10^18 and is past it now. An implementation MUST NOT carry a precision it cannot represent exactly, and MUST use the same precision for both instants.
 
 **A version MAY set two options** governing what a mechanism should do:
 
