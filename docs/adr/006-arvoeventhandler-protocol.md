@@ -179,36 +179,31 @@ An init delivery derives a new execution. A followup delivery resolves the exist
 
 ### Entry validation
 
-Before any executor code runs, a handler MUST work through the following gate. It is **ordered and short-circuiting**: each step is a precondition for the next, and the first failure ends the delivery. Order matters — a record cannot be compared before it is known to be well formed, and a duplicate cannot be recognised as harmless after a later step has already called it a fault.
+Before any executor code runs, a handler MUST work through the following gate **in sequence**. Each step is a precondition for the ones after it, and the record must be known to be well formed before anything reads a field from it — which is why validating it comes first and everything else follows.
 
-A delivery leaves the gate in one of three ways: **proceed** to the executor, **discard** with nothing recorded and nothing raised, or **fault**.
+A delivery leaves the gate one of three ways: **proceed** to the executor, **discard** with nothing written and nothing raised, or **fault**.
 
-1. **Already seen → discard.** If the delivered event's `id` is already in `event_ids` as `received`, this delivery has been processed. Discard it: no executor, no write, no fault. At-least-once delivery makes this ordinary, not exceptional.
-2. **Classifiable → else fault.** The event resolves to an init or a followup under **Classification**.
-3. **Well-formed record → else fault.** The record validates against the fixed envelope composed with the executor's own declared schema at `data`, and every event it holds restores to an event value (see **Hydration**). Only now may any `state.*` value be read.
-4. **Presence matches classification → else fault.** An init delivery MUST be given no record; every other delivery MUST be given a complete one.
-5. **Not terminal → else fault.** A record at `success`, `error`, `cancelled` or `failure` accepts no further delivery. A late arrival is a fault, not a quiet discard: something is still sending to an execution that finished, and that is worth surfacing rather than absorbing.
-6. **Addressed to this record → else fault.**
+| Sequence | Description | Behaviour on invalid | Short-circuits | Retry safe |
+|---|---|---|---|---|
+| 1 | **State object validation.** Where a record is supplied, it validates against the fixed envelope composed with the executor's own declared schema at `data`, and every event it holds restores to an event value (see **Hydration**). No `state.*` value may be read until this passes. | fault | yes | no |
+| 2 | **The event belongs to a declared contract**, and classifies as an init or a followup under **Classification**. | fault | yes | no |
+| 3 | **Presence matches classification.** An init delivery MUST be given no record; every other delivery MUST be given a complete one. | fault | yes | no |
+| 4 | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` accepts a followup. | fault | yes | no |
+| 5 | **Record, handler and event agree.** `event.to == handler's self contract type`, `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault | no — all four are reported together | no |
+| 6 | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. | discard | yes | n/a |
+| 7 | **Declared by this version.** The event's type is declared by the version in `state.version` — its own input, or the input or response type of a service *that version* declares. | fault | yes — without a resolved type there is no schema to check | no |
+| 8 | **Payload satisfies its schema**, as declared by whichever contract and version the type resolves to. | fault | no | no |
+| 9 | **Awaited, on a followup.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault | yes | no |
 
-   ```
-   event.to           == handler's self contract type
-   state.source       == handler's self contract type
-   state.execution_id == event.executionid
-   state.subject      == event.subject
-   ```
+Every fault here is non-retryable, and for one reason: each describes a delivery that would fail identically however often it were repeated. **A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
 
-   `to` is authoritative here, not advisory: an event arriving with no `to` at all is a fault. A handler is entitled to know that it was addressed rather than merely reached.
-7. **Declared by this version → else fault.** The event's type is declared by the version in `state.version` — its own input type, or the input or response type of a service *that version* declares. Versions are fully isolated under ADR-005, so a type another version of the same handler declares is not this version's to accept.
-8. **Payload satisfies its schema → else fault.** Checked against whichever contract and version the type resolves to.
-9. **Awaited, on a followup → else fault.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. A response nothing is waiting for is a fault for the same reason a late arrival is: it means something is answering a question this execution did not ask, or asked and already had answered.
+**Why step 1 is first.** Every later step reads the record — step 4 reads `lifecycle`, step 5 reads three identifiers, step 6 reads `event_ids`. A gate that compared before it validated would be reading fields off a structure it had not established was a record at all, and would report a mismatch where the truth was corruption.
 
-**A fault names every check that failed**, not the first, wherever the ordering permits more than one to be evaluated. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a sequence of redeliveries each revealing one more problem.
+**A consequence of ordering step 4 before step 6.** A redelivery of the very event that completed an execution reaches the terminal check before the duplicate check, and is reported as a fault rather than discarded as a duplicate. Under at-least-once delivery that is a real cost: the final response of every execution can produce a spurious dead-letter if the transport repeats it. The order is deliberate — a terminal execution accepts nothing, and that is stated without exception — but an implementation should expect this and a mechanism should not treat one such fault as evidence of a defect.
 
-**Why step 1 comes first.** A redelivery of the very event that completed an execution would otherwise reach step 5 and be reported as a late arrival at a terminal record — turning ordinary at-least-once delivery into a stream of spurious faults. Recognising a duplicate before asking whether the execution is finished is what keeps the terminal check meaningful: past step 1, a delivery to a terminal record really is something new arriving too late.
+Discarding a duplicate at step 6 is safe because the record that would have been written already exists, carrying that event's id in `event_ids`. **Arvo treats one execution of an executor as atomic**: it either produced its events and its record together, or it produced neither. An executor should be written on the same assumption — where side effects outside Arvo are unavoidable, they should be idempotent or cheap to repeat, because the protocol offers no partial-completion state for them to resume from.
 
-Discarding a duplicate is safe because the record that would have been written already exists, carrying that event's id in `event_ids`. **Arvo treats one execution of an executor as atomic**: it either produced its events and its record together, or it produced neither. An executor should be written on the same assumption — where side effects outside Arvo are unavoidable, they should be idempotent or cheap to repeat, because the protocol offers no partial-completion state for them to resume from.
-
-**What step 4 asks of a mechanism.** It is the reason the derivation in **Execution identity** is specified publicly rather than left internal. A mechanism MUST resolve the record *before* dispatch, computing the identifier from the init event by the same rule the handler would, and MUST NOT dispatch an init delivery for which a record already exists. That is how a redelivered init event "resolves to the existing execution rather than forking a new one", which ADR-001 gives as the reason for requiring deterministic derivation in the first place.
+**What step 3 asks of a mechanism.** It is the reason the derivation in **Execution identity** is specified publicly rather than left internal. A mechanism MUST resolve the record *before* dispatch, computing the identifier from the init event by the same rule the handler would, and MUST NOT dispatch an init delivery for which a record already exists. That is how a redelivered init event "resolves to the existing execution rather than forking a new one", which ADR-001 gives as the reason for requiring deterministic derivation in the first place.
 
 ### The execution record
 
