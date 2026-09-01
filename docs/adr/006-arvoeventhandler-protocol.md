@@ -11,7 +11,7 @@ Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-a
 
 ## Scope
 
-This ADR defines what an **ArvoEventHandler** is and how one is entered, resumed, and completed: how it declares the contracts it implements and depends on, how an execution is identified, what an execution durably remembers, how an incoming event is classified, how outstanding responses are collected, how failure is categorized, and what a handler requires of whatever runs it.
+This ADR defines what an **ArvoEventHandler** is and how one is entered, resumed, and completed: how it declares the contracts it implements and depends on, how an execution is identified, what an execution durably remembers, how an incoming event is classified, how outstanding responses are collected, how deep it will go before it stops calling out, how failure is categorized and retried, and what a handler requires of whatever runs it.
 
 It defines the handler as a **pure function of a delivered event, a prior execution record, its resolved dependencies, and which attempt this delivery is**, returning emitted events and the next execution record. The handler holds nothing between deliveries and reaches no store.
 
@@ -578,7 +578,7 @@ handler
         options                                     all optional
             maxRetryAttempts     5                  default 3
             retryDelay           f(event, state) → 200 × attempt   default 300ms
-            handlerErrorDomain   "orders_failures"  default: no domain
+            handlerErrorDomain   "orders_failures"  a value or a source; default none
             collect              all                all | each; default all
             maxDepth             250                default 1000
             onMaxDepthViolation  event              error | event | f({ctx, violation}); default event
@@ -603,7 +603,9 @@ execute(ctx):
     ctx.dependencies        as resolved for this delivery
     ctx.attempt             which attempt this delivery is
     ctx.isMaxExecutionDepth true when an emission could no longer increment depth
-    ctx.collected           for collect = each: which responses are in, which outstanding
+    ctx.collected           the responses in hand and any still outstanding
+                            under collect = all it is always complete, since the
+                            executor is only entered once nothing is outstanding
 
     ctx.state               present only where the version declared a schema
     ctx.initState(value)    first write
