@@ -229,9 +229,9 @@ on max depth violation     'error' | 'event' | f(ctx, span) → event or events
 | `'event'` | The default. The handler error event is emitted and the execution terminates at `error`, exactly as a handler failure does. The caller learns the work will not be done, in the one shape it is already obliged to handle. |
 | a function | Called instead of the executor, with the same context and trace it would have had. Whatever it returns is emitted and the execution terminates accordingly. |
 
-**A function MAY return only the self contract's own `outputs` or its handler error event.** A service emission is refused, and the reason is the whole point: an execution stopped for being too deep must not go deeper. The refusal is a fault, since an implementation cannot honour a violation handler that violates the thing it was called about.
+**A function MAY return only the self contract's own `outputs` or its handler error event.** A service emission is refused, and the reason is the whole point: an execution stopped for being too deep must not go deeper, and an implementation cannot honour a violation handler that violates the very thing it was called about.
 
-**A function MUST NOT be able to fail.** Where it throws, or returns anything that is not a permitted event, an implementation MUST fall back to `'event'` — the handler error event. This is the same rule as `retry delay`, for the same reason: a failure while handling a failure leaves nothing sensible to do, so the specification removes the possibility rather than describing the outcome.
+**A function MUST NOT be able to fail**, and every way it can go wrong has the same answer. Where it throws, returns nothing usable, or returns a service emission, an implementation MUST fall back to `'event'` — the handler error event — rather than propagate anything. One rule covers all three, which is deliberate: this code runs precisely when a workflow is already in trouble, and a violation handler that can itself derail the response is worth less than no violation handler at all. Same rule as `retry delay`, same reason.
 
 The executor is never entered on a violation. Whichever branch runs, `lifecycle_description` SHOULD record that the depth limit was reached, since an execution ending at `error` for this reason and one ending there for a handler failure are otherwise indistinguishable in the record.
 
@@ -406,7 +406,6 @@ An execution's failures fall into two categories, and the distinction is which o
 | the event's type is not one the handler can receive | no |
 | a handler declares two versions of the same service contract | no |
 | a delivery exceeds the version's maximum depth, where that version chose `'error'` | no |
-| a max-depth handler returns a service emission rather than an own-contract event | no |
 | `data` does not survive a JSON round trip | no |
 | an emission the executor requested is not permitted, or its payload is rejected | no |
 | resolving the executor's dependencies fails | yes |
