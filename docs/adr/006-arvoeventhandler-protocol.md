@@ -21,7 +21,7 @@ Several things are deliberately not defined here:
 - **Native API shape.** Per ADR-004, how a language exposes handler declaration, the execution context, or emission is that language's own choice. This ADR fixes semantics and the durable record's field names, not method names or type names.
 - **Migration of an execution record.** Not deferred — decided against. An execution record belongs to one contract version for its whole life and MUST NOT be moved to another (see **Version authority**).
 - **Timers, deadlines, and scheduling.** ADR-000 defers these. A consequence is stated under **Collection** and left unresolved rather than answered here.
-- **Cancellation, interruption, and compensation as model primitives.** Decided against rather than deferred. Arvo defines no cancel event, no cancelled lifecycle, and no interruption mechanism; cancellation is cooperative and application-level, and **Dependencies** gives it the only hook it needs. This places the concern outside the model, amending ADR-000's Deferred Decision by explicit reference.
+- **Cancellation as something one node does to another.** Decided against rather than deferred. Arvo defines no cancel event and no interruption mechanism: nothing can stop an execution that does not stop itself. What the model does provide is the means to cancel *cooperatively* — a hook for reading an application's own signal (**Dependencies**), and a terminal `cancelled` lifecycle so a record says why an execution ended. Compensation stays entirely an application's own concern, expressed through events its contracts already permit. This amends ADR-000's Deferred Decision by explicit reference.
 - **Execution capability profiles.** ADR-000 defers their model. This ADR states the concrete requirements a handler places on a mechanism (**Required of infrastructure adapters**) without proposing the profile format that would carry it.
 - **Error taxonomy beyond handler failure.** As in ADR-005, exactly one standardized emit is in play — the handler error event. This ADR adds the non-event failure category an execution can be in, and no further error kinds.
 
@@ -207,7 +207,8 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `source` | The self contract type this execution belongs to, and the `source` of every event it emits. |
 | `version` | The self contract version whose executor owns this execution. |
 | `cas_version` | Non-negative integer, starting at 0 and incremented by the handler on every write. Exists so a mechanism can compare-and-swap. |
-| `lifecycle` | `init`, `waiting`, `success`, or `error`. |
+| `lifecycle` | `init`, `waiting`, `success`, `error`, or `cancelled`. |
+| `lifecycle_description` | Free text explaining how the execution reached its current `lifecycle`, or `null`. |
 | `event_ids` | Every event the execution has touched, each as an `id` and a `direction` of `received` or `emitted`, relative to this handler. |
 | `init_event_id` | The `id` of the init event. |
 | `init_event_source` | The `source` of the init event — the caller a completion returns to. |
@@ -231,6 +232,15 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `waiting` | One or more responses are outstanding. |
 | `success` | Terminal. An own `outputs` event was emitted. |
 | `error` | Terminal. The handler error event was emitted. |
+| `cancelled` | Terminal. The executor marked the execution cancelled. |
+
+**An executor MUST be able to mark its own execution `cancelled`**, and doing so is terminal. It is how a cooperative wind-down records *why* an execution ended rather than leaving it indistinguishable from an ordinary completion. What it is called, and how it is reached, is API shape and each language's own choice (ADR-004).
+
+Marking cancelled does not excuse an execution from answering its caller. An execution that ends without emitting anything leaves whoever is waiting on it waiting forever — cancelling is a reason to stop, not a way out of the protocol. An executor that cancels SHOULD still emit something that completes its own contract, and an implementation SHOULD make that the easy path.
+
+Where an executor both marks cancelled and emits an own-contract event, `cancelled` is the recorded lifecycle. An explicit statement of why an execution ended outranks what is inferred from what it emitted.
+
+`lifecycle_description` carries free text explaining how the execution reached its `lifecycle`, and is `null` wherever nothing explains it — which is every `init`, `waiting` and `success`. It is populated on cancellation, with whatever reason the executor gives, and on `error`, with the failure's own message. It is diagnostic only: nothing in the protocol reads it, and no behaviour may depend on its contents.
 
 `init` deserves a warning rather than only a definition. An executor that emits nothing has neither completed nor asked for anything, so nothing will ever deliver to that execution again and it rests there forever. It is a legal state, it is almost always a defect, and an implementation SHOULD make it visible rather than silent.
 
@@ -294,6 +304,8 @@ The verdicts follow from one question: would the same inputs produce the same fa
 
 **No failure defined here routes to the workflow root.** ADR-001 permits such an event — carrying `subject` as its `executionid`, bypassing intermediate executions so a failure surfaces at the top regardless of depth — and defers the conditions to this ADR. This ADR defines none: a handler failure is attributable to the execution that suffered it and returns to that execution's caller, and a fault never becomes an event at all. The capability remains available and unused, and the conditions stay deferred rather than being invented to fill the slot.
 
+Both categories record their cause in `lifecycle_description` where a record survives them — a handler failure reaching `error` writes the failure's message there. A fault that prevents a record being written at all leaves nothing behind but what the mechanism logs, which is why a fault's retry-safety must travel with the fault itself rather than in the record.
+
 The two categories are named distinctly on purpose. "Handler error" refers only to the event; a fault is never an event. An implementation MUST NOT use one name for both.
 
 ### Dependencies
@@ -313,12 +325,12 @@ A factory that fails is an **execution fault and is retry safe**: constructing a
 
 ### Cancellation
 
-**Arvo defines no cancellation primitive**, and this is a decision rather than an omission. There is no cancel event, no `cancelled` lifecycle, and no way for one node to interrupt another. A contract version declares exactly one `input`, so a handler's inbound events are its init event and its services' responses and nothing else; a cancel event would therefore have to be a second model-level derived event alongside the handler error, and interrupting a running execution would require a control path outside the event stream, which ADR-000's *Event-Only Communication* forbids.
+**Nothing can cancel an execution but the execution itself**, and this is a decision rather than an omission. There is no cancel event and no way for one node to interrupt another. A contract version declares exactly one `input`, so a handler's inbound events are its init event and its services' responses and nothing else; a cancel event would therefore have to be a second model-level derived event alongside the handler error, and interrupting a running execution would require a control path outside the event stream, which ADR-000's *Event-Only Communication* forbids.
 
-What the model provides instead is the hook, and cancellation is built on it by whoever needs it:
+What the model does provide is enough for an execution to stop itself and say so: the terminal `cancelled` lifecycle under **The execution record**, and a hook for noticing that someone wants it to. Everything else is built on those by whoever needs it.
 
-- A dependency factory receives `{ event, state }`, so it can consult whatever cancellation signal an application maintains and expose the answer to the executor — conventionally as a flag on the dependencies it returns.
-- The executor reads that flag and winds itself down: emitting whatever compensating events its contracts already permit, then completing. Cancellation therefore terminates an execution the same way any other completion does, and needs no new lifecycle.
+- A dependency factory receives the delivered event and the current record, so it can consult whatever cancellation signal an application maintains and expose the answer to the executor — conventionally as a flag on the dependencies it returns.
+- The executor reads that flag and winds itself down: emitting whatever compensating events its contracts already permit, answering its caller, and marking its execution `cancelled` so the record says why it ended rather than leaving it to look like any other completion.
 - **Scope is the application's choice**, because the record carries both identifiers. Keyed on `execution_id`, a signal cancels one execution; keyed on `subject`, it cancels every execution of a workflow. Neither requires anything of the model, and both work through the same hook.
 
 This is cooperative, and the guidance should say so plainly: an execution that never receives another delivery never observes the signal, and an executor that does not check it is not cancellable. Arvo does not make a handler stoppable against its will. What it guarantees is that a handler which wants to be stoppable has somewhere to look, and that looking costs nothing when no one is cancelling.
@@ -347,7 +359,9 @@ The storage motivation survives intact under ADR-001's assignment, which is why 
 
 **Keeping the revision outside the record, as purely a mechanism's concern** — considered, not chosen. It keeps a storage concern out of a model-level format. But the handler is the only party that knows a write has occurred, and a mechanism that must invent its own revision cannot check it against what the handler intended. Putting it in the record makes incrementing it part of the handler's defined behaviour rather than a convention a mechanism supplies.
 
-**Defining cancellation as a model primitive — a derived cancel event on every contract, mirroring the handler error** — considered, not chosen. It is the only shape that would work event-natively, and it fits the machinery: `in_flight_event_map` already names exactly the children an execution would need to cancel, so propagation down the tree would need nothing new. It was rejected on cost against demand. It makes the handler error no longer the single standardized emit ADR-005 deliberately kept it as, it adds a terminal lifecycle and a third classification case that every implementation and every handler must then handle, and it makes cancellation a thing a node can have done *to* it — a meaningful shift in what a participant is, for a capability most handlers never use. The cooperative hook costs nothing when unused and is enough for the case that motivated asking.
+**Defining cancellation as a model primitive — a derived cancel event on every contract, mirroring the handler error** — considered, not chosen. It is the only shape that would work event-natively, and it fits the machinery: `in_flight_event_map` already names exactly the children an execution would need to cancel, so propagation down the tree would need nothing new. It was rejected on cost against demand. It makes the handler error no longer the single standardized emit ADR-005 deliberately kept it as, it adds a third classification case every implementation and every handler must then handle, and it makes cancellation a thing a node can have done *to* it — a meaningful shift in what a participant is, for a capability most handlers never use.
+
+Note what was and was not avoided. The terminal `cancelled` lifecycle exists either way, because a record should say why an execution ended under either design; that was never the expensive part. What the cooperative form avoids is the inbound event, the classification case, and a participant losing the property that nothing external stops it.
 
 **Defining a migration path for an execution record, so a version could be removed without draining** — considered, not chosen. It is the obvious answer to the operational cost above, and every durable-execution system eventually grows one. It cannot be built on ADR-005's foundation: per-version isolation means there is no compatibility relation between two versions to migrate along, so any mapping would be one an implementation invented, applied to state whose meaning only the original executor knows. An honest prohibition is better than a mechanism that silently reinterprets state, and draining is a cost a deployment can see and plan for.
 
@@ -355,7 +369,7 @@ The storage motivation survives intact under ADR-001's assignment, which is why 
 
 ## Conformance to ADR-000
 
-**Effect on AAM.** This ADR amends the AAM membership list in three ways. It replaces *"handler interfaces and lifecycle semantics"* with the declaration model, execution identity, execution record, classification, collection, and failure categories defined above. It adds the execution record's field names as a durable format, for the same reason ADR-005 placed the canonical contract form inside the model: durable data outlives the code that wrote it, and a record that means different things in two languages is not one model. And it places **cancellation, interruption, and compensation outside the model** — ADR-000 lists them as a Deferred Decision, whose membership is therefore undetermined until decided, and this ADR decides it by explicit reference. Arvo defines no primitive for any of the three; the hook under **Cancellation** is a place for an application's own signal to be read, not a model concept.
+**Effect on AAM.** This ADR amends the AAM membership list in three ways. It replaces *"handler interfaces and lifecycle semantics"* with the declaration model, execution identity, execution record, classification, collection, and failure categories defined above. It adds the execution record's field names as a durable format, for the same reason ADR-005 placed the canonical contract form inside the model: durable data outlives the code that wrote it, and a record that means different things in two languages is not one model. And it decides ADR-000's Deferred Decision on **cancellation, interruption, and compensation**, whose membership was undetermined until decided, by splitting it. *Interruption* — one node stopping another — is placed outside the model and Arvo defines nothing for it. *Compensation* is likewise outside: it happens through events a contract already permits, and needs no primitive. What is inside is narrow and only what a durable record requires: a terminal `cancelled` lifecycle, and `lifecycle_description` to say why. The hook under **Cancellation** reads an application's own signal and is not itself a model concept.
 
 **Invariants depended on.** *Event-Only Communication* — every interaction here, including a handler's own failure, is an ArvoEvent governed by a contract. *Explicit Contracts and Runtime Validation* — the closed capability set and the record's validation both rest on a contract being a complete, checkable declaration. *Infrastructure Independence* — the handler reaches no store and names no transport. *Nondeterminism Is Permitted* — nothing here requires an executor to be deterministic; recovery republishes what was committed rather than recomputing it.
 
