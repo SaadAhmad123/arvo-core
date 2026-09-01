@@ -123,35 +123,33 @@ Because `subject` is constant across a workflow, every record belonging to one w
 
 `init_event_id` and `init_event_source` are held on the record as their own fields rather than read from `init_event` each time. Both are needed to address a completion, and the record already keeps them stable for the life of the execution; carrying them directly means addressing a completion never depends on restoring an event, and a reader of a stored record can see where it will return to without parsing anything.
 
-**What an executor may set.** Every value above is a default. Which of them an executor may replace freely, and which it may not, follows from one question: does getting it wrong break the protocol, or only the event?
+**What an executor may set.** Every value above is a default. Whether an executor may replace one follows from a single question: does a wrong value spoil the event, or spoil something else? A **safe** field spoils only the event. An **unsafe** field spoils a reply path, a correlation, a trace, or a guarantee the rest of the workflow was relying on.
 
-An implementation SHOULD separate the two in its surface — the safe fields as ordinary parameters, the rest reachable only through a distinctly named, visibly unsafe group. The grouping is API shape and therefore each language's own choice (ADR-004); the classification is not.
+An implementation SHOULD separate the three in its surface, reaching the unsafe set only through a distinctly named, visibly unsafe group. The grouping is API shape and therefore each language's own choice (ADR-004); the classification is not.
 
-**Safe.** `type` and `data` are required rather than overrides: `type` selects both the destination and the schema, and `data` is validated against whichever schema it selects. Beyond those two, an executor may freely set exactly `domain` and `executionunits`. Neither is read by anything that routes, correlates, or identifies — `domain` selects a processing path the model already treats as the emitter's choice, and `executionunits` is accounting.
+| Field | Executor-owned edit | Reason | Consequence of a wrong value |
+|---|---|---|---|
+| `type` | required | Selects both the destination and the payload schema. | An undeclared type does not compile, and is an execution fault where types cannot catch it. |
+| `data` | required | The payload, validated against whichever schema `type` selects. | A payload the schema rejects is a non-retryable fault; no event is emitted. |
+| `domain` | safe | Selects a processing path. ADR-005 makes a contract's own `domain` a static default that is not inherited, so the emitter chooses. | The event is fulfilled on a different path. Nothing that routes, correlates or identifies reads it. |
+| `executionunits` | safe | Accounting only. | A wrong cost figure, and nothing else. |
+| `executionid` | unsafe | The reply path. A callee stores it as its `parent_execution_id` and stamps it on its completion. | The reply is addressed to an execution that does not exist, and this one waits forever. |
+| `to` | unsafe | What Arvo routes on. ADR-001 makes it "set fresh by the emitter", and for these events the handler is that emitter. | The event is delivered elsewhere. No reply arrives from a service call; a completion never reaches the caller. |
+| `subject` | unsafe | Workflow identity, and one of this handler's own entry checks. | The callee's completion fails `state.subject == event.subject` and is rejected on arrival. |
+| `initid` | unsafe | Response correlation — the key a caller looks its outstanding request up by. | The reply matches no outstanding entry and is discarded as an orphan. |
+| `id` | unsafe | The in-flight key, and an input to the callee's identity derivation. | A duplicate collapses two distinct calls onto one execution — the reason ADR-001 requires global uniqueness. |
+| `dataschema` | unsafe | Names the contract and version that validate the payload, and the other input to the callee's derivation. | The callee rejects the event, or derives a different execution than intended. |
+| `source` | unsafe | The callee stores it as `init_event_source` and addresses its completion to it. | A handler that misreports its source never receives its own replies. |
+| `parentid` | unsafe | Lineage, and rootness: `parentid == null` is what defines a root event. | A null claims rootness, which then requires `executionid == subject` and usually fails validation outright. |
+| `category` | unsafe | Classification, consulted before contract declarations. ADR-001 assigns it "through contract event factories rather than handler or application code". | The receiver rejects the delivery, or takes an init for a followup. |
+| `depth` | unsafe | The runaway-nesting signal. ADR-001 states it never decrements. | Unbounded recursion stops being visible — the one thing the field exists for. |
+| `traceparent` / `tracestate` | unsafe | Trace context, inside the model per ADR-000. The default already continues the delivered event's trace. | The workflow's trace fragments into disconnected pieces, exactly where a suspension makes it hardest to reconstruct by hand. |
+| `time` | unsafe | The moment of construction. ADR-001 makes it descriptive and forbids using it to establish ordering. | Nothing in the protocol; a misleading timeline for everyone reading the event stream afterwards. |
+| `baggage` | unsafe | Written once, at the root. ADR-001: "no handler may add a key, remove a key, or change a value". | Every event in the workflow no longer carries an identical map. Branches diverge, fan-in needs a merge rule that does not exist, and two nodes couple without a contract declaring it — for the whole workflow, not just this handler. |
 
-**Unsafe.** Everything else. Each of these is read by something other than the recipient's business logic, and a wrong value fails somewhere far from where it was set:
+**What "unsafe" means.** Four of these carry normative ADR-001 rules an override breaks outright rather than merely inadvisably — `baggage`, `depth`, `category`, and `initid`. The unsafe surface repeals none of them. It exists because a type boundary cannot enforce every rule in the model, and because hiding a field entirely leaves a developer with a real need no way forward and no way to weigh the cost.
 
-| Field | What a wrong value breaks |
-|---|---|
-| `executionid` | The reply path. A callee stores it as its `parent_execution_id` and stamps it on its completion, so a wrong value sends the reply to an execution that does not exist and this one waits forever. |
-| `subject` | Workflow identity, and this handler's own entry validation — the callee's completion fails the `state.subject == event.subject` check and is rejected on arrival. |
-| `initid` | Response correlation. A caller matches a reply by `in_flight_event_map[response.initid]`, so a wrong value matches nothing and the reply is discarded as an orphan. |
-| `id` | Both the in-flight key and an input to the callee's identity derivation. A duplicate collapses two distinct calls onto one execution, which is why ADR-001 requires global uniqueness. |
-| `dataschema` | Which contract and version validate the payload, and the other input to the callee's identity derivation. |
-| `parentid` | Lineage, and rootness: `parentid == null` defines a root event, which must then satisfy `executionid == subject`. |
-| `source` | A callee stores it as `init_event_source` and addresses its completion to it, so a handler that misreports its source never receives its own replies. |
-| `category` | Classification, which is consulted before contract declarations. A wrong value makes a receiver reject the delivery or take an init for a followup. |
-| `depth` | The runaway-nesting signal, which ADR-001 states never decrements. Overriding hides unbounded recursion — the one thing the field exists to make visible. |
-| `to` | Delivery. Arvo's routing reads it, so a wrong value does not fail — it sends the event somewhere else. On a service emission no reply ever arrives and the execution waits forever; on a completion the caller never resumes. ADR-001 makes `to` "set fresh by the emitter", and the handler is that emitter; an executor replacing it is redirecting the protocol's own traffic. |
-| `traceparent` / `tracestate`, or a span | The trace. An emission carrying anything other than the execution's running context detaches from the causal chain, so a workflow's trace fragments into disconnected pieces exactly where a suspension makes it hardest to reconstruct. Trace context is inside the model (ADR-000), and the default already continues the delivered event's trace, so replacing it is nearly always a mistake. |
-| `time` | Nothing in the protocol; ADR-001 makes it descriptive and forbids using it for ordering. It is here because a value that is normally the moment of construction should not be quietly replaceable. |
-| `baggage` | Workflow-global sameness. ADR-001 writes it once, at the root, so every event in a workflow carries an identical map — no branch diverges, no fan-in needs a merge rule, and no two nodes couple without a contract declaring it. A handler that writes it takes all three of those away, for the whole workflow, from every participant downstream. |
-
-**What an unsafe field means.** Several of these carry normative rules from ADR-001 that an override breaks outright, not merely inadvisably: `baggage` is written exactly once and "no handler may add a key, remove a key, or change a value"; `depth` "never decrements"; `category` is assigned "through contract event factories rather than handler or application code"; `initid` is `null` on every event but a completion.
-
-The unsafe surface does not repeal any of them. It exists because a type boundary cannot enforce every rule in the model, and because an implementation that hides a field entirely leaves a developer with a genuine need no way forward and no way to reason about the cost. What it offers is reachability with the consequence named — and a developer who crosses it owns that consequence fully, including for participants downstream who never chose it.
-
-That is the whole of the distinction between safe and unsafe here. A safe field is one where a wrong value spoils the event. An unsafe field is one where a wrong value spoils something else: a reply path, a correlation, a trace, or in `baggage`'s case a guarantee the entire workflow was relying on.
+What it offers is reachability with the consequence named. A developer who crosses it owns that consequence fully, including on behalf of participants downstream who never chose it.
 
 ### Observability
 
