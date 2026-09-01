@@ -203,18 +203,20 @@ Before any executor code runs, a handler MUST work through the following gate **
 
 A delivery leaves the gate one of three ways: **proceed** to the executor, **discard** with nothing written and nothing raised, or **fault**.
 
-| Sequence | Description | Behaviour on invalid | Short-circuits | Retry safe |
-|---|---|---|---|---|
-| 1 | **State object validation.** Where a record is supplied, it validates against the fixed envelope composed with the executor's own declared schema at `data`, and every event it holds restores to an event value (see **Hydration**). No `state.*` value may be read until this passes. | fault | yes | no |
-| 2 | **`dataschema` resolves against a declared contract**, naming one contract at one version and thereby determining whether this is an init or a followup. See **Resolution**. | fault | yes | no |
-| 3 | **`category` agrees with what resolution found.** `io.arvo.init` accompanies a self-contract event, `io.arvo.complete` a service-contract one. Absent or unrecognised, it is not consulted. | fault | yes | no |
-| 4 | **Presence matches classification, and the record's version is still declared.** An init delivery MUST be given no record; every other delivery MUST be given a complete one. Where one is present, the handler MUST still declare an executor for its `version` — a version withdrawn from a deployed handler strands its in-flight executions (see **Version authority**), and this is where that surfaces. | fault | yes | no |
-| 5 | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. Applies to followups; a duplicate init is the mechanism's to suppress. | discard | yes | n/a |
-| 6 | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` accepts a followup. | fault | yes | no |
-| 7 | **Record, handler and event agree.** `event.to == handler's self contract type`, `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault | no — all four are reported together | no |
-| 8 | **The type is one the resolved contract can send here.** For the self contract, its own type. For a service contract, one of that version's `outputs` or its handler error type. | fault | yes | no |
-| 9 | **Payload satisfies its schema**, as declared by the contract and version step 2 resolved. | fault | no | no |
-| 10 | **Awaited, on a followup.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault | yes | no |
+| Sequence | Applies to | Description | Behaviour on invalid | Short-circuits | Retry safe |
+|---|---|---|---|---|---|
+| 1 | any delivery carrying a record | **State object validation.** It validates against the fixed envelope composed with the executor's own declared schema at `data`, and every event it holds restores to an event value (see **Hydration**). No `state.*` value may be read until this passes. | fault | yes | no |
+| 2 | every delivery | **`dataschema` resolves against a declared contract**, naming one contract at one version and thereby determining whether this is an init or a followup. See **Resolution**. | fault | yes | no |
+| 3 | every delivery | **`category` agrees with what resolution found.** `io.arvo.init` accompanies a self-contract event, `io.arvo.complete` a service-contract one. Absent or unrecognised, it is not consulted. | fault | yes | no |
+| 4 | every delivery; the version check where a record is present | **Presence matches classification, and the record's version is still declared.** An init delivery MUST be given no record; every other delivery MUST be given a complete one. Where one is present, the handler MUST still declare an executor for its `version` — a version withdrawn from a deployed handler strands its in-flight executions (see **Version authority**), and this is where that surfaces. | fault | yes | no |
+| 5 | followups | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. A duplicate init is the mechanism's to suppress. | discard | yes | n/a |
+| 6 | followups | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` or `idle` accepts a followup. | fault | yes | no |
+| 7 | `event.to` on every delivery; the rest on followups | **Record, handler and event agree.** `event.to == handler's self contract type`, `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault | no — all applicable comparisons are reported together | no |
+| 8 | every delivery | **The type is one the resolved contract can send here.** For the self contract, its own type. For a service contract, one of that version's `outputs` or its handler error type. | fault | yes | no |
+| 9 | every delivery | **Payload satisfies its schema**, as declared by the contract and version step 2 resolved. | fault | no | no |
+| 10 | followups | **Awaited.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault | yes | no |
+
+An init delivery has no record, so the steps that read one do not apply to it — which is most of what the **applies to** column records. Only step 7 is split: `event.to` is on the event and is checked either way, while the three comparisons against the record are followups only.
 
 Every fault here is non-retryable, and for one reason: each describes a delivery that would fail identically however often it were repeated. **A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
 
@@ -311,7 +313,7 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `source` | The self contract type this execution belongs to, and the `source` of every event it emits. |
 | `version` | The self contract version whose executor owns this execution. |
 | `cas_version` | Non-negative integer, starting at 0 and incremented on every write to the record — by the handler ordinarily, and by the mechanism on the one write it makes itself (see obligation 3). Exists so a mechanism can compare-and-swap. |
-| `lifecycle` | `init`, `waiting`, `success`, `error`, `cancelled`, or `failure`. |
+| `lifecycle` | `idle`, `waiting`, `success`, `error`, `cancelled`, or `failure`. |
 | `lifecycle_description` | Free text explaining how the execution reached its current `lifecycle`, or `null`. |
 | `event_ids` | Every event the execution has touched, each as an `id` and a `direction` of `received` or `emitted`, relative to this handler. |
 | `init_event_id` | The `id` of the init event. |
@@ -332,7 +334,7 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 
 | Value | When an execution rests here |
 |---|---|
-| `init` | Created, with nothing outstanding and nothing completed — reachable only when an executor emits no events at all. |
+| `idle` | Alive, with nothing outstanding and nothing completed. |
 | `waiting` | One or more responses are outstanding. |
 | `success` | Terminal. An own `outputs` event was emitted. |
 | `error` | Terminal. The handler error event was emitted. |
@@ -345,9 +347,11 @@ Marking cancelled does not excuse an execution from answering its caller. An exe
 
 Where an executor both marks cancelled and emits an own-contract event, `cancelled` is the recorded lifecycle. An explicit statement of why an execution ended outranks what is inferred from what it emitted.
 
-`lifecycle_description` carries free text explaining how the execution reached its `lifecycle`, and is `null` wherever nothing explains it — which is every `init`, `waiting` and `success`. It is populated on `cancelled`, with whatever reason the executor gives; on `error`, with the handler failure's own message; and on `failure`, with the message of whatever the mechanism gave up retrying. It is diagnostic only: nothing in the protocol reads it, and no behaviour may depend on its contents.
+`lifecycle_description` carries free text explaining how the execution reached its `lifecycle`, and is `null` wherever nothing explains it — which is every `idle`, `waiting` and `success`. It is populated on `cancelled`, with whatever reason the executor gives; on `error`, with the handler failure's own message; and on `failure`, with the message of whatever the mechanism gave up retrying. It is diagnostic only: nothing in the protocol reads it, and no behaviour may depend on its contents.
 
-`init` deserves a warning rather than only a definition. An executor that emits nothing has neither completed nor asked for anything, so nothing will ever deliver to that execution again and it rests there forever. It is a legal state, it is almost always a defect, and an implementation SHOULD make it visible rather than silent.
+**An executor that emits nothing rests at `waiting` or `idle`, depending on what is still outstanding.** Returning `[]` says only "no new events"; it does not say the execution has nothing to wait for. Under `collect = each` an executor is entered on a partial collection and returning `[]` is the ordinary case — responses remain outstanding, so the execution stays at `waiting`. Where nothing is outstanding and nothing terminal was emitted, it rests at `idle`.
+
+`idle` is named for the state rather than for how it was reached, because it can be reached two ways: an executor that emitted nothing on the delivery that created the execution, and one that emitted nothing after its last response came in. Both leave an execution that is alive, waiting for nothing, and finished with nothing — so nothing will ever deliver to it again and it rests there forever. It is a legal state, it is almost always a defect, and an implementation SHOULD make it visible rather than silent.
 
 **How this record may change later.** A stored record outlives the deployment that wrote it, and an execution in flight when a handler is upgraded is read back by the newer code. So every field a future ADR adds to this record MUST be nullable, with absence carrying a defined meaning — a record written before the field existed is still a valid record, and must validate and resume without alteration.
 
@@ -440,7 +444,7 @@ When an executor emits one or more events to service contracts, the handler reco
 - if any entry is still outstanding, the executor MUST NOT be entered; the delivery ends and the record is written;
 - if none is, the executor is entered with every response available.
 
-A handler MUST allow this to be overridden per handler definition, so that an executor is entered on every response with the partial collection available to it. An implementation SHOULD document that such an executor runs once per arriving response and must therefore be safe to repeat.
+A handler MUST allow this to be overridden **per version**, so that an executor is entered on every response with the partial collection available to it. Per version rather than per handler, because an executor entered on every response must be safe to repeat — and that is a property of executor code, which is written per version. State is version-bound too, so a version keeping a running tally may tolerate this where its successor does not. An implementation SHOULD document that such an executor runs once per arriving response and must therefore be safe to repeat.
 
 `in_flight_event_map` is **rebuilt on every emission**, not merged into. It always describes exactly what the current round awaits. Under the default this is unobservable, since the executor is only entered on a complete collection. Under the override it means emitting while a response is still outstanding abandons that response, and an implementation MUST document this as the cost of the override.
 
@@ -590,6 +594,7 @@ handler
             retryDelay           f(event, state) → 200 × attempt   default 300ms
             handlerErrorDomain   "orders_failures"  a value or a source; default none
             collect              all                all | each; default all
+                                                    per version, not per handler
             maxDepth             250                default 1000
             onMaxDepthViolation  event              error | event | f({ctx, violation}); default event
         execute(ctx) → [ event, ... ]
@@ -637,7 +642,9 @@ execute(ctx):
     ctx.fault(description, retrySafe)   raise an execution fault
                                         retrySafe defaults to true
 
-    return [ ... ]          emitted; [] emits nothing and preserves the collection
+    return [ ... ]          emitted; [] emits nothing and preserves the collection,
+                            resting at waiting if anything is still outstanding
+                            and at idle if nothing is
 ```
 
 **What the mechanism calls.** The handler is entered once per delivery and holds nothing between them.
