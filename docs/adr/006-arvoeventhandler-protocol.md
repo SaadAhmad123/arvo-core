@@ -98,7 +98,7 @@ The complete set of defaults:
 | `initid` | `null` | `state.init_event_id` |
 | `category` | `io.arvo.init` | `io.arvo.complete` |
 | `source` | `state.source` | `state.source` |
-| `to` | the service contract's own `type` | `init_event.source` |
+| `to` | the service contract's own `type` | `state.init_event_source` |
 | `baggage` | carried through unchanged | carried through unchanged |
 | `domain` | absent | absent, or a per-version default for the handler error event |
 | `executionunits` | `0` | `0` |
@@ -108,6 +108,8 @@ The complete set of defaults:
 `source` is the handler's own contract type, which identifies the producing node without inventing an identity scheme the model does not have. It is a valid URI-reference under ADR-002 and normalizes to itself, so it satisfies `source`'s format rule unchanged.
 
 `to` follows from that. A service emission is addressed to the contract that declares it, and a completion is addressed back to whoever opened this execution — which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults an executor may replace; a completion in particular may legitimately go somewhere other than its caller.
+
+`init_event_id` and `init_event_source` are held on the record as their own fields rather than read from `init_event` each time. Both are needed to address a completion, and the record already keeps them stable for the life of the execution; carrying them directly means addressing a completion never depends on restoring an event, and a reader of a stored record can see where it will return to without parsing anything.
 
 **What an executor may override, and what it may not.** Every field above is a default, and an executor may replace most of them — `domain`, `executionunits`, `to`, the trace context, and the rest. Three are not the executor's to set:
 
@@ -178,7 +180,8 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `cas_version` | Non-negative integer, starting at 0 and incremented by the handler on every write. Exists so a mechanism can compare-and-swap. |
 | `lifecycle` | `init`, `waiting`, `success`, or `error`. |
 | `event_ids` | Every event the execution has touched, each as an id and a direction relative to this handler. |
-| `init_event_id` | The `id` of the init event, carried separately so a completion can be addressed without restoring the whole event. |
+| `init_event_id` | The `id` of the init event. |
+| `init_event_source` | The `source` of the init event — the caller a completion returns to. |
 | `init_event` | The event that began the execution. |
 | `triggering_event` | The event that caused the most recent delivery. |
 | `in_flight_event_map` | Keyed by the id of each event emitted to a service in the current round; the collected response, or absent while outstanding. |
