@@ -81,7 +81,7 @@ Three properties follow, and all three are load-bearing. A redelivered init even
 
 The residual case this does not separate is two handlers implementing the *same* contract version, which would derive the same identifier for the same init event. Nothing in the model forbids that deployment, and nothing in the model can distinguish those handlers either — node identity is deliberately not something Arvo depends on (ADR-000). It is a deployment error, and named here so it is not mistaken for a gap in the derivation.
 
-This execution's nesting level is `init_event.depth`, per ADR-001's rule that an event opening a new execution carries one more than the level of the execution emitting it. It needs no field of its own on the record.
+This execution's nesting level is recorded as `state.depth = init_event.depth`. That is this execution's own level by ADR-001's rule that an event opening a new execution carries one more than the level of the execution emitting it — so the init event's depth already *is* the depth of the execution it opens.
 
 ### Addressing an emitted event
 
@@ -94,7 +94,14 @@ Every event an execution emits is addressed by one rule, determined by where it 
 
 `subject` is therefore the same on everything, exactly as ADR-001 requires. `executionid` is role-dependent: an execution stamps its own identity on what it sends downstream, and a completion carries its caller's identity rather than its own — ADR-001 states both, and this ADR only makes them mechanical.
 
-Every emitted event MUST also carry the delivered event's `id` as its `parentid`, and `depth` per ADR-001: one more than this execution's level on an event opening a new execution, this execution's own level on everything else, including a completion.
+Every emitted event MUST also carry the delivered event's `id` as its `parentid`, and its `depth` set as:
+
+| Emitting | `depth` |
+|---|---|
+| to a declared service contract | `state.depth + 1` |
+| its own `outputs`, or its handler error event | `state.depth` |
+
+Both follow ADR-001 directly: an event opening a new execution "carries one more than the level of the execution emitting it", and "every other event, including a completion, carries the emitting execution's own level". A completion therefore reports the level of the execution that produced it, not the level of the execution it returns to — `depth` is defined there as "the nesting level of the execution this event belongs to", and a completion belongs to its emitter. ADR-001 also states outright that `depth` never decrements, so a completion MUST NOT carry one less than its execution's level.
 
 Because `subject` is constant across a workflow, every record belonging to one workflow shares it, and a mechanism MAY use it to group them. Because `execution_id` identifies one execution, a mechanism MAY use it as the record's key.
 
@@ -143,6 +150,7 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `subject` | The workflow. Grouping key. |
 | `execution_id` | This execution. Record key. |
 | `parent_execution_id` | The execution that caused this one. |
+| `depth` | This execution's nesting level, from the init event that opened it. |
 | `type` | The self contract type this execution belongs to. |
 | `version` | The self contract version whose executor owns this execution. |
 | `cas_version` | Non-negative integer, starting at 0 and incremented by the handler on every write. Exists so a mechanism can compare-and-swap. |
