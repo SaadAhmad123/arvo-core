@@ -49,6 +49,8 @@ The set of events a handler may emit is exactly: the input event type of each de
 
 **No two capabilities in a handler's declared set may share an event type**, and a handler MUST be rejected at declaration time if any two do — a service input against another service's input, a service input against a key of its own `outputs`, or either against its handler error type. ADR-005 forbids only the within-contract case, and is explicit that `type` is not globally unique across contracts, so nothing prevents two declared capabilities colliding until this rule does.
 
+**A handler MUST NOT declare two versions of the same service contract.** Doing so is a declaration error, and where it reaches a delivery it is a non-retryable fault. Two versions of one contract share a `type` — ADR-005 makes `type` a property of the contract, not of a version — so their input types collide and the rule above already rejects them. It is stated separately because the collision rule reads as being about unrelated contracts, and this is the case an author is most likely to reach for deliberately: wanting to call an old and a new version of the same service from one handler. That is two dependencies on one contract, and the model has no way to tell their responses apart.
+
 The rule is what makes an emitted event's type sufficient to determine its destination. It is checked once, at declaration, where the entire capability set is visible — the only place it can be checked, since no declaration site knows every contract in existence.
 
 An executor MAY declare a schema for business state it wishes to remember between deliveries. An executor that declares none is still resumable — it may emit to a service and be re-entered on the response — and still has an execution record. It simply has nothing of its own in it.
@@ -177,11 +179,16 @@ An init delivery derives a new execution. A followup delivery resolves the exist
 
 ### Entry validation
 
-Before any executor code runs, a handler MUST perform the following checks in full. **Every one of them fails as a non-retryable fault**, because each describes a delivery that would fail identically however many times it were repeated.
+Before any executor code runs, a handler MUST work through the following gate. It is **ordered and short-circuiting**: each step is a precondition for the next, and the first failure ends the delivery. Order matters — a record cannot be compared before it is known to be well formed, and a duplicate cannot be recognised as harmless after a later step has already called it a fault.
 
-1. **The delivered event is one this handler's contracts expect** — it classifies as an init or a followup under **Classification**, and its payload satisfies the schema the relevant contract declares for it.
-2. **The record is a well-formed execution record** — it validates against the fixed envelope composed with the executor's own declared schema at `data`, and every event it holds restores to an event value (see **Hydration**).
-3. **The record, the event and the handler agree.** A record that validates in isolation may still be the wrong record:
+A delivery leaves the gate in one of three ways: **proceed** to the executor, **discard** with nothing recorded and nothing raised, or **fault**.
+
+1. **Already seen → discard.** If the delivered event's `id` is already in `event_ids` as `received`, this delivery has been processed. Discard it: no executor, no write, no fault. At-least-once delivery makes this ordinary, not exceptional.
+2. **Classifiable → else fault.** The event resolves to an init or a followup under **Classification**.
+3. **Well-formed record → else fault.** The record validates against the fixed envelope composed with the executor's own declared schema at `data`, and every event it holds restores to an event value (see **Hydration**). Only now may any `state.*` value be read.
+4. **Presence matches classification → else fault.** An init delivery MUST be given no record; every other delivery MUST be given a complete one.
+5. **Not terminal → else fault.** A record at `success`, `error`, `cancelled` or `failure` accepts no further delivery. A late arrival is a fault, not a quiet discard: something is still sending to an execution that finished, and that is worth surfacing rather than absorbing.
+6. **Addressed to this record → else fault.**
 
    ```
    event.to           == handler's self contract type
@@ -190,9 +197,18 @@ Before any executor code runs, a handler MUST perform the following checks in fu
    state.subject      == event.subject
    ```
 
-4. **Presence matches classification.** An init delivery MUST be given no record — an init event opens a new execution, so a record already existing for it means the delivery is not what it claims to be. Every other delivery MUST be given a complete record. A missing record on a followup, or a present one on an init, is a fault.
+   `to` is authoritative here, not advisory: an event arriving with no `to` at all is a fault. A handler is entitled to know that it was addressed rather than merely reached.
+7. **Declared by this version → else fault.** The event's type is declared by the version in `state.version` — its own input type, or the input or response type of a service *that version* declares. Versions are fully isolated under ADR-005, so a type another version of the same handler declares is not this version's to accept.
+8. **Payload satisfies its schema → else fault.** Checked against whichever contract and version the type resolves to.
+9. **Awaited, on a followup → else fault.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. A response nothing is waiting for is a fault for the same reason a late arrival is: it means something is answering a question this execution did not ask, or asked and already had answered.
 
-Rule 4 places one obligation on whatever runs the handler, and it is the reason the derivation in **Execution identity** is specified publicly rather than left internal. A mechanism MUST resolve the record *before* dispatch, computing the identifier from the init event by the same rule the handler would, and MUST NOT dispatch an init delivery for which a record already exists. That is how a redelivered init event "resolves to the existing execution rather than forking a new one", which ADR-001 gives as the reason for requiring deterministic derivation in the first place. Were the handler to absorb a duplicate init silently instead, the model would have no way to distinguish a redelivery from a genuine collision, and rule 4 would have nothing to catch.
+**A fault names every check that failed**, not the first, wherever the ordering permits more than one to be evaluated. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a sequence of redeliveries each revealing one more problem.
+
+**Why step 1 comes first.** A redelivery of the very event that completed an execution would otherwise reach step 5 and be reported as a late arrival at a terminal record — turning ordinary at-least-once delivery into a stream of spurious faults. Recognising a duplicate before asking whether the execution is finished is what keeps the terminal check meaningful: past step 1, a delivery to a terminal record really is something new arriving too late.
+
+Discarding a duplicate is safe because the record that would have been written already exists, carrying that event's id in `event_ids`. **Arvo treats one execution of an executor as atomic**: it either produced its events and its record together, or it produced neither. An executor should be written on the same assumption — where side effects outside Arvo are unavoidable, they should be idempotent or cheap to repeat, because the protocol offers no partial-completion state for them to resume from.
+
+**What step 4 asks of a mechanism.** It is the reason the derivation in **Execution identity** is specified publicly rather than left internal. A mechanism MUST resolve the record *before* dispatch, computing the identifier from the init event by the same rule the handler would, and MUST NOT dispatch an init delivery for which a record already exists. That is how a redelivered init event "resolves to the existing execution rather than forking a new one", which ADR-001 gives as the reason for requiring deterministic derivation in the first place.
 
 ### The execution record
 
@@ -262,6 +278,8 @@ Removing a version from a deployed handler therefore strands its in-flight execu
 
 **Hydration.** On entering a delivery, a handler MUST refresh `retry_metrics` from the attempt number the delivery carries, validate the whole record — a fixed envelope, composed with the executor's own declared schema at `data` — and MUST restore every event the record holds to an event value before any executor code runs. A record that fails either is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
 
+**This is an accepted trade-off, and its cost scales with fan-out.** An execution awaiting a thousand responses restores a thousand events on each of them, and the record grows with the collection. Eager hydration is the rule regardless: a handler that reasons about a record it has only partly validated is worse than a handler that is slow. Nothing here bounds fan-out, and how to bound it — a cap, lazy restoration for entries an executor never reads, or something else — is left to a later decision rather than guessed at now.
+
 **Serializability of `data`.** A handler MUST verify that `data` survives a JSON round trip when an executor returns, and report a fault if it does not. This is the executor author's obligation and cannot be prevented by a declared schema, which will not catch a native date or class instance passed through a permissive schema position. Checking at return keeps the failure attributable to the executor that caused it.
 
 ### Retry
@@ -320,7 +338,9 @@ A handler MUST allow this to be overridden per handler definition, so that an ex
 
 `in_flight_event_map` is **rebuilt on every emission**, not merged into. It always describes exactly what the current round awaits. Under the default this is unobservable, since the executor is only entered on a complete collection. Under the override it means emitting while a response is still outstanding abandons that response, and an implementation MUST document this as the cost of the override.
 
-**A response is processed only if the collection is awaiting it.** A response whose `initid` is not a key of the collection, or is a key whose value is already filled, is ignored — whether because the collection was rebuilt without it, or because the execution has already reached a terminal `lifecycle`. It does not re-enter the executor, does not reopen a terminal execution, and is not a fault.
+**A response is processed only if the collection is awaiting it**, and one that is not is a fault — see steps 5 and 9 of **Entry validation**. This covers a response the collection was rebuilt without, one answering a question already answered, and one arriving at an execution that has already finished. None of them re-enters the executor and none reopens a terminal execution.
+
+The one delivery that is discarded rather than faulted is an outright duplicate, recognised at step 1 by its event id. The distinction is worth holding onto: a duplicate is the transport doing its job, while an unawaited response is a participant sending something nobody asked for.
 
 A consequence this ADR states rather than resolves: under the default join, a service that never responds leaves an execution at `waiting` indefinitely. Bounding that requires deadlines, which ADR-000 defers.
 
@@ -339,7 +359,11 @@ An execution's failures fall into two categories, and the distinction is which o
 | the record's `version` is no longer declared | no |
 | the delivered event fails classification or its contract's schema | no |
 | an init delivery arrives with a record, or any other delivery without one | no |
-| the record does not match the delivery's addressing | no |
+| the record does not match the delivery's addressing, or the event carries no `to` | no |
+| the delivery reaches a record already at a terminal `lifecycle` | no |
+| a response's `initid` names nothing the collection is awaiting | no |
+| the event's type is not declared by the version in `state.version` | no |
+| a handler declares two versions of the same service contract | no |
 | `data` does not survive a JSON round trip | no |
 | an emission the executor requested is not permitted, or its payload is rejected | no |
 | resolving the executor's dependencies fails | yes |
@@ -429,7 +453,7 @@ Note what was and was not avoided. The terminal `cancelled` lifecycle exists eit
 
 Optimistic concurrency satisfies the fourth, and `cas_version` exists so it can. It is a good fit here: concurrent responses write different keys of the collection, so the contention is an artefact of storing one record rather than a semantic conflict, and a loser can simply redo its work. Where a response lands on an incomplete collection the executor is never entered, so a failed write has no side effect to undo. Where a response completes the collection, two writers can each believe they completed it and each enter the executor — which the first obligation resolves, since the loser's events and record fail to commit as one unit and nothing is published. This is why those two are stated together.
 
-**Left deferred.** The conditions under which a handler routes a failure to the workflow root, which ADR-001 deferred here and this ADR does not settle. Timers, deadlines, and any bound on how long an execution may rest at `waiting`. Execution capability profiles as a format, including how a handler would declare the four obligations above rather than have an ADR assert them. Error kinds beyond handler failure. Whether emitted event identifiers should be derived rather than freshly generated — unnecessary given the first adapter obligation, and available as defence in depth if a later decision wants it.
+**Left deferred.** How to bound fan-out, given that hydration is eager and its cost scales with the size of `in_flight_event_map` — a cap, lazy restoration, or something else. Whether the `contracts` snapshot should be compared against the live contract at entry as a drift warning; it is free to do and would surface "this execution began under a contract that has since changed" at the moment it matters, but it is not decided here and nothing may enforce against the snapshot in the meantime. The conditions under which a handler routes a failure to the workflow root, which ADR-001 deferred here and this ADR does not settle. Timers, deadlines, and any bound on how long an execution may rest at `waiting`. Execution capability profiles as a format, including how a handler would declare the four obligations above rather than have an ADR assert them. Error kinds beyond handler failure. Whether emitted event identifiers should be derived rather than freshly generated — unnecessary given the first adapter obligation, and available as defence in depth if a later decision wants it.
 
 
 ## Appendix: An illustrative handler surface
@@ -511,6 +535,7 @@ tryExecute(
 )
     → produced { events, state }         includes the case where the executor failed
                                           and the handler error event is among the events
+    → discarded                           a duplicate; nothing to do, nothing wrong
     → fault    { retrySafe, retryAfterMs, description }
                                           never an event; nothing was produced
 ```
