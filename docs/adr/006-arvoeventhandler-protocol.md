@@ -51,7 +51,7 @@ The set of events a handler may emit is exactly: the input event type of each de
 
 **A handler MUST NOT declare two versions of the same service contract.** Doing so is a declaration error, and where it reaches a delivery it is a non-retryable fault. Two versions of one contract share a `type` — ADR-005 makes `type` a property of the contract, not of a version — so their input types collide and the rule above already rejects them. It is stated separately because the collision rule reads as being about unrelated contracts, and this is the case an author is most likely to reach for deliberately: wanting to call an old and a new version of the same service from one handler. That is two dependencies on one contract, and the model has no way to tell their responses apart.
 
-The rule is what makes an emitted event's type sufficient to determine its destination. It is checked once, at declaration, where the entire capability set is visible — the only place it can be checked, since no declaration site knows every contract in existence.
+Both rules exist to make an emitted event's type sufficient to determine its destination. Each is checked once, at declaration, where the entire capability set is visible — the only place it can be checked, since no declaration site knows every contract in existence.
 
 An executor MAY declare a schema for business state it wishes to remember between deliveries. An executor that declares none is still resumable — it may emit to a service and be re-entered on the response — and still has an execution record. It simply has nothing of its own in it.
 
@@ -149,7 +149,7 @@ An implementation SHOULD separate the three in its surface, reaching the unsafe 
 | `time` | unsafe | The moment of construction. ADR-001 makes it descriptive and forbids using it to establish ordering. | Nothing in the protocol; a misleading timeline for everyone reading the event stream afterwards. | Whoever reads or audits the stream later. | It is a real RFC 3339 instant carrying an offset, and describes when the event actually occurred. |
 | `baggage` | unsafe | Written once, at the root. ADR-001: "no handler may add a key, remove a key, or change a value". | Every event in the workflow no longer carries an identical map. Branches diverge, fan-in needs a merge rule that does not exist, and two nodes couple without a contract declaring it. | Every participant in the workflow, downstream and in every other branch. | Nothing a handler can guarantee from where it stands. It would have to know every branch of the workflow, present and future, and that none fans back in. Only the root minter is in that position, and a handler never is. |
 
-Read the last column down and the case for the category makes itself: for two of the four safe and required rows the cost stops at the execution that caused it, and for almost every unsafe row it does not. An executor setting an unsafe field is spending someone else's reliability — a callee's, a receiver's, an operator's, or in `baggage`'s case every participant in the workflow at once. That is the distinction the surface is marking, and the reason the ADR names an owner rather than only a symptom.
+Read the *consequence borne by* column down and the case for the category makes itself: for three of the four safe and required rows the cost stops at the execution that caused it, and for almost every unsafe row it does not. An executor setting an unsafe field is spending someone else's reliability — a callee's, a receiver's, an operator's, or in `baggage`'s case every participant in the workflow at once. That is the distinction the surface is marking, and the reason the ADR names an owner rather than only a symptom.
 
 **What "unsafe" means.** Four of these carry normative ADR-001 rules an override breaks outright rather than merely inadvisably — `baggage`, `depth`, `category`, and `initid`. The unsafe surface repeals none of them. It exists because a type boundary cannot enforce every rule in the model, and because hiding a field entirely leaves a developer with a real need no way forward and no way to weigh the cost.
 
@@ -191,9 +191,10 @@ A delivery leaves the gate one of three ways: **proceed** to the executor, **dis
 | 4 | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. Applies to followups; a duplicate init is the mechanism's to suppress. | discard | yes | n/a |
 | 5 | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` accepts a followup. | fault | yes | no |
 | 6 | **Record, handler and event agree.** `event.to == handler's self contract type`, `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault | no — all four are reported together | no |
-| 7 | **Declared by this version.** The event's type is declared by the version in `state.version` — its own input, or the input or response type of a service *that version* declares. | fault | yes — without a resolved type there is no schema to check | no |
-| 8 | **Payload satisfies its schema**, as declared by whichever contract and version the type resolves to. | fault | no | no |
-| 9 | **Awaited, on a followup.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault | yes | no |
+| 7 | **The record's version is still declared.** The handler declares an executor for the version in `state.version`. A version withdrawn from a deployed handler strands its in-flight executions (see **Version authority**), and this is where that surfaces. Init deliveries resolve their version from `dataschema` and are covered by step 2. | fault | yes — no executor means nothing further can be evaluated | no |
+| 8 | **Declared by this version.** The event's type is declared by the version in `state.version` — its own input, or the input or response type of a service *that version* declares. | fault | yes — without a resolved type there is no schema to check | no |
+| 9 | **Payload satisfies its schema**, as declared by whichever contract and version the type resolves to. | fault | no | no |
+| 10 | **Awaited, on a followup.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault | yes | no |
 
 Every fault here is non-retryable, and for one reason: each describes a delivery that would fail identically however often it were repeated. **A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
 
@@ -219,7 +220,7 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `depth` | This execution's nesting level, from the init event that opened it. |
 | `source` | The self contract type this execution belongs to, and the `source` of every event it emits. |
 | `version` | The self contract version whose executor owns this execution. |
-| `cas_version` | Non-negative integer, starting at 0 and incremented by the handler on every write. Exists so a mechanism can compare-and-swap. |
+| `cas_version` | Non-negative integer, starting at 0 and incremented on every write to the record — by the handler ordinarily, and by the mechanism on the one write it makes itself (see obligation 3). Exists so a mechanism can compare-and-swap. |
 | `lifecycle` | `init`, `waiting`, `success`, `error`, `cancelled`, or `failure`. |
 | `lifecycle_description` | Free text explaining how the execution reached its current `lifecycle`, or `null`. |
 | `retry_metrics` | What this execution knows about being retried. See **Retry**. |
@@ -255,7 +256,7 @@ Marking cancelled does not excuse an execution from answering its caller. An exe
 
 Where an executor both marks cancelled and emits an own-contract event, `cancelled` is the recorded lifecycle. An explicit statement of why an execution ended outranks what is inferred from what it emitted.
 
-`lifecycle_description` carries free text explaining how the execution reached its `lifecycle`, and is `null` wherever nothing explains it — which is every `init`, `waiting` and `success`. It is populated on cancellation, with whatever reason the executor gives, and on `error`, with the failure's own message. It is diagnostic only: nothing in the protocol reads it, and no behaviour may depend on its contents.
+`lifecycle_description` carries free text explaining how the execution reached its `lifecycle`, and is `null` wherever nothing explains it — which is every `init`, `waiting` and `success`. It is populated on `cancelled`, with whatever reason the executor gives; on `error`, with the handler failure's own message; and on `failure`, with the message of whatever the mechanism gave up retrying. It is diagnostic only: nothing in the protocol reads it, and no behaviour may depend on its contents.
 
 `init` deserves a warning rather than only a definition. An executor that emits nothing has neither completed nor asked for anything, so nothing will ever deliver to that execution again and it rests there forever. It is a legal state, it is almost always a defect, and an implementation SHOULD make it visible rather than silent.
 
@@ -307,10 +308,12 @@ In practice that admits milliseconds and microseconds and rules out nanoseconds:
 **A version MAY set two options** governing what a mechanism should do:
 
 ```
-maxRetryAttempts   number, default 3
-retryDelay         number of milliseconds
-                   or  f(event, state) → milliseconds
+max retry attempts   a number; 3 unless set
+retry delay          a number of milliseconds
+                     or  f(event, state) → milliseconds
 ```
+
+Their names are each language's own choice; what this ADR fixes is that both exist and what they mean.
 
 `retryDelay` in its function form **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute an internal default of 300ms rather than propagate the failure. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
 
@@ -339,9 +342,9 @@ A handler MUST allow this to be overridden per handler definition, so that an ex
 
 `in_flight_event_map` is **rebuilt on every emission**, not merged into. It always describes exactly what the current round awaits. Under the default this is unobservable, since the executor is only entered on a complete collection. Under the override it means emitting while a response is still outstanding abandons that response, and an implementation MUST document this as the cost of the override.
 
-**A response is processed only if the collection is awaiting it**, and one that is not is a fault — see steps 5 and 9 of **Entry validation**. This covers a response the collection was rebuilt without, one answering a question already answered, and one arriving at an execution that has already finished. None of them re-enters the executor and none reopens a terminal execution.
+**A response is processed only if the collection is awaiting it**, and one that is not is a fault — see steps 5 and 10 of **Entry validation**. This covers a response the collection was rebuilt without, one answering a question already answered, and one arriving at an execution that has already finished. None of them re-enters the executor and none reopens a terminal execution.
 
-The one delivery that is discarded rather than faulted is an outright duplicate, recognised at step 1 by its event id. The distinction is worth holding onto: a duplicate is the transport doing its job, while an unawaited response is a participant sending something nobody asked for.
+The one delivery that is discarded rather than faulted is an outright duplicate, recognised at step 4 by its event id. The distinction is worth holding onto: a duplicate is the transport doing its job, while an unawaited response is a participant sending something nobody asked for.
 
 A consequence this ADR states rather than resolves: under the default join, a service that never responds leaves an execution at `waiting` indefinitely. Bounding that requires deadlines, which ADR-000 defers.
 
@@ -407,7 +410,7 @@ This is cooperative, and the guidance should say so plainly: an execution that n
 
 ## Consequences
 
-**Gained.** A handler becomes a function of an event, a record, and its dependencies, which makes it testable with literal values and no infrastructure — the property that most reliably decides whether resumable code can be reasoned about. Resumption is a single keyed read, so no mechanism needs a correlation index to participate. The capability set is closed and statically known, so a mechanism can determine what a handler may do before running it, and an implementation with a type system can reject an impermissible emission before it is deployed. The two failure categories give a mechanism an unambiguous rule for when to retry, which is the question adapters otherwise answer by guessing from an error message.
+**Gained.** A handler becomes a function of an event, a record, its dependencies and an attempt number, which makes it testable with literal values and no infrastructure — the property that most reliably decides whether resumable code can be reasoned about. Resumption is a single keyed read, so no mechanism needs a correlation index to participate. The capability set is closed and statically known, so a mechanism can determine what a handler may do before running it, and an implementation with a type system can reject an impermissible emission before it is deployed. The two failure categories give a mechanism an unambiguous rule for when to retry, which is the question adapters otherwise answer by guessing from an error message.
 
 **Paid for.** A mechanism must now supply an attempt number as well as an event, a record and dependencies, which is a fourth input and one it may not naturally track. Durability moves entirely onto whatever runs a handler, and the obligations under **Required of infrastructure adapters** are strict enough that a naive mechanism — publish, then persist — is non-conformant rather than merely lossy. The default join makes concurrency invisible to an executor, and pays for it with an execution that waits indefinitely on a service that never answers, until a deadline decision exists. Eager hydration costs every stored event on every delivery, which a handler awaiting many responses pays repeatedly. Removing a contract version strands its in-flight executions permanently, with no migration path by design, so deployment acquires a drain step it did not previously have. And a handler must construct emitted events itself, which removes an executor's ability to hand back an event it built by hand — deliberately, since the addressing rule is not something a call site can be trusted with.
 
