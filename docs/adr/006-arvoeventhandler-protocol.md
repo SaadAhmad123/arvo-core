@@ -20,7 +20,7 @@ Several things are deliberately not defined here:
 - **Any particular durable mechanism.** This ADR states obligations a mechanism must meet. It names no broker, database, transaction, outbox, lock implementation, or scheduler, and requires no specific one.
 - **Native API shape.** Per ADR-004, how a language exposes handler declaration, the execution context, or emission is that language's own choice. This ADR fixes semantics and the durable record's field names, not method names or type names.
 - **Migration of an execution record.** Not deferred — decided against. An execution record belongs to one contract version for its whole life and MUST NOT be moved to another (see **Version authority**).
-- **Timers, deadlines, and scheduling.** ADR-000 defers these. A consequence is stated under **Collection** and left unresolved rather than answered here.
+- **Timers, deadlines, and scheduling.** ADR-000 defers these, and this ADR invents no semantics for them. It does assign the responsibility: following up on an execution that is waiting on something that never arrives belongs to whatever runs the handler (**Retry**, **Collection**).
 - **Cancellation as something one node does to another.** Decided against rather than deferred. Arvo defines no cancel event and no interruption mechanism: nothing can stop an execution that does not stop itself. What the model does provide is the means to cancel *cooperatively* — a hook for reading an application's own signal (**Dependencies**), and a terminal `cancelled` lifecycle so a record says why an execution ended. Compensation stays entirely an application's own concern, expressed through events its contracts already permit. This amends ADR-000's Deferred Decision by explicit reference.
 - **Execution capability profiles.** ADR-000 defers their model. This ADR states the concrete requirements a handler places on a mechanism (**Required of infrastructure adapters**) without proposing the profile format that would carry it.
 - **Error taxonomy beyond handler failure.** As in ADR-005, exactly one standardized emit is in play — the handler error event. This ADR adds the non-event failure category an execution can be in, and no further error kinds.
@@ -183,14 +183,13 @@ Replacing an emission's trace context is possible but unsafe, for the reason the
 
 ### Classification
 
-On receiving an event, a handler MUST classify it as an **init** or a **followup**, in this precedence:
+Every delivery is either an **init** — opening a new execution — or a **followup**, resuming one. There is no third outcome and no unclassified pass-through: a delivery that cannot be classified is a fault.
 
-1. If `category` is `io.arvo.init`, the event's type MUST match the handler's declared init event type for the resolved version; otherwise the delivery is a fault. If `category` is `io.arvo.complete`, the event's type MUST match a declared service response type; otherwise the delivery is a fault.
-2. If `category` is absent or any other value, classification falls back to the contract declarations: the declared init type is an init, a declared service response type is a followup, and anything else is a fault.
+**`dataschema` decides it.** ADR-005 fixes `dataschema` as `{uri}/{version}`, and the `uri` names the contract that governs the event. A `uri` matching the self contract is an init; one matching a declared service contract is a followup; one matching neither is a fault. This is read from a field ADR-001 requires on every event, ADR-002 constrains the format of, and ADR-005 gives a fixed shape — not inferred.
 
-Every delivery MUST resolve to init, followup, or a fault. There is no unclassified outcome. The two-step precedence exists so that a sender's declared intent is cross-checked against the receiver's declarations, and version skew between independently deployed participants is detected rather than silently misrouted.
+**`category` cross-checks it.** ADR-001 reserves `io.arvo.init` and `io.arvo.complete` and says a producer sets them "through contract event factories rather than handler or application code", so where one is present it states the sender's own contractual intent. It MUST agree with what `dataschema` resolved: `io.arvo.init` on a self-contract event, `io.arvo.complete` on a service-contract one. A disagreement is a fault, and catching it is the point — it means two independently deployed participants have diverged about what they are doing, which ADR-001 wants "detectable rather than silent". Any other value, including absence, carries no ecosystem meaning per ADR-001 and is not consulted.
 
-An init delivery derives a new execution. A followup delivery resolves the existing execution by the arriving event's `executionid`, which a completion carries as its caller's identity — that is, as this handler's own.
+An init delivery derives a new execution. A followup resolves the existing one by the arriving event's `executionid`, which a completion carries as its caller's identity — that is, as this handler's own.
 
 **A response is matched to what it answers by `initid`.** ADR-001 defines `initid` as "the `id` of the init event that opened the execution this event completes", and states that it "is the only field that answers *which request is this the answer to*" — `executionid` cannot, because every completion carries the caller's identity, and `parentid` cannot, because it degrades to noise across a suspension. A response is therefore recorded against `in_flight_event_map[response.initid]`, which is the id of the event this execution emitted to open that service's execution.
 
@@ -203,14 +202,14 @@ A delivery leaves the gate one of three ways: **proceed** to the executor, **dis
 | Sequence | Description | Behaviour on invalid | Short-circuits | Retry safe |
 |---|---|---|---|---|
 | 1 | **State object validation.** Where a record is supplied, it validates against the fixed envelope composed with the executor's own declared schema at `data`, and every event it holds restores to an event value (see **Hydration**). No `state.*` value may be read until this passes. | fault | yes | no |
-| 2 | **Classifiable.** The event resolves to an init or a followup under **Classification**. | fault | yes | no |
-| 3 | **Presence matches classification.** An init delivery MUST be given no record; every other delivery MUST be given a complete one. | fault | yes | no |
-| 4 | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. Applies to followups; a duplicate init is the mechanism's to suppress. | discard | yes | n/a |
-| 5 | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` accepts a followup. | fault | yes | no |
-| 6 | **Record, handler and event agree.** `event.to == handler's self contract type`, `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault | no — all four are reported together | no |
-| 7 | **`dataschema` resolves against a declared contract.** See **Resolution** below. This is what selects the version whose schemas the remaining steps use, and it happens before anything looks at the event's type. | fault | yes | no |
+| 2 | **`dataschema` resolves against a declared contract**, naming one contract at one version and thereby determining whether this is an init or a followup. See **Resolution**. | fault | yes | no |
+| 3 | **`category` agrees with what resolution found.** `io.arvo.init` accompanies a self-contract event, `io.arvo.complete` a service-contract one. Absent or unrecognised, it is not consulted. | fault | yes | no |
+| 4 | **Presence matches classification, and the record's version is still declared.** An init delivery MUST be given no record; every other delivery MUST be given a complete one. Where one is present, the handler MUST still declare an executor for its `version` — a version withdrawn from a deployed handler strands its in-flight executions (see **Version authority**), and this is where that surfaces. | fault | yes | no |
+| 5 | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. Applies to followups; a duplicate init is the mechanism's to suppress. | discard | yes | n/a |
+| 6 | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` accepts a followup. | fault | yes | no |
+| 7 | **Record, handler and event agree.** `event.to == handler's self contract type`, `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault | no — all four are reported together | no |
 | 8 | **The type is one the resolved contract can send here.** For the self contract, its own type. For a service contract, one of that version's `outputs` or its handler error type. | fault | yes | no |
-| 9 | **Payload satisfies its schema**, as declared by the contract and version step 7 resolved. | fault | no | no |
+| 9 | **Payload satisfies its schema**, as declared by the contract and version step 2 resolved. | fault | no | no |
 | 10 | **Awaited, on a followup.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault | yes | no |
 
 Every fault here is non-retryable, and for one reason: each describes a delivery that would fail identically however often it were repeated. **A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
@@ -230,17 +229,19 @@ For an init there is no record, so the event is the only thing that can say whic
 
 For a followup the record is authoritative, because a response's `dataschema` names the *service's* contract and version and says nothing about this handler's. The event's version is still checked, against the version the handler declared for that service, and it MUST be equal. This is the check that catches version skew: a response from `payments/1.1.0` arriving at a handler that declared `payments/1.0.0` carries the same version-independent `type`, would pass a type check, and would then be validated against the wrong version's schema — passing wrongly or failing with a misleading diagnosis. ADR-001 made `dataschema` required so that "version skew … becomes detectable rather than silent", and this is where a followup gets that.
 
-**Why step 1 is first.** Every later step reads the record — step 4 reads `event_ids`, step 5 reads `lifecycle`, step 6 reads three identifiers. A gate that compared before it validated would be reading fields off a structure it had not established was a record at all, and would report a mismatch where the truth was corruption.
+**Why step 1 is first.** Every later step that touches the record reads it — step 5 reads `event_ids`, step 6 reads `lifecycle`, step 7 reads three identifiers. A gate that compared before it validated would be reading fields off a structure it had not established was a record at all, and would report a mismatch where the truth was corruption.
 
-**Why resolution precedes the type check.** A `type` is version-independent — ADR-005 makes it a property of the contract — so a type alone cannot say which schema to validate against, and checking it first means either guessing a version or validating twice. Resolving `dataschema` first names exactly one contract at exactly one version, and every later step has one answer to work from.
+**Why resolution comes second, ahead of everything about the event.** A `type` is version-independent — ADR-005 makes it a property of the contract — so a type alone cannot say which schema to validate against, nor even reliably which contract sent it. `dataschema` names exactly one contract at exactly one version, so resolving it first gives every later step one answer to work from.
+
+It also settles which kind of delivery this is, which is why classification follows it rather than preceding it. A self-contract `uri` is an init and a service `uri` is a followup, and that is not a guess: it is read from a required field that ADR-002 constrains and ADR-005 gives a fixed shape. `category` then cross-checks it — a sender's stated intent against a receiver's declarations, which is what ADR-001 put the field there for. Deciding the same question twice by two independent means, with no rule for disagreement, is the thing this ordering removes.
 
 **Why the duplicate check precedes the lifecycle check.** A redelivery of the very event that completed an execution would otherwise reach the terminal check first and be reported as a fault — so under at-least-once delivery, the final response of every execution could produce a spurious failure whenever the transport repeated it.
 
-Putting step 4 ahead of step 5 costs nothing, because the two catch disjoint things. Step 4 discards only an event the execution has demonstrably already processed. A genuinely late message — one arriving at a finished execution having never been seen — is not in `event_ids`, passes step 4 untouched, and is reported by step 5 exactly as it should be. Quiet about repetition, loud about lateness.
+Putting step 5 ahead of step 6 costs nothing, because the two catch disjoint things. Step 5 discards only an event the execution has demonstrably already processed. A genuinely late message — one arriving at a finished execution having never been seen — is not in `event_ids`, passes step 5 untouched, and is reported by step 6 exactly as it should be. Quiet about repetition, loud about lateness.
 
-Discarding a duplicate at step 4 is safe because the record that would have been written already exists, carrying that event's id in `event_ids`. **Arvo treats one execution of an executor as atomic**: it either produced its events and its record together, or it produced neither. An executor should be written on the same assumption — where side effects outside Arvo are unavoidable, they should be idempotent or cheap to repeat, because the protocol offers no partial-completion state for them to resume from.
+Discarding a duplicate at step 5 is safe because the record that would have been written already exists, carrying that event's id in `event_ids`. **Arvo treats one execution of an executor as atomic**: it either produced its events and its record together, or it produced neither. An executor should be written on the same assumption — where side effects outside Arvo are unavoidable, they should be idempotent or cheap to repeat, because the protocol offers no partial-completion state for them to resume from.
 
-**What step 3 asks of a mechanism.** It is the reason the derivation in **Execution identity** is specified publicly rather than left internal. A mechanism MUST resolve the record *before* dispatch, computing the identifier from the init event by the same rule the handler would, and MUST NOT dispatch an init delivery for which a record already exists. That is how a redelivered init event "resolves to the existing execution rather than forking a new one", which ADR-001 gives as the reason for requiring deterministic derivation in the first place.
+**What step 4 asks of a mechanism.** It is the reason the derivation in **Execution identity** is specified publicly rather than left internal. A mechanism MUST resolve the record *before* dispatch, computing the identifier from the init event by the same rule the handler would, and MUST NOT dispatch an init delivery for which a record already exists. That is how a redelivered init event "resolves to the existing execution rather than forking a new one", which ADR-001 gives as the reason for requiring deterministic derivation in the first place.
 
 ### Depth
 
@@ -276,7 +277,7 @@ It also keeps a service's own depth violation deliverable. Where a service refus
 
 Whichever branch runs, `lifecycle_description` SHOULD record that the depth limit was reached, since an execution ending at `error` for this reason and one ending there for a handler failure are otherwise indistinguishable in the record.
 
-### The execution record### The execution record
+### The execution record
 
 An execution's entire memory is one record. It MUST be representable as JSON, so that no mechanism has to understand any language's object model to store it, and MUST carry the following fields under these names:
 
@@ -418,7 +419,7 @@ A handler MUST allow this to be overridden per handler definition, so that an ex
 
 `in_flight_event_map` is **rebuilt on every emission**, not merged into. It always describes exactly what the current round awaits. Under the default this is unobservable, since the executor is only entered on a complete collection. Under the override it means emitting while a response is still outstanding abandons that response, and an implementation MUST document this as the cost of the override.
 
-**A response is processed only if the collection is awaiting it**, and one that is not is a fault — see steps 5 and 10 of **Entry validation**. This covers a response the collection was rebuilt without, one answering a question already answered, and one arriving at an execution that has already finished. None of them re-enters the executor and none reopens a terminal execution.
+**A response is processed only if the collection is awaiting it**, and one that is not is a fault — see steps 6 and 10 of **Entry validation**. This covers a response the collection was rebuilt without, one answering a question already answered, and one arriving at an execution that has already finished. None of them re-enters the executor and none reopens a terminal execution.
 
 The one delivery that is discarded rather than faulted is an outright duplicate, recognised at step 4 by its event id. The distinction is worth holding onto: a duplicate is the transport doing its job, while an unawaited response is a participant sending something nobody asked for.
 
