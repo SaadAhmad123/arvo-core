@@ -111,7 +111,7 @@ The complete set of defaults, for every field of an event:
 | `dataschema` | the target contract's, for the resolved version | the self contract's, for this execution's version |
 | `id` | fresh | fresh |
 | `time` | the moment of construction | the moment of construction |
-| `traceparent` / `tracestate` | the execution's running span | the execution's running span |
+| `traceparent` / `tracestate` | the execution's own trace context | the execution's own trace context |
 
 `initid` is set only on a completion, per ADR-001: "on a completion, the `id` of the init event that opened the execution being completed; `null` on every other event". It is what lets a caller match a response to the request it answers, and it is the value a caller looks up in `in_flight_event_map`. Setting it on a service emission would mean something different — the id of the init event that opened the *emitting* execution — and ADR-001 reserves the field against exactly that.
 
@@ -153,9 +153,11 @@ What it offers is reachability with the consequence named. A developer who cross
 
 ### Observability
 
-Trace context is inside the model (ADR-000). A handler MUST continue an existing trace rather than start a new one wherever it can: the span an execution runs under is derived from the delivered event's `traceparent` where one is present, and started fresh only where none is. Every event the handler emits carries that span's context by default, so causal chains survive suspension without an executor doing anything.
+Trace context is inside the model (ADR-000). A handler MUST continue an existing trace rather than begin a new one wherever it can: an execution's trace context is taken from the delivered event's `traceparent` and `tracestate` where a `traceparent` is present, and begun fresh only where none is. Every event the handler emits carries that context by default, so a causal chain survives suspension without an executor doing anything.
 
-An executor MUST be given the running span so it can record its own attributes and events on the same trace. Replacing an emission's trace context is possible but unsafe, for the reason given above — it is one of the fields an implementation puts behind its unsafe surface, not an ordinary parameter. An implementation SHOULD instrument the protocol itself — entry validation, hydration, classification, collection, emission — so that a handler is observable without an executor writing any instrumentation, and SHOULD make adding custom instrumentation a first-class part of its surface rather than something reached around the framework for.
+An executor MUST be able to contribute to the execution's own trace rather than having to start a parallel one. How — the type it is handed, and what it can record on it — is API shape and each language's own choice (ADR-004).
+
+Replacing an emission's trace context is possible but unsafe, for the reason the table gives. An implementation SHOULD instrument the protocol itself — entry validation, hydration, classification, collection, emission — so that a handler is observable without an executor writing any instrumentation, and SHOULD make adding custom instrumentation a first-class part of its surface rather than something reached around the framework for.
 
 
 ### Classification
