@@ -47,6 +47,8 @@ A handler MUST declare one **executor** per version of its self contract. Versio
 
 The set of events a handler may emit is exactly: the input event type of each declared service contract, every key of its self contract version's `outputs`, and its self contract version's handler error event. An execution MUST NOT emit anything else, and MUST NOT acquire a capability not present in the declaration.
 
+Of those, **an executor may ask for the first two only.** The handler error event is not something an executor constructs; the handler produces it, and only in response to the executor failing. See **Failure**.
+
 **No two capabilities in a handler's declared set may share an event type**, and a handler MUST be rejected at declaration time if any two do — a service input against another service's input, a service input against a key of its own `outputs`, or either against its handler error type. ADR-005 forbids only the within-contract case, and is explicit that `type` is not globally unique across contracts, so nothing prevents two declared capabilities colliding until this rule does.
 
 **A handler MUST NOT declare two versions of the same service contract.** Doing so is a declaration error, and where it reaches a delivery it is a non-retryable fault. Two versions of one contract share a `type` — ADR-005 makes `type` a property of the contract, not of a version — so their input types collide and the rule above already rejects them. It is stated separately because the collision rule reads as being about unrelated contracts, and this is the case an author is most likely to reach for deliberately: wanting to call an old and a new version of the same service from one handler. That is two dependencies on one contract, and the model has no way to tell their responses apart.
@@ -100,6 +102,8 @@ This execution's nesting level is recorded as `state.depth = init_event.depth`. 
 
 Every field of an emitted event is set by the handler, from the record and the event being answered. Two of them depend on where the event is going, and those two are the ones a mistake would misroute silently: `subject` is the same on everything, exactly as ADR-001 requires, while `executionid` is role-dependent — an execution stamps its own identity on what it sends downstream, and a completion carries its caller's identity rather than its own. ADR-001 states both; this ADR only makes them mechanical.
 
+**An executor may ask for a service's input event or one of its version's `outputs`, and nothing else.** The handler error event is deliberately not among them: it exists to say that the executor failed, and an executor that could construct it could claim to have failed while continuing to run. The way to say "I cannot do this" is to fail — see **Failure**.
+
 A handler MUST construct emitted events itself rather than accept them pre-built from executor code. Both values of `executionid` are structurally valid, so a mistake there is a misrouted workflow rather than a rejected event, and the same is true of `subject`, `to` and `category`. What an executor supplies is the event's type, its payload, and the two fields named safe below.
 
 `category` in particular MUST be set by the handler according to the emitted event's declared role, using the values ADR-001 reserves — ADR-001 assigns them "through contract event factories rather than handler or application code".
@@ -152,7 +156,7 @@ An implementation SHOULD separate the three in its surface, reaching the unsafe 
 
 | Field | Executor-owned edit | Reason | Consequence of a wrong value | Consequence borne by | Safe only if the executor guarantees |
 |---|---|---|---|---|---|
-| `type` | required | Selects both the destination and the payload schema. | An undeclared type does not compile, and is an execution fault where types cannot catch it. | This execution. Nothing is emitted. | It names a capability in the declared set. Checked for you. |
+| `type` | required | Selects both the destination and the payload schema. | An undeclared type does not compile, and is an execution fault where types cannot catch it. | This execution. Nothing is emitted. | It names a service's input type or a key of this version's `outputs` — not the handler error type, which is not an executor's to emit. Checked for you. |
 | `data` | required | The payload, validated against whichever schema `type` selects. | A payload the schema rejects is a non-retryable fault; no event is emitted. | This execution. Nothing is emitted. | It satisfies the schema `type` selects. Checked for you. |
 | `domain` | safe | Selects a processing path, and is the emitter's to choose. Takes a value or a request to read one — see **Domain**. | The event is fulfilled on a different path. Nothing that routes, correlates or identifies reads it. | This execution, which chose the path. | Something fulfils that domain and returns the event to the default path. |
 | `executionunits` | safe | Accounting only. | A wrong cost figure, and nothing else. | Whoever reads cost reporting. | The figure means what the deployment's other producers mean by it. |
@@ -294,9 +298,9 @@ violation
 
 `rejected` lists the whole batch rather than only the offenders, because the batch was rejected whole and a diagnostic that showed only part of it would misrepresent what happened.
 
-**A function MAY return only the self contract's own `outputs` or its handler error event.** A service emission is refused, and the reason is the whole point: an execution stopped for being too deep must not go deeper.
+**A function MAY return only keys of the self contract's own `outputs`.** A service emission is refused because an execution stopped for being too deep must not go deeper, and the handler error event is refused because no executor-side code constructs that — where an author wants it, `'event'` is the branch that provides it.
 
-**A function MUST NOT be able to fail**, and every way it can go wrong has the same answer. Where it throws, returns nothing usable, or returns a service emission, an implementation MUST fall back to `'event'` — the handler error event — rather than propagate anything. One rule covers all three, which is deliberate: this code runs precisely when a workflow is already in trouble, and a violation handler that can itself derail the response is worth less than no violation handler at all. Same rule as `retry delay`, same reason.
+**A function MUST NOT be able to fail**, and every way it can go wrong has the same answer. Where it throws, returns nothing usable, or returns anything other than a permitted own-contract output, an implementation MUST fall back to `'event'` — the handler error event — rather than propagate anything. One rule covers all three, which is deliberate: this code runs precisely when a workflow is already in trouble, and a violation handler that can itself derail the response is worth less than no violation handler at all. Same rule as `retry delay`, same reason.
 
 Whichever branch runs, `lifecycle_description` SHOULD record that the depth limit was reached, since an execution ending at `error` for this reason and one ending there for a handler failure are otherwise indistinguishable in the record.
 
@@ -460,6 +464,10 @@ An execution's failures fall into two categories, and the distinction is which o
 
 **Handler failure** is the executor failing to fulfil its contract — its own code raising something the protocol did not define. It MUST be reported as the self contract version's **handler error event**, addressed as an own-contract emission, and the execution MUST reach `error`. This is a completed execution: it produced events and a record, and a mechanism has nothing to retry.
 
+**Failing is the only way to produce that event.** An executor cannot construct the handler error event, and the handler constructs it only from a failure that escapes the executor. So the two are one thing seen from two sides: an executor says "I cannot fulfil this contract" by failing, and the caller hears it as the event. There is no path by which an execution reports its own failure and carries on, and no path by which it carries on while claiming to have failed.
+
+The exception is deliberate and narrow: an `ArvoEventHandlerError` raised by the executor is a **fault**, not a handler failure, and does not become the handler error event. An implementation SHOULD provide a way to construct one for the executor to raise, and SHOULD document what it costs — see below.
+
 **Execution fault** is a failure of the protocol or its surroundings: a record that will not validate, an event that will not restore, a delivery that will not classify, a version no longer declared, a payload an executor asked to emit that its contract rejects, a dependency that would not resolve. A fault MUST NOT become an event. It MUST carry whether it is **retry safe** and, where it is, how long a mechanism should wait before the next attempt — so a mechanism can retry, dead-letter, or escalate without inspecting a message or consulting a handler's declaration. See **Retry**.
 
 | Fault | Retry safe |
@@ -485,6 +493,10 @@ The verdicts follow from one question: would the same inputs produce the same fa
 **No failure defined here routes to the workflow root.** ADR-001 permits such an event — carrying `subject` as its `executionid`, bypassing intermediate executions so a failure surfaces at the top regardless of depth — and defers the conditions to this ADR. This ADR defines none: a handler failure is attributable to the execution that suffered it and returns to that execution's caller, and a fault never becomes an event at all. The capability remains available and unused, and the conditions stay deferred rather than being invented to fill the slot.
 
 Both categories record their cause in `lifecycle_description` where a record survives them — a handler failure reaching `error` writes the failure's message there. A fault that prevents a record being written at all leaves nothing behind but what the mechanism logs, which is why a fault's retry-safety must travel with the fault itself rather than in the record.
+
+**An executor raising a fault leaves its caller waiting, and that consequence MUST be documented wherever the means to raise one is offered.** A fault never becomes an event, so nothing tells the caller anything — it waits until whatever runs the workflow notices, which is the outcome *Considered Alternatives* rejects for handler failures generally: "a failure it never hears about is a workflow that stalls."
+
+That makes the choice a narrow one rather than a matter of taste. Raise a fault where the *protocol* is broken and a retry is the only sensible response: a dependency that would not construct, a record that cannot be trusted. Where the executor's own work failed, fail — and let the handler error event tell the caller, which is the shape it is already obliged to handle.
 
 The two categories are named distinctly on purpose. "Handler error" refers only to the event; a fault is never an event. An implementation MUST NOT use one name for both.
 
@@ -629,7 +641,7 @@ execute(ctx):
     ctx.createOutput(
         type        one of: a service's input type
                           | a key of this version's outputs
-                          | this version's handler error type
+                    not the handler error type -- see ctx.fault and Failure
         data        checked against whichever schema that type selects
         domain      optional; a value, or a source to resolve one from
         executionunits optional
@@ -639,8 +651,13 @@ execute(ctx):
 
     ctx.setCancel(description)   terminal; still answer your caller
 
-    ctx.fault(description, retrySafe)   raise an execution fault
-                                        retrySafe defaults to true
+    throw ctx.fault(description, retrySafe)
+                            builds the fault to throw; retrySafe defaults to true
+                            never becomes an event, so the caller is told nothing --
+                            for a broken protocol, not for work that failed
+
+    to report that the work failed, just fail: any error escaping the executor
+    becomes the handler error event, which the caller already handles
 
     return [ ... ]          emitted; [] emits nothing and preserves the collection,
                             resting at waiting if anything is still outstanding
