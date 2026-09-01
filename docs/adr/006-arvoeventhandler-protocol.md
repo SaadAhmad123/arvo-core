@@ -87,7 +87,11 @@ This execution's nesting level is recorded as `state.depth = init_event.depth`. 
 
 Every field of an emitted event is set by the handler, from the record and the event being answered. Two of them depend on where the event is going, and those two are the ones a mistake would misroute silently: `subject` is the same on everything, exactly as ADR-001 requires, while `executionid` is role-dependent — an execution stamps its own identity on what it sends downstream, and a completion carries its caller's identity rather than its own. ADR-001 states both; this ADR only makes them mechanical.
 
-The complete set of defaults:
+A handler MUST construct emitted events itself rather than accept them pre-built from executor code. Both values of `executionid` are structurally valid, so a mistake there is a misrouted workflow rather than a rejected event, and the same is true of `subject`, `to` and `category`. What an executor supplies is the event's type, its payload, and the two fields named safe below.
+
+`category` in particular MUST be set by the handler according to the emitted event's declared role, using the values ADR-001 reserves — ADR-001 assigns them "through contract event factories rather than handler or application code".
+
+The complete set of defaults, for every field of an event:
 
 | Field | To a service contract | Own `outputs`, or the handler error event |
 |---|---|---|
@@ -102,12 +106,20 @@ The complete set of defaults:
 | `baggage` | carried through unchanged | carried through unchanged |
 | `domain` | absent | absent, or a per-version default for the handler error event |
 | `executionunits` | `0` | `0` |
+| `type` | supplied by the executor | supplied by the executor |
+| `data` | supplied by the executor | supplied by the executor, or composed from the error |
+| `dataschema` | the target contract's, for the resolved version | the self contract's, for this execution's version |
+| `id` | fresh | fresh |
+| `time` | the moment of construction | the moment of construction |
+| `traceparent` / `tracestate` | the execution's running span | the execution's running span |
 
 `initid` is set only on a completion, per ADR-001: "on a completion, the `id` of the init event that opened the execution being completed; `null` on every other event". It is what lets a caller match a response to the request it answers, and it is the value a caller looks up in `in_flight_event_map`. Setting it on a service emission would mean something different — the id of the init event that opened the *emitting* execution — and ADR-001 reserves the field against exactly that.
 
 `source` is the handler's own contract type, which identifies the producing node without inventing an identity scheme the model does not have. It is a valid URI-reference under ADR-002 and normalizes to itself, so it satisfies `source`'s format rule unchanged.
 
-`to` follows from that. A service emission is addressed to the contract that declares it, and a completion is addressed back to whoever opened this execution — which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults an executor may replace; a completion in particular may legitimately go somewhere other than its caller.
+`to` follows from that. A service emission is addressed to the contract that declares it, and a completion is addressed back to whoever opened this execution — which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults, and both are unsafe to replace — see below.
+
+Because `subject` is constant across a workflow, every record belonging to one workflow shares it, and a mechanism MAY group on it. Because `execution_id` identifies one execution, a mechanism MAY key the record on it.
 
 `init_event_id` and `init_event_source` are held on the record as their own fields rather than read from `init_event` each time. Both are needed to address a completion, and the record already keeps them stable for the life of the execution; carrying them directly means addressing a completion never depends on restoring an event, and a reader of a stored record can see where it will return to without parsing anything.
 
@@ -145,17 +157,12 @@ Trace context is inside the model (ADR-000). A handler MUST continue an existing
 
 An executor MUST be given the running span so it can record its own attributes and events on the same trace. Replacing an emission's trace context is possible but unsafe, for the reason given above — it is one of the fields an implementation puts behind its unsafe surface, not an ordinary parameter. An implementation SHOULD instrument the protocol itself — entry validation, hydration, classification, collection, emission — so that a handler is observable without an executor writing any instrumentation, and SHOULD make adding custom instrumentation a first-class part of its surface rather than something reached around the framework for.
 
-Because `subject` is constant across a workflow, every record belonging to one workflow shares it, and a mechanism MAY use it to group them. Because `execution_id` identifies one execution, a mechanism MAY use it as the record's key.
-
-An emitted event's `executionid` therefore depends on its destination, and both possible values are structurally valid. A handler MUST construct emitted events itself rather than accepting them pre-built from executor code, so that this rule, and the `category` rule below, cannot be got wrong by an executor. What an executor supplies is the event's type and its payload.
-
-`category` MUST be set by the handler according to the emitted event's declared role, using the values ADR-001 reserves: `io.arvo.init` on the init event of a service contract, `io.arvo.complete` on an event completing this handler's own contract, and nothing on any other emission. An executor MUST NOT set `category` directly — ADR-001 already assigns these "through contract event factories rather than handler or application code".
 
 ### Classification
 
 On receiving an event, a handler MUST classify it as an **init** or a **followup**, in this precedence:
 
-1. If `category` is `'init'`, the event's type MUST match the handler's declared init event type for the resolved version; otherwise the delivery is a fault. If `category` is `'complete'`, the event's type MUST match a declared service response type; otherwise the delivery is a fault.
+1. If `category` is `io.arvo.init`, the event's type MUST match the handler's declared init event type for the resolved version; otherwise the delivery is a fault. If `category` is `io.arvo.complete`, the event's type MUST match a declared service response type; otherwise the delivery is a fault.
 2. If `category` is absent or any other value, classification falls back to the contract declarations: the declared init type is an init, a declared service response type is a followup, and anything else is a fault.
 
 Every delivery MUST resolve to init, followup, or a fault. There is no unclassified outcome. The two-step precedence exists so that a sender's declared intent is cross-checked against the receiver's declarations, and version skew between independently deployed participants is detected rather than silently misrouted.
@@ -197,20 +204,31 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `version` | The self contract version whose executor owns this execution. |
 | `cas_version` | Non-negative integer, starting at 0 and incremented by the handler on every write. Exists so a mechanism can compare-and-swap. |
 | `lifecycle` | `init`, `waiting`, `success`, or `error`. |
-| `event_ids` | Every event the execution has touched, each as an id and a direction relative to this handler. |
+| `event_ids` | Every event the execution has touched, each as an `id` and a `direction` of `received` or `emitted`, relative to this handler. |
 | `init_event_id` | The `id` of the init event. |
 | `init_event_source` | The `source` of the init event — the caller a completion returns to. |
 | `init_event` | The event that began the execution. |
 | `triggering_event` | The event that caused the most recent delivery. |
-| `in_flight_event_map` | Keyed by the id of each event emitted to a service in the current round; the collected response, or absent while outstanding. |
+| `in_flight_event_map` | Keyed by the `id` of each event emitted to a service in the current round. The value is the collected response, or `null` while outstanding — the key MUST be present either way, because the key set is what the execution is waiting for. |
 | `contracts` | The handler's `self` and `services` contracts, in their canonical form. Carried for a reader's benefit only — nothing in execution consults it. |
 | `data` | The executor's own business state, governed by the schema that executor declared. |
+
+`direction` is `received` or `emitted` rather than `input` or `output`, deliberately. Those two words already name something else in this model — ADR-005's declared shapes, and this ADR's own `outputs` — and a service's reply is `received` here while being that service's output. Two axes sharing a vocabulary is how a reader ends up confidently wrong.
 
 `contracts` is informational by construction, and an implementation MUST NOT resolve, bind, or validate against it. It exists so that a record found in a store years later can be understood without the code that wrote it, which is the same reason the identifying fields are inside the record rather than only in the keys. A reader should be aware it is a snapshot: a contract that has since changed will not match a live one, and that discrepancy carries no meaning at execution time.
 
 `execution_id` identifies a record uniquely and `subject` groups the records of one workflow; a mechanism MAY use them as its record and grouping keys, and both are inside the record so that it is self-describing.
 
-`lifecycle` records where an execution **rests**, not how it was entered. `success` and `error` are terminal; `error` is reached when the handler error event is emitted. How a delivery was classified is a property of that delivery and MUST NOT be conflated with this field.
+`lifecycle` records where an execution **rests**, not how it was entered. How a delivery was classified is a property of that delivery and MUST NOT be conflated with this field.
+
+| Value | When an execution rests here |
+|---|---|
+| `init` | Created, with nothing outstanding and nothing completed — reachable only when an executor emits no events at all. |
+| `waiting` | One or more responses are outstanding. |
+| `success` | Terminal. An own `outputs` event was emitted. |
+| `error` | Terminal. The handler error event was emitted. |
+
+`init` deserves a warning rather than only a definition. An executor that emits nothing has neither completed nor asked for anything, so nothing will ever deliver to that execution again and it rests there forever. It is a legal state, it is almost always a defect, and an implementation SHOULD make it visible rather than silent.
 
 `cas_version` MUST NOT be reset or wrapped by an implementation. It is an integer exactly representable in JSON, which bounds it far above any reachable execution length.
 
@@ -237,7 +255,7 @@ A handler MUST allow this to be overridden per handler definition, so that an ex
 
 `in_flight_event_map` is **rebuilt on every emission**, not merged into. It always describes exactly what the current round awaits. Under the default this is unobservable, since the executor is only entered on a complete collection. Under the override it means emitting while a response is still outstanding abandons that response, and an implementation MUST document this as the cost of the override.
 
-**A response is processed only if the collection is awaiting it.** A response whose id is not an outstanding key is ignored — whether because the collection was rebuilt without it, or because the execution has already reached a terminal `lifecycle`. It does not re-enter the executor, does not reopen a terminal execution, and is not a fault.
+**A response is processed only if the collection is awaiting it.** A response whose `initid` is not a key of the collection, or is a key whose value is already filled, is ignored — whether because the collection was rebuilt without it, or because the execution has already reached a terminal `lifecycle`. It does not re-enter the executor, does not reopen a terminal execution, and is not a fault.
 
 A consequence this ADR states rather than resolves: under the default join, a service that never responds leaves an execution at `waiting` indefinitely. Bounding that requires deadlines, which ADR-000 defers.
 
@@ -328,7 +346,7 @@ The storage motivation survives intact under ADR-001's assignment, which is why 
 
 **Invariants depended on.** *Event-Only Communication* — every interaction here, including a handler's own failure, is an ArvoEvent governed by a contract. *Explicit Contracts and Runtime Validation* — the closed capability set and the record's validation both rest on a contract being a complete, checkable declaration. *Infrastructure Independence* — the handler reaches no store and names no transport. *Nondeterminism Is Permitted* — nothing here requires an executor to be deterministic; recovery republishes what was committed rather than recomputing it.
 
-**Invariants strained.** *Infrastructure Independence*, mildly and deliberately. **Required of infrastructure adapters** below places two hard obligations on any mechanism, which is a stronger demand than any prior ADR makes. The strain is contained: the obligations are stated as properties, not implementations, and ADR-000's *Downstream ADR Requirements* already anticipates that a downstream ADR states what it requires of adapters.
+**Invariants strained.** *Infrastructure Independence*, mildly and deliberately. **Required of infrastructure adapters** below places three hard obligations on any mechanism, which is a stronger demand than any prior ADR makes. The strain is contained: the obligations are stated as properties, not implementations, and ADR-000's *Downstream ADR Requirements* already anticipates that a downstream ADR states what it requires of adapters.
 
 **Required of infrastructure adapters.** Three obligations. The first and third are not sufficient alone — see below.
 
