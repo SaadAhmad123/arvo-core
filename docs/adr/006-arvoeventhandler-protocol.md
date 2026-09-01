@@ -144,7 +144,7 @@ The sources a request may name, and how they resolve, are the substance of ADR-0
 
 This is the only requirement this ADR makes of a participant that is not a handler. It is stated here because a root minter is outside the protocol and will not read the rest of it, and because the failure is otherwise baffling: a perfectly well-formed root event, rejected by every handler it reaches, for a field its author never knew mattered.
 
-`to` follows from that. A service emission is addressed to the contract that declares it, and a completion is addressed back to whoever opened this execution — which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults, and both are unsafe to replace — see below.
+`to` follows from `source`. A service emission is addressed to the contract that declares it, and a completion is addressed back to whoever opened this execution — which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults, and both are unsafe to replace — see below.
 
 Because `subject` is constant across a workflow, every record belonging to one workflow shares it, and a mechanism MAY group on it. Because `execution_id` identifies one execution, a mechanism MAY key the record on it.
 
@@ -222,6 +222,8 @@ A delivery leaves the gate one of three ways: **proceed** to the executor, **dis
 
 An init delivery has no record, so the steps that read one do not apply to it — which is most of what the **applies to** column records. Only step 7 is split: `event.to` is on the event and is checked either way, while the three comparisons against the record are followups only.
 
+Step 6 admits a followup to a record at `idle`, which step 10 will then almost certainly reject, and that is deliberate rather than redundant. `idle` is not terminal, so rejecting at step 6 would report that the execution has ended, which is untrue. Letting it through means step 10 reports what is actually wrong — nothing is awaiting this response. The cost is one extra step evaluated; the gain is a diagnosis that does not send a reader looking for a completion that never happened.
+
 Every fault here is non-retryable, and for one reason: each describes a delivery that would fail identically however often it were repeated. **A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
 
 **Resolution, and which executor runs.** Every delivered event is resolved through its `dataschema` before anything reads its type. ADR-005 fixes `dataschema` as `{uri}/{version}`, split at the last `/`, so the `uri` names a contract and the remainder names one of its versions.
@@ -280,7 +282,7 @@ It also keeps a service's own depth violation deliverable. Where a service refus
 | Choice | Behaviour |
 |---|---|
 | `'error'` | A non-retryable execution fault. Nothing is emitted, no record is written, and the mechanism decides what to do with a workflow that has run away. |
-| `'event'` | The default. The handler error event is emitted and the execution terminates at `error`. The caller learns the work will not be done, in the one shape it is already obliged to handle. |
+| `'event'` | The default. The handler error event is emitted and the execution terminates at `error`. The caller learns the work will not be done, in the one shape it is already obliged to handle. This is the one case in which that event is produced without the executor having failed — **Failure** names both causes. |
 | a function | Called with the same context the executor had, plus a description of what was rejected. Whatever it returns is emitted and the execution terminates accordingly. |
 
 The function receives the context and a `violation`, so it can explain itself rather than guess:
@@ -464,7 +466,12 @@ An execution's failures fall into two categories, and the distinction is which o
 
 **Handler failure** is the executor failing to fulfil its contract — its own code raising something the protocol did not define. It MUST be reported as the self contract version's **handler error event**, addressed as an own-contract emission, and the execution MUST reach `error`. This is a completed execution: it produced events and a record, and a mechanism has nothing to retry.
 
-**Failing is the only way to produce that event.** An executor cannot construct the handler error event, and the handler constructs it only from a failure that escapes the executor. So the two are one thing seen from two sides: an executor says "I cannot fulfil this contract" by failing, and the caller hears it as the event. There is no path by which an execution reports its own failure and carries on, and no path by which it carries on while claiming to have failed.
+**An executor never constructs the handler error event.** The handler does, and from exactly two causes:
+
+- a failure escaping the executor, as above;
+- a depth violation, where the version chose `'event'` or a violation function fell back to it (see **Depth**).
+
+That set is closed, and the first cause is the one an executor can reach. So failing and the event are one thing seen from two sides: an executor says "I cannot fulfil this contract" by failing, and the caller hears it as the event. There is no path by which an execution reports its own failure and carries on, and none by which it carries on while claiming to have failed. The second cause is the handler's own, and an executor cannot invoke it either — it is the handler refusing an emission the executor asked for.
 
 The exception is deliberate and narrow: where an executor raises a failure that *is* an execution fault, it stays a fault and does not become the handler error event. An implementation SHOULD provide a way to construct one for an executor to raise, and SHOULD document what that costs — see below. How such a failure is distinguished from any other is API shape and each language's own choice (ADR-004); what this ADR fixes is that the distinction exists and which side of it produces an event.
 
@@ -641,7 +648,7 @@ execute(ctx):
     ctx.createOutput(
         type        one of: a service's input type
                           | a key of this version's outputs
-                    not the handler error type -- see ctx.fault and Failure
+                    not the handler error type -- see Failure, and the note below
         data        checked against whichever schema that type selects
         domain      optional; a value, or a source to resolve one from
         executionunits optional
