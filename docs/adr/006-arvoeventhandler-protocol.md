@@ -396,17 +396,17 @@ retry                            null where no retry is in prospect
 
 **Attempts count from 0**, and a retry is in prospect while `current_retry_attempt < max_retry_attempts_allowed`. Both halves are pinned because neither is inferable: with the default of 3 and an unpinned base, one implementation delivers three times and another four, and both could call themselves conformant.
 
-There is deliberately no exhaustion flag and no cross-delivery total. A flag would be dead weight — `retry` is `null` exactly when attempts are spent, so any flag inside it could only ever read false, and `retry_safe: false` with `retry: null` already says "do not retry" without one. A total is worse than redundant: it is uncomputable. The mechanism supplies only this delivery's attempt number, retry state is deliberately absent from the record, and a fault writes no record — so nothing the handler is given could produce a figure spanning deliveries, and a field no conformant implementation can fill does not belong in a specification.
-
-This is where it has to live. A fault produces no record, so a retry figure written into the record could never be persisted at the moment it mattered — and outside a fault there is nothing to retry, so the field would be null on every record that ever reached a store. The fault is the only object that exists exactly when the information is meaningful.
+**The fault is the only place this can live.** A fault produces no record, so a figure written into the record could never be persisted at the moment it mattered — and outside a fault there is nothing to retry, so the field would be `null` on every record that ever reached a store. The fault exists exactly when the information is meaningful and at no other time.
 
 `retry` is `null` where no retry is in prospect: a fault that is not retry safe, or one whose attempts are spent. A mechanism can therefore read "retry, and here is when" or "do not" without interpreting a message.
+
+There is deliberately no exhaustion flag and no cross-delivery total. A flag would be dead weight — `retry` is `null` exactly when attempts are spent, so any flag inside it could only ever read false, and `retry_safe: false` with `retry: null` already says "do not retry" without one. A total is worse than redundant: it is uncomputable. The mechanism supplies only this delivery's attempt number, retry state is deliberately absent from the record, and a fault writes no record — so nothing the handler is given could produce a figure spanning deliveries, and a field no conformant implementation can fill does not belong in a specification.
 
 `current_time` and `retry_at` are instants and `retry_in_ms` a duration. **All three are numbers in milliseconds** — the instants as milliseconds since the Unix epoch, the duration as a count of milliseconds — so `retry_at = current_time + retry_in_ms` is arithmetic between like units and needs no conversion rule.
 
 Milliseconds rather than the finest precision available, for two reasons. It keeps that addition honest: a microsecond instant plus a millisecond duration is a unit error waiting to be written. And a millisecond epoch sits far inside the range a JSON number represents exactly, where a nanosecond epoch does not — nothing here needs precision a durable format cannot carry.
 
-**A version MAY set two options** governing what a mechanism should do:
+**A version MAY set two options** governing retry, both of which a mechanism reads off the fault rather than from the handler's declaration:
 
 ```
 max retry attempts   a number; 3 unless set
@@ -448,7 +448,7 @@ When an executor emits one or more events to service contracts, the handler reco
 - if any entry is still outstanding, the executor MUST NOT be entered; the delivery ends and the record is written;
 - if none is, the executor is entered with every response available.
 
-A handler MUST allow this to be overridden **per version**, so that an executor is entered on every response with the partial collection available to it. Per version rather than per handler, because an executor entered on every response must be safe to repeat — and that is a property of executor code, which is written per version. State is version-bound too, so a version keeping a running tally may tolerate this where its successor does not. An implementation SHOULD document that such an executor runs once per arriving response and must therefore be safe to repeat.
+A handler MUST allow this to be overridden **per version**, so that an executor is entered on every response with the partial collection available to it. Per version rather than per handler, because an executor entered on every response must be safe to repeat — and that is a property of executor code, which is written per version. State is version-bound too, so a version keeping a running tally may tolerate this where its successor does not. An implementation SHOULD document that plainly at the point the option is offered, since an executor that is not safe to repeat will appear to work until two responses arrive close together.
 
 `in_flight_event_map` is **rebuilt on every emission**, not merged into. It always describes exactly what the current round awaits. Under the default this is unobservable, since the executor is only entered on a complete collection. Under the override it means emitting while a response is still outstanding abandons that response, and an implementation MUST document this as the cost of the override.
 
@@ -466,7 +466,7 @@ An execution's failures fall into two categories, and the distinction is which o
 
 **Failing is the only way to produce that event.** An executor cannot construct the handler error event, and the handler constructs it only from a failure that escapes the executor. So the two are one thing seen from two sides: an executor says "I cannot fulfil this contract" by failing, and the caller hears it as the event. There is no path by which an execution reports its own failure and carries on, and no path by which it carries on while claiming to have failed.
 
-The exception is deliberate and narrow: an `ArvoEventHandlerError` raised by the executor is a **fault**, not a handler failure, and does not become the handler error event. An implementation SHOULD provide a way to construct one for the executor to raise, and SHOULD document what it costs — see below.
+The exception is deliberate and narrow: where an executor raises a failure that *is* an execution fault, it stays a fault and does not become the handler error event. An implementation SHOULD provide a way to construct one for an executor to raise, and SHOULD document what that costs — see below. How such a failure is distinguished from any other is API shape and each language's own choice (ADR-004); what this ADR fixes is that the distinction exists and which side of it produces an event.
 
 **Execution fault** is a failure of the protocol or its surroundings: a record that will not validate, an event that will not restore, a delivery that will not classify, a version no longer declared, a payload an executor asked to emit that its contract rejects, a dependency that would not resolve. A fault MUST NOT become an event. It MUST carry whether it is **retry safe** and, where it is, how long a mechanism should wait before the next attempt — so a mechanism can retry, dead-letter, or escalate without inspecting a message or consulting a handler's declaration. See **Retry**.
 
@@ -651,8 +651,8 @@ execute(ctx):
 
     ctx.setCancel(description)   terminal; still answer your caller
 
-    throw ctx.fault(description, retrySafe)
-                            builds the fault to throw; retrySafe defaults to true
+    throw ctx.fault(description, retry_safe)
+                            builds the fault to throw; retry_safe defaults to true
                             never becomes an event, so the caller is told nothing --
                             for a broken protocol, not for work that failed
 
@@ -676,7 +676,7 @@ tryExecute(
     → produced { events, state }         includes the case where the executor failed
                                           and the handler error event is among the events
     → discarded                           a duplicate; nothing to do, nothing wrong
-    → fault    { retrySafe, retry, description }
+    → fault    { retry_safe, retry, description }
                                           never an event; nothing was produced
                                           retry: the figures under Retry, or null
 ```
