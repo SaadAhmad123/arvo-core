@@ -192,7 +192,7 @@ A delivery leaves the gate one of three ways: **proceed** to the executor, **dis
 | 5 | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` accepts a followup. | fault | yes | no |
 | 6 | **Record, handler and event agree.** `event.to == handler's self contract type`, `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault | no — all four are reported together | no |
 | 7 | **The record's version is still declared.** The handler declares an executor for the version in `state.version`. A version withdrawn from a deployed handler strands its in-flight executions (see **Version authority**), and this is where that surfaces. Init deliveries resolve their version from `dataschema` and are covered by step 2. | fault | yes — no executor means nothing further can be evaluated | no |
-| 8 | **Declared by this version.** The event's type is declared by the version in `state.version` — its own input, or the input or response type of a service *that version* declares. | fault | yes — without a resolved type there is no schema to check | no |
+| 8 | **The type is one the handler can receive.** Either the self contract's own type, on an init, or a response type of a declared service — its `outputs` or its handler error type — on a followup. Service contracts are declared once for the handler, so this does not vary by version; what varies is the schema step 9 checks against. | fault | yes — without a resolved type there is no schema to check | no |
 | 9 | **Payload satisfies its schema**, as declared by whichever contract and version the type resolves to. | fault | no | no |
 | 10 | **Awaited, on a followup.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault | yes | no |
 
@@ -223,7 +223,6 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `cas_version` | Non-negative integer, starting at 0 and incremented on every write to the record — by the handler ordinarily, and by the mechanism on the one write it makes itself (see obligation 3). Exists so a mechanism can compare-and-swap. |
 | `lifecycle` | `init`, `waiting`, `success`, `error`, `cancelled`, or `failure`. |
 | `lifecycle_description` | Free text explaining how the execution reached its current `lifecycle`, or `null`. |
-| `retry_metrics` | What this execution knows about being retried. See **Retry**. |
 | `event_ids` | Every event the execution has touched, each as an `id` and a `direction` of `received` or `emitted`, relative to this handler. |
 | `init_event_id` | The `id` of the init event. |
 | `init_event_source` | The `source` of the init event — the caller a completion returns to. |
@@ -274,7 +273,7 @@ This is deliberately narrower than migration, which **Version authority** prohib
 
 Removing a version from a deployed handler therefore strands its in-flight executions, permanently. A version is drained before it is removed, and that is the whole of the migration story.
 
-**Hydration.** On entering a delivery, a handler MUST refresh `retry_metrics` from the attempt number the delivery carries, validate the whole record — a fixed envelope, composed with the executor's own declared schema at `data` — and MUST restore every event the record holds to an event value before any executor code runs. A record that fails either is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
+**Hydration.** On entering a delivery, a handler MUST validate the whole record — a fixed envelope, composed with the executor's own declared schema at `data` — and MUST restore every event the record holds to an event value before any executor code runs. A record that fails either is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
 
 **This is an accepted trade-off, and its cost scales with fan-out.** An execution awaiting a thousand responses restores a thousand events on each of them, and the record grows with the collection. Eager hydration is the rule regardless: a handler that reasons about a record it has only partly validated is worse than a handler that is slow. Nothing here bounds fan-out, and how to bound it — a cap, lazy restoration for entries an executor never reads, or something else — is left to a later decision rather than guessed at now.
 
@@ -282,28 +281,28 @@ Removing a version from a deployed handler therefore strands its in-flight execu
 
 ### Retry
 
-A handler cannot retry itself. It is stateless and runs only when something delivers to it, so a retry is a redelivery and the decision to make one belongs to whatever runs the handler. What this ADR settles is that the handler is not blind to it.
+A handler cannot retry itself. It is stateless and runs only when something delivers to it, so a retry is a redelivery and every decision about one belongs to whatever runs the handler. What this ADR settles is what the handler must tell it.
 
-**Every delivery carries which attempt it is.** The mechanism supplies an attempt number alongside the event, the record and the dependencies, and the handler writes it into the record so an executor can see it without being told twice:
+**Every delivery carries which attempt it is.** The mechanism supplies an attempt number alongside the event, the record and the dependencies. An executor may read it — knowing this is the third attempt is sometimes exactly what a decision turns on — but it is not part of the record. It describes a delivery, not an execution.
+
+**Retry information travels on the fault, not in the record.** Where a delivery ends in an execution fault, the fault carries everything a mechanism needs to decide what happens next:
 
 ```
-retry_metrics                   null unless a retry is actually in prospect
-    current_retry_attempt       this delivery's attempt number
-    total_retry_attempts        attempts this execution has seen in total
-    max_retry_attempts_allowed  from the version's options; 3 unless set
-    is_retry_exhausted          current_retry_attempt >= max_retry_attempts_allowed
-    retry_in_ms                 how long until the next attempt
-    current_time                when this delivery was processed
-    retry_at                    current_time + retry_in_ms
+retry                            null where no retry is in prospect
+    current_retry_attempt        this delivery's attempt number
+    total_retry_attempts         attempts this execution has seen in total
+    max_retry_attempts_allowed   from the version's options; 3 unless set
+    is_retry_exhausted           current_retry_attempt >= max_retry_attempts_allowed
+    retry_in_ms                  how long to wait before the next attempt
+    current_time                 when this delivery was processed
+    retry_at                     current_time + retry_in_ms
 ```
 
-These MUST be recomputed on every delivery rather than carried forward, so the record always describes the delivery in hand rather than a previous one.
+This is where it has to live. A fault produces no record, so a retry figure written into the record could never be persisted at the moment it mattered — and outside a fault there is nothing to retry, so the field would be null on every record that ever reached a store. The fault is the only object that exists exactly when the information is meaningful.
 
-**`retry_metrics` is `null` unless a retry is in prospect.** Where the situation is not retry safe — or attempts are spent — there is nothing to describe and the field says so, rather than carrying figures that will never be acted on. A reader can therefore tell "will be retried" from "will not" by the field's presence alone.
+`retry` is `null` where no retry is in prospect: a fault that is not retry safe, or one whose attempts are spent. A mechanism can therefore read "retry, and here is when" or "do not" without interpreting a message.
 
-`current_time` and `retry_at` are instants and `retry_in_ms` a duration. **All three are numbers**, and their precision is the finest an implementation can offer that is still exactly representable as a JSON number — integers up to 2^53−1, since the record is JSON and anything beyond that rounds silently.
-
-In practice that admits milliseconds and microseconds and rules out nanoseconds: a microsecond epoch is around 1.8×10^15 today and stays inside the range for centuries, while a nanosecond epoch is already around 1.8×10^18 and is past it now. An implementation MUST NOT carry a precision it cannot represent exactly, and MUST use the same precision for both instants.
+`current_time` and `retry_at` are instants and `retry_in_ms` a duration. **All three are numbers**, and their precision is the finest an implementation can offer that remains exactly representable where the value is carried — integers up to 2^53−1 wherever that is JSON. In practice that admits milliseconds and microseconds and rules out nanoseconds: a microsecond epoch is around 1.8×10^15 today and stays inside the range for centuries, while a nanosecond epoch is already around 1.8×10^18 and is past it now. Both instants MUST use the same precision.
 
 **A version MAY set two options** governing what a mechanism should do:
 
@@ -315,9 +314,9 @@ retry delay          a number of milliseconds
 
 Their names are each language's own choice; what this ADR fixes is that both exist and what they mean.
 
-`retryDelay` in its function form **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute an internal default of 300ms rather than propagate the failure. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
+`retry delay` in its function form **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute an internal default of 300ms rather than propagate the failure. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
 
-**Exhaustion ends retrying, and the handler says so.** Where `is_retry_exhausted` holds, a fault that would otherwise be retry safe MUST be reported as no longer retry safe, so a mechanism stops rather than looping. A fault carries its retry-safety and, where it is retry safe, how long to wait — a mechanism should not have to consult a handler's declaration to learn either.
+**Exhaustion ends retrying, and the handler says so.** Where attempts are spent, a fault that would otherwise be retry safe MUST be reported as no longer retry safe, and its `retry` is `null`. A mechanism stops rather than loops.
 
 **An exhausted execution ends at `failure`, and only the mechanism can put it there.** This needs stating because it is the one lifecycle the handler cannot write. A fault produces no record, so the stored record still says `waiting` — and an execution abandoned after its retries are spent would otherwise be indistinguishable from one legitimately waiting on a slow service. On giving up, a mechanism MUST mark the record `failure` and put the failure's message in `lifecycle_description`. `failure` is terminal, and no delivery to it is ever processed.
 
@@ -327,7 +326,13 @@ That obligation asks something new of a mechanism: it must be able to write a re
 
 So a mechanism re-reads the record, the event and the dependencies for each attempt, carrying forward only the attempt number, which is the one input a retry genuinely inherits. A handler cannot enforce this: it is handed whatever it is handed, and has no way to tell a fresh record from a stale one.
 
-**Where no record can be produced, retry and compensation belong to the runner.** A fault can prevent a record existing at all — a record that will not validate, an event that will not restore, a delivery that will not classify. There is then no execution to record an attempt against and nothing for the handler to reason with, so the mechanism owns what happens next entirely. This is the same boundary the two failure categories already draw, seen from the retry side.
+**What else the runner owns, for the same reason.** The handler is entered only when something delivers to it, so everything that depends on time passing or on nothing happening is outside what it can observe:
+
+- storing, interpreting and acting on the `retry` a fault carries, including whether to honour the delay at all;
+- following up on an execution resting at `waiting` whose responses have not arrived — the handler has no way to notice absence, and the model defines no deadline (ADR-000 defers timers);
+- persisting the record, publishing the events, and delivering them.
+
+This ADR states what a handler produces and what it requires. Everything between one delivery and the next belongs to the mechanism, and is deliberately not divided further here.
 
 ### Collection
 
@@ -346,7 +351,7 @@ A handler MUST allow this to be overridden per handler definition, so that an ex
 
 The one delivery that is discarded rather than faulted is an outright duplicate, recognised at step 4 by its event id. The distinction is worth holding onto: a duplicate is the transport doing its job, while an unawaited response is a participant sending something nobody asked for.
 
-A consequence this ADR states rather than resolves: under the default join, a service that never responds leaves an execution at `waiting` indefinitely. Bounding that requires deadlines, which ADR-000 defers.
+Under the default join, a service that never responds leaves an execution at `waiting` indefinitely. The handler cannot notice this — it is entered only when something arrives, and nothing arriving is precisely the case. Following up on such an execution is the mechanism's, as **Retry** sets out. The model still defines no deadline of its own; ADR-000 defers timers, and this ADR assigns the responsibility without inventing the semantics.
 
 ### Failure
 
@@ -366,7 +371,7 @@ An execution's failures fall into two categories, and the distinction is which o
 | the record does not match the delivery's addressing, or the event carries no `to` | no |
 | the delivery reaches a record already at a terminal `lifecycle` | no |
 | a response's `initid` names nothing the collection is awaiting | no |
-| the event's type is not declared by the version in `state.version` | no |
+| the event's type is not one the handler can receive | no |
 | a handler declares two versions of the same service contract | no |
 | `data` does not survive a JSON round trip | no |
 | an emission the executor requested is not permitted, or its payload is rejected | no |
@@ -470,8 +475,9 @@ These sketches are illustrative only. They do not define the protocol and they a
 ```
 handler
     self       com_order_create                     the contract this handler implements
-    services
+    services                                         declared once, for the handler
         payments   com_payment_charge @ 1.0.0       a contract it may send to
+                                                    at most one version per contract
 
     version 1.0.0
         state                                       optional; omit for a stateless version
@@ -500,10 +506,7 @@ execute(ctx):
                               entry = followup  → one of: a service's outputs,
                                                   or a service's handler error event
     ctx.dependencies        as resolved for this delivery
-    ctx.retry               null unless a retry is in prospect, else
-                            current_retry_attempt, total_retry_attempts,
-                            max_retry_attempts_allowed, is_retry_exhausted,
-                            retry_in_ms, current_time, retry_at
+    ctx.attempt             which attempt this delivery is
     ctx.collected           for collect = each: which responses are in, which outstanding
 
     ctx.state               present only where the version declared a schema
@@ -541,8 +544,9 @@ tryExecute(
     → produced { events, state }         includes the case where the executor failed
                                           and the handler error event is among the events
     → discarded                           a duplicate; nothing to do, nothing wrong
-    → fault    { retrySafe, retryAfterMs, description }
+    → fault    { retrySafe, retry, description }
                                           never an event; nothing was produced
+                                          retry: the figures under Retry, or null
 ```
 
 The asymmetry in that return is the failure model in one place. A handler failure comes back as `produced`, because it is a completed execution that happens to have emitted an error event. Only a fault comes back as `fault`, and only a fault is a mechanism's problem.
