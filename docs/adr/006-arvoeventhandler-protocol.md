@@ -5,7 +5,7 @@
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)
 - **Supplies:** the `executionid` derivation and the event classification that [ADR-001](./001-arvoevent-structure.md) defers to "the handler protocol ADR"; the conditions for routing a failure to the workflow root remain deferred
-- **Addresses, in part:** ADR-000 Deferred Decisions — "ArvoEventHandler execution semantics" (settled here); "Handler state serialization, persistence, migration, and recovery" (settled here, migration by prohibiting it); "Handler concurrency and event-waiting patterns" (settled here). ADR-005 **Left deferred** — "dependency declaration, contract resolution, and binding" and "a handler's own runtime decision of which permitted event to emit and when" (settled here).
+- **Addresses, in part:** ADR-000 Deferred Decisions — "ArvoEventHandler execution semantics" (settled here); "Handler state serialization, persistence, migration, and recovery" (settled here, migration by prohibiting it); "Handler concurrency and event-waiting patterns" (settled here). ADR-005 **Left deferred** — "dependency declaration, contract resolution, and binding", "a handler's own runtime decision of which permitted event to emit and when", and "domain resolution, inheritance, and any orchestration-context-dependent routing strategy" (all settled here).
 
 Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-architectural-principles.md).
 
@@ -72,16 +72,27 @@ On entering a new execution, a handler MUST set:
 ```
 state.subject             = init_event.subject
 state.parent_execution_id = init_event.executionid
-state.execution_id        = H(init_event.dataschema || 0x00 || init_event.id)
+state.execution_id        = SHA-256( utf8(init_event.dataschema) ‖ 0x00 ‖ utf8(init_event.id) )
+                            rendered as 64 lowercase hexadecimal characters
 ```
 
-where `H` is a cryptographic hash and `||` is concatenation over an explicitly delimited input. The derivation MUST be pure: no randomness, no clock, no mutable input, and it MUST be performed only when a new execution is entered. This satisfies ADR-001's standing requirement that the derivation be deterministic, "so a redelivered trigger resolves to the existing execution rather than forking a new one".
+Every part of that is pinned, and pinned for the same reason ADR-005 pins its JSON Schema dialect rather than saying "JSON Schema": two implementations that disagree on any of it derive different identifiers from the same init event, and a redelivery then forks a new execution — precisely the failure the derivation exists to prevent. Adapter obligation 2 makes a mechanism compute this too, so the rule has at least two independent implementors before a second language exists.
+
+- **Algorithm:** SHA-256, as specified in FIPS 180-4. Chosen because it is available in every language's standard library or platform, not because Arvo needs its cryptographic properties for anything beyond collision resistance.
+- **Input encoding:** the UTF-8 bytes of `dataschema`, then the single byte `0x00`, then the UTF-8 bytes of `id`. The delimiter is a byte, not a character, and it cannot occur inside either input — so no pair of distinct inputs can produce the same byte string.
+- **Output encoding:** lowercase hexadecimal, 64 characters, no prefix and no separator.
+
+The derivation MUST be pure: no randomness, no clock, no mutable input, and it MUST be performed only when a new execution is entered. This satisfies ADR-001's standing requirement that the derivation be deterministic, "so a redelivered trigger resolves to the existing execution rather than forking a new one".
+
+Changing any of the three would change every identifier every implementation derives, so it changes only by a superseding ADR.
 
 `dataschema` is the identifying component rather than `type`, because ADR-005 is explicit that no ADR makes `type` globally unique and that cross-contract collisions are resolved by "`type` and `dataschema` together". Since `dataschema` is `{uri}/{version}`, it names one contract at one version, and it is read directly off the init event that resolved this handler's version in the first place.
 
 Three properties follow, and all three are load-bearing. A redelivered init event derives the same `execution_id` and therefore resolves to the same execution rather than forking a new one. Two handlers implementing different contracts derive different identifiers even where those contracts declare the same `type`, because their `dataschema` values differ. One handler invoking the same service twice within an execution produces two executions of it, because the two init events have different `id` values.
 
 The residual case this does not separate is two handlers implementing the *same* contract version, which would derive the same identifier for the same init event. Nothing in the model forbids that deployment, and nothing in the model can distinguish those handlers either — node identity is deliberately not something Arvo depends on (ADR-000). It is a deployment error, and named here so it is not mistaken for a gap in the derivation.
+
+**The root case changes nothing here, and is named so it cannot be misread.** ADR-001's *root execution* — the one whose identity is `subject`, whose completion carries it, and to which a failure event may one day be routed — is whatever minted the root event: a gateway, a scheduler, a webhook receiver. It sits outside this protocol, runs no executor, and owns no execution record. The handler a root event opens is not that execution; it is an ordinary execution like any other, deriving `execution_id = H(...)` by the rule above, with `parent_execution_id = init_event.executionid`, which on a root event is `subject`. The two readings are indistinguishable on the wire — that handler's completion carries `subject` either way, since a completion carries its caller's identity and the minter is the caller — but they diverge on whether this derivation needs a root carve-out, and it does not. A failure event routed to the root (`executionid = subject`, deferred as stated under **Failure**) is addressed to the minter, not to any record, which is why it needs no keyed lookup to land.
 
 This execution's nesting level is recorded as `state.depth = init_event.depth`. That is this execution's own level by ADR-001's rule that an event opening a new execution carries one more than the level of the execution emitting it — so the init event's depth already *is* the depth of the execution it opens.
 
@@ -106,7 +117,7 @@ The complete set of defaults, for every field of an event:
 | `source` | `state.source` | `state.source` |
 | `to` | the service contract's own `type` | `state.init_event_source` |
 | `baggage` | carried through unchanged | carried through unchanged |
-| `domain` | absent | absent, or a per-version default for the handler error event |
+| `domain` | absent unless asked for | absent unless asked for, or the version's handler-error default |
 | `executionunits` | `0` | `0` |
 | `type` | supplied by the executor | supplied by the executor |
 | `data` | supplied by the executor | supplied by the executor, or composed from the error |
@@ -118,6 +129,12 @@ The complete set of defaults, for every field of an event:
 `initid` is set only on a completion, per ADR-001: "on a completion, the `id` of the init event that opened the execution being completed; `null` on every other event". It is what lets a caller match a response to the request it answers, and it is the value a caller looks up in `in_flight_event_map`. Setting it on a service emission would mean something different — the id of the init event that opened the *emitting* execution — and ADR-001 reserves the field against exactly that.
 
 `source` is the handler's own contract type, which identifies the producing node without inventing an identity scheme the model does not have. It is a valid URI-reference under ADR-002 and normalizes to itself, so it satisfies `source`'s format rule unchanged.
+
+**Domain.** An executor may give an emitted event a literal domain, or name a source for the handler to read one from and resolve before the event exists. Either way it is absent unless asked for. The handler error event, which an executor does not construct field by field, takes the same two forms as a per-version default.
+
+This is worth confronting rather than paraphrasing, because ADR-005 says why the field exists: a contract carries `domain` "so that events its factories construct can inherit a default without every call site repeating it". Defaulting every emission to absent with no way to reach that value would leave ADR-005's field inert in the one place it was meant to be used. So **the contract's own declared domain is one of the sources a request may name.** Reaching it takes a request rather than happening silently — which is what ADR-005's "not inherited" language is about, and what keeps an event's domain something an author chose rather than something it acquired on the way past.
+
+The sources a request may name, and how they resolve, are the substance of ADR-005's deferred "domain resolution, inheritance, and orchestration-context routing". At minimum they are: no domain at all, the domain of the contract the event is built from, the domain of the contract of whoever is building it, and the domain of the event that caused this delivery. A request naming a source that was not supplied resolves to no domain rather than failing, so a handler is never broken by context it did not receive. A resolved domain is always a plain value or absent — **a request MUST NOT reach the event**.
 
 `to` follows from that. A service emission is addressed to the contract that declares it, and a completion is addressed back to whoever opened this execution — which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults, and both are unsafe to replace — see below.
 
@@ -133,7 +150,7 @@ An implementation SHOULD separate the three in its surface, reaching the unsafe 
 |---|---|---|---|---|---|
 | `type` | required | Selects both the destination and the payload schema. | An undeclared type does not compile, and is an execution fault where types cannot catch it. | This execution. Nothing is emitted. | It names a capability in the declared set. Checked for you. |
 | `data` | required | The payload, validated against whichever schema `type` selects. | A payload the schema rejects is a non-retryable fault; no event is emitted. | This execution. Nothing is emitted. | It satisfies the schema `type` selects. Checked for you. |
-| `domain` | safe | Selects a processing path. ADR-005 makes a contract's own `domain` a static default that is not inherited, so the emitter chooses. | The event is fulfilled on a different path. Nothing that routes, correlates or identifies reads it. | This execution, which chose the path. | Something fulfils that domain and returns the event to the default path. |
+| `domain` | safe | Selects a processing path, and is the emitter's to choose. Takes a value or a request to read one — see **Domain**. | The event is fulfilled on a different path. Nothing that routes, correlates or identifies reads it. | This execution, which chose the path. | Something fulfils that domain and returns the event to the default path. |
 | `executionunits` | safe | Accounting only. | A wrong cost figure, and nothing else. | Whoever reads cost reporting. | The figure means what the deployment's other producers mean by it. |
 | `executionid` | unsafe | The reply path. A callee stores it as its `parent_execution_id` and stamps it on its completion. | The reply is addressed to an execution that does not exist, and this one waits forever. | This execution, and the callee whose work is discarded. | The named execution exists, is not terminal, and is awaiting exactly this reply. |
 | `to` | unsafe | What Arvo routes on. ADR-001 makes it "set fresh by the emitter", and for these events the handler is that emitter. | The event is delivered elsewhere. No reply arrives from a service call; a completion never reaches the caller. | This execution, and whichever node receives an event it never expected. | The recipient implements this contract version, and — on a service call — replies with the same `subject`, `executionid` and `initid` the default would have produced. |
@@ -186,22 +203,36 @@ A delivery leaves the gate one of three ways: **proceed** to the executor, **dis
 | Sequence | Description | Behaviour on invalid | Short-circuits | Retry safe |
 |---|---|---|---|---|
 | 1 | **State object validation.** Where a record is supplied, it validates against the fixed envelope composed with the executor's own declared schema at `data`, and every event it holds restores to an event value (see **Hydration**). No `state.*` value may be read until this passes. | fault | yes | no |
-| 2 | **The event belongs to a declared contract**, and classifies as an init or a followup under **Classification**. | fault | yes | no |
+| 2 | **Classifiable.** The event resolves to an init or a followup under **Classification**. | fault | yes | no |
 | 3 | **Presence matches classification.** An init delivery MUST be given no record; every other delivery MUST be given a complete one. | fault | yes | no |
 | 4 | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. Applies to followups; a duplicate init is the mechanism's to suppress. | discard | yes | n/a |
 | 5 | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` accepts a followup. | fault | yes | no |
 | 6 | **Record, handler and event agree.** `event.to == handler's self contract type`, `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault | no — all four are reported together | no |
-| 7 | **The record's version is still declared.** The handler declares an executor for the version in `state.version`. A version withdrawn from a deployed handler strands its in-flight executions (see **Version authority**), and this is where that surfaces. Init deliveries resolve their version from `dataschema` and are covered by step 2. | fault | yes — no executor means nothing further can be evaluated | no |
-| 8 | **The type is one the handler can receive.** Either the self contract's own type, on an init, or a response type of a declared service — its `outputs` or its handler error type — on a followup. Service contracts are declared once for the handler, so this does not vary by version; what varies is the schema step 9 checks against. | fault | yes — without a resolved type there is no schema to check | no |
-| 9 | **Payload satisfies its schema**, as declared by whichever contract and version the type resolves to. | fault | no | no |
+| 7 | **`dataschema` resolves against a declared contract.** See **Resolution** below. This is what selects the version whose schemas the remaining steps use, and it happens before anything looks at the event's type. | fault | yes | no |
+| 8 | **The type is one the resolved contract can send here.** For the self contract, its own type. For a service contract, one of that version's `outputs` or its handler error type. | fault | yes | no |
+| 9 | **Payload satisfies its schema**, as declared by the contract and version step 7 resolved. | fault | no | no |
 | 10 | **Awaited, on a followup.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault | yes | no |
-| 11 | **Depth is within the limit.** `event.depth < max depth`, which is 1000 unless the version sets it. | see **Depth** — fault, or a produced outcome that never enters the executor | yes | no, where it is a fault |
-
-Step 11 is the only one whose failure is not necessarily a fault, and the only one that can produce events without the executor running. Everything above it either proceeds, discards or faults.
 
 Every fault here is non-retryable, and for one reason: each describes a delivery that would fail identically however often it were repeated. **A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
 
+**Resolution, and which executor runs.** Every delivered event is resolved through its `dataschema` before anything reads its type. ADR-005 fixes `dataschema` as `{uri}/{version}`, split at the last `/`, so the `uri` names a contract and the remainder names one of its versions.
+
+The `uri` MUST match the self contract or one of the declared service contracts. If it matches neither, the delivery is a fault. Then the two cases differ, and so does where the version comes from:
+
+| | init delivery | followup delivery |
+|---|---|---|
+| `uri` resolves to | the self contract | a declared service contract |
+| the record is | `null` | non-null |
+| the executor is chosen by | the **event's** version, from its `dataschema` | the **record's** `source` and `version` |
+| the version check is | the handler declares an executor for that version, else a fault | the event's version equals the declared service version exactly, else a fault |
+
+For an init there is no record, so the event is the only thing that can say which version to run — and if the handler declares no executor for it, that is a fault rather than a fallback to a neighbour.
+
+For a followup the record is authoritative, because a response's `dataschema` names the *service's* contract and version and says nothing about this handler's. The event's version is still checked, against the version the handler declared for that service, and it MUST be equal. This is the check that catches version skew: a response from `payments/1.1.0` arriving at a handler that declared `payments/1.0.0` carries the same version-independent `type`, would pass a type check, and would then be validated against the wrong version's schema — passing wrongly or failing with a misleading diagnosis. ADR-001 made `dataschema` required so that "version skew … becomes detectable rather than silent", and this is where a followup gets that.
+
 **Why step 1 is first.** Every later step reads the record — step 4 reads `event_ids`, step 5 reads `lifecycle`, step 6 reads three identifiers. A gate that compared before it validated would be reading fields off a structure it had not established was a record at all, and would report a mismatch where the truth was corruption.
+
+**Why resolution precedes the type check.** A `type` is version-independent — ADR-005 makes it a property of the contract — so a type alone cannot say which schema to validate against, and checking it first means either guessing a version or validating twice. Resolving `dataschema` first names exactly one contract at exactly one version, and every later step has one answer to work from.
 
 **Why the duplicate check precedes the lifecycle check.** A redelivery of the very event that completed an execution would otherwise reach the terminal check first and be reported as a fault — so under at-least-once delivery, the final response of every execution could produce a spurious failure whenever the transport repeated it.
 
@@ -213,9 +244,9 @@ Discarding a duplicate at step 4 is safe because the record that would have been
 
 ### Depth
 
-ADR-000 imposes no architectural limit on composition depth, which makes runaway nesting an operational risk rather than a structural impossibility — ADR-001 says as much, and adds `depth` so the risk is visible. This ADR turns visibility into a stop.
+**This is an execution-level guard, not a constraint on the event.** It does not narrow `depth` as ADR-001 defines it, does not restrict what depth an event may carry, and imposes no limit the model enforces. A version chooses its own maximum, and may choose one high enough that the guard never fires. What it bounds is how deep *this handler* is willing to go before it stops calling out — which is a handler's own decision about its own recursion, not an architectural limit on composition.
 
-**A version MAY set a maximum depth**, defaulting to 1000. A delivery whose `event.depth` is at or above it is a violation, and what happens then is the version's to choose:
+**A version MAY set a maximum execution depth**, defaulting to 1000:
 
 ```
 max depth                  a number; 1000 unless set
@@ -223,21 +254,29 @@ on max depth violation     'error' | 'event' | f(ctx, span) → event or events
                            'event' unless set
 ```
 
+**The guard is checked on emission, not on delivery.** After the executor has run, the handler checks each event it wants to emit: an event that would open a new execution carries `state.depth + 1`, and where that reaches the maximum the emission is a violation.
+
+Checking here rather than at the gate matters. A delivered response necessarily arrives at `state.depth + 1`, because a completion carries the depth of the execution that produced it — so a gate that rejected on the incoming depth would reject *every* response to a handler sitting one below the limit, discarding work a service had already completed successfully. Nothing about refusing a reply prevents any depth; the nesting has already happened. Refusing the *emission* stops it before the doomed work runs, which is the only point at which stopping is worth anything.
+
+It also keeps a service's own depth violation deliverable. Where a service refuses at its limit and completes with its handler error event, that response reaches its caller normally and the caller's executor can do something about it, rather than tripping a gate and being replaced by the caller's own error one level further up.
+
+**An executor can see it coming.** The context exposes whether this execution has reached its limit — true when an event it emits could no longer increment `depth`. An executor that checks it can choose a different path, complete early, or explain itself, instead of discovering the refusal after the fact.
+
+**On a violation**, what happens is the version's to choose:
+
 | Choice | Behaviour |
 |---|---|
 | `'error'` | A non-retryable execution fault. Nothing is emitted, no record is written, and the mechanism decides what to do with a workflow that has run away. |
-| `'event'` | The default. The handler error event is emitted and the execution terminates at `error`, exactly as a handler failure does. The caller learns the work will not be done, in the one shape it is already obliged to handle. |
-| a function | Called instead of the executor, with the same context and trace it would have had. Whatever it returns is emitted and the execution terminates accordingly. |
+| `'event'` | The default. The handler error event is emitted and the execution terminates at `error`. The caller learns the work will not be done, in the one shape it is already obliged to handle. |
+| a function | Called with the same context and trace the executor had. Whatever it returns is emitted and the execution terminates accordingly. |
 
-**A function MAY return only the self contract's own `outputs` or its handler error event.** A service emission is refused, and the reason is the whole point: an execution stopped for being too deep must not go deeper, and an implementation cannot honour a violation handler that violates the very thing it was called about.
+**A function MAY return only the self contract's own `outputs` or its handler error event.** A service emission is refused, and the reason is the whole point: an execution stopped for being too deep must not go deeper.
 
 **A function MUST NOT be able to fail**, and every way it can go wrong has the same answer. Where it throws, returns nothing usable, or returns a service emission, an implementation MUST fall back to `'event'` — the handler error event — rather than propagate anything. One rule covers all three, which is deliberate: this code runs precisely when a workflow is already in trouble, and a violation handler that can itself derail the response is worth less than no violation handler at all. Same rule as `retry delay`, same reason.
 
-The executor is never entered on a violation. Whichever branch runs, `lifecycle_description` SHOULD record that the depth limit was reached, since an execution ending at `error` for this reason and one ending there for a handler failure are otherwise indistinguishable in the record.
+Whichever branch runs, `lifecycle_description` SHOULD record that the depth limit was reached, since an execution ending at `error` for this reason and one ending there for a handler failure are otherwise indistinguishable in the record.
 
-Note what `event.depth` is on each kind of delivery. On an init it is the level of the execution about to be created. On a followup it is the level of the *service execution that replied*, which is one deeper than this one — so a followup trips the limit one level before an init at the same position would. That is the correct direction to err: the reply is the evidence that the deeper execution actually happened.
-
-### The execution record
+### The execution record### The execution record
 
 An execution's entire memory is one record. It MUST be representable as JSON, so that no mechanism has to understand any language's object model to store it, and MUST carry the following fields under these names:
 
@@ -405,7 +444,7 @@ An execution's failures fall into two categories, and the distinction is which o
 | a response's `initid` names nothing the collection is awaiting | no |
 | the event's type is not one the handler can receive | no |
 | a handler declares two versions of the same service contract | no |
-| a delivery exceeds the version's maximum depth, where that version chose `'error'` | no |
+| an emission would exceed the version's maximum execution depth, where that version chose `'error'` | no |
 | `data` does not survive a JSON round trip | no |
 | an emission the executor requested is not permitted, or its payload is rejected | no |
 | resolving the executor's dependencies fails | yes |
@@ -450,7 +489,7 @@ This is cooperative, and the guidance should say so plainly: an execution that n
 
 **Gained.** A handler becomes a function of an event, a record, its dependencies and an attempt number, which makes it testable with literal values and no infrastructure — the property that most reliably decides whether resumable code can be reasoned about. Resumption is a single keyed read, so no mechanism needs a correlation index to participate. The capability set is closed and statically known, so a mechanism can determine what a handler may do before running it, and an implementation with a type system can reject an impermissible emission before it is deployed. The two failure categories give a mechanism an unambiguous rule for when to retry, which is the question adapters otherwise answer by guessing from an error message.
 
-**Paid for.** A mechanism must now supply an attempt number as well as an event, a record and dependencies, which is a fourth input and one it may not naturally track. Durability moves entirely onto whatever runs a handler, and the obligations under **Required of infrastructure adapters** are strict enough that a naive mechanism — publish, then persist — is non-conformant rather than merely lossy. The default join makes concurrency invisible to an executor, and pays for it with an execution that waits indefinitely on a service that never answers, until a deadline decision exists. Eager hydration costs every stored event on every delivery, which a handler awaiting many responses pays repeatedly. Removing a contract version strands its in-flight executions permanently, with no migration path by design, so deployment acquires a drain step it did not previously have. And a handler must construct emitted events itself, which removes an executor's ability to hand back an event it built by hand — deliberately, since the addressing rule is not something a call site can be trusted with.
+**Paid for.** A mechanism must now supply an attempt number as well as an event, a record and dependencies, which is a fourth input and one it may not naturally track. Durability moves entirely onto whatever runs a handler, and the obligations under **Required of infrastructure adapters** are strict enough that a naive mechanism — publish, then persist — is non-conformant rather than merely lossy. The default join makes concurrency invisible to an executor, and pays for it with an execution that waits indefinitely on a service that never answers, until a deadline decision exists. Eager hydration costs every stored event on every delivery, which a handler awaiting many responses pays repeatedly. Removing a contract version strands its in-flight executions permanently, with no migration path by design, so deployment acquires a drain step it did not previously have. A default depth guard means a handler that legitimately nests beyond 1000 must say so, and one that does not notice will meet the limit as an error rather than as a stack overflow — which is the trade the default is making. And a handler must construct emitted events itself, which removes an executor's ability to hand back an event it built by hand — deliberately, since the addressing rule is not something a call site can be trusted with.
 
 ## Considered Alternatives
 
@@ -484,7 +523,9 @@ Note what was and was not avoided. The terminal `cancelled` lifecycle exists eit
 
 **Invariants depended on.** *Event-Only Communication* — every interaction here, including a handler's own failure, is an ArvoEvent governed by a contract. *Explicit Contracts and Runtime Validation* — the closed capability set and the record's validation both rest on a contract being a complete, checkable declaration. *Infrastructure Independence* — the handler reaches no store and names no transport. *Nondeterminism Is Permitted* — nothing here requires an executor to be deterministic; recovery republishes what was committed rather than recomputing it.
 
-**Invariants strained.** *Infrastructure Independence*, mildly and deliberately. **Required of infrastructure adapters** below places five hard obligations on any mechanism, which is a stronger demand than any prior ADR makes. The strain is contained: the obligations are stated as properties, not implementations, and ADR-000's *Downstream ADR Requirements* already anticipates that a downstream ADR states what it requires of adapters.
+**Invariants strained.** *Open Composition* is addressed rather than strained, but only because of how the depth guard is shaped, so it is worth stating why. ADR-000 holds that "Arvo imposes no architectural limit on composition depth" and that practical limits belong to the selected infrastructure. The guard under **Depth** is not such a limit: it constrains nothing about the `depth` field, applies to what one handler is willing to emit rather than to what the model permits, and its maximum is a version's own choice which may be set arbitrarily high. Two handlers in one workflow may hold different limits, which an architectural limit could not tolerate. What it adds is a default — 1000 — where previously an author had to notice the risk themselves, and a default is not a constraint.
+
+*Infrastructure Independence*, mildly and deliberately. **Required of infrastructure adapters** below places five hard obligations on any mechanism, which is a stronger demand than any prior ADR makes. The strain is contained: the obligations are stated as properties, not implementations, and ADR-000's *Downstream ADR Requirements* already anticipates that a downstream ADR states what it requires of adapters.
 
 **Required of infrastructure adapters.** Five obligations. The first and fifth are not sufficient alone — see below.
 
@@ -543,6 +584,7 @@ execute(ctx, span):
                                                   or a service's handler error event
     ctx.dependencies        as resolved for this delivery
     ctx.attempt             which attempt this delivery is
+    ctx.isMaxExecutionDepth true when an emission could no longer increment depth
     ctx.collected           for collect = each: which responses are in, which outstanding
 
     ctx.state               present only where the version declared a schema
@@ -554,7 +596,7 @@ execute(ctx, span):
                           | a key of this version's outputs
                           | this version's handler error type
         data        checked against whichever schema that type selects
-        domain      optional
+        domain      optional; a value, or a source to resolve one from
         executionunits optional
         dangerously_set   optional; everything else, with the consequences
                           in "What an executor may set"
