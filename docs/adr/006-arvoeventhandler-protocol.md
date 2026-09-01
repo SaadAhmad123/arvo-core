@@ -339,11 +339,14 @@ This is where it has to live. A fault produces no record, so a retry figure writ
 max retry attempts   a number; 3 unless set
 retry delay          a number of milliseconds
                      or  f(event, state) → milliseconds
+                     300ms unless set
 ```
 
 Their names are each language's own choice; what this ADR fixes is that both exist and what they mean.
 
-`retry delay` in its function form **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute an internal default of 300ms rather than propagate the failure. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
+`retry delay` is 300ms where a version sets none. The handler must put a number in the fault's `retry_in_ms`, so leaving it undefined is not an option — a mechanism may of course ignore the figure, but it must be given one.
+
+In its function form it **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute that same 300ms rather than propagate the failure. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
 
 **Exhaustion ends retrying, and the handler says so.** Where attempts are spent, a fault that would otherwise be retry safe MUST be reported as no longer retry safe, and its `retry` is `null`. A mechanism stops rather than loops.
 
@@ -516,11 +519,11 @@ handler
             attempts   integer
         options                                     all optional
             maxRetryAttempts     5                  default 3
-            retryDelay           f(event, state) → 200 × attempt
+            retryDelay           f(event, state) → 200 × attempt   default 300ms
             handlerErrorDomain   "orders_failures"  default: no domain
             collect              all                all | each; default all
             maxDepth             250                default 1000
-            onMaxDepthViolation  event              error | event | f(ctx, span)
+            onMaxDepthViolation  event              error | event | f(ctx, span); default event
         execute(ctx, span) → [ event, ... ]
 
     version 1.2.0
