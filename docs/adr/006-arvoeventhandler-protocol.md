@@ -195,6 +195,9 @@ A delivery leaves the gate one of three ways: **proceed** to the executor, **dis
 | 8 | **The type is one the handler can receive.** Either the self contract's own type, on an init, or a response type of a declared service — its `outputs` or its handler error type — on a followup. Service contracts are declared once for the handler, so this does not vary by version; what varies is the schema step 9 checks against. | fault | yes — without a resolved type there is no schema to check | no |
 | 9 | **Payload satisfies its schema**, as declared by whichever contract and version the type resolves to. | fault | no | no |
 | 10 | **Awaited, on a followup.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault | yes | no |
+| 11 | **Depth is within the limit.** `event.depth < max depth`, which is 1000 unless the version sets it. | see **Depth** — fault, or a produced outcome that never enters the executor | yes | no, where it is a fault |
+
+Step 11 is the only one whose failure is not necessarily a fault, and the only one that can produce events without the executor running. Everything above it either proceeds, discards or faults.
 
 Every fault here is non-retryable, and for one reason: each describes a delivery that would fail identically however often it were repeated. **A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
 
@@ -207,6 +210,32 @@ Putting step 4 ahead of step 5 costs nothing, because the two catch disjoint thi
 Discarding a duplicate at step 4 is safe because the record that would have been written already exists, carrying that event's id in `event_ids`. **Arvo treats one execution of an executor as atomic**: it either produced its events and its record together, or it produced neither. An executor should be written on the same assumption — where side effects outside Arvo are unavoidable, they should be idempotent or cheap to repeat, because the protocol offers no partial-completion state for them to resume from.
 
 **What step 3 asks of a mechanism.** It is the reason the derivation in **Execution identity** is specified publicly rather than left internal. A mechanism MUST resolve the record *before* dispatch, computing the identifier from the init event by the same rule the handler would, and MUST NOT dispatch an init delivery for which a record already exists. That is how a redelivered init event "resolves to the existing execution rather than forking a new one", which ADR-001 gives as the reason for requiring deterministic derivation in the first place.
+
+### Depth
+
+ADR-000 imposes no architectural limit on composition depth, which makes runaway nesting an operational risk rather than a structural impossibility — ADR-001 says as much, and adds `depth` so the risk is visible. This ADR turns visibility into a stop.
+
+**A version MAY set a maximum depth**, defaulting to 1000. A delivery whose `event.depth` is at or above it is a violation, and what happens then is the version's to choose:
+
+```
+max depth                  a number; 1000 unless set
+on max depth violation     'error' | 'event' | f(ctx, span) → event or events
+                           'event' unless set
+```
+
+| Choice | Behaviour |
+|---|---|
+| `'error'` | A non-retryable execution fault. Nothing is emitted, no record is written, and the mechanism decides what to do with a workflow that has run away. |
+| `'event'` | The default. The handler error event is emitted and the execution terminates at `error`, exactly as a handler failure does. The caller learns the work will not be done, in the one shape it is already obliged to handle. |
+| a function | Called instead of the executor, with the same context and trace it would have had. Whatever it returns is emitted and the execution terminates accordingly. |
+
+**A function MAY return only the self contract's own `outputs` or its handler error event.** A service emission is refused, and the reason is the whole point: an execution stopped for being too deep must not go deeper. The refusal is a fault, since an implementation cannot honour a violation handler that violates the thing it was called about.
+
+**A function MUST NOT be able to fail.** Where it throws, or returns anything that is not a permitted event, an implementation MUST fall back to `'event'` — the handler error event. This is the same rule as `retry delay`, for the same reason: a failure while handling a failure leaves nothing sensible to do, so the specification removes the possibility rather than describing the outcome.
+
+The executor is never entered on a violation. Whichever branch runs, `lifecycle_description` SHOULD record that the depth limit was reached, since an execution ending at `error` for this reason and one ending there for a handler failure are otherwise indistinguishable in the record.
+
+Note what `event.depth` is on each kind of delivery. On an init it is the level of the execution about to be created. On a followup it is the level of the *service execution that replied*, which is one deeper than this one — so a followup trips the limit one level before an init at the same position would. That is the correct direction to err: the reply is the evidence that the deeper execution actually happened.
 
 ### The execution record
 
@@ -373,6 +402,8 @@ An execution's failures fall into two categories, and the distinction is which o
 | a response's `initid` names nothing the collection is awaiting | no |
 | the event's type is not one the handler can receive | no |
 | a handler declares two versions of the same service contract | no |
+| a delivery exceeds the version's maximum depth, where that version chose `'error'` | no |
+| a max-depth handler returns a service emission rather than an own-contract event | no |
 | `data` does not survive a JSON round trip | no |
 | an emission the executor requested is not permitted, or its payload is rejected | no |
 | resolving the executor's dependencies fails | yes |
@@ -488,17 +519,20 @@ handler
             retryDelay           f(event, state) → 200 × attempt
             handlerErrorDomain   "orders_failures"  default: no domain
             collect              all                all | each; default all
-        execute(ctx) → [ event, ... ]
+            maxDepth             250                default 1000
+            onMaxDepthViolation  event              error | event | f(ctx, span)
+        execute(ctx, span) → [ event, ... ]
 
     version 1.2.0
-        execute(ctx) → [ event, ... ]               stateless: the executor alone
+        execute(ctx, span) → [ event, ... ]         stateless: the executor alone
 ```
 
 **Inside an executor.** `ctx.entry` discriminates `ctx.triggeringEvent`, so a payload is only reachable once the case is settled.
 
 ```
-execute(ctx):
+execute(ctx, span):
 
+    span                    the execution's own trace, to record against
     ctx.entry               init | followup
     ctx.initEvent           the event that opened this execution
     ctx.triggeringEvent     what caused this delivery
