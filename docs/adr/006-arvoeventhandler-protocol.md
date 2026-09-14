@@ -257,7 +257,7 @@ There is no fifth. A return that is none of these — a value that is not an eve
 
 - its `type` is in the emittable set for this version and is not the handler error type (**Definition and declaration**) — else `emission_not_permitted`;
 - its `data` satisfies the schema that `type` selects, at the declared version — else `emission_schema_rejected`;
-- its `depth` passes the version's guard (**Depth**) — else the version's `on max depth violation` decides, which is the one check whose failure may be something other than a fault;
+- its `depth` passes the version's guard (**Depth**) — else `max_depth_event_requested`;
 - it is structurally valid under ADR-001 and ADR-002, which an event built through the builder is by construction and a hand-built event may not be — else `emission_not_permitted`.
 
 The batch is validated whole and succeeds or fails whole, for the reason **Depth** gives: a batch is one decision by one executor, and emitting part of it would leave an execution in a state no lifecycle can describe.
@@ -315,7 +315,7 @@ Setting it on a service emission would mean something different — the id of th
 
 `source` is the handler's own self contract `type`, held on the record as `state.source`. It identifies the producing node without inventing an identity scheme the model does not have. It is a valid URI-reference under ADR-002 and normalizes to itself, so it satisfies `source`'s format rule unchanged. Every handler stamps it the same way, which is what makes the next default possible.
 
-`to` follows from `source`. A service emission is addressed to the contract that declares it — the service contract's own `type`, which is what a handler implementing that contract expects to see as its `to` (**Entry validation**, step 9). A completion is addressed back to whoever opened this execution, which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults, and both are unsafe to replace — see **What an executor may set**.
+`to` follows from `source`. A service emission is addressed to the contract that declares it — the service contract's own `type`, which is what a handler implementing that contract expects to see as its `to` (**Entry validation**, step 10). A completion is addressed back to whoever opened this execution, which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults, and both are unsafe to replace — see **What an executor may set**.
 
 #### Domain
 
@@ -338,7 +338,7 @@ ADR-001 holds that `domain` is "`null` for traffic inside a lattice" and set non
 
 #### A root event must carry `to`
 
-**A root event MUST carry a `to`, and it SHOULD be its own `type`.** Gate step 9 (**Entry validation**) makes `to` authoritative, so an event arriving with none is a fault — and ADR-001's minimal root event, taking every default, has `to` at `null`. Whatever mints a root event therefore has one obligation this ADR places on it: address the event. `to = type` is the sensible default and the one an implementation SHOULD apply when constructing a root event, since a root event by definition goes to the handler that implements the contract it names.
+**A root event MUST carry a `to`, and it SHOULD be its own `type`.** Gate step 10 (**Entry validation**) makes `to` authoritative, so an event arriving with none is a fault — and ADR-001's minimal root event, taking every default, has `to` at `null`. Whatever mints a root event therefore has one obligation this ADR places on it: address the event. `to = type` is the sensible default and the one an implementation SHOULD apply when constructing a root event, since a root event by definition goes to the handler that implements the contract it names.
 
 This is the only requirement this ADR makes of a participant that is not a handler. It is stated here because a root minter is outside the protocol and will not read the rest of it, and because the failure is otherwise baffling: a perfectly well-formed root event, rejected by every handler it reaches, for a field its author never knew mattered.
 
@@ -371,7 +371,7 @@ The builder MUST take the two required fields, MUST accept the two safe fields, 
 | `source` | unsafe | The callee stores it as `init_event_source` and addresses its completion to it. | A handler that misreports its source never receives its own replies. | This execution, and whichever node is sent completions meant for it. | Whatever it names can receive this execution's completions and act on them. |
 | `parentid` | unsafe | Lineage, and rootness: `parentid == null` is what defines a root event under ADR-001. | A null claims rootness, which then requires `executionid == subject` and usually fails validation outright. | The receiver, and anyone reconstructing causality afterwards. | It names an event that genuinely caused this one, and is not `null` unless this really is a root — which then also requires `executionid == subject`. |
 | `category` | unsafe | The receiver's corroboration of what `dataschema` already told it. ADR-001 assigns it "through contract event factories rather than handler or application code". | The receiver's cross-check fails and the delivery is rejected. It cannot misroute — `dataschema` decides classification — but a wrong value turns a valid event into a fault. | The receiver, and this execution when the reply it was owed is rejected. | It states the event's actual role, so it corroborates the receiver's resolution rather than contradicting it. |
-| `depth` | unsafe | The runaway-nesting signal. ADR-001 states it "never decrements", and it is what the execution-depth guard measures. | Unbounded recursion stops being visible — the one thing the field exists for. A value at or above the version's maximum also rejects the whole emission batch (see **Depth**). | Operators, who lose the signal at the moment it matters. | It still counts real nesting from the root, and does not decrease. |
+| `depth` | unsafe | The runaway-nesting signal. ADR-001 states it "never decrements", and it is what the execution-depth guard measures. | Unbounded recursion stops being visible — the one thing the field exists for. A value at or above the version's maximum also rejects the whole emission batch as `max_depth_event_requested` (see **Depth**). | Operators, who lose the signal at the moment it matters. | It still counts real nesting from the root, and does not decrease. |
 | `traceparent` / `tracestate` | unsafe | Trace context, inside the model per ADR-000. The default already continues the delivered event's trace. | The workflow's trace fragments into disconnected pieces, exactly where a suspension makes it hardest to reconstruct by hand. | Whoever debugs the workflow later. | It is a valid W3C context descending from this execution's own, so the chain still joins up. |
 | `time` | unsafe | The moment of construction. ADR-001 makes it descriptive and forbids using it to establish ordering. | Nothing in the protocol; a misleading timeline for everyone reading the event stream afterwards. | Whoever reads or audits the stream later. | It is a real RFC 3339 instant carrying an offset, and describes when the event actually occurred. |
 | `baggage` | unsafe | Written once, at the root. ADR-001: "copied unchanged onto every event in the workflow". | Every event in the workflow no longer carries an identical map. Branches diverge, fan-in needs a merge rule that does not exist, and two nodes couple without a contract declaring it. | Every participant in the workflow, downstream and in every other branch. | Nothing a handler can guarantee from where it stands. It would have to know every branch of the workflow, present and future, and that none fans back in. Only the root minter is in that position, and a handler never is. |
@@ -450,7 +450,7 @@ A delivery reaches the handler as an event and a **state function**. The mechani
 
 **The state function.** The mechanism MUST supply, alongside the event, an operation that takes an `execution_id` and yields the record stored under it, or nothing where none is. It may take time and may fail, since a store is behind it; how a language expresses that — a promise, a future, a coroutine, a blocking call — is that language's own choice (ADR-004). What is fixed is the input — one `execution_id`, together with the delivery's telemetry (**Observability**) so the read is logged and traced as part of this delivery, and the delivery's attempt number (**Retry**) so the mechanism knows whether this read is the first or a retry of one that already failed; the output, a record or its absence; and the rules below. Telemetry and attempt are read-only context for the mechanism to record against and to tune its own read by — a longer timeout, a different replica — not information that changes which record it returns.
 
-The mechanism behind it validates nothing beyond parsing: what it yields MUST be absence or a parsed JSON object, and whether that object is a record, belongs to this event, or is still resumable is the handler's to judge (**Entry validation**, steps 4, 5 and 9). It MUST read the store on every call rather than yield a value captured earlier, which is what makes a retry re-read the record by construction (**Retry**). It MUST NOT be given the event or the classification, and it MUST NOT branch on anything but the key.
+The mechanism behind it validates nothing beyond parsing: what it yields MUST be absence or a parsed JSON object, and whether that object is a record, belongs to this event, or is still resumable is the handler's to judge (**Entry validation**, steps 4, 5 and 10). It MUST read the store on every call rather than yield a value captured earlier, which is what makes a retry re-read the record by construction (**Retry**). It MUST NOT be given the event or the classification, and it MUST NOT branch on anything but the key.
 
 **The handler chooses the key.** It is the only party that knows which delivery this is, so it is the only party that can. After classification (**`dataschema` decides it**) and before any gate step that reads the record, the handler calls the state function exactly once:
 
@@ -476,7 +476,7 @@ A record under an init's derived key means an execution with this identifier alr
 
 **A response is matched to what it answers by `initid`.** ADR-001 defines `initid` as "the `id` of the init event that opened the execution this event completes", and states that it "is the only field that answers *which request is this the answer to*". `executionid` cannot, because every completion carries the caller's identity and so every response to this execution carries the same value. `parentid` cannot, because it "degrades to noise across suspension boundaries" — a response's `parentid` is whatever event the service last processed, not the request it is answering.
 
-A response is therefore recorded against `in_flight_event_map[response.initid]`, which is the `id` of the event this execution emitted to open that service's execution (**Collection**). A response whose `initid` names no outstanding key is a fault (`response_unawaited`), and one whose `id` has already been recorded is a duplicate and is discarded (**Entry validation**, steps 7 and 12).
+A response is therefore recorded against `in_flight_event_map[response.initid]`, which is the `id` of the event this execution emitted to open that service's execution (**Collection**). A response whose `initid` names no outstanding key is a fault (`response_unawaited`), and one whose `id` has already been recorded is a duplicate and is discarded (**Entry validation**, steps 8 and 13).
 
 ### Entry validation
 
@@ -492,18 +492,19 @@ Before any executor code runs, a handler MUST work through the following gate **
 | 4 | every delivery | **Presence matches classification.** An init delivery MUST have fetched nothing; a followup MUST have fetched a record. | fault, `record_unexpected` or `record_expected` | yes | no |
 | 5 | followups | **The record validates and hydrates.** It validates against the fixed envelope composed with the executor's declared schema at `data`, and every event it holds restores to an event value (**Hydration**). No `state.*` value may be read until this passes. | fault, `record_invalid` or `record_event_unrestorable` | yes | no |
 | 6 | followups | **The record's version is still declared.** The handler MUST still declare an executor for `state.version`; a version withdrawn from a deployed handler strands its in-flight executions (**Version authority**), and this is where that surfaces. | fault, `version_not_declared` | yes | no |
-| 7 | followups | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. | discard | yes | n/a |
-| 8 | followups | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` or `idle` accepts a followup. | fault, `lifecycle_terminal` | yes | no |
-| 9 | `event.to` on every delivery; the rest on followups | **Record, handler and event agree.** `event.to == handler's self contract type`; and on a followup `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault, `event_unaddressed` or `addressing_mismatch` | no — all applicable comparisons are reported together | no |
-| 10 | every delivery | **The type is one the resolved contract can send here.** For the self contract, its own `type`. For a service contract, one of that version's `outputs` or its handler error type. | fault, `type_not_receivable` | yes | no |
-| 11 | every delivery | **Payload satisfies its schema**, as declared by the contract and version step 1 resolved. | fault, `event_schema_rejected` | no | no |
-| 12 | followups | **Awaited.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault, `response_unawaited` | yes | no |
+| 7 | every delivery | **The event is below the version's maximum depth.** `event.depth < max depth` for the version resolution selected — the event's on an init, the record's on a followup (**Depth**). Placed here because it is the first point at which that version is known and confirmed declared. | fault, `max_depth_event_received` | yes | no |
+| 8 | followups | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. | discard | yes | n/a |
+| 9 | followups | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` or `idle` accepts a followup. | fault, `lifecycle_terminal` | yes | no |
+| 10 | `event.to` on every delivery; the rest on followups | **Record, handler and event agree.** `event.to == handler's self contract type`; and on a followup `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault, `event_unaddressed` or `addressing_mismatch` | no — all applicable comparisons are reported together | no |
+| 11 | every delivery | **The type is one the resolved contract can send here.** For the self contract, its own `type`. For a service contract, one of that version's `outputs` or its handler error type. | fault, `type_not_receivable` | yes | no |
+| 12 | every delivery | **Payload satisfies its schema**, as declared by the contract and version step 1 resolved. | fault, `event_schema_rejected` | no | no |
+| 13 | followups | **Awaited.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault, `response_unawaited` | yes | no |
 
-An init delivery has no record, so the steps that read one do not apply to it — which is most of what the **applies to** column records. Only step 9 is split: `event.to` is on the event and is checked either way, while the three comparisons against the record are followups only.
+An init delivery has no record, so the steps that read one do not apply to it — which is most of what the **applies to** column records. Only step 10 is split: `event.to` is on the event and is checked either way, while the three comparisons against the record are followups only.
 
 #### Three ways out: proceed, discard, fault
 
-A delivery leaves the gate one of three ways. **Proceed**: every applicable step passed, the execution context is built (**The execution context**), and the executor is entered — or, under the default join, the response is recorded and the delivery ends without entering it (**Collection**). **Discard**: step 7 recognised a duplicate; nothing is written and nothing is raised. **Fault**: a step failed, and an execution fault is raised carrying every check that failed (**Failure protocol**).
+A delivery leaves the gate one of three ways. **Proceed**: every applicable step passed, the execution context is built (**The execution context**), and the executor is entered — or, under the default join, the response is recorded and the delivery ends without entering it (**Collection**). **Discard**: step 8 recognised a duplicate; nothing is written and nothing is raised. **Fault**: a step failed, and an execution fault is raised carrying every check that failed (**Failure protocol**).
 
 Every fault here but one is non-retryable, and for one reason: each describes a delivery that would fail identically however often it were repeated. The exception is step 3, which reaches a store and may succeed a moment later.
 
@@ -526,31 +527,31 @@ For a followup the record is authoritative, because a response's `dataschema` na
 
 #### Why resolution comes first
 
-Resolution is first because everything else depends on it. It decides which contract and version validate the payload (step 11), which type set the event must belong to (step 10), and — because it classifies the delivery — which key the record is fetched under (step 3) and whether one is expected at all (step 4). A `type` alone could do none of this: ADR-005 makes it a property of the contract, so it cannot name a version, and it is not globally unique, so it cannot reliably name a contract.
+Resolution is first because everything else depends on it. It decides which contract and version validate the payload (step 12), which type set the event must belong to (step 11), and — because it classifies the delivery — which key the record is fetched under (step 3) and whether one is expected at all (step 4). A `type` alone could do none of this: ADR-005 makes it a property of the contract, so it cannot name a version, and it is not globally unique, so it cannot reliably name a contract.
 
 It also settles which kind of delivery this is, which is why `category` follows it rather than preceding it. Classification is read from a required field that ADR-002 constrains and ADR-005 gives a fixed shape; `category` then cross-checks it — a sender's stated intent against a receiver's declarations, which is what ADR-001 put the field there for. Deciding the same question twice by two independent means, with no rule for disagreement, is the thing this ordering removes.
 
 #### Why the record is validated before anything reads it
 
-Every step after 5 that touches the record reads it — step 6 reads `version`, step 7 reads `event_ids`, step 8 reads `lifecycle`, step 9 reads three identifiers, step 12 reads the collection. A gate that compared before it validated would be reading fields off a structure it had not established was a record at all, and would report a mismatch where the truth was corruption. Step 5 is therefore the first step that touches the record's contents, and no step before it does.
+Every step after 5 that touches the record reads it — step 6 reads `version`, step 8 reads `event_ids`, step 9 reads `lifecycle`, step 10 reads three identifiers, step 13 reads the collection. A gate that compared before it validated would be reading fields off a structure it had not established was a record at all, and would report a mismatch where the truth was corruption. Step 5 is therefore the first step that touches the record's contents, and no step before it does.
 
 #### Why the duplicate check precedes the lifecycle check
 
 A redelivery of the very event that completed an execution would otherwise reach the terminal check first and be reported as a fault — so under at-least-once delivery, the final response of every execution could produce a spurious failure whenever the transport repeated it.
 
-Putting step 7 ahead of step 8 costs nothing, because the two catch disjoint things. Step 7 discards only an event the execution has demonstrably already processed. A genuinely late message — one arriving at a finished execution having never been seen — is not in `event_ids`, passes step 7 untouched, and is reported by step 8 exactly as it should be. Quiet about repetition, loud about lateness.
+Putting step 8 ahead of step 9 costs nothing, because the two catch disjoint things. Step 8 discards only an event the execution has demonstrably already processed. A genuinely late message — one arriving at a finished execution having never been seen — is not in `event_ids`, passes step 8 untouched, and is reported by step 9 exactly as it should be. Quiet about repetition, loud about lateness.
 
 #### Why an idle record admits a followup
 
-Step 8 admits a followup to a record at `idle`, which step 12 will then almost certainly reject, and that is deliberate rather than redundant. `idle` is not terminal, so rejecting at step 8 would report that the execution has ended, which is untrue. Letting it through means step 12 reports what is actually wrong — nothing is awaiting this response. The cost is one extra step evaluated; the gain is a diagnosis that does not send a reader looking for a completion that never happened.
+Step 9 admits a followup to a record at `idle`, which step 13 will then almost certainly reject, and that is deliberate rather than redundant. `idle` is not terminal, so rejecting at step 9 would report that the execution has ended, which is untrue. Letting it through means step 13 reports what is actually wrong — nothing is awaiting this response. The cost is one extra step evaluated; the gain is a diagnosis that does not send a reader looking for a completion that never happened.
 
 #### Every fault names every failed check
 
-**A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported, in the fault's `violations` (**The fault object**). Steps 9 and 11 do not short-circuit for this reason: the four addressing comparisons are reported together, and a payload's schema violations are reported in full. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
+**A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported, in the fault's `violations` (**The fault object**). Steps 10 and 12 do not short-circuit for this reason: the four addressing comparisons are reported together, and a payload's schema violations are reported in full. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
 
 #### One execution is atomic
 
-Discarding a duplicate at step 7 is safe because the record that would have been written already exists, carrying that event's id in `event_ids`. **Arvo treats one execution of an executor as atomic**: it either produced its events and its record together, or it produced neither (**Required of infrastructure adapters**, obligation 1). An executor should be written on the same assumption — where side effects outside Arvo are unavoidable, they should be idempotent or cheap to repeat, because the protocol offers no partial-completion state for them to resume from.
+Discarding a duplicate at step 8 is safe because the record that would have been written already exists, carrying that event's id in `event_ids`. **Arvo treats one execution of an executor as atomic**: it either produced its events and its record together, or it produced neither (**Required of infrastructure adapters**, obligation 1). An executor should be written on the same assumption — where side effects outside Arvo are unavoidable, they should be idempotent or cheap to repeat, because the protocol offers no partial-completion state for them to resume from.
 
 Inside the executor code, the developer can leverage two values the protocol already guarantees as idempotency keys. The delivered event's `id` is globally unique (ADR-001) and identical on every retry of the same delivery, so it keys a side effect that must happen once per delivery. The execution's `execution_id` is derived deterministically (**Execution identity**) and identical on every delivery to the same execution, so it keys a side effect that must happen once per execution. Both are on the execution context (**The execution context**), and an executor that keys its external writes on one of them gets exactly-once effects from at-least-once delivery without a store of its own.
 
@@ -562,23 +563,49 @@ Because the handler fetches the record itself under a key it chooses, a mechanis
 
 #### An execution-level guard, not an event constraint
 
-#### The two options and their defaults
+**This is an execution-level guard, not a constraint on the event.** It does not narrow `depth` as ADR-001 defines it, does not restrict what depth an event may carry across the ecosystem, and imposes no limit the model enforces. ADR-000 holds that "Arvo imposes no architectural limit on composition depth", and this section does not contradict it: a version chooses its own maximum, and may choose one high enough that the guard never fires. What it bounds is how deep *this handler, at this version* is willing to be, and to go — a handler's own decision about its own recursion, not an architectural limit on composition.
 
-#### Checked on emission, not on delivery
+ADR-001 gives `depth` its purpose: it "exists for operational comprehension", because unbounded nesting is "an operational risk rather than a structural impossibility". This guard is the one place in the protocol that reads the field for that purpose, and turns a runaway recursion into a diagnosable stop rather than an exhausted store.
 
-#### One violating event rejects the whole batch
+#### One option, per version
+
+**A version MAY set a maximum execution depth**:
+
+```
+max depth      a number; 10000 unless set
+```
+
+Its name is each language's own choice (ADR-004); what this ADR fixes is that it exists, its default, and what it means. It is per version, not per handler, because two versions of one contract may nest differently and a version's executor is the code whose recursion it bounds.
+
+There is no option for what happens when the limit is crossed. **Crossing it is always a non-retryable execution fault.** It has two kinds, one for each place it can be detected: `max_depth_event_received` where an event arrives at or beyond the limit, and `max_depth_event_requested` where the executor returns an event that would go beyond it.
+
+#### Checked twice: on delivery, and on return
+
+The guard is applied at two points, with one threshold.
+
+**On delivery, at gate step 7** (**Entry validation**), fault `max_depth_event_received`: the delivered event's `depth` MUST be below the version's maximum. The version is the one resolution selected — the event's on an init, the record's on a followup — which is why the check sits after the version is known and confirmed declared, and not earlier. It catches a caller with a looser limit than this handler's reaching it from too deep.
+
+**On return, as part of return validation** (**What an executor returns**), fault `max_depth_event_requested`: for each event the executor returned that would open a new execution — one addressed to a service — the depth it would carry is `state.depth + 1`, and that value MUST be below the maximum. An own-`outputs` event carries `state.depth` and can never violate.
+
+The two thresholds are the same number, and that is what makes both checks safe together. Because emission refuses at `state.depth + 1 >= max`, no execution of this version ever opens a service execution at or above `max`, so no legitimate response — which carries the depth of the execution that produced it — ever arrives at or above `max` either. The delivery check therefore never rejects a reply this handler was owed, and only ever rejects an init that arrived from beyond the limit.
+
+Refusing the *emission* is where the protection lies. A delivered response has already happened; nothing about refusing it prevents any depth. Refusing to emit stops the doomed work before it runs, which is the only point at which stopping is worth anything. The delivery check is the second line: a handler protecting itself against a caller that does not share its limit.
+
+An executor does not have to discover the limit by hitting it. The execution context carries **at max depth** (**The execution context**), true exactly when a service emission from this execution would fail the return check. An executor that reads it before deciding what to return can choose an own-`outputs` event instead, safely and inside its own logic, and never raise the fault at all.
+
+#### One offending event rejects the whole batch
+
+**One offending event rejects the whole batch.** Where any event an executor returns fails the guard, none of them is emitted, no record is written, and `max_depth_event_requested` is raised for the delivery. The alternative — emitting the permitted ones and faulting on the violation — would leave a fault describing a delivery that partly succeeded, which a fault by definition cannot (**Failure protocol**). A batch is one decision by one executor, and it succeeds or fails as one. The same rule governs every other return-time check.
 
 #### The executor can see it coming
 
-#### On a violation: the three choices
+**An executor can see it coming, which is why the outcome is its own.** The execution context exposes **at max depth** (**The execution context**) — true when an event this execution emits to a service could no longer increment `depth` without reaching the maximum. An executor that checks it can take a different path, complete early with an own-`outputs` event that explains itself, or fail deliberately so the caller hears a handler error rather than an abandonment. Raising this fault on return therefore takes a deliberate act: emitting to a service after being told the limit is reached, or overriding `depth` outright, which is already among the unsafe fields under **What an executor may set**.
 
-#### The `violation` description
+#### What the caller hears
 
-#### What a violation function may return
+Because a fault carries its abandonment pair (**Abandonment**), a depth fault is not silence. The fault is non-retryable, so a conformant mechanism gives up at once and, where the fault carries them, publishes the handler error event and commits the record at `failure` (**Required of infrastructure adapters**, obligation 3). The caller learns the work will not be done, in the one shape it is already obliged to handle, and the record says why. On a `max_depth_event_received` fault against an init delivery, the record half is `null` — no execution began — and only the event is published, exactly as for any other init fault.
 
-#### A violation function must not be able to fail
-
-#### Recording the reason
+The fault's `message`, and the `lifecycle_description` of the abandonment record where there is one, MUST state the limit in force, the depth at which the execution sat or the event arrived, and — on `max_depth_event_requested` — the type and would-be depth of each event in the rejected batch, offenders and non-offenders alike, because the batch was rejected whole and a diagnostic showing only part of it would misrepresent what happened.
 
 ### The execution record
 
