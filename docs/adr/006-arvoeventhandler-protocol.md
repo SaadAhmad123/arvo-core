@@ -115,19 +115,73 @@ An executor that declares none is still resumable — it may emit to a service a
 
 ### Execution identity
 
+ADR-001 already assigns the two roles. `subject` identifies the workflow and is "deliberately inert — it encodes nothing, and nothing is derived from it by inspection". `executionid` identifies a specific durable, resumable execution of a handler, and ADR-001 leaves its derivation to this ADR. This section supplies that derivation and changes neither assignment.
+
 #### The three identifying values
+
+Three values identify an execution, all carried on the execution record.
+
+| Field | Meaning |
+|---|---|
+| `subject` | The workflow. Taken from the init event and copied unchanged onto everything emitted. |
+| `execution_id` | This execution of this handler. Derived, by the rule below. |
+| `parent_execution_id` | The execution that caused this one — the init event's `executionid`. |
+
+On entering a new execution, a handler MUST set:
+
+```
+state.subject             = init_event.subject
+state.parent_execution_id = init_event.executionid
+state.execution_id        = SHA-256( utf8(init_event.dataschema) ‖ 0x00 ‖ utf8(init_event.id) )
+                            rendered as 64 lowercase hexadecimal characters
+```
 
 #### The derivation of `execution_id`
 
+- **Algorithm:** SHA-256, as specified in FIPS 180-4. Chosen because it is available in every language's standard library or platform, not because Arvo needs its cryptographic properties for anything beyond collision resistance.
+- **Input encoding:** the UTF-8 bytes of `dataschema`, then the single byte `0x00`, then the UTF-8 bytes of `id`. The delimiter is a byte, not a character, and it cannot occur inside either input under ADR-002's format rules — so no pair of distinct inputs can produce the same byte string.
+- **Output encoding:** lowercase hexadecimal, 64 characters, no prefix and no separator.
+
+The derivation MUST be pure: no randomness, no clock, no mutable input. It MUST be performed only when a new execution is entered; on every later delivery `execution_id` is read from the record, never recomputed. This satisfies ADR-001's standing requirement that the derivation be deterministic, "so a redelivered trigger resolves to the existing execution rather than forking a new one".
+
+`dataschema` is the identifying component rather than `type`, because ADR-005 is explicit that no ADR makes `type` globally unique and that cross-contract collisions are resolved by "`type` and `dataschema` together". Since `dataschema` is `{uri}/{version}`, it names one contract at one version, and it is read directly off the init event that resolved this handler's version in the first place.
+
 #### Why every part of the derivation is pinned
+
+Every part of the derivation is pinned, and for the same reason ADR-005 pins its JSON Schema dialect rather than saying "JSON Schema": two implementations that disagree on any part of it derive different identifiers from the same init event, and a redelivery then forks a new execution — precisely the failure the derivation exists to prevent.
+
+The rule has at least two independent implementors before a second language exists. Adapter obligation 2 (**Required of infrastructure adapters**) makes a mechanism compute the same identifier before dispatch, so that it can find an existing record for a redelivered init event. A mechanism and a handler that computed it differently would never agree on whether an execution exists.
+
+Changing the algorithm, the input encoding, or the output encoding would change every identifier every implementation derives, so each changes only by a superseding ADR.
 
 #### Properties that follow
 
+Four properties follow, and all four are load-bearing.
+
+- Every execution has a unique `execution_id`. ADR-001 requires an event's `id` to be globally unique, so two distinct init events never share one, and the derivation carries that uniqueness through to the identifier.
+- A redelivered init event derives the same `execution_id` and therefore resolves to the same execution rather than forking a new one.
+- Two handlers implementing different contracts derive different identifiers even where those contracts declare the same `type`, because their `dataschema` values differ.
+- One handler invoking the same service twice within an execution produces two executions of it, because the two init events have different `id` values.
+
 #### The residual case: two handlers on one contract version
+
+The one case this does not separate is two handlers implementing the *same* contract version, which would derive the same identifier for the same init event. Nothing in the model can distinguish those handlers — node identity is deliberately not something Arvo depends on (ADR-000) — so the derivation cannot be made to separate them, and the rule closes the case from the other side:
+
+**Within one execution context, two handlers MUST NOT implement the same self contract.** An execution context is the set of handlers among which a mechanism routes events by `to` — a deployment, in the ordinary case. Two handlers implementing one contract there would both be candidates for the same init event, both derive the same `execution_id`, and both attempt to own the same record. A deployment that violates this is non-conformant, and a mechanism SHOULD reject it where it can see the full handler set. This is a constraint on deployment rather than on the derivation, and it is named here so the case is not mistaken for a gap in the derivation.
+
+Two handlers implementing the same contract in *different* execution contexts — two independent deployments — are unaffected, since no event of one is ever routed to the other.
 
 #### The root case
 
+**The root case changes nothing here, and is named so it cannot be misread.** ADR-001's *root execution* — the one whose identity is `subject`, whose completion carries it, and to which a failure event may one day be routed — is whatever minted the root event: a gateway, a scheduler, a webhook receiver. It sits outside this protocol, runs no executor, and owns no execution record.
+
+The handler a root event opens is not that execution. It is an ordinary execution like any other, deriving `execution_id` by the rule above, with `parent_execution_id = init_event.executionid`, which on a root event equals `subject`. The two readings are indistinguishable on the wire — that handler's completion carries `subject` either way, since a completion carries its caller's identity and the minter is the caller — but they diverge on whether this derivation needs a root carve-out, and it does not.
+
+A failure event routed to the root (`executionid = subject`, deferred as stated under **Failure protocol**) is addressed to the minter, not to any record, which is why it would need no keyed lookup to land.
+
 #### Depth of this execution
+
+This execution's nesting level is recorded as `state.depth = init_event.depth`. Under ADR-001, "an event opening a new execution carries one more than the level of the execution emitting it", so the init event's depth already *is* the depth of the execution it opens. No arithmetic is performed on entry; the increment happens on emission, under **Addressing an emitted event**.
 
 ### Addressing an emitted event
 
