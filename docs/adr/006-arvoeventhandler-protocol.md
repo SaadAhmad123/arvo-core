@@ -138,7 +138,7 @@ The members below are normative in their existence and semantics. What each is c
 | **at max depth** | True when an event this execution emits to a service could no longer increment `depth` without reaching the version's maximum (**Depth**). | read |
 | **cancel** | Marks this execution `cancelled` with a reason, terminal (**The execution record**). | write |
 | **fault** | Builds an execution fault for the executor to raise deliberately, with a reason and whether it is retry safe (**Failure protocol**). | produces a fault |
-| **trace** | The execution's own trace context, to record against (**Observability**). | read, and record |
+| **telemetry** | The delivery's OpenTelemetry objects: its **span**, a **logger** bound to that span's context, and a **meter** scoped to the handler (**Observability**). | read, and record |
 | **mechanism hooks** | Whatever the mechanism running this handler chooses to expose to an executor, supplied to the handler alongside the delivery. Which hooks exist is the mechanism's own scope and undefined here. Where none are supplied it is an empty object, never absent. | read, or stable mutation only — see below |
 
 #### What the context does not expose
@@ -386,11 +386,43 @@ The unsafe surface exists because a type boundary cannot enforce every rule in t
 
 ### Observability
 
+Trace context is inside the model. ADR-000's *Observability by Default* requires that "the model must preserve sufficient correlation, causation, lineage, and trace context to make distributed composition observable", and lists "causation, lineage, and trace context" among AAM membership. ADR-001 places `traceparent` and `tracestate` on every event and states that the envelope "neither inherits nor synthesizes them" — whoever creates the event sets them. For every event this protocol emits, that is the handler, and this section states what it does.
+
 #### Continuing the trace
 
-#### The executor's access to the trace
+A handler MUST continue an existing trace rather than begin a new one wherever it can. An execution's trace context for a delivery is taken from the delivered event's `traceparent` and `tracestate` where a `traceparent` is present, and begun fresh only where none is. Every event the handler emits carries that context by default (**The complete field defaults**), so a causal chain survives suspension without an executor doing anything.
+
+The trace is per delivery, not per execution. An execution that suspends and resumes on a response continues the response's trace, which descends from the service's trace, which descends from the emission that opened it — so the chain joins across the suspension through the events themselves, which is the only thing that survives one. Nothing about the trace is stored on the record as its own field; the record's `triggering_event` carries it if a reader needs it later.
+
+#### OpenTelemetry is the observability standard
+
+**The observability surface of this protocol is OpenTelemetry**, and an implementation MUST expose it through the OpenTelemetry API for its language rather than through an API of its own. This is the first ADR to name an external standard as a requirement on handler behaviour, and it does so on ADR-000's stated preference for "established standards to invented ones". OpenTelemetry is the vendor-neutral API for traces, metrics and logs, `traceparent` and `tracestate` are its W3C propagation format — the one ADR-001 already places on every event — and every language Arvo targets has an official OpenTelemetry API.
+
+What is mandated is the **API**: the types an executor records against and the handler emits through. Collection, retention and export remain infrastructure responsibilities per ADR-000's *Observability by Default*, and an implementation MUST NOT require a particular exporter, collector, sampler or backend. A deployment with no OpenTelemetry SDK configured gets the API's no-op behaviour, at no cost and with nothing to change in handler or executor code.
+
+#### The executor's access to observability
+
+An executor MUST be able to contribute to the execution's own telemetry rather than having to start a parallel one, and it reaches it through the **telemetry** member of the execution context (**The execution context**). That member holds three objects, each the OpenTelemetry API's own type for that language:
+
+| Object | What it is | What an executor does with it |
+|---|---|---|
+| **span** | The delivery span the handler opened (**Instrumenting the protocol itself**). | Set custom attributes; add span events with their own attributes; record exceptions; set status. |
+| **logger** | A logger already bound to the span's context. | Emit logs correlated to this delivery without passing context by hand. |
+| **meter** | A meter scoped to the handler, with the span's context available for exemplars. | Record counters, histograms and gauges. |
+
+Three objects rather than one because that is how OpenTelemetry is shaped: a span cannot emit a log or record a metric, and pretending otherwise would mean a wrapper that has to be re-learned per language. Each is the real API object, not a wrapper an implementation invents, so that anything the OpenTelemetry API permits an executor may do, and any OpenTelemetry instrumentation library an executor already uses works unchanged. An implementation MAY add convenience over them and MUST NOT narrow them.
+
+Replacing an emission's trace context is possible but unsafe, for the reason the classification table gives under **What an executor may set**: a valid override descends from this execution's own context, and anything else fragments the workflow's trace at the point a suspension makes it hardest to reconstruct.
 
 #### Instrumenting the protocol itself
+
+An implementation MUST instrument the protocol so that a handler is observable without an executor writing any instrumentation. Each delivery MUST produce a span, and the stages this ADR defines — entry validation, hydration, classification, collection, executor entry, return validation, emission — SHOULD each be visible within it, so that a delivery that faulted at the gate and one that faulted on return can be told apart from telemetry alone, and so that time inside the executor can be separated from time in the protocol around it.
+
+The delivery span SHOULD carry as attributes the identifiers a reader needs to find the execution: `subject`, `execution_id`, the self contract `type` and `version`, the entry kind, and the attempt number. Attribute names are API shape and each language's own choice, but an implementation SHOULD follow OpenTelemetry semantic conventions where one applies and SHOULD namespace Arvo's own under a single prefix, so that two languages' traces can be read side by side.
+
+An implementation SHOULD publish protocol-level metrics — deliveries by outcome, faults by `fault_kind`, executor duration, collection size — through the same metrics API, and MUST NOT require an executor to opt in to them.
+
+A fault MUST be recorded on the delivery span before it is raised, as an exception with its `fault_kind` and whether it is retry safe as attributes (**The fault object**), because a fault writes no record and the trace may be the only place a retried-away failure is ever visible.
 
 ### Classification
 
