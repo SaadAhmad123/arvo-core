@@ -135,6 +135,7 @@ The members below are normative in their existence and semantics. What each is c
 | **set state** | Replaces the business state whole. There is no partial write and no merge: an executor that keeps part of the old state copies it forward itself. Validated against the declared schema, and a value the schema rejects is an execution fault. | write |
 | **dependencies** | Whatever the dependency factory resolved for this delivery, or the value supplied (**Dependencies**). | read |
 | **event builder** | Constructs a fully addressed event from a `type` and a `data`, applying every default under **Addressing an emitted event**, and exposing the safe fields and the visibly unsafe group. The only member that produces an event. | produces an event |
+| **implementation drift** | True where the handler's current declaration for this version hashes differently from the `version_hash` the record carried into this delivery — that is, the declaration changed since the last delivery this execution processed (**`version_hash` and implementation drift**). Always false on an init delivery. What drift means is outside this ADR; the handler only reports it. | read |
 | **at max depth** | True when an event this execution emits to a service could no longer increment `depth` without reaching the version's maximum (**Depth**). | read |
 | **cancel** | Marks this execution `cancelled` with a reason, terminal (**The execution record**). | write |
 | **fault** | Builds an execution fault for the executor to raise deliberately, with a reason and whether it is retry safe (**Failure protocol**). | produces a fault |
@@ -611,39 +612,181 @@ The fault's `message`, and the `lifecycle_description` of the abandonment record
 
 #### One record, representable as JSON
 
+An execution's entire memory is one record. It MUST be representable as JSON, so that no mechanism has to understand any language's object model to store it, and it MUST carry the fields below under these names. The names are normative — the record is a durable format, and a record written by one language MUST be readable by another (ADR-004). A mechanism stores and returns it; it never authors one (**Resolving the existing execution**).
+
 #### The fields
+
+| Field | Meaning |
+|---|---|
+| `record_format_version` | The version of this record envelope, as a `MAJOR.MINOR.PATCH` string. Under this ADR it is exactly `1.0.0`. Set by the handler on every record it writes (**`record_format_version`**). |
+| `subject` | The workflow. Grouping key. |
+| `execution_id` | This execution. Record key. |
+| `parent_execution_id` | The execution that caused this one. |
+| `depth` | This execution's nesting level, from the init event that opened it. |
+| `source` | The self contract `type` this execution belongs to, and the `source` of every event it emits. |
+| `version` | The self contract version whose executor owns this execution. |
+| `version_hash` | A hash of this version's declaration as it stood at the last delivery that wrote the record, so that drift in the handler's implementation since then can be detected on the next (**`version_hash` and implementation drift**). |
+| `cas_version` | Non-negative integer, starting at 0 and incremented by the handler on every write to the record, including the `abandonment_state` it prepares against being given up on (**Abandonment**). A mechanism commits records but never authors one, so it never increments this itself. Exists so a mechanism can compare-and-swap (**Required of infrastructure adapters**, obligation 5). |
+| `lifecycle` | `idle`, `waiting`, `success`, `error`, `cancelled`, or `failure`. |
+| `lifecycle_description` | Free text explaining how the execution reached its current `lifecycle`, or `null`. |
+| `event_ids` | Every event the execution has touched, each as an `id` and a `direction` of `received` or `emitted`, relative to this handler. |
+| `init_event_id` | The `id` of the init event. |
+| `init_event_source` | The `source` of the init event — the caller a completion returns to. |
+| `init_event` | The event that began the execution. |
+| `triggering_event` | The event that caused the most recent delivery. |
+| `in_flight_event_map` | Keyed by the `id` of each event emitted to a service in the current round. The value is the collected response, or `null` while outstanding — the key MUST be present either way, because the key set is what the execution is waiting for. |
+| `contracts` | The handler's `self` and `services` contracts, in their canonical form (ADR-005). Carried for a reader's benefit only — nothing in execution consults it. |
+| `data` | The executor's own business state, governed by the schema that executor declared, or `null` where none is declared or nothing has been written. |
+
+`execution_id` identifies a record uniquely and `subject` groups the records of one workflow; a mechanism MAY use them as its record and grouping keys, and both are inside the record so that it is self-describing.
 
 #### `direction`: received or emitted
 
+`direction` is `received` or `emitted` rather than `input` or `output`, deliberately. Those two words already name something else in this model — ADR-005's declared shapes, and a version's `outputs` — and a service's reply is `received` here while being that service's output. Two axes sharing a vocabulary is how a reader ends up confidently wrong.
+
 #### `contracts` is informational only
+
+`contracts` is informational by construction, and an implementation MUST NOT resolve, bind, or validate against it. It exists so that a record found in a store years later can be understood without the code that wrote it, which is the same reason the identifying fields are inside the record rather than only in the keys. A reader should be aware it is a snapshot: a contract that has since changed will not match a live one, and that discrepancy carries no meaning at execution time. Whether it should be compared against the live contract as a drift warning is left deferred (**Left deferred**).
+
+#### `version_hash` and implementation drift
+
+`version_hash` is written on every record the handler produces — the next record on a successful delivery, and the `abandonment_state` on a fault — with the hash of the declaration in force at that delivery. It is a hash over **this version's declaration only**, computed by the pinned algorithm below. It MUST NOT include the executor's code — source text differs by language, build, and minification, and including it would make the hash differ between two deployments of identical behaviour.
+
+On every followup delivery the handler computes the hash from its current declaration and compares it with the one the record carries. The result is exposed to the executor as **implementation drift**, a boolean on the execution context (**The execution context**): true where the two differ. Because the record's hash is refreshed on every write, drift means *the declaration has changed since the last delivery this execution processed* — not since the execution began — so an execution that has already been entered once under the new declaration reports no drift on the delivery after that. This is the useful question: an executor that needs to react to a change needs to react once, on the first delivery after it. The handler itself does nothing with it — a mismatch is not a fault, does not change classification, and does not alter the gate. What drift means, and what an executor should do about it, is explicitly outside this ADR: the handler's job is to make the fact visible, and the executor's is to decide whether it matters.
+
+Drift is detected **per version only**. A change to another version of the same contract, or to a version of a service contract this handler does not declare, does not register, because the hash covers only what this version's executor could observe.
+
+#### The `version_hash` algorithm
+
+Every part of this is pinned, for the same reason the `execution_id` derivation is: two implementations that disagree on any of it report drift where there is none, or miss it where there is. It changes only by a superseding ADR.
+
+**Step 1 — build the input object.** Construct a JSON object with exactly these four keys and no others:
+
+| Key | Value |
+|---|---|
+| `self` | the self contract's canonical form (ADR-005), with `versions` reduced to the single entry for this version, and `description` and `metadata` removed |
+| `state_schema` | the schema this version's executor declared for `data`, or `null` |
+| `options` | an object with exactly the keys `max_depth`, `max_retry_attempts`, `retry_delay`, `collect`, `handler_error_domain`, each holding the value in force for this version — the default where none was set. `retry_delay` in its function form and `handler_error_domain` in its source form are each represented by the literal string `"function"` and `"source"` respectively, since neither has a value until a delivery. |
+| `services` | an array, sorted by `uri` ascending by Unicode code point, of each declared service contract's canonical form with `versions` reduced to the single entry for the declared version, and `description` and `metadata` removed |
+
+The canonical form is what ADR-005 defines, and this ADR does not restate its fields: whatever a canonical form contains is what is hashed, less the two reductions above. Nothing else is included. In particular: `description` and `metadata`, which ADR-005 makes informational; every other version of the self contract; every version of a service contract other than the declared one; the executor; the dependency value or factory; and anything a mechanism supplies.
+
+**Step 2 — serialize.** Serialize the input object with the JSON Canonicalization Scheme, [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785): object keys sorted by UTF-16 code unit, no insignificant whitespace, numbers in the ECMAScript shortest round-trip form, strings escaped as the scheme requires. This pins the byte sequence for one purpose — hashing — and does not settle ADR-005's deferred byte canonicalization of the canonical form itself, which remains deferred.
+
+**Step 3 — hash.** SHA-256 (FIPS 180-4) over the UTF-8 bytes of the serialization.
+
+**Step 4 — encode.** 64 lowercase hexadecimal characters, no prefix and no separator.
+
+Because every input is drawn from the canonical form or from protocol-defined options, and the serialization is pinned, two languages declaring the same version produce the same `version_hash`, and a record written by one language MAY be resumed by another with drift reported truthfully.
 
 #### `lifecycle`: where an execution rests
 
+`lifecycle` records where an execution **rests**, not how it was entered. How a delivery was classified is a property of that delivery (**Classification**) and MUST NOT be conflated with this field.
+
 #### The six lifecycle values
+
+| Value | Terminal | When an execution rests here |
+|---|---|---|
+| `idle` | no | Alive, with nothing outstanding and nothing completed. |
+| `waiting` | no | One or more responses are outstanding. |
+| `success` | yes | An own `outputs` event was emitted; or, for a version with empty `outputs` in a handler with no service contracts, the executor returned nothing (**A sink version completes by returning nothing**). |
+| `error` | yes | The handler error event was emitted because the executor failed. |
+| `cancelled` | yes | The executor marked the execution cancelled and returned an own `outputs` event. |
+| `failure` | yes | The mechanism abandoned the execution after a fault, and committed the record the handler prepared for that (**Abandonment**). |
+
+A terminal record accepts no further delivery (**Entry validation**, step 9). `failure` is the one value no handler reaches under its own steam: a fault writes no record, so only the mechanism, acting on the fault's `abandonment_state`, can put an execution there (**Retry**).
 
 #### Marking an execution `cancelled`
 
+**An executor MUST be able to mark its own execution `cancelled`**, through the **cancel** member of the execution context (**The execution context**), and doing so is terminal. It is how a cooperative wind-down records *why* an execution ended rather than leaving it indistinguishable from an ordinary completion (**Cancellation**).
+
+Marking cancelled does not excuse an execution from answering its caller. Cancelling is a reason to stop, not a way out of the protocol, and the protocol makes silence after a cancel impossible. The three ways a cancelling executor can leave are decided as follows:
+
+| The executor marks cancelled and… | The handler |
+|---|---|
+| returns an own-`outputs` event | emits it; the record rests at `cancelled`, with the executor's reason in `lifecycle_description`. An explicit statement of why an execution ended outranks what is inferred from what it emitted. |
+| returns nothing, or only service emissions | raises a non-retryable execution fault, `execution_cancelled`. Nothing is emitted and no record is written by the handler. The fault carries the handler error event and the record at `failure` as its abandonment pair (**Abandonment**), with the executor's reason in the fault's `message` and the record's `lifecycle_description`, so the mechanism publishes and commits them at once and the caller hears. A service emission is refused here because a cancelled execution must not open new work. |
+| throws | the throw wins: the handler error event is emitted and the record rests at `error`, because a failure after a cancellation is still a failure and the caller should hear it as one. |
+
+An implementation SHOULD make the first row the easy path. The second exists so that a developer who forgets to answer is caught by the protocol rather than by a caller that waits forever, and it uses no machinery the fault does not already have. One consequence follows: the `cancelled` lifecycle appears in a store only where the execution also answered its caller, and an execution that cancelled without answering rests at `failure` with its reason preserved in `lifecycle_description`.
+
 #### `lifecycle_description`
+
+`lifecycle_description` carries free text explaining how the execution reached its `lifecycle`, and is `null` wherever nothing explains it — which is every `idle`, `waiting` and `success`. It is populated on `cancelled`, with whatever reason the executor gives; on `error`, with the executor's failure message; and on `failure`, with the message of the fault the mechanism gave up on. It is diagnostic only: nothing in the protocol reads it, and no behaviour may depend on its contents.
 
 #### Emitting nothing: `waiting` or `idle`
 
+**An executor that returns nothing rests at `waiting` or `idle`, depending on what is still outstanding** (**What an executor returns**). Returning nothing says only "no new events"; it does not say the execution has nothing to wait for. Under the per-version override that enters the executor on each response (**Collection**), returning nothing on a partial collection is the ordinary case — responses remain outstanding, so the execution stays at `waiting`. Where nothing is outstanding and nothing terminal was emitted, it rests at `idle` — except for a sink version, which rests at `success` (below).
+
+#### A sink version completes by returning nothing
+
+There is one version shape for which returning nothing is the only possible completion: a version whose `outputs` is empty — which ADR-005 permits — belonging to a handler that declares no service contracts. Such a version's executor can legitimately return nothing at all: no own output exists to return, and no service exists to call. It does its work by side effect and is done.
+
+For that shape, and only that shape, an executor returning nothing MUST rest the execution at `success`, not `idle`. The two conditions are both required: with a service declared, the executor could have called it; with an output declared, it could have answered. Where either is present, returning nothing means the executor had a choice and did not take it, and `idle` is the correct and honest state.
+
+The caller receives no completion event, but the contract said so in advance by declaring no outputs, and the handler error event remains available so that failure still reaches it. The condition is a property of the declaration, so an implementation can determine it once, at declaration time, and need not re-derive it per delivery.
+
 #### `idle` is legal and almost always a defect
+
+Outside the sink shape above, `idle` is named for the state rather than for how it was reached, because it can be reached two ways: an executor that returned nothing on the delivery that created the execution, and one that returned nothing after its last response came in. Both leave an execution that is alive, waiting for nothing, and finished with nothing — so nothing will ever deliver to it again and it rests there forever. It is a legal state, it is almost always a defect, and an implementation SHOULD make it visible rather than silent: on the delivery span (**Observability**), and in whatever protocol-level metrics it publishes. Because the sink shape rests at `success` instead, `idle` is reachable only where the executor had something it could have returned, which is what makes it a reliable defect signal.
+
+#### `record_format_version`
+
+`record_format_version` says which envelope a record was written under, so that a reader can tell what shape it holds before validating it. Under this ADR the value is exactly `1.0.0`, and a handler MUST write it on every record it produces — the next record on a successful delivery and the `abandonment_state` on a fault. Neither a mechanism nor an executor ever sets it.
+
+Its three components carry the meaning semantic versioning gives them, applied to the envelope rather than to a contract. **MAJOR** changes only by a superseding ADR, and only for a change the rules under **How this record may change later** forbid — a field removed, a field's meaning changed, a required field added. **MINOR** marks an additive change under those rules, a new nullable field with a defined absence. **PATCH** marks a clarification that alters neither shape nor meaning. A reader at `1.x` therefore reads any `1.y` record, which is what the additive rules are for; a reader meeting a MAJOR it does not know cannot validate a shape it has no schema for, and MUST fault non-retryably at gate step 5 as `record_invalid` rather than guess.
+
+It is the first field in the table for the reason it exists: it is the one field a reader must consult before it knows how to read the rest.
 
 #### How this record may change later
 
+A stored record outlives the deployment that wrote it, and an execution in flight when a handler is upgraded is read back by the newer code. So every field a future ADR adds to this record MUST be nullable, with absence carrying a defined meaning — a record written before the field existed is still a valid record, and must validate and resume without alteration.
+
+Two rules follow from the same premise and are stated here so a later ADR does not have to rediscover them. A field MUST NOT be removed, and a field's meaning MUST NOT change, because both silently reinterpret records already in a store. And validation MUST NOT reject a record for carrying a field the reader does not know, so that a record written by a newer deployment survives being read by an older one during a rollout.
+
+These rules hold within a MAJOR of `record_format_version`. A change that cannot satisfy them is a MAJOR bump, made only by a superseding ADR, and a reader distinguishes the two envelopes by the field rather than by inspection.
+
+This is deliberately narrower than migration, which **Version authority** prohibits outright. Migration would move a record between contract versions, remapping state whose meaning only its own executor knows. This is the envelope growing new optional fields around state that is untouched.
+
 #### `cas_version`
+
+`cas_version` MUST NOT be reset or wrapped by an implementation. It is an integer exactly representable in JSON, which bounds it far above any reachable execution length. It is incremented by the handler on every record it produces — the next record on a successful delivery, and the `abandonment_state` on a fault — so that a mechanism comparing the stored value against the one it read can tell whether another write landed in between (**Required of infrastructure adapters**, obligation 5).
 
 #### Version authority
 
+After the first delivery, the record is the only place the handler's own version survives — a followup response's `dataschema` names the *service's* contract and version, not this handler's. That is why a followup's executor is chosen by `state.version` (**Resolution, and which executor runs**), and why the record's version must still be one the handler declares (**Entry validation**, step 6). If it is not, the delivery is a fault and the execution is not resumed.
+
 #### A record belongs to one version for its whole life
+
+**An execution record belongs to one contract version for its whole life.** It MUST NOT be resumed under another version, and it MUST NOT be migrated to one. This is not a conservative default awaiting a better answer; it follows from ADR-005, where each version is fully isolated and "no two versions are ever compatible by construction". A migration would need a defined mapping from one version's state to another's, and isolation is precisely the statement that no such mapping exists — a `data` shape is governed by the schema its own executor declared, and a neighbouring version's schema has no claim on it. Silently running one version's executor over another version's state would corrupt an execution rather than report one.
 
 #### Removing a version strands its executions
 
+Removing a version from a deployed handler's self contract — and with it, under **One executor per version**, its executor — therefore strands that version's in-flight executions, permanently. Each will fault at gate step 6 on its next delivery and, being non-retryable, be abandoned. A version is drained before it is removed, and that is the whole of the migration story.
+
 #### Hydration
+
+On a followup delivery, a handler MUST validate the whole record — a fixed envelope, composed with the executor's own declared schema at `data` — and MUST restore every event the record holds to an event value before any executor code runs (**Entry validation**, step 5). A record that fails either is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
 
 #### The cost of eager hydration
 
+**This is an accepted trade-off, and its cost scales with fan-out.** An execution awaiting a thousand responses restores a thousand events on each of them, and the record grows with the collection. Eager hydration is the rule regardless: a handler that reasons about a record it has only partly validated is worse than a handler that is slow. Nothing here bounds fan-out, and how to bound it — a cap, lazy restoration for entries an executor never reads, or something else — is left to a later decision rather than guessed at now (**Left deferred**).
+
+#### Changing a deployed version's state schema
+
+The state schema is enforced on every entry, at gate step 5, against the schema the version declares *today*. That creates an obligation the protocol cannot enforce for the author, and it is stated here so the consequence is not discovered in production.
+
+**Once a version has been deployed and has records in a store, any change to its declared state schema MUST be compatible with the `data` those records already hold.** A new field MUST be optional, with a defined meaning when absent. A field MUST NOT be removed and its meaning MUST NOT change. A constraint MUST NOT be tightened. These are the same rules the record envelope holds itself to under **How this record may change later**, applied to the one part of the record the author controls.
+
+The consequence of breaking them is exact. Every in-flight execution of that version fails step 5 on its next delivery with `record_invalid`, which is non-retryable, so each is abandoned and its caller told the work will not be done. Nothing can rescue them: migration is prohibited (**A record belongs to one version for its whole life**), and drift detection does not help, because drift is reported to the executor and the record has already been rejected before the executor runs.
+
+A change that cannot meet these rules is a new version. It is declared alongside the old one, the old one is drained, and then the old one is removed — the same story as any other version change, and the only one the protocol supports.
+
 #### Serializability of `data`
+
+A handler MUST verify that `data` survives a JSON round trip when an executor returns, and report a non-retryable fault (`state_not_serializable`) if it does not. This is the executor author's obligation and cannot be prevented by a declared schema, which will not catch a native date or class instance passed through a permissive schema position. Checking at return keeps the failure attributable to the executor that caused it, and it is part of return validation alongside the checks on returned events (**What an executor returns**).
+
+The schema at `data` is the version author's, not the protocol's. The protocol validates stored `data` against whatever that schema declares at the time of a delivery, and nothing more. Keeping a change to that schema safe for the `data` already in a store, after the handler's first production deployment, is therefore the author's responsibility, and this ADR places no rule on how it is done.
 
 ### Retry
 
