@@ -1348,27 +1348,79 @@ Cooperative means the execution stops when it next runs and chooses to. Four lim
 
 ### Deriving the per-execution identifier into `subject`
 
+Considered, not chosen. A draft of this protocol took that shape — a fresh `subject` per execution, `executionid` constant across the workflow — on the reasoning that a record wants a unique key and `subject` was the more natural name for one. It contradicts ADR-001 twice over: `subject` is defined there as inert, with "nothing derived from it by inspection", and as minted once and copied unchanged; and `executionid` is defined as identifying an execution, not a workflow. ADR-001 also records the same idea as already tried — "earlier designs chained subjects to carry coordination state, making one field both the workflow key and the coordination mechanism; it served neither well."
+
+The storage motivation survives intact under ADR-001's assignment, which is why nothing was lost: `execution_id` is the unique record key and `subject` is the grouping key, the same two-key design with the roles as ADR-001 assigns them. Resumption remains a single keyed read, because a completion carries its caller's `executionid`.
+
 ### Having the handler construct every event from a type-and-payload request, refusing pre-built events
+
+Considered, not chosen. A draft had the executor return requests — a `type` and a `data` — and the handler build every event from them, refusing any finished event an executor handed back. It is the tighter shape: the addressing rules run in exactly one place, and a misrouted `subject` or `initid` becomes impossible rather than merely unsafe.
+
+It was rejected because it makes the handler the only party that can ever produce an event, and there are legitimate cases where an executor must set what the defaults would not — a domain from a source the builder does not know, a `traceparent` continuing a context the executor received from outside the model, a `to` for a service contract shared by several handlers. Under a request model each of those becomes a request option the protocol has to define, and the list never closes. Under the chosen model the executor returns finished events, the builder makes the correct event the easy one, the unsafe fields are named so that overriding one is a visible act (**What an executor may set**), and validation at return catches everything that is structurally checkable. What the handler cannot check — a wrong but well-formed `subject` — it cannot check under either model, since the request model merely moves the same mistake to a request option.
 
 ### Naming a destination on each emission
 
+Considered, not chosen. Deriving `to` from the emitted event's type is what forces the collision rule under **No two capabilities may share an event type**, and that rule is a real cost: it can reject a handler whose declared capabilities are individually valid, and a contract author cannot anticipate it. Letting an executor name the destination would remove it.
+
+It was rejected because naming a destination introduces a second way to say the same thing and therefore a way for the two to disagree, and because the collision it guards against is detectable once, at declaration, where the whole capability set is visible, rather than at every call site.
+
 ### Entering the executor on every response by default
+
+Considered, not chosen. It is the more flexible default and needs no override. It also makes every multi-service handler concurrency-sensitive by default, and the failure mode is a partially processed execution rather than an error — an executor that was not written to be entered twice appears to work until two responses arrive close together. The safe behaviour is the one that should require no decision, so joining is the default and entering on each is the per-version opt-in (**Collection**).
 
 ### Merging into `in_flight_event_map` on emission
 
+Considered, not chosen. It would prevent a response being abandoned under the enter-on-each override. It would also let a collection span rounds and outlive the emission that created it, so "what is this execution waiting for" would no longer have a single answer. One rule that is occasionally lossy is preferred to a rule that is always ambiguous, and the loss is documented at the point the override is offered.
+
 ### Reporting a handler failure as a fault
+
+Considered, not chosen. It would let a mechanism retry application failures uniformly, with one path for everything that goes wrong. It would also make a handler's failure invisible to the caller waiting on it, which contradicts ADR-000's *Event-Only Communication*: the caller's continuation depends on an event arriving, and a failure it never hears about is a workflow that stalls. A handler error is a conclusion and travels as an event; a fault concludes nothing and does not (**Failure protocol**).
+
+### Letting an executor construct the handler error event
+
+Considered, not chosen. It would let an executor say "I failed" and keep running — emit the error event to its caller and then go on to call a service, for instance. That is the property ADR-005 gave the event and this ADR must not lose: it means the handler failed, full stop. An executor that wants to say it cannot do the work says so by failing, and the handler turns that into the event (**An executor never constructs the handler error event**). Refusing the type at the builder and at return costs an executor nothing it legitimately needs.
 
 ### Letting a mechanism compose the abandonment event
 
+Considered, not chosen. It looks simpler, since the mechanism is the party that knows abandonment has happened. But addressing a completion needs `to`, `initid`, `executionid`, `subject`, `category`, `dataschema` and a version, all of which are read off a record or an init event by rules this ADR spends a section on — so a mechanism composing one would be reimplementing **Addressing an emitted event**, and any drift between its version and the handler's would misroute a failure at the exact moment a workflow is already in trouble. Carrying a finished event keeps one implementation of the addressing rules and reduces the mechanism's new capability to publishing something it was handed.
+
 ### Leaving abandonment publication to the mechanism's discretion
+
+Considered, not chosen. It reads as the more respectful division of labour, and a mechanism may well want to dead-letter or alert instead. It was rejected because it makes whether a stranded caller is ever told a property of the deployment rather than of the model, which is the divergence ADR-004 exists to prevent, arriving through mechanisms rather than through languages. A mechanism's discretion is preserved where it belongs: in deciding when to give up, and in whatever else it does alongside publishing.
+
+### Having the mechanism classify the delivery and resolve the record
+
+Considered, not chosen. A draft had the mechanism read `dataschema`, decide init from followup, derive or read the key, and hand the handler a record or nothing. It removes a call from the handler's entry path. It also puts classification — the first and most consequential step of the gate — in code this ADR does not govern, so a mechanism that got it wrong would hand the handler a plausible record for the wrong execution, and the handler's every later check would be validating the wrong thing. The state function (**Resolving the existing execution**) keeps the mechanism classification-blind: it receives a key and returns what is under it, and every judgement about what came back is the handler's.
 
 ### Keeping the revision outside the record
 
+Considered, not chosen. It keeps a storage concern out of a model-level format. But the handler is the only party that knows a write has occurred, and a mechanism that must invent its own revision cannot check it against what the handler intended. Putting `cas_version` in the record makes incrementing it part of the handler's defined behaviour rather than a convention a mechanism supplies (**`cas_version`**).
+
+### Letting a version choose between a fault and an error event on a depth breach
+
+Considered, not chosen. A draft offered a per-version option — fault, or emit the handler error event — and a function form that could pick per event. It gave an author control over what the caller hears. It was rejected because the fault already carries the handler error event as its abandonment pair, so the option chose between two paths to the same event, and the function form was a second place for business logic to live outside the executor. One outcome, always a fault, with the executor able to see the limit coming through **at max depth** and choose its own path, is the same expressiveness with one path (**Depth**).
+
+### Bounding time with a single timeout
+
+Considered, not chosen. One number is simpler to declare and to explain. But the two questions it would have to answer have different answers and different remedies: an attempt that is stuck should be retried, and an execution that has lived too long should not. A single clock would either retry an execution that no attempt can rescue or abandon one whose only problem was a slow attempt. Two clocks, one retryable and one not, with a rule about their relation, is the smallest shape that gets both verdicts right (**Timeouts**).
+
 ### Defining cancellation as a model primitive
+
+Considered, not chosen. A derived cancel event on every contract, mirroring the handler error event, is the only shape that would work event-natively, and it fits the machinery: `in_flight_event_map` already names exactly the children an execution would need to cancel, so propagation down the tree would need nothing new. It was rejected on cost against demand. It makes the handler error event no longer the single standardized emit ADR-005 deliberately kept it as, it adds a third classification case every implementation and every handler must then handle, and it makes cancellation a thing a node can have done *to* it — a meaningful shift in what a participant is, for a capability most handlers never use.
+
+Note what was and was not avoided. The terminal `cancelled` lifecycle exists either way, because a record should say why an execution ended under either design; that was never the expensive part. What the cooperative form avoids is the inbound event, the classification case, and a participant losing the property that nothing external stops it (**Cancellation**).
 
 ### Defining a migration path for an execution record
 
+Considered, not chosen. It is the obvious answer to the drain cost under **Paid for**, and every durable-execution system eventually grows one. It cannot be built on ADR-005's foundation: per-version isolation means there is no compatibility relation between two versions to migrate along, so any mapping would be one an implementation invented, applied to state whose meaning only the original executor knows. An honest prohibition is better than a mechanism that silently reinterprets state, and draining is a cost a deployment can see and plan for (**A record belongs to one version for its whole life**).
+
+### Defining compatibility rules for a version's state schema
+
+Considered, not chosen. A draft wrote a rule set for how `data`'s schema may change after deployment — which fields may be added, which constraints tightened — mirroring the rules the record envelope holds itself to. It was withdrawn because the schema is the version author's, not the protocol's: the protocol composes it into validation and does nothing else with it, and a rule set it cannot enforce would be advice dressed as a requirement. What remains is the one fact the protocol can state, that an incompatible change fails every in-flight execution at gate step 5, and the one obligation that follows from it (**Changing a deployed version's state schema**).
+
 ### Requiring a specific concurrency mechanism
+
+Considered, not chosen. Naming a locking or transaction strategy would make the guarantee concrete and testable. It would also make this ADR the first to require a particular infrastructure capability by name, which ADR-000's *Infrastructure Independence* is explicit about avoiding. Stating the obligation — compare-and-swap on `cas_version`, and the outbox behaviour under **Required of infrastructure adapters** — and leaving the mechanism free preserves that.
 
 ## Conformance to ADR-000
 
