@@ -1,7 +1,7 @@
 # ADR-006: ArvoEventHandler Protocol
 
-- **Status:** Proposed
-- **Date:** 2026-09-14
+- **Status:** Accepted
+- **Date:** 2026-09-27
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)
 - **Supplies:** the `executionid` derivation and the incoming-event classification that [ADR-001](./001-arvoevent-structure.md) leaves to "the handler protocol ADR"; the conditions for routing a failure to the workflow root remain deferred (see **Left deferred**)
