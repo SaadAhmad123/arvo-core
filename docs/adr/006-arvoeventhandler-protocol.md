@@ -1495,8 +1495,129 @@ Beside the five, a mechanism supplies three inputs this ADR defines the shape of
 
 ## Appendix: An illustrative handler surface
 
+These sketches are illustrative only. They do not define the protocol and they are not a specification of any language's API — per ADR-004, API shape is each language's own choice. They exist to make the rules above concrete by showing them together, in a notation belonging to no language. Where prose and a sketch ever appear to disagree, the prose governs.
+
 ### Declaring a handler
+
+```
+handler
+    self        com_order_create                    the contract this handler implements;
+                                                    every version it declares gets an executor
+    services                                        declared once, for the handler
+        payments    com_payment_charge @ 1.0.0      a contract it may send to,
+                                                    at exactly one version
+
+    version 1.0.0
+        state                                       optional; omit for a stateless version
+            order_id    string                      the author's schema for record.data,
+            attempts    integer                     kept compatible once deployed
+        options                                     all optional; all validated at declaration
+            max_depth              250              default 10000
+            max_retry_attempts     5                default 3
+            retry_delay            f(event, state, attempt, max) → 200 × attempt
+                                                    default 300ms; a number or a function
+            run_timeout            10000            default 30000; null is unbounded
+            execution_timeout      86400000         default null; never below run_timeout,
+                                                    and null where run_timeout is null
+            collect                all              all | each; default all
+            handler_error_domain   "orders_failures"
+                                                    a value or a source; default none
+        execute(ctx) → event | [event, ...] | nothing, or throw
+
+    version 1.2.0
+        execute(ctx) → ...                          stateless: the executor alone
+
+a declaration that cannot work is refused here, before any event exists:
+a version without an executor, an executor for an undeclared version,
+two capabilities sharing a type, two versions of one service, an option
+outside its domain
+```
 
 ### Inside an executor
 
+The context is the executor's whole view. `entry` discriminates `event`, so a payload is only reachable once the case is settled.
+
+```
+execute(ctx):
+
+    ctx.event               the delivered event, restored
+                              entry = init      → the init event
+                              entry = followup  → one service's response: its
+                                                  outputs event or its handler error event
+    ctx.entry               init | followup
+    ctx.attempt             which attempt this delivery is, from 0
+    ctx.init_event          the event that opened this execution
+    ctx.identity            subject, execution_id, parent_execution_id, depth, version
+    ctx.collected           the responses in hand this round, and what is still outstanding
+                            under collect = all it is always complete on entry
+    ctx.state               record.data; present only where the version declared a schema;
+                            null until written
+    ctx.set_state(value)    replaces data whole; the schema rejects → state_schema_rejected
+    ctx.dependencies        as resolved for this delivery, or empty
+    ctx.implementation_drift
+                            true where this version's declaration hashes differently
+                            from the version_hash the record carried; false on an init
+    ctx.at_max_depth        true when one more service emission would reach max_depth
+    ctx.time_remaining      ms left on the run clock and on the execution clock,
+                            as of entry; null where a clock is unbounded
+    ctx.telemetry           span, logger, meter -- OpenTelemetry, for this delivery
+    ctx.hooks               whatever the mechanism exposed; read-only or stably
+                            mutable; empty where none
+
+    ctx.build(
+        type                a service's input type, or a key of this version's outputs
+                            -- never the handler error type
+        data                checked against whichever schema that type selects
+        domain              optional; a literal, or a source to resolve one from
+        ...                 the safe fields; the unsafe group only through a
+                            visibly separate surface -- see "What an executor may set"
+    ) → event               fully addressed; to, subject, executionid, initid,
+                            parentid, depth, category, dataschema all set for you
+
+    ctx.cancel(reason)      marks cancelled, terminal; still answer your caller,
+                            or the handler raises execution_cancelled for you
+
+    throw ctx.fault(reason, retry_safe = true)
+                            an execution fault, for a delivery that cannot proceed;
+                            the caller hears nothing while retries remain, and
+                            afterwards only through the abandonment event
+
+    to report that the work failed, just fail: any error escaping the executor
+    becomes the handler error event, which the caller already handles
+
+    return event            a batch of one
+    return [ ... ]          one batch, validated whole; [] emits nothing
+    return                  nothing; rests at waiting if anything is outstanding,
+                            at idle if not -- or at success for a sink version
+```
+
 ### What the mechanism calls
+
+The handler is entered once per delivery and holds nothing between them. It is given a way to reach the record, never the record itself.
+
+```
+execute(
+    event           the delivered event
+    state           an operation: (execution_id, telemetry, attempt) → record | absence
+                    reads the store on every call; parses and nothing more;
+                    knows nothing of init or followup
+    dependencies    a value, or a factory (event, record | absence, attempt) → value
+    attempt         which attempt this delivery is, from 0
+    telemetry       the delivery's OpenTelemetry context
+    hooks           optional; whatever this mechanism exposes to executors
+)
+    → produced { events, record }        commit together, then publish -- the outbox
+                                         guarantee, obligation 1. includes the case
+                                         where the executor failed and the handler
+                                         error event is among the events
+    → discarded                          already seen; nothing to do, nothing wrong
+    → fault    an ArvoHandlerFault       nothing is committed or emitted now.
+                                         read retry_safe and retry; redeliver with
+                                         attempt + 1, or give up. on giving up,
+                                         commit abandonment_state and publish
+                                         abandonment_event, together, where present
+```
+
+The asymmetry in that return is the failure model in one place. A handler error comes back as `produced`, because it is a concluded execution that happens to have emitted an error event. Only a fault comes back as `fault`, and only a fault is a mechanism's problem.
+
+Note what the two returns have in common. `produced` hands over events and a record to commit together, and a fault's abandonment pair is the same two things held back for a decision only the mechanism can make. A mechanism that has implemented `produced` correctly has already implemented most of abandonment.
