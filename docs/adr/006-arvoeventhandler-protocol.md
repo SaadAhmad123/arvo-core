@@ -792,29 +792,91 @@ The schema at `data` is the version author's, not the protocol's. The protocol v
 
 #### A handler cannot retry itself
 
+A handler cannot retry itself. It is stateless and runs only when something delivers to it, so a retry is a redelivery and every decision about one belongs to whatever runs the handler. What this ADR settles is what the handler must tell it, and what the mechanism must do with what it is told.
+
 #### Every delivery carries its attempt number
 
-#### Retry information travels on the fault
+**Every delivery carries which attempt it is.** The mechanism supplies an attempt number alongside the event, the state function and the dependencies. It is on the execution context (**The execution context**), so an executor may read it — knowing this is the third attempt is sometimes exactly what a decision turns on — and it is also passed to the state function, so a mechanism can tune its own read by it (**Resolving the existing execution**).
+
+It is not part of the record. It describes a delivery, not an execution, and a record that carried it would be claiming to remember something no delivery can know about another.
 
 #### Attempts count from zero
 
+**Attempts count from 0**, and a retry is in prospect while `attempt < max_retry_attempts_allowed`. Both halves are pinned because neither is inferable: with the default of 3 and an unpinned base, one implementation delivers three times and another four, and both could call themselves conformant.
+
+#### Retry information travels on the fault
+
+**Retry information travels on the fault, not in the record.** Where a delivery ends in an execution fault, the fault carries everything a mechanism needs to decide what happens next — `attempt`, `timestamp`, `retry_safe`, and the `retry` block. Those fields are defined once, with the rest of the object, under **The fault object**; what follows is what they mean rather than a second copy of their shape.
+
+`retry` is `null` where no retry is in prospect: a fault that is not retry safe, or one whose attempts are spent. A mechanism can therefore read "retry, and here is when" or "do not" without interpreting a message.
+
 #### Why the fault is the only place this can live
+
+**The fault is the only place this can live.** A fault produces no record, so a figure written into the record could never be persisted at the moment it mattered — and outside a fault there is nothing to retry, so the field would be `null` on every record that ever reached a store. The fault exists exactly when the information is meaningful and at no other time.
 
 #### No exhaustion flag, no cross-delivery total
 
+There is deliberately no exhaustion flag and no cross-delivery total. A flag would be dead weight — `retry` is `null` exactly when attempts are spent, so any flag inside it could only ever read false, and `retry_safe: false` with `retry: null` already says "do not retry" without one.
+
+A total is worse than redundant: it is uncomputable. The mechanism supplies only this delivery's attempt number, retry state is deliberately absent from the record, and a fault writes no record — so nothing the handler is given could produce a figure spanning deliveries, and a field no conformant implementation can fill does not belong in a specification.
+
 #### Units: milliseconds throughout
+
+`timestamp` and `retry_at` are instants and `retry_in_ms` a duration. **All three are numbers in milliseconds** — the instants as milliseconds since the Unix epoch, the duration as a count of milliseconds — so `retry_at = timestamp + retry_in_ms` is arithmetic between like units and needs no conversion rule, notwithstanding that the two operands sit at different levels of the object.
+
+Milliseconds rather than the finest precision available, for three reasons. It keeps that addition honest: a microsecond instant plus a millisecond duration is a unit error waiting to be written. A millisecond epoch sits far inside the range a JSON number represents exactly, where a nanosecond epoch does not — nothing here needs precision a durable format cannot carry. Furthermore, a millisecond clock is something every language implementing AAM can read from its standard library without a platform-specific call.
 
 #### The two retry options and their defaults
 
+**A version MAY set two options** governing retry, both of which a mechanism reads off the fault rather than from the handler's declaration:
+
+```
+max retry attempts   a number; 3 unless set (default)
+retry delay          a number of milliseconds
+                     or  f(event, state, attempt, max attempts) → milliseconds
+                     300ms unless set (default)
+```
+
+Their names are each language's own choice (ADR-004); what this ADR fixes is that both exist, their defaults, and what they mean. Both are per version, and both are part of the `version_hash` input (**The `version_hash` algorithm**), so a change to either is visible to an executor as implementation drift.
+
+In its function form, `retry delay` receives the retry state as well as the delivery: which attempt this was and how many the version allows. That is what makes a backoff expressible — a figure that grows with `attempt`, or one that stretches as the budget nears its end — without the function reaching for state the handler does not hold. It receives no more than that, because nothing else about a retry exists: the record carries no retry state, and no attempt can know about another (**No exhaustion flag, no cross-delivery total**).
+
+`retry delay` is 300ms where a version sets none. The handler must put a number in the fault's `retry_in_ms`, so leaving it undefined is not an option — a mechanism may of course ignore the figure, but it must be given one.
+
 #### `retry delay` must not be able to fail
+
+In its function form `retry delay` **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute that same 300ms rather than propagate the failure. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
 
 #### Exhaustion ends retrying
 
+**Exhaustion ends retrying, and the handler says so.** Where `attempt` has reached `max_retry_attempts_allowed`, a fault that would otherwise be retry safe MUST be reported as no longer retry safe, and its `retry` is `null`. A mechanism stops rather than loops.
+
+The handler is the party that applies this because it is the party that knows the version's limit; the mechanism knows only which attempt it is making. A mechanism MAY stop earlier than the handler tells it to — its own budgets are its own — but it MUST NOT continue past a fault that says no retry is in prospect.
+
 #### An exhausted execution ends at `failure`
+
+**An exhausted execution ends at `failure`, and only the mechanism can put it there.** This needs stating because it is the one lifecycle no handler can reach under its own steam: a handler runs only when something delivers to it, and this is the case where nothing more will. A fault commits no record of its own, so the stored record still says `waiting` — and an execution abandoned after its retries are spent would otherwise be indistinguishable from one legitimately waiting on a slow service.
+
+On giving up, a mechanism MUST commit the fault's `abandonment_state` and publish its `abandonment_event`, where the fault carries them (**Abandonment**; **Required of infrastructure adapters**, obligation 3). `failure` is terminal, and no delivery to it is ever processed (**Entry validation**, step 9).
+
+**Only the mechanism can put an execution there, but it never composes what it writes.** The record it commits and the event it sends were both built by the handler, on the attempt that failed, and carried on the fault against precisely this outcome — so the rule that model data originates in the handler holds without an exception here. What is genuinely the mechanism's, and only its, is the decision that no further attempt will be made. That is a decision no handler can reach, because a handler is entered only when something delivers to it and giving up is the case where nothing will.
 
 #### Every retry re-reads the record
 
+**Every retry MUST fetch the record afresh.** A retry is a new delivery, not a replay of the one that failed. Between the failed attempt and the retry the record may have moved on — another response may have arrived, been recorded, and advanced `cas_version` — so re-running against a record read before the failure would compute from state that is no longer current. With compare-and-swap in place that write fails and the retry never converges; without it, the retry silently erases work that succeeded in between.
+
+The state function makes this structural rather than a rule a mechanism must remember: the handler calls it on every delivery, and the function MUST read the store rather than return a value captured earlier (**Resolving the existing execution**). What a mechanism must still get right is not caching behind it, and re-resolving the dependencies for each attempt. Only the attempt number carries forward, which is the one input a retry genuinely inherits.
+
 #### What else the runner owns
+
+Everything that depends on time passing or on nothing happening is outside what a handler can observe, because it is entered only when something delivers to it:
+
+- storing, interpreting and acting on the `retry` a fault carries, including whether to honour the delay at all;
+- following up on an execution resting at `waiting` whose responses have not arrived — the handler has no way to notice absence, and the model defines no deadline (ADR-000 defers timers);
+- persisting the record, publishing the events, and delivering them;
+- deciding when to stop, and acting on the abandonment pair at that moment.
+
+This ADR states what a handler produces and what it requires. Everything between one delivery and the next belongs to the mechanism, and is deliberately not divided further here.
 
 ### Collection
 
