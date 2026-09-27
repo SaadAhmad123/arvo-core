@@ -1294,7 +1294,55 @@ Cooperative means the execution stops when it next runs and chooses to. Four lim
 
 ### Gained
 
+**A handler is a function.** Of a delivered event, a record fetched through a state function, resolved dependencies, and an attempt number — and of nothing else. That makes it testable with literal values and no infrastructure, which is the property that most reliably decides whether resumable code can be reasoned about. A test hands in an event, a function that returns a fixed record, a value for dependencies and the number 0, and checks the events and record that come back.
+
+**Resumption is one keyed read, and the mechanism needs to understand nothing.** The state function takes `execution_id` and returns what is under it. A mechanism does not classify, does not derive, does not know what a record is, and never authors one. Everything it stores and forwards was built by the handler, so the model's data has one author everywhere.
+
+**Identity is derived, unique, and the same in every language.** `execution_id` is a pinned hash of two fields the init event already carries, so two handlers in two languages reading one event agree on which execution it opens, and a unique init `id` makes every execution unique without a coordination step.
+
+**The capability set is closed and known before anything runs.** A mechanism can determine what a handler may emit from its declaration, a type system can reject an impermissible emission before deployment, and a declaration that cannot work — a version without an executor, a type collision, two versions of one service, an execution timeout shorter than a run timeout — is refused before any event exists.
+
+**Every failure has one of two shapes, and a mechanism never guesses.** A fault says on its face whether to retry and when; a handler error is an event the caller already handles. An adapter that reads `retry_safe` and `fault_kind` has all it needs, and never parses a message.
+
+**An abandoned execution still answers its caller and still records how it ended.** The fault carries both, built by the handler before it lost the ability to speak. The failure that most reliably strands a workflow — retries exhausted, a store gone, a depth or time bound crossed — now surfaces in the shape every caller already handles, and a mechanism composes nothing to make it so.
+
+**Recursion and time are both bounded by default.** A version that says nothing gets a depth guard and a thirty-second run clock, so a runaway fan-out and a stuck executor both end as named faults with a caller told, rather than as a stack overflow or a process that never returns. A version that says more gets an execution clock, and its total lifetime is bounded too.
+
+**Drift is visible.** A record remembers the hash of the declaration that last wrote it, so an executor can learn that its own code has changed since the execution began, and decide what that means for itself. Two languages compute the same hash, so the signal survives a language boundary.
+
+**Records and faults are durable formats, readable across languages.** Both carry normative field names and survive JSON, and the record carries its own format version. A record written by one implementation is resumed by another, a fault dead-lettered by one is read by another, and a future change to either has a defined place to announce itself.
+
+**Observability is uniform.** Every delivery is a span continuing the event's trace, and every executor reaches the same three OpenTelemetry objects through the context, so a workflow's trace joins up across suspensions and across implementations without an adapter for each backend.
+
+**Silence is impossible where it matters.** An execution cannot cancel without answering, cannot complete a sink version without resting at `success`, and cannot be abandoned without its caller hearing. `idle` remains, and because every legitimate way of returning nothing rests elsewhere, it is a reliable signal that something was forgotten.
+
 ### Paid for
+
+**The mechanism carries more.** It must supply a state function that reads live on every call, an attempt number it may not naturally track, dependencies in either of two forms, and hooks under a mutability constraint. The obligations under **Required of infrastructure adapters** are strict enough that a naive mechanism — publish, then persist — is non-conformant rather than merely lossy, and one that cannot compare-and-swap cannot claim conformance at all.
+
+**Durability moves entirely onto whatever runs the handler.** The handler writes nothing and remembers nothing; every guarantee about the record's survival is the mechanism's, and the protocol can only state what it requires.
+
+**Every fault builds a pair that is usually thrown away.** Most faults are retried successfully, so the abandonment event and record are constructed on the expectation that they will be discarded. And where the record is the thing that broke, neither half can be built at all: the stranding the pair exists to prevent survives in exactly the case where the execution's own memory is what failed.
+
+**A mechanism must make a judgement this ADR declines to make for it.** When the abandonment record loses a compare-and-swap, committing overwrites a record that legitimately advanced and not committing leaves an execution un-abandoned. The ADR requires the attempt and leaves the resolution where the knowledge is.
+
+**The default join waits forever.** Concurrency is invisible to an executor, and the price is an execution at `waiting` on a service that never answers, which the handler cannot notice. The execution timeout bounds this only where a version sets one; the default is unbounded, because the alternative is a default that ends legitimate long-lived workflows.
+
+**A run clock that cannot stop the code.** The protocol promises to stop *waiting*, not to stop the executor, and an executor with side effects must watch the clock itself. An implementation that could interrupt would be more useful than the guarantee the ADR can actually make.
+
+**Eager hydration costs every stored event on every delivery.** A handler awaiting many responses pays that repeatedly, and the ADR chooses it so that a corrupt record fails once at entry with its cause named.
+
+**Removing a version strands its executions, by design.** There is no migration path, so deployment acquires a drain step it did not previously have, and an operator who skips it turns every in-flight execution of that version into a `failure` on its next delivery.
+
+**A state schema, once deployed, is a contract with the store.** Its author must keep every change compatible with the `data` already written, or take the same drain-and-remove path as any other breaking change. The protocol cannot check this for them.
+
+**The executor holds the misrouting risk.** Because it returns finished events, a hand-built event with a wrong `subject` or `initid` is structurally valid and passes every check at return. The builder removes the need to take that risk, and the unsafe surface names it, but the protocol cannot make it impossible without refusing pre-built events, which **Considered Alternatives** rejects.
+
+**Two more options, and a rule about their relation.** Every version now has seven options in its hash, and a change to any of them reads as drift to every in-flight execution of that version, including changes that alter nothing an executor could observe.
+
+**OpenTelemetry is named.** Mandating an observability API is a mild strain on Infrastructure Independence (**Invariants strained**); the ADR accepts it because the alternative is a workflow trace that fragments at every language boundary.
+
+**Time is measured against a producer's clock.** The execution clock starts from the init event's `time`, which the producer set and the handler cannot verify. Skew between a producer and a handler is read as elapsed time, and a version with a tight execution timeout inherits the producer's clock discipline.
 
 ## Considered Alternatives
 
