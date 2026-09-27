@@ -1249,13 +1249,46 @@ The factory is not under the run clock (**Timeouts**): the run clock bounds the 
 
 #### Nothing cancels an execution but itself
 
+**Nothing can cancel an execution but the execution itself**, and this is a decision rather than an omission. There is no cancel event, and there is no way for one node to interrupt another. This ADR settles the point ADR-000 deferred, and settles it in the negative (**Scope**).
+
+Two things already decided leave no room for anything else. A contract version declares exactly one `input` (ADR-005), so a handler's inbound events are its init event and its services' responses and nothing more; a cancel event would have to be a second model-level derived event alongside the handler error event, arriving at every version of every contract, and nothing in ADR-005 provides for one. And interrupting an execution that is *running* would need a control path outside the event stream, which ADR-000's *Event-Only Communication* forbids: "no node, coordinating or otherwise, may rely on a control mechanism absent from the model". Between deliveries there is nothing running to interrupt, and during one the executor is inside a single atomic delivery (**One execution is atomic**) that either concludes or faults.
+
+The absence is also honest about what a cancel event could not do. A response already in flight from a service would still arrive; an execution already at `success` cannot be un-completed; and an executor with side effects already made would need compensation the model cannot write for it. A cancel event would promise what only the application can deliver.
+
 #### What the model provides
+
+What the model provides is enough for an execution to stop itself and say so, and nothing more:
+
+- **a way to notice.** The dependency factory receives the delivered event and the record (**Dependencies**), so it can consult whatever cancellation signal an application maintains — a flag in a store, a revoked token, a closed ticket — and hand the answer to the executor as part of its dependencies;
+- **a way to record it.** The **cancel** member of the execution context marks the execution `cancelled` with a reason, and `cancelled` is terminal (**Marking an execution `cancelled`**);
+- **a way to be sure the caller hears.** An execution that marks itself cancelled and does not answer its caller raises `execution_cancelled`, non-retryable, carrying the abandonment pair, so silence after a cancel is impossible.
+
+Everything else — what the signal is, where it lives, who sets it, what an execution does on the way out — is built on those by whoever needs it.
 
 #### The cooperative pattern
 
+The pattern that follows from the three provisions is short, and an implementation SHOULD document it as the way to cancel:
+
+1. The application writes its signal somewhere its own code can read, keyed on an identifier the record carries.
+2. On the next delivery, the dependency factory reads the signal and exposes it to the executor — conventionally as a flag or a value on the dependencies it returns.
+3. The executor reads the flag and winds itself down: emitting whatever compensating events its contracts already permit, answering its caller with an own-`outputs` event that says what happened, and marking the execution `cancelled` so the record says why it ended rather than leaving it to look like any other completion.
+
+Step 2 is why the signal is read through the factory and not through a mechanism hook: the pattern then works under every mechanism, and an executor written to it is coupled to nothing but its own application. A mechanism MAY additionally expose a cancellation hook of its own, under the constraints on hooks (**Mechanism hooks**), but the protocol does not depend on one.
+
 #### Scope is the application's choice
 
+**Scope is the application's choice**, because the record carries both identifiers and exposes both through **identity** on the context. Keyed on `execution_id`, a signal cancels one execution. Keyed on `subject`, it cancels every execution of a workflow, at every depth, the next time each is delivered to. Keyed on anything else the application derives — a tenant carried in the init event's payload, an order number in `data` — it cancels whatever the application means by that. Neither requires anything of the model, and all work through the same three steps.
+
+What the model does not provide is a scope of its own, and this is deliberate. A model-defined "cancel this workflow" would have to choose between the executions that have already completed, those waiting on a service, and those not yet started, and no single answer is right for every application.
+
 #### What cooperative means
+
+Cooperative means the execution stops when it next runs and chooses to. Four limits follow, and an application relying on the pattern MUST be told them:
+
+- **It takes effect on the next delivery, not now.** An execution at `waiting` is cancelled only when a response arrives; one whose services never respond is never delivered to again and never reads the signal (**A service that never responds**). Where an application needs a bound on that, the execution timeout is the protocol's instrument (**Timeouts**): it ends the execution for time whether or not any signal was ever read.
+- **A response already in flight still arrives.** It reaches a record at `cancelled`, which is terminal, and is refused at gate step 9 as `lifecycle_terminal`. That refusal is a fault, and the mechanism handles it as one; it is not a defect in the cancelling execution.
+- **The executor decides what winding down means.** The protocol does not know which side effects were made or how to undo them. Compensation is expressed through events the contracts already permit, and where a contract permits none, there is none.
+- **The cancelling execution still answers.** Marking `cancelled` is a reason to stop, not a way out of the protocol, and the three outcomes under **Marking an execution `cancelled`** decide what the caller hears.
 
 ## Consequences
 
