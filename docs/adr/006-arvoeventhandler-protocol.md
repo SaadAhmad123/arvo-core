@@ -137,6 +137,7 @@ The members below are normative in their existence and semantics. What each is c
 | **event builder** | Constructs a fully addressed event from a `type` and a `data`, applying every default under **Addressing an emitted event**, and exposing the safe fields and the visibly unsafe group. The only member that produces an event. | produces an event |
 | **implementation drift** | True where the handler's current declaration for this version hashes differently from the `version_hash` the record carried into this delivery — that is, the declaration changed since the last delivery this execution processed (**`version_hash` and implementation drift**). Always false on an init delivery. What drift means is outside this ADR; the handler only reports it. | read |
 | **at max depth** | True when an event this execution emits to a service could no longer increment `depth` without reaching the version's maximum (**Depth**). | read |
+| **time remaining** | How many milliseconds remain on each of the version's two clocks at the moment the executor is entered: the run clock for this attempt, and the execution clock from the init event to the moment this execution's lifecycle becomes terminal (**Timeouts**). `null` for a clock the version leaves unbounded. Read at entry and not updated: an executor that needs the live figure subtracts its own elapsed time. | read |
 | **cancel** | Marks this execution `cancelled` with a reason, terminal (**The execution record**). | write |
 | **fault** | Builds an execution fault for the executor to raise deliberately, with a reason and whether it is retry safe (**Failure protocol**). | produces a fault |
 | **telemetry** | The delivery's OpenTelemetry objects: its **span**, a **logger** bound to that span's context, and a **meter** scoped to the handler (**Observability**). | read, and record |
@@ -316,7 +317,7 @@ Setting it on a service emission would mean something different — the id of th
 
 `source` is the handler's own self contract `type`, held on the record as `state.source`. It identifies the producing node without inventing an identity scheme the model does not have. It is a valid URI-reference under ADR-002 and normalizes to itself, so it satisfies `source`'s format rule unchanged. Every handler stamps it the same way, which is what makes the next default possible.
 
-`to` follows from `source`. A service emission is addressed to the contract that declares it — the service contract's own `type`, which is what a handler implementing that contract expects to see as its `to` (**Entry validation**, step 10). A completion is addressed back to whoever opened this execution, which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults, and both are unsafe to replace — see **What an executor may set**.
+`to` follows from `source`. A service emission is addressed to the contract that declares it — the service contract's own `type`, which is what a handler implementing that contract expects to see as its `to` (**Entry validation**, step 11). A completion is addressed back to whoever opened this execution, which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults, and both are unsafe to replace — see **What an executor may set**.
 
 #### Domain
 
@@ -339,7 +340,7 @@ ADR-001 holds that `domain` is "`null` for traffic inside a lattice" and set non
 
 #### A root event must carry `to`
 
-**A root event MUST carry a `to`, and it SHOULD be its own `type`.** Gate step 10 (**Entry validation**) makes `to` authoritative, so an event arriving with none is a fault — and ADR-001's minimal root event, taking every default, has `to` at `null`. Whatever mints a root event therefore has one obligation this ADR places on it: address the event. `to = type` is the sensible default and the one an implementation SHOULD apply when constructing a root event, since a root event by definition goes to the handler that implements the contract it names.
+**A root event MUST carry a `to`, and it SHOULD be its own `type`.** Gate step 11 (**Entry validation**) makes `to` authoritative, so an event arriving with none is a fault — and ADR-001's minimal root event, taking every default, has `to` at `null`. Whatever mints a root event therefore has one obligation this ADR places on it: address the event. `to = type` is the sensible default and the one an implementation SHOULD apply when constructing a root event, since a root event by definition goes to the handler that implements the contract it names.
 
 This is the only requirement this ADR makes of a participant that is not a handler. It is stated here because a root minter is outside the protocol and will not read the rest of it, and because the failure is otherwise baffling: a perfectly well-formed root event, rejected by every handler it reaches, for a field its author never knew mattered.
 
@@ -451,7 +452,7 @@ A delivery reaches the handler as an event and a **state function**. The mechani
 
 **The state function.** The mechanism MUST supply, alongside the event, an operation that takes an `execution_id` and yields the record stored under it, or nothing where none is. It may take time and may fail, since a store is behind it; how a language expresses that — a promise, a future, a coroutine, a blocking call — is that language's own choice (ADR-004). What is fixed is the input — one `execution_id`, together with the delivery's telemetry (**Observability**) so the read is logged and traced as part of this delivery, and the delivery's attempt number (**Retry**) so the mechanism knows whether this read is the first or a retry of one that already failed; the output, a record or its absence; and the rules below. Telemetry and attempt are read-only context for the mechanism to record against and to tune its own read by — a longer timeout, a different replica — not information that changes which record it returns.
 
-The mechanism behind it validates nothing beyond parsing: what it yields MUST be absence or a parsed JSON object, and whether that object is a record, belongs to this event, or is still resumable is the handler's to judge (**Entry validation**, steps 4, 5 and 10). It MUST read the store on every call rather than yield a value captured earlier, which is what makes a retry re-read the record by construction (**Retry**). It MUST NOT be given the event or the classification, and it MUST NOT branch on anything but the key.
+The mechanism behind it validates nothing beyond parsing: what it yields MUST be absence or a parsed JSON object, and whether that object is a record, belongs to this event, or is still resumable is the handler's to judge (**Entry validation**, steps 4, 5 and 11). It MUST read the store on every call rather than yield a value captured earlier, which is what makes a retry re-read the record by construction (**Retry**). It MUST NOT be given the event or the classification, and it MUST NOT branch on anything but the key.
 
 **The handler chooses the key.** It is the only party that knows which delivery this is, so it is the only party that can. After classification (**`dataschema` decides it**) and before any gate step that reads the record, the handler calls the state function exactly once:
 
@@ -477,7 +478,7 @@ A record under an init's derived key means an execution with this identifier alr
 
 **A response is matched to what it answers by `initid`.** ADR-001 defines `initid` as "the `id` of the init event that opened the execution this event completes", and states that it "is the only field that answers *which request is this the answer to*". `executionid` cannot, because every completion carries the caller's identity and so every response to this execution carries the same value. `parentid` cannot, because it "degrades to noise across suspension boundaries" — a response's `parentid` is whatever event the service last processed, not the request it is answering.
 
-A response is therefore recorded against `in_flight_event_map[response.initid]`, which is the `id` of the event this execution emitted to open that service's execution (**Collection**). A response whose `initid` names no outstanding key is a fault (`response_unawaited`), and one whose `id` has already been recorded is a duplicate and is discarded (**Entry validation**, steps 8 and 13).
+A response is therefore recorded against `in_flight_event_map[response.initid]`, which is the `id` of the event this execution emitted to open that service's execution (**Collection**). A response whose `initid` names no outstanding key is a fault (`response_unawaited`), and one whose `id` has already been recorded is a duplicate and is discarded (**Entry validation**, steps 8 and 14).
 
 ### Entry validation
 
@@ -496,12 +497,13 @@ Before any executor code runs, a handler MUST work through the following gate **
 | 7 | every delivery | **The event is below the version's maximum depth.** `event.depth < max depth` for the version resolution selected — the event's on an init, the record's on a followup (**Depth**). Placed here because it is the first point at which that version is known and confirmed declared. | fault, `max_depth_event_received` | yes | no |
 | 8 | followups | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. | discard | yes | n/a |
 | 9 | followups | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` or `idle` accepts a followup. | fault, `lifecycle_terminal` | yes | no |
-| 10 | `event.to` on every delivery; the rest on followups | **Record, handler and event agree.** `event.to == handler's self contract type`; and on a followup `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault, `event_unaddressed` or `addressing_mismatch` | no — all applicable comparisons are reported together | no |
-| 11 | every delivery | **The type is one the resolved contract can send here.** For the self contract, its own `type`. For a service contract, one of that version's `outputs` or its handler error type. | fault, `type_not_receivable` | yes | no |
-| 12 | every delivery | **Payload satisfies its schema**, as declared by the contract and version step 1 resolved. | fault, `event_schema_rejected` | no | no |
-| 13 | followups | **Awaited.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault, `response_unawaited` | yes | no |
+| 10 | every delivery | **The execution has not outlived its execution timeout.** Where the version sets one, the time from the init event's `time` — the delivered event's on an init, `state.init_event`'s on a followup — to now is below it (**Timeouts**). Where the version sets none, this step passes. Placed after the lifecycle check so that a late event reaching a finished execution is refused for its lifecycle, not abandoned for time; and before the checks on the event itself, because an execution past its bound has nothing further to do with the event whatever it carries. | fault, `execution_timeout` | yes | no |
+| 11 | `event.to` on every delivery; the rest on followups | **Record, handler and event agree.** `event.to == handler's self contract type`; and on a followup `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault, `event_unaddressed` or `addressing_mismatch` | no — all applicable comparisons are reported together | no |
+| 12 | every delivery | **The type is one the resolved contract can send here.** For the self contract, its own `type`. For a service contract, one of that version's `outputs` or its handler error type. | fault, `type_not_receivable` | yes | no |
+| 13 | every delivery | **Payload satisfies its schema**, as declared by the contract and version step 1 resolved. | fault, `event_schema_rejected` | no | no |
+| 14 | followups | **Awaited.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault, `response_unawaited` | yes | no |
 
-An init delivery has no record, so the steps that read one do not apply to it — which is most of what the **applies to** column records. Only step 10 is split: `event.to` is on the event and is checked either way, while the three comparisons against the record are followups only.
+An init delivery has no record, so the steps that read one do not apply to it — which is most of what the **applies to** column records. Only step 11 is split: `event.to` is on the event and is checked either way, while the three comparisons against the record are followups only.
 
 #### Three ways out: proceed, discard, fault
 
@@ -528,13 +530,13 @@ For a followup the record is authoritative, because a response's `dataschema` na
 
 #### Why resolution comes first
 
-Resolution is first because everything else depends on it. It decides which contract and version validate the payload (step 12), which type set the event must belong to (step 11), and — because it classifies the delivery — which key the record is fetched under (step 3) and whether one is expected at all (step 4). A `type` alone could do none of this: ADR-005 makes it a property of the contract, so it cannot name a version, and it is not globally unique, so it cannot reliably name a contract.
+Resolution is first because everything else depends on it. It decides which contract and version validate the payload (step 13), which type set the event must belong to (step 12), and — because it classifies the delivery — which key the record is fetched under (step 3) and whether one is expected at all (step 4). A `type` alone could do none of this: ADR-005 makes it a property of the contract, so it cannot name a version, and it is not globally unique, so it cannot reliably name a contract.
 
 It also settles which kind of delivery this is, which is why `category` follows it rather than preceding it. Classification is read from a required field that ADR-002 constrains and ADR-005 gives a fixed shape; `category` then cross-checks it — a sender's stated intent against a receiver's declarations, which is what ADR-001 put the field there for. Deciding the same question twice by two independent means, with no rule for disagreement, is the thing this ordering removes.
 
 #### Why the record is validated before anything reads it
 
-Every step after 5 that touches the record reads it — step 6 reads `version`, step 8 reads `event_ids`, step 9 reads `lifecycle`, step 10 reads three identifiers, step 13 reads the collection. A gate that compared before it validated would be reading fields off a structure it had not established was a record at all, and would report a mismatch where the truth was corruption. Step 5 is therefore the first step that touches the record's contents, and no step before it does.
+Every step after 5 that touches the record reads it — step 6 reads `version`, step 8 reads `event_ids`, step 9 reads `lifecycle`, step 11 reads three identifiers, step 14 reads the collection. A gate that compared before it validated would be reading fields off a structure it had not established was a record at all, and would report a mismatch where the truth was corruption. Step 5 is therefore the first step that touches the record's contents, and no step before it does.
 
 #### Why the duplicate check precedes the lifecycle check
 
@@ -544,11 +546,11 @@ Putting step 8 ahead of step 9 costs nothing, because the two catch disjoint thi
 
 #### Why an idle record admits a followup
 
-Step 9 admits a followup to a record at `idle`, which step 13 will then almost certainly reject, and that is deliberate rather than redundant. `idle` is not terminal, so rejecting at step 9 would report that the execution has ended, which is untrue. Letting it through means step 13 reports what is actually wrong — nothing is awaiting this response. The cost is one extra step evaluated; the gain is a diagnosis that does not send a reader looking for a completion that never happened.
+Step 9 admits a followup to a record at `idle`, which step 14 will then almost certainly reject, and that is deliberate rather than redundant. `idle` is not terminal, so rejecting at step 9 would report that the execution has ended, which is untrue. Letting it through means step 14 reports what is actually wrong — nothing is awaiting this response. The cost is one extra step evaluated; the gain is a diagnosis that does not send a reader looking for a completion that never happened.
 
 #### Every fault names every failed check
 
-**A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported, in the fault's `violations` (**The fault object**). Steps 10 and 12 do not short-circuit for this reason: the four addressing comparisons are reported together, and a payload's schema violations are reported in full. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
+**A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported, in the fault's `violations` (**The fault object**). Steps 11 and 13 do not short-circuit for this reason: the four addressing comparisons are reported together, and a payload's schema violations are reported in full. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
 
 #### One execution is atomic
 
@@ -666,7 +668,7 @@ Every part of this is pinned, for the same reason the `execution_id` derivation 
 |---|---|
 | `self` | the self contract's canonical form (ADR-005), with `versions` reduced to the single entry for this version, and `description` and `metadata` removed |
 | `state_schema` | the schema this version's executor declared for `data`, or `null` |
-| `options` | an object with exactly the keys `max_depth`, `max_retry_attempts`, `retry_delay`, `collect`, `handler_error_domain`, each holding the value in force for this version — the default where none was set. `retry_delay` in its function form and `handler_error_domain` in its source form are each represented by the literal string `"function"` and `"source"` respectively, since neither has a value until a delivery. |
+| `options` | an object with exactly the keys `max_depth`, `max_retry_attempts`, `retry_delay`, `run_timeout`, `execution_timeout`, `collect`, `handler_error_domain`, each holding the value in force for this version — the default where none was set. `retry_delay` in its function form and `handler_error_domain` in its source form are each represented by the literal string `"function"` and `"source"` respectively, since neither has a value until a delivery. An unbounded timeout is represented by JSON `null`. |
 | `services` | an array, sorted by `uri` ascending by Unicode code point, of each declared service contract's canonical form with `versions` reduced to the single entry for the declared version, and `description` and `metadata` removed |
 
 The canonical form is what ADR-005 defines, and this ADR does not restate its fields: whatever a canonical form contains is what is hashed, less the two reductions above. Nothing else is included. In particular: `description` and `metadata`, which ADR-005 makes informational; every other version of the self contract; every version of a service contract other than the declared one; the executor; the dependency value or factory; and anything a mechanism supplies.
@@ -878,21 +880,113 @@ Everything that depends on time passing or on nothing happening is outside what 
 
 This ADR states what a handler produces and what it requires. Everything between one delivery and the next belongs to the mechanism, and is deliberately not divided further here.
 
+### Timeouts
+
+#### Two clocks, per version
+
+**A version MAY bound time in two places**, and the two are different questions:
+
+```
+run timeout          a number of milliseconds, or null; 30000 unless set
+execution timeout    a number of milliseconds, or null; null unless set
+```
+
+The **run clock** bounds one entry into the executor: how long a single attempt may spend in business code before the handler stops waiting. The **execution clock** bounds the execution itself: how long may pass from the init event to the moment this execution's lifecycle becomes terminal. The first asks whether *this attempt* is stuck. The second asks whether *the business process* has taken longer, start to finish, than the version allows.
+
+Their names are each language's own choice (ADR-004); what this ADR fixes is that both exist, their defaults, their domains, and what they mean. Both are per version and both are part of the `version_hash` input (**The `version_hash` algorithm**), so a change to either is visible to an executor as implementation drift. Both are in milliseconds, as everything under **Retry** is.
+
+#### `null` is unbounded
+
+On either clock, `null` means **no bound**: the handler starts no timer and the corresponding check never fails. The run clock defaults to thirty seconds because business code that has not returned in that time is far more often stuck than slow, and a mechanism that is never told so retries nothing and frees nothing. The execution clock defaults to `null` because many workflows legitimately live for hours or days between deliveries, and a default that could end one of those silently would be worse than no default.
+
+#### Bad values are refused at declaration
+
+Each clock, where set, MUST be a positive integer number of milliseconds or `null`. **An execution timeout MUST NOT be smaller than the run timeout**: a single attempt could then never complete inside the execution's own bound, and the version could never succeed. The corollary follows: **where the run timeout is `null`, the execution timeout MUST be `null` too**, because an unbounded attempt is longer than any finite bound on the whole. A version declaring any of these is a declaration error, and the handler MUST be rejected at declaration time — the same treatment the ADR gives a version without an executor and a capability set with a type collision (**Definition and declaration**). It is a defect in code, visible before any event exists, so no fault is defined for it and no backstop at delivery is needed.
+
+The same holds for every per-version option this ADR defines. `max depth` and `max retry attempts` MUST be non-negative integers, `retry delay` in its number form a non-negative integer, and `collect` one of its two values. An option outside its domain is rejected at declaration, never discovered on a delivery.
+
+#### The run clock: what it covers, and what it does not
+
+The run clock starts when the handler enters the executor and stops when the executor returns or fails. It covers nothing else: not the gate, not the state function, not the dependency factory, not return validation. Each of those either has its own fault (`state_resolution_failed`, `dependency_resolution_failed`) or is the handler's own code, and bundling them into one clock would blur who was slow when it fired.
+
+**Where the run clock expires, the handler stops waiting and raises a retry-safe execution fault, `run_timeout`.** Nothing is emitted and no record is written by the handler. The fault carries retry information like any other retry-safe fault (**Retry information travels on the fault**), so a mechanism redelivers under the version's retry options and each attempt has its own thirty seconds — or whatever the version set. A timed-out attempt is an attempt: it consumes one of `max retry attempts`, and where it is the last, the fault is reported as no longer retry safe and carries the abandonment pair (**Exhaustion ends retrying**). A stuck executor is therefore bounded twice over, once per attempt and once in how many attempts it gets.
+
+**The protocol does not promise that the executor's work stops.** No language can guarantee that arbitrary running code halts on demand, and a rule that pretended otherwise would be one every implementation broke. What the handler guarantees is narrower and keepable: once the clock has expired, nothing the executor later returns, writes through **set state**, or raises is accepted or acted on. Whether the underlying work is interrupted is each language's own affair. An executor MUST NOT assume it was stopped, and an executor with side effects that must not outlive the attempt SHOULD watch **time remaining** on the context rather than rely on being killed.
+
+#### The execution clock: from the init event to this execution's end
+
+**The execution clock spans the whole life of one execution: from the init event that opened it to the moment its lifecycle becomes terminal** — `success`, `error`, `cancelled` or `failure` (**The six lifecycle values**). That is the same notion of finished the gate uses at step 9, and it covers every way an execution can end: a completion emitted, a handler error event emitted, a cancellation, a sink version resting at `success` by returning nothing, and abandonment by a mechanism. Between those two points an execution may emit any number of requests to services and receive any number of their responses. **None of those is an end.** A service request is a step on the way, its response is another, and the clock neither stops at one nor restarts from one. It is one interval, measured once, from start to finish.
+
+The clock is measured from the init event's `time` — the delivered event's on an init delivery, `state.init_event`'s on a followup. It is the protocol's own notion of when the execution began, it is on the record for the whole life of the execution, and it needs no field this ADR does not already carry. The producer's clock set it, so skew is possible; ADR-001 already accepts that for `time` and this ADR does not tighten it. `time` is used here as a duration's origin, not to order events, which is what ADR-001 forbids.
+
+#### How the execution clock is enforced
+
+A handler runs only when an event is delivered, so it cannot watch an execution between deliveries. The bound is therefore enforced at the two moments the handler is present, entry and return, and **the check at either moment is how the bound is enforced, not what the bound means.**
+
+**On entry, at gate step 10** (**Entry validation**): where the version sets an execution timeout and the time from the init event to now is not below it, the delivery is a non-retryable execution fault, `execution_timeout`. It follows the duplicate and lifecycle checks deliberately: a redelivered event is discarded and a late event reaching a finished execution is refused for its lifecycle, so neither can abandon a record that has already concluded. It precedes the checks on the event itself because an execution past its bound has nothing further to do with the event, whatever it carries. It applies on an init delivery too: an init that sat undelivered longer than the version allows is refused on arrival rather than started late, and the caller hears why.
+
+**On return, after the executor finishes**: where the version sets an execution timeout and the time from the init event to the moment of return is not below it, the return is a non-retryable execution fault, `execution_timeout`, and nothing the executor returned is emitted or written. This is what makes the bound a bound on the *end* of the execution rather than on its last entry. Without it, an execution entered a moment before its limit could run for the whole of a run timeout and emit its completion well beyond the bound, and the bound would have meant nothing. Depth is checked at the same two moments for the same reason (**Checked twice: on delivery, and on return**).
+
+Being non-retryable, the fault carries the abandonment pair (**Abandonment**): the handler error event and a record at `failure`, so a mechanism that gives up can publish and commit at once and the caller learns the process was abandoned for time. The fault's `message` and the record's `lifecycle_description` MUST state the limit in force, the init event's `time`, and the elapsed time as the handler measured it.
+
+#### Where both expire in one attempt
+
+A run that expires can carry the execution past its own bound in the same attempt. **When the run clock fires, the handler MUST evaluate the execution clock before reporting**: where that too has passed, the fault is `execution_timeout` and non-retryable, not `run_timeout` and retryable. Retrying an execution that the next gate would refuse for time would cost a redelivery to reach the same answer, and the non-retryable verdict is the broader judgement of the two.
+
+#### Why these are options and not fixed limits
+
+Depth has one fixed treatment because the sensible bound is the same for almost every version and its failure is always a defect. Time is not like that. A version fronting a synchronous lookup and a version orchestrating a week-long approval have nothing in common in how long an attempt should take or how long the process should live, and the protocol has no ground to choose for either. What the protocol fixes is the shape — two clocks, one retryable and one not — and a run default conservative enough that a stuck executor is never invisible.
+
 ### Collection
+
+An execution that calls out to services has to know what it is waiting for, and has to be re-enterable when an answer arrives. `in_flight_event_map` is that memory, and this section defines what goes into it, when a response re-enters the executor, and what happens to a response nothing is waiting for.
 
 #### Recording emissions as outstanding
 
+When an executor returns one or more events addressed to service contracts, the handler records each in `in_flight_event_map` before the delivery ends, keyed by the `id` of the event it is emitting, with `null` as the value. The execution then rests at `waiting` (**The execution record**).
+
+The key is the emitted event's `id` because that is the value a response carries back in `initid` (**Matching a response by `initid`**). The key MUST be present while the answer is outstanding, because the key set — not the values — is what says what the execution is waiting for. A response arriving for a key replaces that key's `null` with the response event.
+
 #### The default: join on all
+
+**By default a handler joins on all of them.** On a response delivery the handler records the response against its key and then:
+
+- if any entry in the map is still `null`, the executor MUST NOT be entered. The delivery ends, the record is written, and the execution stays at `waiting`.
+- if none is, the executor is entered with every response available to it through **collected** on the execution context (**The execution context**).
+
+This makes concurrency invisible to an executor. It is entered once per round with a complete collection, and never has to reason about how many responses have arrived, in what order, or whether it has seen this one before. The safe behaviour is the one that requires no decision from an author.
 
 #### The per-version override: enter on each
 
+A handler MUST allow the join to be overridden **per version**, so that the executor is entered on every response with whatever the collection holds at that moment — some entries answered, others still `null`.
+
+Per version rather than per handler, because an executor entered on every response must be safe to enter repeatedly, and that is a property of executor code, which is written per version. State is version-bound too, so a version keeping a running tally may tolerate this where its successor does not. The option is one of the five in the `version_hash` input (**The `version_hash` algorithm**), so changing it is visible to an executor as implementation drift.
+
+Under the override, returning nothing on a partial collection is the ordinary case rather than a defect: responses remain outstanding, so the execution stays at `waiting` (**Emitting nothing: `waiting` or `idle`**). An implementation SHOULD document the cost plainly at the point the option is offered, because an executor that is not in fact safe to enter repeatedly will appear to work until two responses arrive close together.
+
 #### The map is rebuilt, not merged
+
+`in_flight_event_map` is **rebuilt on every emission**, not merged into. When an executor returns service emissions, the new map is exactly those emissions; whatever the map held before is gone. It therefore always describes precisely what the current round awaits, and "what is this execution waiting for" has one answer at all times.
+
+Under the default join this is unobservable, because the executor is entered only on a complete collection and a complete collection is the only state from which it can emit again. Under the override it is observable and lossy: emitting while a response is still outstanding abandons that response, since the rebuilt map no longer holds its key and the answer will not be awaited when it arrives. An implementation MUST document this as the cost of the override.
 
 #### A response is processed only if awaited
 
+**A response is processed only if the collection is awaiting it.** One that is not is a fault, `response_unawaited`, checked at gate step 14 (**Entry validation**).
+
+One rule covers three situations: a response whose key the map was rebuilt without, a response answering a key that already holds an answer, and a response arriving at an execution that has already finished. None of them re-enters the executor, and none reopens a terminal execution — the last is caught earlier still, by the lifecycle check at step 9.
+
 #### Duplicate versus unawaited
 
+The one response delivery that is discarded rather than faulted is an outright duplicate, recognised at gate step 8 by its event `id` already appearing in `event_ids` (**Why the duplicate check precedes the lifecycle check**).
+
+The distinction is worth holding onto. A duplicate is the transport doing its job under at-least-once delivery, and the handler has demonstrably already processed that exact event, so there is nothing to report and nothing to do. An unawaited response is a participant sending something nobody asked for, which is a real disagreement between two deployed nodes. Quiet about the first, loud about the second.
+
 #### A service that never responds
+
+Under the default join, a service that never responds leaves an execution at `waiting` indefinitely, and every other response it was waiting for is held with it. The handler cannot notice this: it is entered only when something arrives, and nothing arriving is precisely the case.
+
+Following up on such an execution belongs to whatever runs the handler (**What else the runner owns**). The model defines no deadline of its own — ADR-000 defers timers, and this ADR assigns the responsibility without inventing the semantics. What a bound on `waiting` should be is left deferred (**Left deferred**).
 
 ### Failure protocol
 
