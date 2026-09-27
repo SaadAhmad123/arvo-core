@@ -132,7 +132,7 @@ The members below are normative in their existence and semantics. What each is c
 | **identity** | `subject`, `execution_id`, `parent_execution_id`, `depth`, and `version`, as held on the record. Exposed so an executor can key its own resources on them (**Cancellation**), never so it can change them. | read |
 | **collected** | The responses in hand for the current round, keyed as `in_flight_event_map` keys them, and which keys are still outstanding. Under the default join it is always complete when the executor is entered (**Collection**). | read |
 | **state** | The executor's own business state, `state.data`. Present only where the version declared a schema. `null` on a new execution until written. Written through **set state** and no other way. | read, and write through `set state` |
-| **set state** | Replaces the business state whole. There is no partial write and no merge: an executor that keeps part of the old state copies it forward itself. Validated against the declared schema, and a value the schema rejects is an execution fault. | write |
+| **set state** | Replaces the business state whole. There is no partial write and no merge: an executor that keeps part of the old state copies it forward itself. Validated against the declared schema, and a value the schema rejects is a non-retryable execution fault, `state_schema_rejected` (**Failure protocol**). | write |
 | **dependencies** | Whatever the dependency factory resolved for this delivery, or the value supplied (**Dependencies**). | read |
 | **event builder** | Constructs a fully addressed event from a `type` and a `data`, applying every default under **Addressing an emitted event**, and exposing the safe fields and the visibly unsafe group. The only member that produces an event. | produces an event |
 | **implementation drift** | True where the handler's current declaration for this version hashes differently from the `version_hash` the record carried into this delivery — that is, the declaration changed since the last delivery this execution processed (**`version_hash` and implementation drift**). Always false on an init delivery. What drift means is outside this ADR; the handler only reports it. | read |
@@ -992,59 +992,210 @@ Following up on such an execution belongs to whatever runs the handler (**What e
 
 #### The two categories
 
+An execution's failures fall into exactly two categories. Both are defined before either is elaborated, because everything after this — the fault object, the retry figures, the abandonment pair, and what a mechanism is obliged to do — turns on which one is in play.
+
+| | **Execution fault** | **Handler error** |
+|---|---|---|
+| What failed | The delivery — a precondition the handler required, or an obligation it had to meet | The work — the executor could not fulfil the contract it implements |
+| Protocol state | Broken or unverifiable; nothing the executor determined can be relied upon | Intact; the delivery classified, the record was sound, the execution ran |
+| Is it a conclusion? | No. Nothing was concluded | Yes. This is the execution's conclusion |
+| Becomes an event | Not itself. It carries one, published only if the execution is abandoned | Yes — the version's handler error event |
+| Record written by the handler | None | Yes; terminal at `error` |
+| Audience | Whatever runs the handler | The caller |
+| Retry | Carried explicitly: retry safe or not, with figures | Not applicable — a concluded execution has nothing to retry |
+
 #### Execution fault
+
+**Execution fault** is the condition in which a delivery could not be carried through to a trustworthy conclusion. What broke is a precondition the handler required before it could run — the gate (**Entry validation**), the state function, the dependency factory — or an obligation it had to meet in order to commit: a returned event that is not permitted, a state that will not serialize, a batch that would breach the version's depth or time bound. Because nothing the executor determined can be relied upon, **a fault concludes nothing: it emits no event and writes no record.** It is a statement about the delivery, and its audience is whatever runs the handler.
 
 #### Handler error
 
+**Handler error** is the condition in which a delivery was carried through to a valid conclusion, and that conclusion is that the executor could not fulfil the contract it implements. The protocol was intact throughout: the gate passed, the record was sound, the executor ran and failed. Because the outcome is a contractual one, it is expressible as the standardized handler error event every contract version carries (ADR-005), and it returns to the caller as an ordinary event. It is a statement about the work, and its audience is the caller.
+
 #### The single test: was anything concluded?
+
+The test for any failure, including one a later ADR introduces, is one question: **did anything get concluded?** If nothing was, it is a fault. If something was, and what was concluded is "I could not", it is a handler error. The two timeouts under **Timeouts** show the test at work: a run that overran concluded nothing and is a fault, retry safe because the next attempt may finish; an execution that outlived its bound also concluded nothing and is a fault, not retry safe because no attempt can give it back the time.
 
 #### Handler error: the event and the terminal lifecycle
 
-#### The three causes, and the set is closed
+A handler error MUST be reported as the self contract version's handler error event, addressed as an own-contract emission under **The complete field defaults**, and the execution MUST reach a terminal lifecycle. Which lifecycle depends on who publishes the event: **`error`** where the handler emits it itself, and **`failure`** where a mechanism publishes it for an execution already abandoned (**Abandonment**). In the first case it is a concluded execution — it produced an event and a record, and a mechanism has nothing to retry.
+
+The event's payload is ADR-005's fixed shape: `error_name`, `error_message`, and `error_stack`. Where the executor failed, `error_name` is the name of the failure the language raised, `error_message` its message and `error_stack` its stack or `null`. Where the execution was abandoned, `error_name` is `ArvoHandlerFault` (**Why the name is fixed**), and the other two are the fault's `message` and `stack`.
+
+#### The two causes, and the set is closed
+
+**An executor never constructs the handler error event.** The handler does, from exactly two causes:
+
+- **a failure escaping the executor** — the handler produces the event, emits it, and writes the record at `error` with the failure's message in `lifecycle_description`;
+- **an execution abandoned after a fault** — the handler built the event in advance and carried it on the fault, and a mechanism publishes it on the handler's behalf when it gives up, committing the record at `failure` beside it (**Abandonment**).
+
+That set is closed, and only the first is one an executor reaches by its own act. Everything else that ends in the handler error event arrives through the second: a depth bound crossed (**Depth**), a time bound crossed (**Timeouts**), a cancellation without an answer (**Marking an execution `cancelled`**), a retry budget spent (**Retry**). Each is a fault first, and becomes the event only if the mechanism abandons the execution. The two causes differ in who acts and where the record rests, and the record keeps them apart on purpose: being abandoned and concluding "I could not" are different facts, and `error` and `failure` are how a reader tells them apart later.
 
 #### An executor never constructs the handler error event
 
+Failing and the event are one thing seen from two sides: an executor says "I cannot fulfil this contract" by failing, and the caller hears it as the event. There is no path by which an execution reports its own failure and carries on, and none by which it carries on while claiming to have failed. This is why the **event builder** refuses the handler error type and a hand-built event carrying it is refused at return as `emission_not_permitted` (**What an executor may return**): an executor that could construct the event could emit it and then keep running, and the event would no longer mean what ADR-005 says it means.
+
 #### The narrow exception: an executor raising a fault
+
+The exception is deliberate and narrow. Where an executor raises a failure that *is* an execution fault — one built through the **fault** member of the execution context (**The execution context**) — it stays a fault and does not become a handler error. It carries `fault_kind` `executor_raised`, the executor's reason as `message`, and the retry verdict the executor chose, **retry safe unless the executor says otherwise**. Where it is not retry safe, or where its retries are spent, it carries the abandonment pair like any other fault.
+
+How such a failure is distinguished from an ordinary one is API shape and each language's own choice (ADR-004); what this ADR fixes is that the distinction exists, which side of it produces an event, and what it costs (**The cost of an executor raising a fault**).
 
 #### The fault object
 
+A fault MUST carry whether it is **retry safe** and, where it is, how long a mechanism should wait before the next attempt — so a mechanism can retry, dead-letter, or escalate without inspecting a message or consulting a handler's declaration. It carries the rest of what follows for the same reason: a fault writes no record, so anything not on the fault is lost to everything downstream of it.
+
+```
+ArvoHandlerFault                     extends the language's native error type
+
+    name                'ArvoHandlerFault'    fixed; reaches the wire via error_name
+    fault_kind          which fault this is; the vocabulary is the table below
+    message             what failed, the value, and the rule broken
+    cause               the underlying failure rendered as a string,
+                        or null where nothing underlies it
+    stack               or null
+    violations          every check that failed, not only the first
+
+    subject             the delivered event's subject
+    execution_id        the delivered event's executionid -- the key the
+                        state function was called with
+    event_id            the delivered event's id
+
+    attempt             this delivery's attempt number, counting from 0
+    timestamp           when this delivery was processed
+    retry_safe          whether a retry could produce a different outcome
+    retry               null where no retry is in prospect
+        max_retry_attempts_allowed
+        retry_in_ms
+        retry_at
+
+    abandonment_event   the handler error ArvoEvent to publish if this execution
+                        is abandoned, or null
+    abandonment_state   the execution record to commit alongside it, already
+                        terminal at failure, or null
+
+                        NEITHER is acted on when the fault is received --
+                        only if the execution is abandoned. See Abandonment
+```
+
+`subject`, `execution_id` and `event_id` are read from the delivered event and are never `null`: ADR-001 requires all three on every event, and the gate has them before it checks anything. `execution_id` is the value the handler passed to the state function, whether or not a record came back, which is what lets a mechanism dead-lettering the fault find the record it concerns.
+
 #### What is normative in the fault object
+
+**Everything above is normative: the semantics of every field, the field names, the value `ArvoHandlerFault`, the `fault_kind` vocabulary, and the requirement that the whole object be representable as JSON.** The names are fixed for the same reason the record's are (**The execution record**). A mechanism may dead-letter a fault, and dead-lettering means storing it; a fault stored by one language MUST be readable by another (ADR-004), and a durable format with per-language spellings is not one format. This is the second of the two objects that leave the process (**Scope**), and it is held to the same standard as the first.
+
+What is *not* normative is the shape of the object in a language's own terms: which native error type it extends, whether the fields are properties or accessors, and how an executor's `fault` is told apart from an ordinary failure. Those are API shape (ADR-004).
 
 #### Why the name is fixed
 
+`ArvoHandlerFault` is fixed rather than left to each language because it does not stay inside the implementation. It is what the abandonment event carries in `error_name`, which is the only thing telling a caller that its callee was *abandoned* rather than that its callee's own logic failed. A caller filtering on that string against an implementation that spelled its class differently does not error — it silently falls through to the wrong branch, and the one signal that distinguishes "the work was given up" from "the work was tried and failed" is lost.
+
 #### `cause` and `violations`
+
+`cause` is a string rather than the underlying error value because a fault may be dead-lettered, and dead-lettering means persisting it. That is the same reason the whole object must survive JSON: anything added here later must survive it too.
+
+`violations` exists because **Entry validation** requires a fault to name every check that failed rather than only the first (**Every fault names every failed check**), and a single `message` cannot carry that structurally — a reader would have to parse prose to recover a list, which is the interpreting-a-message this object exists to avoid. Each entry names the check and the value that failed it. Where the gate short-circuited, `violations` holds the one check that stopped it; where it evaluated several, as steps 11 and 13 do, it holds all of them. On a return fault it holds every rejected event in the batch, offenders and non-offenders alike (**One offending event rejects the whole batch**). `message` remains the human-readable rendering of the same thing.
 
 #### `attempt` and `timestamp`
 
+`attempt` and `timestamp` sit on the fault rather than inside `retry`, because both are true whether or not another attempt is coming, while everything inside `retry` is only meaningful if one is. Nulling them alongside the forward-looking figures would lose the attempt count at exactly the moment it is most worth having — the fault that exhausts a retry budget and abandons the execution. Their units, and those of the `retry` block, are pinned under **Units: milliseconds throughout**.
+
 #### The `fault_kind` vocabulary and retry verdicts
+
+| Where | Fault | `fault_kind` | Retry safe |
+|---|---|---|---|
+| gate 1 | the delivered event's `dataschema` names no declared contract at a declared version | `event_unclassifiable` | no |
+| gate 2 | `category` contradicts what resolution found | `category_mismatch` | no |
+| gate 3 | the state function failed | `state_resolution_failed` | **yes** |
+| gate 4 | an init delivery arrives with a record | `record_unexpected` | no |
+| gate 4 | a followup delivery arrives without one | `record_expected` | no |
+| gate 5 | the record fails validation | `record_invalid` | no |
+| gate 5 | an event in the record fails to restore | `record_event_unrestorable` | no |
+| gate 6 | the record's `version` is no longer declared | `version_not_declared` | no |
+| gate 7 | the delivered event's `depth` is at or beyond the version's maximum | `max_depth_event_received` | no |
+| gate 9 | the delivery reaches a record already at a terminal `lifecycle` | `lifecycle_terminal` | no |
+| gate 10, and return | the execution has outlived the version's execution timeout | `execution_timeout` | no |
+| gate 11 | the event carries no `to` | `event_unaddressed` | no |
+| gate 11 | record, handler and event disagree on `to`, `source`, `execution_id` or `subject` | `addressing_mismatch` | no |
+| gate 12 | the event's type is not one the resolved contract can send here | `type_not_receivable` | no |
+| gate 13 | the delivered event's payload fails its contract's schema | `event_schema_rejected` | no |
+| gate 14 | a response's `initid` names nothing the collection is awaiting | `response_unawaited` | no |
+| declaration reached a delivery | the handler declares two versions of one service contract | `service_version_conflict` | no |
+| after the gate | resolving the executor's dependencies failed | `dependency_resolution_failed` | **yes** |
+| execution | the executor did not return within the version's run timeout | `run_timeout` | **yes** |
+| execution | the executor marked the execution cancelled and returned no own-`outputs` event | `execution_cancelled` | no |
+| execution | a fault the executor raised deliberately through the context | `executor_raised` | **executor's choice; yes unless stated** |
+| return | a returned value is not an event, or an event's type is not emittable by this version, or it is structurally invalid | `emission_not_permitted` | no |
+| return | a returned event's payload is rejected by its schema | `emission_schema_rejected` | no |
+| return | a returned event would go beyond the version's maximum depth | `max_depth_event_requested` | no |
+| return | the value written through `set state` is rejected by the declared schema | `state_schema_rejected` | no |
+| return | `data` does not survive a JSON round trip | `state_not_serializable` | no |
+
+This table is the whole of the `fault_kind` vocabulary, and it is here rather than in a list of its own so that a kind, its meaning, where it arises, and its retry verdict cannot drift apart. Several conditions a mechanism must be able to tell apart are named separately even where one gate step catches both — a record that arrived when none was expected is a different diagnosis from one that never arrived at all, and a mechanism reading `fault_kind` should not have to recover that distinction from a message.
+
+The verdicts follow from one question: **would the same inputs produce the same failure?** A malformed record, a removed version, a bad payload, an impermissible emission and a crossed bound are all reproduced exactly by a redelivery. Three are different. The state function and the dependency factory reach outside the handler, and what is outside may answer differently a moment later. A run timeout says only that *this* attempt did not finish, and the next may. Every retry-safe verdict is subject to exhaustion: once `attempt` reaches the version's limit the fault is reported as no longer retry safe, and carries the abandonment pair (**Exhaustion ends retrying**).
 
 #### Abandonment: the contingency a fault carries
 
+A fault never becomes an event and never writes a record. What it carries is a **contingency**: a handler error event and the execution record that accompanies it, both built by the handler while it still had what it needed, to be acted on for it if it is never going to run again.
+
 #### The pair is what an ordinary delivery returns
+
+**The pair is exactly what an ordinary delivery returns.** A successful delivery hands the mechanism events and a next record to commit together; abandonment hands it the same two things, prepared in advance for a delivery that could not finish. The obligation that the event and the record be committed together or not at all (**Required of infrastructure adapters**, obligation 1) therefore applies unchanged, and no new rule about their ordering is needed.
 
 #### Acted on only when a mechanism gives up
 
+The distinction from an ordinary emission is only *when*. **Neither is acted on when the fault is received.** They are acted on at exactly one moment: when a mechanism gives up and stops retrying (obligation 3). Publishing on an attempt that is then retried successfully would deliver a caller both a handler error event and a real completion for the same request, which is worse than the silence this exists to end.
+
+At that moment, acting on them is a MUST rather than a mechanism's discretion. A mechanism's judgement belongs in *when it gives up* — its own budgets, its own dead-letter policy — and whether a stranded caller is ever told should not vary by deployment. A non-retryable fault makes the moment immediate: there is no retry to wait for, so a conformant mechanism acts on the pair on receipt.
+
 #### The handler builds both, the mechanism composes neither
+
+This is the point of carrying them. A mechanism gains no ability to construct an event and no ability to author a record — it commits one and sends the other, exactly as it does for a delivery that succeeded. It is also why the event must be complete, `id` included, rather than a recipe: should a mechanism crash between publishing and committing and then publish again, the caller's gate discards the second copy at step 8 as already seen, where a regenerated event would arrive as a second, distinct error.
 
 #### `abandonment_state`
 
+**`abandonment_state` is the record at `failure`**, with `lifecycle_description` carrying the fault's own message, `event_ids` extended with the abandonment event's `id` as `emitted`, `triggering_event` set to the delivered event, `version_hash` set as on any write, and `cas_version` incremented as for any other write. Every other field is carried forward from the record as the attempt read it. `failure` rather than `error` because the execution was abandoned rather than concluded, and **The execution record** keeps those apart.
+
 #### Each attempt builds its own pair
+
+Each attempt builds its own pair from the record it was given, which is what the re-read under **Every retry re-reads the record** makes correct: the pair a mechanism finally commits was derived from the record as of the attempt it gave up on, not as of the first one. Where a write nonetheless lands in between, the compare-and-swap fails (obligation 5), and what to do then is the mechanism's — committing anyway overwrites a record that legitimately advanced, while honouring the failure leaves an execution un-abandoned. Neither is safe in general, so this ADR requires the attempt and leaves the resolution where the knowledge is.
 
 #### When each is present, and why they differ
 
+`abandonment_event` is present wherever the handler can address a completion. On an **init** delivery that is as soon as step 1 has classified it: the init event itself carries the caller's `source`, the `subject`, and the `executionid` a completion answers to, so every init fault from step 2 onward carries the event, `max_depth_event_received` included. On a **followup** delivery it is as soon as step 5 has passed: the record is then trustworthy and holds `init_event_source` and everything else the defaults table needs. Before that point a followup holds only a service's response, whose `source`, `initid` and `executionid` all name the service rather than this execution's caller, and there is nothing to address from. So the event is `null` on `event_unclassifiable`, where the delivery could not even be told init from followup; and on a followup's `category_mismatch`, `state_resolution_failed`, `record_expected`, `record_invalid` and `record_event_unrestorable`. An implementation MUST NOT salvage the addressing fields from a record that failed validation — reading fields off a structure not established to be a record is what **Why the record is validated before anything reads it** rules out.
+
+`abandonment_state` is present on a narrower set: only where a trustworthy record exists to be brought to `failure`, which is a followup past step 5. **On a fault against an init delivery it is `null` even though the event is not**, because no execution validly began and there is nothing to mark terminal. Manufacturing a record for one would also make the init undeliverable: the next attempt would find a record where step 4 requires none, and a transient init fault would become an init that can never be delivered again. So on an init fault the caller is told and nothing is stored, which is the correct pair of outcomes: something was waiting on an answer, and nothing was ever waiting on a record.
+
 #### `lifecycle_terminal` yields neither
+
+`lifecycle_terminal` yields `null` for both, by rule rather than by inability. That execution already answered its caller and already rests terminal; a second completion would be discarded or refused at the caller's gate, and overwriting its lifecycle would erase how it actually ended. The same holds for `response_unawaited`, `event_unaddressed` and `addressing_mismatch` on a record already terminal, since step 9 refuses those deliveries before the later steps run.
 
 #### What the abandonment event carries
 
+**`error_name` carries `ArvoHandlerFault`**, which is what distinguishes this event from one an executor's own failure produced. `error_message` carries the fault's `message` and `error_stack` its `stack`, per ADR-005's fixed payload. Every other field follows the own-contract column of **The complete field defaults**, `parentid` being the delivered event's `id` because that delivery is what caused the abandonment.
+
+Because that message crosses into another handler's event stream and is persisted in that handler's record for as long as the record lives, an implementation SHOULD keep raw infrastructure detail — hosts, credentials, connection strings — out of fault messages, or redact when building this event. It is the one place this protocol moves diagnostic text across a node boundary.
+
 #### No failure routes to the workflow root
+
+**No failure defined here routes to the workflow root.** ADR-001 permits such an event — carrying `subject` as its `executionid`, bypassing intermediate executions so a failure surfaces at the top regardless of depth — and defers the conditions to this ADR. This ADR defines none: a handler failure is attributable to the execution that suffered it and returns to that execution's caller, and an abandonment event goes to that same caller for the same reason. The capability remains available and unused, and the conditions stay deferred rather than being invented to fill the slot (**Left deferred**).
 
 #### Where each category records its cause
 
+Both categories record their cause in `lifecycle_description` where a record survives them — a handler error reaching `error` writes the failure's message there, and a mechanism abandoning an execution writes the fault's message alongside `failure`. A fault leaves nothing behind of its own, which is why its retry safety and everything else a mechanism needs must travel on the fault itself rather than in the record.
+
 #### The cost of an executor raising a fault
+
+**An executor raising a fault leaves its caller waiting until the retry budget is spent, and that consequence MUST be documented wherever the means to raise one is offered.** A fault is not an answer, so nothing reaches the caller while the mechanism is still retrying — and where the fault carries no abandonment event, nothing reaches it afterwards either. The cost is bounded by the version's retry options and by the mechanism's own patience, but it is not nothing: the caller waits for as long as the retries take, and **Considered Alternatives** rejects the general shape of it for handler failures on the ground that a failure a caller never hears about is a workflow that stalls.
 
 #### When to raise a fault and when to fail
 
+That makes the choice a narrow one rather than a matter of taste. Raise a fault where the *delivery* is compromised and a retry is the only sensible response: a resource that would not open this time, a precondition the executor can see is not yet met. Where the executor's own *work* failed, fail — and let the handler error event tell the caller now, which is the shape it is already obliged to handle. An executor that is unsure should fail: a handler error the caller hears at once is recoverable by the caller, and a fault the caller waits on is recoverable only by the mechanism.
+
 #### The two names are kept distinct
+
+The two categories are named distinctly on purpose. "Handler error" refers only to the event; a fault is never an event, and the event it may carry is the handler's, not the fault's. An implementation MUST NOT use one name for both, and the fault's own name is fixed at `ArvoHandlerFault` rather than left to each language, for the reason given under **Why the name is fixed**.
 
 ### Dependencies
 
