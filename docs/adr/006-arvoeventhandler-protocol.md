@@ -1201,11 +1201,49 @@ The two categories are named distinctly on purpose. "Handler error" refers only 
 
 #### Outside the model, supplied per delivery
 
+An executor's implementation dependencies — a database client, an HTTP client, a clock, a secret — are outside the model. ADR-000 constrains them in exactly one way: "no live implementation dependency may be relied upon to survive one", a suspension. This ADR settles how they reach an executor so that the constraint holds by construction rather than by discipline.
+
+**Dependencies are supplied per delivery, by the mechanism, alongside the event, the state function and the attempt number** (**Retry**). They are not part of the handler's declaration: the version hash excludes them (**The `version_hash` algorithm**), the record never holds them, and two handlers declaring the same contracts with different dependencies are the same handler to the protocol. What the executor is written against — the shape it expects to find on **dependencies** in the execution context — is that executor's own concern, and each language expresses it in its own way (ADR-004).
+
+Dependencies are distinct from **mechanism hooks** (**The execution context**). Dependencies are the executor's: things its business code needs and would need under any mechanism. Hooks are the mechanism's: things one particular runner chooses to expose. An executor that uses a dependency is coupled to nothing; one that uses a hook is coupled to that mechanism by its own choice.
+
 #### The two forms: a value or a factory
+
+An implementation MUST accept dependencies in either of two forms:
+
+```
+dependencies    optional; where absent, the context member is present and empty
+
+    either      a value                              used as given
+    or          a factory                            called once per delivery
+                  taking the delivered event,
+                         the execution record or absence,
+                         and the attempt number
+                  yielding the value
+                  may be asynchronous where a language distinguishes it
+```
+
+The value form is for dependencies that are safe to share across deliveries and hold no per-execution state — a configuration object, a pure client. The factory form is for everything else. Where a factory is supplied, the handler calls it **exactly once per delivery**, after the gate has passed and the record has been hydrated, and before the executor is entered. It therefore receives a record the handler has already validated, or absence on an init, and never a structure not yet established to be a record (**Why the record is validated before anything reads it**). Whatever it yields is placed on the context as **dependencies**, unchanged; the handler does not inspect it.
+
+The factory receives the attempt number for the same reason the state function does (**Resolving the existing execution**): a dependency built for a third attempt may reasonably differ from one built for a first — a longer connection timeout, a different replica — and the factory is the only place that decision can be made.
 
 #### Why the factory form matters for resumability
 
+The factory form is what a resumable handler needs. A handler runs only when something delivers to it, and between deliveries there is no process to hold anything; ADR-000's rule that no live dependency survives a suspension is not a restriction the protocol imposes on an executor so much as a description of the executor's situation. The factory makes that situation the ordinary one: nothing live is constructed until a delivery needs it, it lives for that delivery, and nothing about it is captured anywhere the next delivery could see. An executor that stashes a client in module scope and reaches for it next time has stepped outside the protocol, and an implementation SHOULD make the factory the easy path so that it need not.
+
+Giving the factory the delivered event and the record lets a dependency be built *for this execution* rather than for the process: a client scoped to the tenant the init event names, a lock keyed on `execution_id`, a signal keyed on `subject`. That is what makes the cooperative pattern under **Cancellation** possible without adding anything to the model.
+
+Three rules follow, and they are the whole of what the protocol asks:
+
+- a resolved dependency MUST NOT be retained by the handler across deliveries — it is built for one and discarded with it, exactly as the execution context is (**One object, built per delivery**);
+- a resolved dependency MUST NOT be written into the execution record — the record is JSON and a dependency is live, and `data` that will not survive a round trip is already a fault (**Serializability of `data`**);
+- a factory MUST NOT be able to alter the outcome of the gate, the collection, the depth check or the timeouts — it runs after the gate has decided and before the executor, and it is given the record to read, not to write.
+
 #### A failing factory is a retry-safe fault
+
+**A factory that fails is an execution fault, `dependency_resolution_failed`, and it is retry safe.** However the language signals the failure, the handler MUST NOT catch and reinterpret it: it surfaces as a fault with the failure rendered into `cause`, and nothing is emitted or written. It is retry safe because constructing a dependency reaches outside the handler — a pool that is exhausted now, a service that is restarting — and what is outside may answer differently a moment later. It is, with the state function, one of the two entry-path faults with that verdict (**The `fault_kind` vocabulary and retry verdicts**), and for the same reason. Like every retry-safe fault it is subject to exhaustion, and on a followup it carries the abandonment pair, so a dependency that never comes back ends the execution at `failure` with the cause on record rather than leaving it at `waiting` forever.
+
+The factory is not under the run clock (**Timeouts**): the run clock bounds the executor's code, and a factory that hangs is diagnosed as a dependency failure, not as a stuck executor. An implementation MAY bound the factory on its own account, and where it does, expiry is this same fault.
 
 ### Cancellation
 
