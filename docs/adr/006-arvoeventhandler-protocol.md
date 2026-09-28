@@ -123,17 +123,17 @@ An executor that declares none is still resumable — it may emit to a service a
 
 #### One table, one rule
 
-Seven **options** govern how a version behaves. They are defined here and nowhere else: every other section says what its option *does*, and refers here for its type, its default, how its value is found, and whether it enters the `version_hash`. The **Hashable** column is the whole of that last question: **The `version_hash` algorithm** takes a version's declared value for an option marked hashable and nothing for one that is not.
+Seven **options** govern how a version behaves. They are defined here and nowhere else: every other section says what its option *does*, and refers here for its type, its default, and how its value is found.
 
-| Option | Type | Handler level | Version level | Hashable |
-|---|---|---|---|---|
-| `max_depth` | integer ≥ 0 | **required**; `10000` where the author writes nothing | optional; falls back to the handler's | yes |
-| `max_retry_attempts` | integer ≥ 0 | **required**; `3` where the author writes nothing | optional; falls back to the handler's | yes |
-| `retry_delay` | integer ms ≥ 0, or a function `(event, record \| null, attempt, max_retry_attempts) → integer ms` | **required**; `300` where the author writes nothing | optional; falls back to the handler's | number form yes; function form **no** |
-| `run_timeout` | integer ms > 0, or `null` for unbounded | **required**; `30000` where the author writes nothing | optional; falls back to the handler's | yes |
-| `execution_timeout` | integer ms > 0, or `null` for unbounded | **required**; `null` where the author writes nothing | optional; falls back to the handler's | yes |
-| `collect` | `all` \| `each` | **required**; `all` where the author writes nothing | optional; falls back to the handler's | yes |
-| `handler_error_domain` | a domain literal, or one of the four source identifiers under **Domain** | **required**; `none` where the author writes nothing | optional; falls back to the handler's | yes — the literal, or the source identifier |
+| Option | Type | Handler level | Version level |
+|---|---|---|---|
+| `max_depth` | integer ≥ 0 | **required**; `10000` where the author writes nothing | optional; falls back to the handler's |
+| `max_retry_attempts` | integer ≥ 0 | **required**; `3` where the author writes nothing | optional; falls back to the handler's |
+| `retry_delay` | integer ms ≥ 0, or a function `(event, record \| null, attempt, max_retry_attempts) → integer ms` | **required**; `300` where the author writes nothing | optional; falls back to the handler's |
+| `run_timeout` | integer ms > 0, or `null` for unbounded | **required**; `30000` where the author writes nothing | optional; falls back to the handler's |
+| `execution_timeout` | integer ms > 0, or `null` for unbounded | **required**; `null` where the author writes nothing | optional; falls back to the handler's |
+| `collect` | `all` \| `each` | **required**; `all` where the author writes nothing | optional; falls back to the handler's |
+| `handler_error_domain` | a domain literal, or one of the four source identifiers under **Domain** | **required**; `none` where the author writes nothing | optional; falls back to the handler's |
 
 **The handler level is complete.** A handler always holds a value for every one of the seven. An author who writes nothing for one gets the value in the third column, which the protocol defines; there is no state in which a handler lacks an option. **The version level is sparse.** A version declares only what it wants to differ, and an option it does not declare is `null`, meaning *inherited*.
 
@@ -159,10 +159,6 @@ One relation spans two options and is checked on each version's **resolved** pai
 
 What each option is called in a language, and whether the two levels are two objects or one object with overrides, is API shape and each language's own choice (ADR-004). The set of seven, their types, their defaults, the two levels, and the resolution rule are not.
 
-#### Only the version's declarations are hashed
-
-The `version_hash` records what a version itself declared, with an inherited option represented as JSON `null` (**The `version_hash` algorithm**). **The handler level is never hashed.** It belongs to the handler, and the hash is a statement about the version. The consequence is stated so no one is surprised by it: **a version that inherits an option can have its effective value changed at the handler level, and no in-flight execution of that version sees drift.** An author who wants a change seen as drift declares the option on the version.
-
 ### The execution context
 
 #### One object, built per delivery
@@ -185,7 +181,6 @@ The members below are normative in their existence and semantics. What each is c
 | **set state** | operation: (value) → nothing; faults on rejection | Replaces the business state whole. There is no partial write and no merge: an executor that keeps part of the old state copies it forward itself. Validated against the declared schema, and a value the schema rejects is a non-retryable execution fault, `state_schema_rejected` (**Failure protocol**). | write |
 | **dependencies** | the executor's own type; empty object where none supplied | Whatever the dependency factory resolved for this delivery, or the value supplied (**Dependencies**). | read |
 | **event builder** | operation: (`type`, `data`, options) → ArvoEvent | Constructs a fully addressed event from a `type` and a `data`, applying every default under **Addressing an emitted event**, and exposing the safe fields and the visibly unsafe group. The only member that produces an event. | produces an event |
-| **implementation drift** | boolean | True where the handler's current declaration for this version hashes differently from the `version_hash` the record carried into this delivery — that is, the declaration changed since the last delivery this execution processed (**`version_hash` and implementation drift**). Always false on an init delivery. What drift means is outside this ADR; the handler only reports it. | read |
 | **at max depth** | boolean | True when an event this execution emits to a service could no longer increment `depth` without reaching the version's maximum (**Depth**). | read |
 | **time remaining** | object: `run` integer ms \| `null`, `execution` integer ms \| `null` | How many milliseconds remain on each of the version's two clocks at the moment the executor is entered: the run clock for this attempt, and the execution clock from the init event to the moment this execution's lifecycle becomes terminal (**Timeouts**). `null` for a clock the version leaves unbounded. Read at entry and not updated: an executor that needs the live figure subtracts its own elapsed time. | read |
 | **cancel** | operation: (reason string) → nothing | Marks this execution `cancelled` with a reason, terminal (**The execution record**). | write |
@@ -385,7 +380,7 @@ The sources a request may name, and how each resolves, are the substance of the 
 | the self contract | `self_contract` | the `domain` of this handler's own contract |
 | the delivered event | `delivered_event` | the `domain` of the event that caused this delivery |
 
-A request naming a source whose value is `null` or absent resolves to no domain rather than failing, so a handler is never broken by context it did not receive. A resolved domain is always a plain value or absent — **a request MUST NOT reach the event**. How an implementation lets an executor or a declaration name these sources is API shape (ADR-004); the set, the resolution, and the **identifier** column are not. The identifier is the value that enters the `version_hash` when `handler_error_domain` is declared in source form (**The `version_hash` algorithm**), and it is fixed so that two languages declaring the same source hash the same.
+A request naming a source whose value is `null` or absent resolves to no domain rather than failing, so a handler is never broken by context it did not receive. A resolved domain is always a plain value or absent — **a request MUST NOT reach the event**. How an implementation lets an executor or a declaration name these sources is API shape (ADR-004); the set, the resolution, and the **identifier** column are not. The identifier is fixed so that a declaration naming a source reads the same in every language.
 
 ADR-001 holds that `domain` is "`null` for traffic inside a lattice" and set non-null "by an emitter whose event must be fulfilled elsewhere". The default of absent preserves the first half; the request is how an emitter does the second.
 
@@ -681,7 +676,6 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `depth` | integer ≥ 0 | This execution's nesting level, from the init event that opened it. |
 | `source` | string | The self contract `type` this execution belongs to, and the `source` of every event it emits. |
 | `version` | string, a semver the self contract declares | The self contract version whose executor owns this execution. |
-| `version_hash` | string, 64 lowercase hex | A hash of this version's declaration as it stood at the last delivery that wrote the record, so that drift in the handler's implementation since then can be detected on the next (**`version_hash` and implementation drift**). |
 | `cas_version` | integer ≥ 0 | Non-negative integer. **`0` on the first record of an execution**, the one an init delivery produces; on every later record, **exactly one greater than the record the delivery read**, including the `abandonment_state` a fault prepares against being given up on (**Abandonment**). A mechanism commits records but never authors one, so it never sets or increments this itself. Exists so a mechanism can compare-and-swap (**Required of infrastructure adapters**, obligation 5). |
 | `lifecycle` | `idle` \| `waiting` \| `success` \| `error` \| `cancelled` \| `failure` | `idle`, `waiting`, `success`, `error`, `cancelled`, or `failure`. |
 | `lifecycle_description` | string \| `null` | Free text explaining how the execution reached its current `lifecycle`, or `null`. |
@@ -703,37 +697,6 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 #### `contracts` is informational only
 
 `contracts` is informational by construction, and an implementation MUST NOT resolve, bind, or validate against it. It exists so that a record found in a store years later can be understood without the code that wrote it, which is the same reason the identifying fields are inside the record rather than only in the keys. A reader should be aware it is a snapshot: a contract that has since changed will not match a live one, and that discrepancy carries no meaning at execution time. Whether it should be compared against the live contract as a drift warning is left deferred (**Left deferred**).
-
-#### `version_hash` and implementation drift
-
-`version_hash` is written on every record the handler produces — the next record on a successful delivery, and the `abandonment_state` on a fault — with the hash of the declaration in force at that delivery. It is a hash over **this version's declaration only**, computed by the pinned algorithm below. It MUST NOT include the executor's code — source text differs by language, build, and minification, and including it would make the hash differ between two deployments of identical behaviour.
-
-On every followup delivery the handler computes the hash from its current declaration and compares it with the one the record carries. The result is exposed to the executor as **implementation drift**, a boolean on the execution context (**The execution context**): true where the two differ. Because the record's hash is refreshed on every write, drift means *the declaration has changed since the last delivery this execution processed* — not since the execution began — so an execution that has already been entered once under the new declaration reports no drift on the delivery after that. This is the useful question: an executor that needs to react to a change needs to react once, on the first delivery after it. The handler itself does nothing with it — a mismatch is not a fault, does not change classification, and does not alter the gate. What drift means, and what an executor should do about it, is explicitly outside this ADR: the handler's job is to make the fact visible, and the executor's is to decide whether it matters.
-
-Drift is detected **per version only**. A change to another version of the same contract, or to a version of a service contract this handler does not declare, does not register, because the hash covers only what this version's executor could observe.
-
-#### The `version_hash` algorithm
-
-Every part of this is pinned, for the same reason the `execution_id` derivation is: two implementations that disagree on any of it report drift where there is none, or miss it where there is. It changes only by a superseding ADR.
-
-**Step 1 — build the input object.** Construct a JSON object with exactly these four keys and no others:
-
-| Key | Value |
-|---|---|
-| `self` | the self contract's canonical form (ADR-005), with `versions` reduced to the single entry for this version, and `description` and `metadata` removed |
-| `state_schema` | the schema this version's executor declared for `data`, or `null` |
-| `options` | an object with exactly one key per option in the table under **Options**, in that table's spelling. Each key holds what this version itself declared where the option's Hashable column says yes, and JSON `null` otherwise — where the version declared nothing and inherits the handler's value, where the declared form is marked not hashable, or where the declared value is an unbounded timeout. A source-form domain is represented by its source identifier, so switching sources is drift; a retry-delay function has no canonical form to hash, so its logic changes freely without drift while a switch between number and function remains visible. Handler-level values are never hashed. |
-| `services` | an array, sorted by `uri` ascending by Unicode code point, of each declared service contract's canonical form with `versions` reduced to the single entry for the declared version, and `description` and `metadata` removed |
-
-The canonical form is what ADR-005 defines, and this ADR does not restate its fields: whatever a canonical form contains is what is hashed, less the two reductions above. Nothing else is included. In particular: `description` and `metadata`, which ADR-005 makes informational; every other version of the self contract; every version of a service contract other than the declared one; the executor; the dependency value or factory; and anything a mechanism supplies.
-
-**Step 2 — serialize.** Serialize the input object with the JSON Canonicalization Scheme, [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785): object keys sorted by UTF-16 code unit, no insignificant whitespace, numbers in the ECMAScript shortest round-trip form, strings escaped as the scheme requires. This pins the byte sequence for one purpose — hashing — and does not settle ADR-005's deferred byte canonicalization of the canonical form itself, which remains deferred.
-
-**Step 3 — hash.** SHA-256 (FIPS 180-4) over the UTF-8 bytes of the serialization.
-
-**Step 4 — encode.** 64 lowercase hexadecimal characters, no prefix and no separator.
-
-Because every input is drawn from the canonical form or from protocol-defined options, and the serialization is pinned, two languages declaring the same version produce the same `version_hash`, and a record written by one language MAY be resumed by another with drift reported truthfully.
 
 #### `lifecycle`: where an execution rests
 
@@ -850,7 +813,7 @@ The state schema is enforced on every entry, at gate step 7, against the schema 
 
 **Once a version has been deployed and has records in a store, any change to its declared state schema MUST be compatible with the `data` those records already hold.** That is the whole of the obligation. The schema is the version author's, not the protocol's — the protocol validates `data` against it and does nothing else with it — so *how* compatibility is kept is the author's affair, and this ADR places no rule on it. The rules the record envelope holds itself to under **How this record may change later** are one way to keep it and are offered as such, not imposed.
 
-The consequence of breaking them is exact. Every in-flight execution of that version fails step 7 on its next delivery with `record_invalid`, which is non-retryable, so none is ever redelivered, and a mechanism that abandons them tells each caller the work will not be done. Nothing can rescue them: migration is prohibited (**A record belongs to one version for its whole life**), and drift detection does not help, because drift is reported to the executor and the record has already been rejected before the executor runs.
+The consequence of breaking them is exact. Every in-flight execution of that version fails step 7 on its next delivery with `record_invalid`, which is non-retryable, so none is ever redelivered, and a mechanism that abandons them tells each caller the work will not be done. Nothing can rescue them: migration is prohibited (**A record belongs to one version for its whole life**).
 
 A change the author cannot make compatibly is a new version. It is declared alongside the old one, the old one is drained, and then the old one is removed — the same story as any other version change, and the only one the protocol supports.
 
@@ -900,7 +863,7 @@ Milliseconds rather than the finest precision available, for three reasons. It k
 
 #### The two retry options
 
-Retry is governed by two options, **`max_retry_attempts`** and **`retry_delay`** (**Options**), which a mechanism reads off the fault rather than from the handler's declaration. Both are part of the `version_hash` input as the version declared them (**The `version_hash` algorithm**), so a change to `max_retry_attempts`, or between a number and a function for `retry_delay`, or between two numbers, is visible to an executor as implementation drift. A retry-delay function's internal logic is not: in function form the option is excluded from the hash and from drift detection, for the reason the algorithm gives.
+Retry is governed by two options, **`max_retry_attempts`** and **`retry_delay`** (**Options**), which a mechanism reads off the fault rather than from the handler's declaration.
 
 In its function form, `retry delay` receives the retry state as well as the delivery: which attempt this was and how many the version allows. That is what makes a backoff expressible — a figure that grows with `attempt`, or one that stretches as the budget nears its end — without the function reaching for state the handler does not hold. It receives no more than that, because nothing else about a retry exists: the record carries no retry state, and no attempt can know about another (**No exhaustion flag, no cross-delivery total**).
 
@@ -955,7 +918,7 @@ Time is bounded in two places by two options, **`run_timeout`** and **`execution
 
 The **run clock** bounds one entry into the executor: how long a single attempt may spend in business code before the handler stops waiting. The **execution clock** bounds the execution itself: how long may pass from the init event to the moment this execution's lifecycle becomes terminal. The first asks whether *this attempt* is stuck. The second asks whether *the business process* has taken longer, start to finish, than the version allows.
 
-Both are part of the `version_hash` input as the version declared them (**The `version_hash` algorithm**), so a change to either on the version is visible to an executor as implementation drift. Both are in milliseconds, as everything under **Retry** is.
+Both are in milliseconds, as everything under **Retry** is.
 
 #### `null` is unbounded
 
@@ -1020,7 +983,7 @@ This makes concurrency invisible to an executor. It is entered once per round wi
 
 The join is governed by the option **`collect`** (**Options**): `all` joins, `each` enters the executor on every response with whatever the collection holds at that moment — some entries answered, others still `null`.
 
-It is resolved per version rather than fixed per handler, because an executor entered on every response must be safe to enter repeatedly, and that is a property of executor code, which is written per version. State is version-bound too, so a version keeping a running tally may tolerate this where its successor does not. The option is part of the `version_hash` input as the version declared it (**The `version_hash` algorithm**), so changing it on the version is visible to an executor as implementation drift.
+It is resolved per version rather than fixed per handler, because an executor entered on every response must be safe to enter repeatedly, and that is a property of executor code, which is written per version. State is version-bound too, so a version keeping a running tally may tolerate this where its successor does not.
 
 Under the override, returning nothing on a partial collection is the ordinary case rather than a defect: responses remain outstanding, so the execution stays at `waiting` (**Emitting nothing: `waiting` or `idle`**). An implementation SHOULD document the cost plainly at the point the option is offered, because an executor that is not in fact safe to enter repeatedly will appear to work until two responses arrive close together.
 
@@ -1220,7 +1183,7 @@ This is the point of carrying them. A mechanism gains no ability to construct an
 
 #### `abandonment_state`
 
-**`abandonment_state` is the record at `failure`**, with `lifecycle_description` carrying the fault's own message, `event_ids` extended with the abandonment event's `id` as `emitted`, `triggering_event` set to the delivered event, `version_hash` set as on any write, and `cas_version` incremented as for any other write. Every other field is carried forward from the record as the attempt read it. `failure` rather than `error` because the execution was abandoned rather than concluded, and **The execution record** keeps those apart.
+**`abandonment_state` is the record at `failure`**, with `lifecycle_description` carrying the fault's own message, `event_ids` extended with the abandonment event's `id` as `emitted`, `triggering_event` set to the delivered event, and `cas_version` incremented as for any other write. Every other field is carried forward from the record as the attempt read it. `failure` rather than `error` because the execution was abandoned rather than concluded, and **The execution record** keeps those apart.
 
 #### Each attempt builds its own pair
 
@@ -1268,7 +1231,7 @@ The two categories are named distinctly on purpose. "Handler error" refers only 
 
 An executor's implementation dependencies — a database client, an HTTP client, a clock, a secret — are outside the model. ADR-000 constrains them in exactly one way: "no live implementation dependency may be relied upon to survive one", a suspension. This ADR settles how they reach an executor so that the constraint holds by construction rather than by discipline.
 
-**Dependencies are supplied per delivery, by the mechanism, alongside the event, the state function and the attempt number** (**Retry**). They are not part of the handler's declaration: the version hash excludes them (**The `version_hash` algorithm**), the record never holds them, and two handlers declaring the same contracts with different dependencies are the same handler to the protocol. What the executor is written against — the shape it expects to find on **dependencies** in the execution context — is that executor's own concern, and each language expresses it in its own way (ADR-004).
+**Dependencies are supplied per delivery, by the mechanism, alongside the event, the state function and the attempt number** (**Retry**). They are not part of the handler's declaration: the record never holds them, and two handlers declaring the same contracts with different dependencies are the same handler to the protocol. What the executor is written against — the shape it expects to find on **dependencies** in the execution context — is that executor's own concern, and each language expresses it in its own way (ADR-004).
 
 Dependencies are distinct from **mechanism hooks** (**The execution context**). Dependencies are the executor's: things its business code needs and would need under any mechanism. Hooks are the mechanism's: things one particular runner chooses to expose. An executor that uses a dependency is coupled to nothing; one that uses a hook is coupled to that mechanism by its own choice.
 
@@ -1373,8 +1336,6 @@ Cooperative means the execution stops when it next runs and chooses to. Four lim
 
 **Recursion and time are both bounded by default.** A version that says nothing gets a depth guard and a thirty-second run clock, so a runaway fan-out and a stuck executor both end as named faults carrying the caller's answer ready for a mechanism to send, rather than as a stack overflow or a process that never returns. A version that says more gets an execution clock, and its total lifetime is bounded too.
 
-**Drift is visible.** A record remembers the hash of the declaration that last wrote it, so an executor can learn that its own code has changed since the execution began, and decide what that means for itself. Two languages compute the same hash, so the signal survives a language boundary.
-
 **Records and faults are durable formats, readable across languages.** Both carry normative field names and survive JSON, and the record carries its own format version. A record written by one implementation is resumed by another, a fault dead-lettered by one is read by another, and a future change to either has a defined place to announce itself.
 
 **Observability is uniform.** Every delivery is a span continuing the event's trace, and every executor reaches the same three OpenTelemetry objects through the context, so a workflow's trace joins up across suspensions and across implementations without an adapter for each backend.
@@ -1402,8 +1363,6 @@ Cooperative means the execution stops when it next runs and chooses to. Four lim
 **A state schema, once deployed, is a contract with the store.** Its author must keep every change compatible with the `data` already written, or take the same drain-and-remove path as any other breaking change. The protocol cannot check this for them.
 
 **The executor holds the misrouting risk.** Because it returns finished events, a hand-built event with a wrong `subject` or `initid` is structurally valid and passes every check at return. The builder removes the need to take that risk, and the unsafe surface names it, but the protocol cannot make it impossible without refusing pre-built events, which **Considered Alternatives** rejects.
-
-**Two more options, and a rule about their relation.** Every version now has seven options in its hash, and a change to any of their declared values reads as drift to every in-flight execution of that version, including changes that alter nothing an executor could observe. The one exception cuts the other way: a retry-delay function's logic is excluded from the hash, so a change there is never reported, and an author relying on drift to notice it will not. And the handler level is not hashed either, so a version that inherits an option can have it changed underneath it without drift; an author who wants the change seen declares the option on the version (**Options**).
 
 **OpenTelemetry is named.** Mandating an observability API is a mild strain on Infrastructure Independence (**Invariants strained**); the ADR accepts it because the alternative is a workflow trace that fragments at every language boundary.
 
@@ -1503,7 +1462,7 @@ This ADR amends the AAM membership list (ADR-000, *Arvo Application Model*) by e
 
 **It places two durable formats inside the model.** The execution record's field names and the fault object's field names, and the value `ArvoHandlerFault`. ADR-005 placed the canonical contract form inside the model for the reason that applies here: durable data outlives the code that wrote it, and a record or a dead-lettered fault that means different things in two languages is not one model (ADR-004).
 
-**It places two derivations inside the model.** The `execution_id` derivation (**Execution identity**) and the `version_hash` algorithm (**The `version_hash` algorithm**). Both are pinned byte for byte, because an identifier or a hash two implementations compute differently is not an identifier or a hash.
+**It places one derivation inside the model.** The `execution_id` derivation (**Execution identity**), pinned byte for byte, because an identifier two implementations compute differently is not an identifier.
 
 **It places the observability API inside the model, and leaves the backend outside.** The shape through which an executor reaches trace, log and metric — OpenTelemetry's span, logger and meter — is inside (**Observability**). Collection, retention and export remain outside, exactly where ADR-000 already lists them. The line is drawn at the API because that is where a workflow's trace would otherwise fragment.
 
@@ -1554,13 +1513,11 @@ Beside the five, a mechanism supplies three inputs this ADR defines the shape of
 
 - **Timers, deadlines and scheduling.** Nothing in this ADR fires without a delivery. The two timeouts are bounds checked on entry and return, not timers, and following up on an execution at `waiting` whose responses never come remains the mechanism's, with no deadline the model defines.
 - **A bound on fan-out**, given that hydration is eager and its cost scales with `in_flight_event_map` — a cap, lazy restoration, or something else (**Hydration**).
-- **What implementation drift means.** The handler reports it; whether an executor should refuse, adapt, or ignore is a decision for the version's author, and any protocol-level policy is left open (**`version_hash` and implementation drift**).
 - **Whether the `contracts` snapshot should be compared against the live contract** at entry as a drift warning. It is free to do and would surface "this execution began under a contract that has since changed", but nothing may enforce against the snapshot in the meantime (**`contracts` is informational only**).
 - **The conditions under which a handler routes a failure to the workflow root**, which ADR-001 deferred here and this ADR does not settle (**No failure routes to the workflow root**).
 - **Execution capability profiles as a format**, including how a handler would declare the five obligations above rather than have an ADR assert them.
 - **Error kinds beyond handler failure**, and the representation of infrastructure and delivery failures, which ADR-000's *Explicit Failure Boundaries* names and this ADR does not reach.
 - **Domain sources beyond the minimum.** **Domain** fixes the sources an implementation MUST offer; whether the set should be closed, extended, or made pluggable is left open.
-- **Byte canonicalization of ADR-005's canonical form** for any purpose other than the `version_hash`. That algorithm pins a serialization for hashing only, and ADR-005's deferral stands.
 - **Whether emitted event identifiers should be derived** rather than freshly generated — unnecessary given obligation 1, and available as defence in depth if a later decision wants it.
 - **Delivery ordering and concurrent event handling** across executions. Obligation 5 serializes writes to one record and says nothing about order across records.
 
@@ -1632,9 +1589,6 @@ execute(ctx):
                             null until written
     ctx.set_state(value)    replaces data whole; the schema rejects → state_schema_rejected
     ctx.dependencies        as resolved for this delivery, or empty
-    ctx.implementation_drift
-                            true where this version's declaration hashes differently
-                            from the version_hash the record carried; false on an init
     ctx.at_max_depth        true when one more service emission would reach max_depth
     ctx.time_remaining      ms left on the run clock and on the execution clock,
                             as of entry; null where a clock is unbounded
