@@ -542,7 +542,7 @@ Before any executor code runs, a handler MUST work through the following gate **
 | 2 | every delivery | **`category` agrees with the classification.** `io.arvo.init` on a delivery classified as an init, `io.arvo.complete` on one classified as a followup. Absent or unrecognised, it is not consulted. | fault, `category_mismatch` | yes | no |
 | 3 | every delivery | **The record is fetched**, once, through the state function, under the key classification selects (**Resolving the existing execution**). | fault, `state_resolution_failed` | yes | **yes** |
 | 4 | every delivery | **Presence matches classification.** An init delivery MUST have fetched nothing; a followup MUST have fetched a record. | fault, `record_unexpected` or `record_expected` | yes | no |
-| 5 | followups | **The record's envelope validates and its events hydrate.** The record validates against the fixed envelope under **The execution record**, with `data` accepted as any JSON value for now, and every event it holds restores to an event value (**Hydration**). No `state.*` value may be read until this passes. | fault, `record_invalid` or `record_event_unrestorable` | yes | no |
+| 5 | followups | **The record's envelope validates, its events hydrate, and it agrees with itself.** The record validates against the fixed envelope under **The execution record**, with `data` accepted as any JSON value for now; every event it holds restores to an event value; and the fields copied or derived from the init event still equal what the restored init event says (**The record must agree with itself**). No `state.*` value may be read until this passes. | fault, `record_invalid` or `record_event_unrestorable` | yes | no |
 | 6 | followups | **The record's version is still declared.** The handler MUST still declare an executor for `state.version`; a version withdrawn from a deployed handler strands its in-flight executions (**Version authority**), and this is where that surfaces. | fault, `version_not_declared` | yes | no |
 | 7 | followups | **`data` satisfies the owning version's schema.** Validated against the schema the version confirmed at step 6 declares — placed here, and not at step 5, because that schema cannot be chosen until the version is known and confirmed (**Hydration**). Where the version declares no schema, `data` MUST be `null`. | fault, `record_invalid` | yes | no |
 | 8 | every delivery | **The event is below the version's maximum depth.** `event.depth < max depth` for the version resolution selected — the event's on an init, the record's on a followup (**Depth**). Placed here because it is the first point at which that version is known and confirmed declared. | fault, `max_depth_event_received` | yes | no |
@@ -801,7 +801,26 @@ Removing a version from a deployed handler's self contract — and with it, unde
 
 #### Hydration
 
-On a followup delivery, a handler MUST validate the whole record and MUST restore every event the record holds to an event value before any executor code runs. This happens in three consecutive steps of the gate (**Entry validation**): step 5 validates the fixed envelope and hydrates the events, treating `data` as an opaque JSON value; step 6 confirms `state.version` is declared; step 7 validates `data` against that version's schema. The split exists because the schema for `data` is chosen by a field the gate cannot read until the envelope has passed. A record that fails any of it is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
+On a followup delivery, a handler MUST validate the whole record and MUST restore every event the record holds to an event value before any executor code runs. This happens in three consecutive steps of the gate (**Entry validation**): step 5 validates the fixed envelope, hydrates the events, and checks the record against its own init event (**The record must agree with itself**), treating `data` as an opaque JSON value; step 6 confirms `state.version` is declared; step 7 validates `data` against that version's schema. The split exists because the schema for `data` is chosen by a field the gate cannot read until the envelope has passed. A record that fails any of it is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
+
+#### The record must agree with itself
+
+A record can be well-shaped and still contradict itself. Several of its fields are copies or derivations of values inside `init_event`, kept as their own fields so that addressing a completion never depends on restoring an event (**`init_event_id` and `init_event_source`**). A copy that has diverged from its source misroutes the completion that is built from it, and a shape check cannot see that. So step 5, once the envelope has passed and `init_event` has been restored, MUST check that the record agrees with itself, and any disagreement is `record_invalid`:
+
+| Field | MUST equal |
+|---|---|
+| `init_event_id` | `init_event.id` |
+| `init_event_source` | `init_event.source` |
+| `subject` | `init_event.subject` |
+| `parent_execution_id` | `init_event.executionid` |
+| `depth` | `init_event.depth` (**Depth of this execution**) |
+| `execution_id` | the derivation over `init_event.dataschema` and `init_event.id` (**The derivation of `execution_id`**) |
+| `source` | `init_event.to` — the self contract type the init was addressed to |
+| `version` | the version named by `init_event.dataschema` |
+| `event_ids` | contains `init_event.id` as `received` |
+| `in_flight_event_map` | every key appears in `event_ids` as `emitted` |
+
+These are the relationships this ADR itself defines, stated once at the point they are enforced. They are checked here rather than at step 12 because step 12 compares the record against the *delivered* event, and these compare the record against *its own* init event — a corrupt record should fail as corrupt, with that diagnosis, before it is compared against anything outside it. How an implementation performs the check is its own; that a disagreement is `record_invalid` is not.
 
 #### The cost of eager hydration
 
