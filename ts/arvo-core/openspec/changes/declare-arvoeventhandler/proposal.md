@@ -295,12 +295,12 @@ execute: async (ctx) => {
 
 ## How a handler is run
 
-One method, `execute`, taking values and returning values. **The mechanism is whatever wraps that
-call, and the handler never knows which one it is.** Everything ADR-006 requires of the thing
-running a handler is expressed as an input to it or an outcome from it, so the same handler runs
-under a queue consumer, a serverless invocation, a test, or a loop in a script. There is no
-interface to implement and nothing to register: a mechanism is code that calls `execute` and acts
-on what comes back.
+One operation, taking values and returning values. **The mechanism is whatever wraps that call,
+and the handler never knows which one it is.** This package implements no adapter and defines no
+adapter interface. It defines a call that any adapter can make, and everything ADR-006 requires of
+the thing running a handler is expressed as an input to it or a result from it. The same handler
+therefore runs under a queue consumer, a serverless invocation, a test, or a loop in a script,
+with nothing to register and no interface to satisfy.
 
 ```ts
 type ArvoDeliveryParam<D, H> = {
@@ -405,7 +405,8 @@ readable by another, and a second spelling is a second format. `name`, `message`
 `cause` are the ones `Error` already has, each narrowed rather than added.
 
 ```ts
-// The whole of an adapter, for a mechanism that has a queue and a store.
+// The call itself. Not an adapter: an adapter is whatever code already sits around a queue
+// and a store, and this is what that code does when an event arrives.
 const delivery = await handler.tryExecute({
   event: incoming,
   attempt: message.deliveryCount,
