@@ -1075,37 +1075,41 @@ How such a failure is distinguished from an ordinary one is API shape and each l
 A fault MUST carry whether a **retry is in prospect** and, where it is, how long a mechanism should wait before the next attempt — so a mechanism can retry, dead-letter, or escalate without inspecting a message or consulting a handler's declaration. It carries the rest of what follows for the same reason: a fault writes no record, so anything not on the fault is lost to everything downstream of it.
 
 ```
-ArvoHandlerFault                     extends the language's native error type
+ArvoHandlerFault                     extends the language's native error type;
+                                     every field below is JSON-representable
 
-    name                'ArvoHandlerFault'    fixed; reaches the wire via error_name
-    fault_kind          which fault this is; the vocabulary is the table below
-    message             what failed, the value, and the rule broken
-    cause               the underlying failure rendered as a string,
-                        or null where nothing underlies it
-    stack               or null
-    violations          every check that failed, not only the first
+    name                string          'ArvoHandlerFault', fixed; reaches the wire via error_name
+    fault_kind          string          which fault this is; the vocabulary is the table below
+    message             string          what failed, the value, and the rule broken
+    cause               string | null   the underlying failure rendered as a string,
+                                        or null where nothing underlies it
+    stack               string | null
+    violations          string[]        every check that failed, not only the first;
+                                        one human-readable entry per failed check,
+                                        naming the check and the value that failed it.
+                                        empty only where nothing was checked
 
-    subject             the delivered event's subject
-    execution_id        the key the state function was called with: on an init,
-                        the identifier derived from the event; on a followup,
-                        the event's executionid. null only where the delivery
-                        could not be classified
-    event_id            the delivered event's id
+    subject             string          the delivered event's subject
+    execution_id        string | null   the key the state function was called with: on an
+                                        init, the identifier derived from the event; on a
+                                        followup, the event's executionid. null only where
+                                        the delivery could not be classified
+    event_id            string          the delivered event's id
 
-    attempt             this delivery's attempt number, counting from 0
-    timestamp           when this delivery was processed
-    retry               null where no retry is in prospect
-        max_retry_attempts_allowed
-        retry_in_ms
-        retry_at
+    attempt             integer         this delivery's attempt number, counting from 0
+    timestamp           integer         when this delivery was processed, ms since the Unix epoch
+    retry               object | null   null where no retry is in prospect
+        max_retry_attempts_allowed   integer
+        retry_in_ms                  integer   milliseconds
+        retry_at                     integer   ms since the Unix epoch; timestamp + retry_in_ms
 
-    abandonment_event   the handler error ArvoEvent to publish if this execution
-                        is abandoned, or null
-    abandonment_state   the execution record to commit alongside it, already
-                        terminal at failure, or null
+    abandonment_event   ArvoEvent | null    the handler error event to publish if this
+                                            execution is abandoned
+    abandonment_state   record | null       the execution record to commit alongside it,
+                                            already terminal at failure
 
-                        NEITHER is acted on when the fault is received --
-                        only if the execution is abandoned. See Abandonment
+                                            NEITHER is acted on when the fault is received --
+                                            only if the execution is abandoned. See Abandonment
 ```
 
 `subject` and `event_id` are read from the delivered event and are never `null`: ADR-001 requires both on every event, and the gate has them before it checks anything. `execution_id` is **the execution this delivery concerns, as the key the handler passed to the state function** (**Resolving the existing execution**). On an init that is the identifier derived from the event's `dataschema` and `id` (**Execution identity**), which is *not* the event's own `executionid` — that names the caller and becomes `parent_execution_id`. On a followup the two coincide, because a response carries its caller's identity in `executionid`. It is `null` only on `event_unclassifiable`, where step 1 failed and no key was ever selected. Defining it as the key rather than as a field of the event is what lets a mechanism dead-lettering the fault find the record it concerns.
@@ -1124,7 +1128,7 @@ What is *not* normative is the shape of the object in a language's own terms: wh
 
 `cause` is a string rather than the underlying error value because a fault may be dead-lettered, and dead-lettering means persisting it. That is the same reason the whole object must survive JSON: anything added here later must survive it too.
 
-`violations` exists because **Entry validation** requires a fault to name every check that failed rather than only the first (**Every fault names every failed check**), and a single `message` cannot carry that structurally — a reader would have to parse prose to recover a list, which is the interpreting-a-message this object exists to avoid. Each entry names the check and the value that failed it. Where the gate short-circuited, `violations` holds the one check that stopped it; where it evaluated several, as steps 11 and 13 do, it holds all of them. On a return fault it holds every rejected event in the batch, offenders and non-offenders alike (**One offending event rejects the whole batch**). `message` remains the human-readable rendering of the same thing.
+`violations` exists because **Entry validation** requires a fault to name every check that failed rather than only the first (**Every fault names every failed check**), and a single `message` cannot carry that structurally — a reader would have to parse prose to recover a list, which is the interpreting-a-message this object exists to avoid. **Each entry is a string**, one per failed check, naming the check and the value that failed it; the list is JSON `string[]` and nothing more structured, because a reader in another language needs to display it, not to branch on it — branching is what `fault_kind` is for. Where the gate short-circuited, `violations` holds the one check that stopped it; where it evaluated several, as steps 11 and 13 do, it holds all of them. On a return fault it holds every rejected event in the batch, offenders and non-offenders alike (**One offending event rejects the whole batch**). `message` remains the human-readable rendering of the same thing.
 
 #### `attempt` and `timestamp`
 
