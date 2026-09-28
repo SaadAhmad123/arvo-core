@@ -16,7 +16,7 @@ Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-a
 
 This ADR defines the **execution record**: the one durable object that is an execution's entire memory between deliveries. It fixes the record's fields and their types, the lifecycle values an execution rests at and how each is reached, the format version the envelope carries, how the record may change in later ADRs, the compare-and-swap counter a mechanism serializes writes with, which contract version owns a record for its whole life, and how a stored record is validated and restored to live values on the next delivery.
 
-It is one of four ADRs that together specify the ArvoEventHandler protocol. [ADR-006](./006-arvoeventhandler-protocol.md) defines the handler, its declaration, its execution context, how an incoming event is classified and gated, and what the handler requires of the mechanism that runs it. [ADR-008](./008-execution-faults-and-abandonment.md) defines the two failure categories and the fault object. [ADR-009](./009-execution-bounds.md) defines the execution bounds — depth, retry, timeouts and collection — whose effects this record stores. The four were written as one and split for size; where one refers to a heading in another, the reference names the ADR.
+It is one of five ADRs that together specify the ArvoEventHandler protocol. [ADR-010](./010-delivery-classification-and-entry-validation.md) defines how a delivery is classified and the gate it passes. [ADR-006](./006-arvoeventhandler-protocol.md) defines the handler, its declaration, its execution context, how an incoming event is classified and gated, and what the handler requires of the mechanism that runs it. [ADR-008](./008-execution-faults-and-abandonment.md) defines the two failure categories and the fault object. [ADR-009](./009-execution-bounds.md) defines the execution bounds — depth, retry, timeouts and collection — whose effects this record stores. The five were written as one and split for size; where one refers to a heading in another, the reference names the ADR.
 
 ### What this ADR deliberately does not define
 
@@ -40,7 +40,7 @@ ADR-006 settles what a handler is and how a delivery reaches its executor; every
 
 #### One record, representable as JSON
 
-An execution's entire memory is one record. It MUST be representable as JSON, so that no mechanism has to understand any language's object model to store it, and it MUST carry the fields below under these names. The **Type** column gives each field's JSON shape, and is as normative as the names: a record whose field holds a value of another shape is `record_invalid` at gate step 5. The names are normative — the record is a durable format, and a record written by one language MUST be readable by another (ADR-004). A mechanism stores and returns it; it never authors one ([ADR-006](./006-arvoeventhandler-protocol.md), **Resolving the existing execution**).
+An execution's entire memory is one record. It MUST be representable as JSON, so that no mechanism has to understand any language's object model to store it, and it MUST carry the fields below under these names. The **Type** column gives each field's JSON shape, and is as normative as the names: a record whose field holds a value of another shape is `record_invalid` at gate step 5. The names are normative — the record is a durable format, and a record written by one language MUST be readable by another (ADR-004). A mechanism stores and returns it; it never authors one ([ADR-010](./010-delivery-classification-and-entry-validation.md), **Resolving the existing execution**).
 
 #### The fields
 
@@ -77,7 +77,7 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 
 #### `lifecycle`: where an execution rests
 
-`lifecycle` records where an execution **rests**, not how it was entered. How a delivery was classified is a property of that delivery ([ADR-006](./006-arvoeventhandler-protocol.md), **Classification**) and MUST NOT be conflated with this field.
+`lifecycle` records where an execution **rests**, not how it was entered. How a delivery was classified is a property of that delivery ([ADR-010](./010-delivery-classification-and-entry-validation.md), **Classification**) and MUST NOT be conflated with this field.
 
 #### The six lifecycle values
 
@@ -90,7 +90,7 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `cancelled` | yes | The executor marked the execution cancelled and returned an own `outputs` event. |
 | `failure` | yes | The mechanism abandoned the execution after a fault, and committed the record the handler prepared for that ([ADR-008](./008-execution-faults-and-abandonment.md), **Abandonment**). |
 
-A terminal record accepts no further delivery ([ADR-006](./006-arvoeventhandler-protocol.md), **Entry validation**, step 10). `failure` is the one value no handler reaches under its own steam: a fault writes no record, so only the mechanism, acting on the fault's `abandonment_state`, can put an execution there ([ADR-009](./009-execution-bounds.md), **Retry**).
+A terminal record accepts no further delivery ([ADR-010](./010-delivery-classification-and-entry-validation.md), **Entry validation**, step 10). `failure` is the one value no handler reaches under its own steam: a fault writes no record, so only the mechanism, acting on the fault's `abandonment_state`, can put an execution there ([ADR-009](./009-execution-bounds.md), **Retry**).
 
 #### Marking an execution `cancelled`
 
@@ -166,7 +166,7 @@ This is deliberately narrower than migration, which **Version authority** prohib
 
 #### Version authority
 
-After the first delivery, the record is the only place the handler's own version survives — a followup response's `dataschema` names the *service's* contract and version, not this handler's. That is why a followup's executor is chosen by `state.version` ([ADR-006](./006-arvoeventhandler-protocol.md), **Resolution, and which executor runs**), and why the record's version must still be one the handler declares ([ADR-006](./006-arvoeventhandler-protocol.md), **Entry validation**, step 6). If it is not, the delivery is a fault and the execution is not resumed.
+After the first delivery, the record is the only place the handler's own version survives — a followup response's `dataschema` names the *service's* contract and version, not this handler's. That is why a followup's executor is chosen by `state.version` ([ADR-010](./010-delivery-classification-and-entry-validation.md), **Resolution, and which executor runs**), and why the record's version must still be one the handler declares ([ADR-010](./010-delivery-classification-and-entry-validation.md), **Entry validation**, step 6). If it is not, the delivery is a fault and the execution is not resumed.
 
 #### A record belongs to one version for its whole life
 
@@ -178,7 +178,7 @@ Removing a version from a deployed handler's self contract — and with it, unde
 
 #### Hydration
 
-On a followup delivery, a handler MUST validate the whole record and MUST restore every event the record holds to an event value before any executor code runs. This happens in three consecutive steps of the gate ([ADR-006](./006-arvoeventhandler-protocol.md), **Entry validation**): step 5 validates the fixed envelope, hydrates the events, and checks the record against its own init event (**The record must agree with itself**), treating `data` as an opaque JSON value; step 6 confirms `state.version` is declared; step 7 validates `data` against that version's schema. The split exists because the schema for `data` is chosen by a field the gate cannot read until the envelope has passed. A record that fails any of it is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
+On a followup delivery, a handler MUST validate the whole record and MUST restore every event the record holds to an event value before any executor code runs. This happens in three consecutive steps of the gate ([ADR-010](./010-delivery-classification-and-entry-validation.md), **Entry validation**): step 5 validates the fixed envelope, hydrates the events, and checks the record against its own init event (**The record must agree with itself**), treating `data` as an opaque JSON value; step 6 confirms `state.version` is declared; step 7 validates `data` against that version's schema. The split exists because the schema for `data` is chosen by a field the gate cannot read until the envelope has passed. A record that fails any of it is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
 
 #### The record must agree with itself
 

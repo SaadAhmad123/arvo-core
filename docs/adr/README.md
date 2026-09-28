@@ -28,3 +28,4 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | [ADR-007](./007-execution-record.md) | Execution Record | Proposed |
 | [ADR-008](./008-execution-faults-and-abandonment.md) | Execution Faults and Abandonment | Proposed |
 | [ADR-009](./009-execution-bounds.md) | Execution Bounds | Proposed |
+| [ADR-010](./010-delivery-classification-and-entry-validation.md) | Delivery Classification and Entry Validation | Proposed |
