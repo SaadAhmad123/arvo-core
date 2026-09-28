@@ -1059,8 +1059,10 @@ ArvoHandlerFault                     extends the language's native error type
     violations          every check that failed, not only the first
 
     subject             the delivered event's subject
-    execution_id        the delivered event's executionid -- the key the
-                        state function was called with
+    execution_id        the key the state function was called with: on an init,
+                        the identifier derived from the event; on a followup,
+                        the event's executionid. null only where the delivery
+                        could not be classified
     event_id            the delivered event's id
 
     attempt             this delivery's attempt number, counting from 0
@@ -1080,7 +1082,7 @@ ArvoHandlerFault                     extends the language's native error type
                         only if the execution is abandoned. See Abandonment
 ```
 
-`subject`, `execution_id` and `event_id` are read from the delivered event and are never `null`: ADR-001 requires all three on every event, and the gate has them before it checks anything. `execution_id` is the value the handler passed to the state function, whether or not a record came back, which is what lets a mechanism dead-lettering the fault find the record it concerns.
+`subject` and `event_id` are read from the delivered event and are never `null`: ADR-001 requires both on every event, and the gate has them before it checks anything. `execution_id` is **the execution this delivery concerns, as the key the handler passed to the state function** (**Resolving the existing execution**). On an init that is the identifier derived from the event's `dataschema` and `id` (**Execution identity**), which is *not* the event's own `executionid` — that names the caller and becomes `parent_execution_id`. On a followup the two coincide, because a response carries its caller's identity in `executionid`. It is `null` only on `event_unclassifiable`, where step 1 failed and no key was ever selected. Defining it as the key rather than as a field of the event is what lets a mechanism dead-lettering the fault find the record it concerns.
 
 #### What is normative in the fault object
 
