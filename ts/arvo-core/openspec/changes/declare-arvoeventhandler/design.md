@@ -182,6 +182,8 @@ Written as one file under `src/`, typechecked, and deleted. `tsc --noEmit` repor
 
 One thing the probes found that no task anticipated. **`z.infer<M[V]['input']>` does not satisfy `ArvoEvent`'s own `D extends Record<string, any>` constraint generically**, because TypeScript cannot prove a payload inferred from an unresolved schema is an object. A conditional helper that re-establishes it is needed wherever a version's payload types an event, and §2.1 carries it as `PayloadOf`. Without it the context's `event` member does not compile at all, which would have surfaced in change 4 with change 1 already shipped.
 
+One thing the second round of probes established, against the shipped types rather than a sketch. **The chain infers everything the design claimed.** A version created by `createArvoEventHandlerVersion` types its context exactly as the inline form does; a state schema declared inline types `ctx.state` and `ctx.setState`, and a wrong read is caught; a version with no schema reaches `state` as a JSON object; dependencies and hooks infer off `types` and are unreachable when it is omitted; narrowing on `entry` narrows the event both ways; and a version the contract does not declare is a compile error at the `handler` call rather than a surprise at `build`.
+
 ## Risks / Trade-offs
 
 - **A typed hole for one release.** An executor written against this change's loose signature will not typecheck against change 4's. Accepted: nothing is published, and an executor that cannot be called has no behaviour to preserve.
