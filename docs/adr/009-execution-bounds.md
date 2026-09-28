@@ -272,7 +272,7 @@ Following up on such an execution belongs to whatever runs the handler (**What e
 
 ### Paid for
 
-**The default join waits forever.** Concurrency is invisible to an executor, and the price is an execution at `waiting` on a service that never answers, which the handler cannot notice. The execution timeout bounds this only where a version sets one; the default is unbounded, because the alternative is a default that ends legitimate long-lived workflows.
+**The default join waits forever.** Concurrency is invisible to an executor, and the price is an execution at `waiting` on a service that never answers, which the handler cannot notice. The execution timeout does not rescue it: it is checked only when something is delivered, so an execution nothing delivers to is never checked, and all it can do is refuse a later delivery for time if one comes. The default is unbounded in any case, because the alternative is a default that ends legitimate long-lived workflows.
 
 **A run clock that cannot stop the code.** The protocol promises to stop *waiting*, not to stop the executor, and an executor with side effects must watch the clock itself. An implementation that could interrupt would be more useful than the guarantee the ADR can actually make.
 
