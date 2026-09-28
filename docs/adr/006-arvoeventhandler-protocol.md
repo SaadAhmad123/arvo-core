@@ -107,6 +107,12 @@ The rule exists to make an emitted event's type sufficient to determine its dest
 
 Two versions of one contract share a `type` — ADR-005 makes `type` a property of the contract, not of a version — so their input types collide and the rule above already rejects them. It is stated separately because the collision rule reads as being about unrelated contracts, and this is the case an author is most likely to reach for deliberately: wanting to call an old and a new version of the same service from one handler. That is two dependencies on one contract, and the model has no way to tell their responses apart. A response's `dataschema` names the service's version, and **Entry validation** checks it against the one version the handler declared; with two declared there would be nothing to check against.
 
+#### The self contract may be a service
+
+**A handler MAY declare its own self contract as a service**, at one version like any other service, so that an execution can open a child execution of itself. This is how a handler recurses — a tree walk, a retry-with-narrower-scope, a fan-out over a list that hands each element back to the same contract — and nothing above forbids it. The collision rule is satisfied by construction: ADR-005 guarantees that a contract's `type` matches none of its `outputs` keys and not its handler error type, so the self contract's input, its outputs, and its handler error type are three disjoint sets whether the contract is declared once or twice.
+
+What the declaration changes is classification. A recursive request and a recursive reply arrive with the **same** `dataschema` `uri`, and `dataschema` alone can no longer say which is which. **Classification** resolves the overlap by one further field, the event's `type`, and does so unambiguously for the reason just given. Once classified, a recursive delivery is an ordinary init or an ordinary followup, and nothing else in this ADR treats it specially: the child has its own `execution_id`, its own record, one more `depth`, and the parent as its caller.
+
 #### Optional business state schema
 
 An executor MAY declare a schema for business state it wishes to remember between deliveries. Where declared, it governs the `data` field of the execution record (see **The execution record**) and is composed into the record's validation at every entry (see **Hydration**).
@@ -441,6 +447,8 @@ This settles the second of the three things ADR-001 left to this ADR — "how it
 
 **`dataschema` decides classification.** ADR-005 fixes `dataschema` as `{uri}/{version}`, and the `uri` names the contract that governs the event. A `uri` matching the self contract is an init; one matching a declared service contract is a followup; one matching neither is a fault. This is read from a field ADR-001 requires on every event, ADR-002 constrains the format of, and ADR-005 gives a fixed shape — not inferred from `type`, which ADR-005 makes version-independent and not globally unique, and not from the presence or absence of a record, which is a separate check (**Entry validation**, step 4).
 
+**One overlap, and one tie-break.** Where the handler declares its self contract as a service (**The self contract may be a service**), a `uri` matching the self contract matches both a self and a service declaration, and `dataschema` cannot finish the job. For that `uri` only, the handler reads the event's `type`: **the self contract's input `type` classifies the delivery as an init; one of its `outputs` keys or its handler error type classifies it as a followup**; any other `type` is `event_unclassifiable`. This is unambiguous because ADR-005 forbids the input `type` from matching either of the other two. It is a tie-break and not a second rule: `type` is consulted only where `dataschema` names a contract that is both, and `category` keeps its role as a cross-check at step 2 in every case.
+
 How the `uri` and version are split, and how the version is checked in each case, is under **Resolution, and which executor runs**.
 
 #### `category` cross-checks it
@@ -491,7 +499,7 @@ Before any executor code runs, a handler MUST work through the following gate **
 
 | Step | Applies to | Check | On failure | Short-circuits | Retry safe |
 |---|---|---|---|---|---|
-| 1 | every delivery | **`dataschema` resolves against a declared contract**, naming one contract at one version and thereby classifying the delivery as init or followup. See **Resolution, and which executor runs**. | fault, `event_unclassifiable` | yes | no |
+| 1 | every delivery | **`dataschema` resolves against a declared contract**, naming one contract at one version and thereby classifying the delivery as init or followup. Where the `uri` names the self contract and the handler also declares it as a service, the event's `type` breaks the tie (**`dataschema` decides it**). See **Resolution, and which executor runs**. | fault, `event_unclassifiable` | yes | no |
 | 2 | every delivery | **`category` agrees with what resolution found.** `io.arvo.init` accompanies a self-contract event, `io.arvo.complete` a service-contract one. Absent or unrecognised, it is not consulted. | fault, `category_mismatch` | yes | no |
 | 3 | every delivery | **The record is fetched**, once, through the state function, under the key classification selects (**Resolving the existing execution**). | fault, `state_resolution_failed` | yes | **yes** |
 | 4 | every delivery | **Presence matches classification.** An init delivery MUST have fetched nothing; a followup MUST have fetched a record. | fault, `record_unexpected` or `record_expected` | yes | no |
@@ -526,6 +534,8 @@ The `uri` MUST match the self contract or one of the declared service contracts.
 | the record fetched is | nothing | the execution's record |
 | the executor is chosen by | the **event's** version, from its `dataschema` | the **record's** `version` |
 | the version check is | the handler declares an executor for that version, else `event_unclassifiable` | the event's version equals the declared service version exactly, else `event_unclassifiable` |
+
+Where the self contract is also a declared service, the `uri` resolves to both columns and the event's `type` selects one (**`dataschema` decides it**). A recursive request then takes the init column exactly: its version is the event's, and the handler must declare an executor for it. A recursive reply takes the followup column exactly: its version must equal the version at which the handler declared itself as a service, because that is the version it opened the child at.
 
 For an init there is no record, so the event is the only thing that can say which version to run — and if the handler declares no executor for it, that is a fault rather than a fallback to a neighbour.
 
@@ -1378,6 +1388,10 @@ The storage motivation survives intact under ADR-001's assignment, which is why 
 Considered, not chosen. A draft had the executor return requests — a `type` and a `data` — and the handler build every event from them, refusing any finished event an executor handed back. It is the tighter shape: the addressing rules run in exactly one place, and a misrouted `subject` or `initid` becomes impossible rather than merely unsafe.
 
 It was rejected because it makes the handler the only party that can ever produce an event, and there are legitimate cases where an executor must set what the defaults would not — a domain from a source the builder does not know, a `traceparent` continuing a context the executor received from outside the model, a `to` for a service contract shared by several handlers. Under a request model each of those becomes a request option the protocol has to define, and the list never closes. Under the chosen model the executor returns finished events, the builder makes the correct event the easy one, the unsafe fields are named so that overriding one is a visible act (**What an executor may set**), and validation at return catches everything that is structurally checkable. What the handler cannot check — a wrong but well-formed `subject` — it cannot check under either model, since the request model merely moves the same mistake to a request option.
+
+### Prohibiting the self contract as a service
+
+Considered, not chosen. Forbidding a handler from declaring its own contract as a service would keep `dataschema` sufficient for classification on its own, with no tie-break to state. It would also forbid recursion, which is a legitimate shape — a tree walk or a fan-out over the same contract has no other honest expression in a model where a handler implements exactly one contract. The tie-break costs one field read on one overlap, and it is unambiguous by a rule ADR-005 already holds, so the prohibition would buy simplicity the protocol does not need at the price of a capability it does (**The self contract may be a service**).
 
 ### Naming a destination on each emission
 
