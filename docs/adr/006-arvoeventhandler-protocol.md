@@ -145,7 +145,7 @@ The members below are normative in their existence and semantics. What each is c
 | **at max depth** | True when an event this execution emits to a service could no longer increment `depth` without reaching the version's maximum (**Depth**). | read |
 | **time remaining** | How many milliseconds remain on each of the version's two clocks at the moment the executor is entered: the run clock for this attempt, and the execution clock from the init event to the moment this execution's lifecycle becomes terminal (**Timeouts**). `null` for a clock the version leaves unbounded. Read at entry and not updated: an executor that needs the live figure subtracts its own elapsed time. | read |
 | **cancel** | Marks this execution `cancelled` with a reason, terminal (**The execution record**). | write |
-| **fault** | Builds an execution fault for the executor to raise deliberately, with a reason and whether it is retry safe (**Failure protocol**). | produces a fault |
+| **fault** | Builds an execution fault for the executor to raise deliberately, with a reason and whether a redelivery could fix it (**Failure protocol**). | produces a fault |
 | **telemetry** | The delivery's OpenTelemetry objects: its **span**, a **logger** bound to that span's context, and a **meter** scoped to the handler (**Observability**). | read, and record |
 | **mechanism hooks** | Whatever the mechanism running this handler chooses to expose to an executor, supplied to the handler alongside the delivery. Which hooks exist is the mechanism's own scope and undefined here. Where none are supplied it is an empty object, never absent. | read, or stable mutation only — see below |
 
@@ -433,7 +433,7 @@ The delivery span SHOULD carry as attributes the identifiers a reader needs to f
 
 An implementation SHOULD publish protocol-level metrics — deliveries by outcome, faults by `fault_kind`, executor duration, collection size — through the same metrics API, and MUST NOT require an executor to opt in to them.
 
-A fault MUST be recorded on the delivery span before it is raised, as an exception with its `fault_kind` and whether it is retry safe as attributes (**The fault object**), because a fault writes no record and the trace may be the only place a retried-away failure is ever visible.
+A fault MUST be recorded on the delivery span before it is raised, as an exception with its `fault_kind` and whether `retry` is present as attributes (**The fault object**), because a fault writes no record and the trace may be the only place a retried-away failure is ever visible.
 
 ### Classification
 
@@ -837,9 +837,9 @@ It is not part of the record. It describes a delivery, not an execution, and a r
 
 #### Retry information travels on the fault
 
-**Retry information travels on the fault, not in the record.** Where a delivery ends in an execution fault, the fault carries everything a mechanism needs to decide what happens next — `attempt`, `timestamp`, `retry_safe`, and the `retry` block. Those fields are defined once, with the rest of the object, under **The fault object**; what follows is what they mean rather than a second copy of their shape.
+**Retry information travels on the fault, not in the record.** Where a delivery ends in an execution fault, the fault carries everything a mechanism needs to decide what happens next — `attempt`, `timestamp`, `fault_kind`, and the `retry` block. Those fields are defined once, with the rest of the object, under **The fault object**; what follows is what they mean rather than a second copy of their shape.
 
-`retry` is `null` where no retry is in prospect: a fault that is not retry safe, or one whose attempts are spent. A mechanism can therefore read "retry, and here is when" or "do not" without interpreting a message.
+`retry` is `null` where no retry is in prospect: a fault whose kind no redelivery fixes, or one whose attempts are spent. A mechanism can therefore read "retry, and here is when" or "do not" without interpreting a message. **`retry` is the permission and `fault_kind` is the nature**, and the two are kept on separate fields on purpose: a mechanism that will not retry can still tell, from the kind, whether the failure was the fixable sort that ran out of budget or the defective sort that never was, and that difference may decide what it does instead (**Abandonment**).
 
 #### Why the fault is the only place this can live
 
@@ -847,7 +847,7 @@ It is not part of the record. It describes a delivery, not an execution, and a r
 
 #### No exhaustion flag, no cross-delivery total
 
-There is deliberately no exhaustion flag and no cross-delivery total. A flag would be dead weight — `retry` is `null` exactly when attempts are spent, so any flag inside it could only ever read false, and `retry_safe: false` with `retry: null` already says "do not retry" without one.
+There is deliberately no exhaustion flag and no cross-delivery total. A flag would be dead weight — `retry` is `null` exactly when no redelivery is in prospect, so any flag beside it could only ever restate it; and there is no separate retry-safety field for the same reason, since the kind's verdict is fixed in the vocabulary and a second field carrying it could only agree or wrongly disagree.
 
 A total is worse than redundant: it is uncomputable. The mechanism supplies only this delivery's attempt number, retry state is deliberately absent from the record, and a fault writes no record — so nothing the handler is given could produce a figure spanning deliveries, and a field no conformant implementation can fill does not belong in a specification.
 
@@ -880,7 +880,7 @@ In its function form `retry delay` **MUST NOT be able to fail**. Where it does �
 
 #### Exhaustion ends retrying
 
-**Exhaustion ends retrying, and the handler says so.** Where `attempt` has reached `max_retry_attempts_allowed`, a fault that would otherwise be retry safe MUST be reported as no longer retry safe, and its `retry` is `null`. A mechanism stops rather than loops.
+**Exhaustion ends retrying, and the handler says so.** Where `attempt` has reached `max_retry_attempts_allowed`, a fault of a retry-safe kind MUST carry `retry` as `null`, exactly as a non-retry-safe kind always does. Its `fault_kind` is unchanged — the failure is still the fixable sort, and the budget, not the nature, is what ran out. A mechanism stops rather than loops.
 
 The handler is the party that applies this because it is the party that knows the version's limit; the mechanism knows only which attempt it is making. A mechanism MAY stop earlier than the handler tells it to — its own budgets are its own — but it MUST NOT continue past a fault that says no retry is in prospect.
 
@@ -1066,13 +1066,13 @@ Failing and the event are one thing seen from two sides: an executor says "I can
 
 #### The narrow exception: an executor raising a fault
 
-The exception is deliberate and narrow. Where an executor raises a failure that *is* an execution fault — one built through the **fault** member of the execution context (**The execution context**) — it stays a fault and does not become a handler error. It carries `fault_kind` `executor_raised`, the executor's reason as `message`, and the retry verdict the executor chose, **retry safe unless the executor says otherwise**. Where it is not retry safe, or where its retries are spent, it carries the abandonment pair like any other fault.
+The exception is deliberate and narrow. Where an executor raises a failure that *is* an execution fault — one built through the **fault** member of the execution context (**The execution context**) — it stays a fault and does not become a handler error. It carries `fault_kind` `executor_raised`, the executor's reason as `message`, and the retry verdict the executor chose, **retry safe unless the executor says otherwise**, expressed as `retry` present or `null`. Where the executor said not, or where its retries are spent, `retry` is `null` and it carries the abandonment pair like any other fault. It is the one kind whose verdict is not fixed in the vocabulary, so for it alone `fault_kind` does not tell a mechanism whether the failure was fixable; the executor's `message` is where that reason lives.
 
 How such a failure is distinguished from an ordinary one is API shape and each language's own choice (ADR-004); what this ADR fixes is that the distinction exists, which side of it produces an event, and what it costs (**The cost of an executor raising a fault**).
 
 #### The fault object
 
-A fault MUST carry whether it is **retry safe** and, where it is, how long a mechanism should wait before the next attempt — so a mechanism can retry, dead-letter, or escalate without inspecting a message or consulting a handler's declaration. It carries the rest of what follows for the same reason: a fault writes no record, so anything not on the fault is lost to everything downstream of it.
+A fault MUST carry whether a **retry is in prospect** and, where it is, how long a mechanism should wait before the next attempt — so a mechanism can retry, dead-letter, or escalate without inspecting a message or consulting a handler's declaration. It carries the rest of what follows for the same reason: a fault writes no record, so anything not on the fault is lost to everything downstream of it.
 
 ```
 ArvoHandlerFault                     extends the language's native error type
@@ -1094,7 +1094,6 @@ ArvoHandlerFault                     extends the language's native error type
 
     attempt             this delivery's attempt number, counting from 0
     timestamp           when this delivery was processed
-    retry_safe          whether a retry could produce a different outcome
     retry               null where no retry is in prospect
         max_retry_attempts_allowed
         retry_in_ms
@@ -1475,7 +1474,7 @@ This ADR amends the AAM membership list (ADR-000, *Arvo Application Model*) by e
 
 **It decides the Deferred Decision on cancellation, interruption and compensation by splitting it.** *Interruption* — one node stopping another — is placed outside the model, and Arvo defines nothing for it. *Compensation* is likewise outside: it happens through events a contract already permits and needs no primitive. What is inside is only what a durable record requires: the terminal `cancelled` lifecycle, `lifecycle_description` to say why, and the `execution_cancelled` fault that hands a mechanism the caller's answer when an execution cancels without giving one. The signal an application reads is not a model concept (**Cancellation**).
 
-One item ADR-000 lists outside the model is touched and left there. "Retry counts, batching, and other adapter-internal behaviour" remain the mechanism's. What this ADR adds is that the *handler* states a verdict — retry safe or not, and a suggested delay — and the mechanism MUST NOT continue past a fault that says no retry is in prospect (**Exhaustion ends retrying**). How many times it actually tries within that verdict, and whether it honours the delay, stay its own.
+One item ADR-000 lists outside the model is touched and left there. "Retry counts, batching, and other adapter-internal behaviour" remain the mechanism's. What this ADR adds is that the *handler* states a verdict — `retry` present with a suggested delay, or `null` — and the mechanism MUST NOT continue past a fault that says no retry is in prospect (**Exhaustion ends retrying**). How many times it actually tries within that verdict, and whether it honours the delay, stay its own.
 
 ### Invariants depended on
 
@@ -1614,7 +1613,7 @@ execute(ctx):
     ctx.cancel(reason)      marks cancelled, terminal; still answer your caller,
                             or the handler raises execution_cancelled for you
 
-    throw ctx.fault(reason, retry_safe = true)
+    throw ctx.fault(reason, retryable = true)
                             an execution fault, for a delivery that cannot proceed;
                             the caller hears nothing while retries remain, and
                             afterwards only if the mechanism abandons with the pair
@@ -1649,7 +1648,7 @@ execute(
                                          error event is among the events
     → discarded                          already seen; nothing to do, nothing wrong
     → fault    an ArvoHandlerFault       nothing is committed or emitted now.
-                                         read retry_safe and retry; redeliver with
+                                         read retry; where present, redeliver with
                                          attempt + 1, or do not. what happens to a
                                          fault you will not retry is your policy; if
                                          you abandon, commit abandonment_state and
