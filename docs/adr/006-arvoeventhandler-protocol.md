@@ -123,17 +123,17 @@ An executor that declares none is still resumable — it may emit to a service a
 
 #### One table, one rule
 
-Seven **options** govern how a version behaves. They are defined here and nowhere else: every other section says what its option *does*, and refers here for its type, its default, and how its value is found.
+Seven **options** govern how a version behaves. They are defined here and nowhere else: every other section says what its option *does*, and refers here for its type, its default, how its value is found, and whether it enters the `version_hash`. The **Hashable** column is the whole of that last question: **The `version_hash` algorithm** takes a version's declared value for an option marked hashable and nothing for one that is not.
 
-| Option | Type | Handler level | Version level |
-|---|---|---|---|
-| `max_depth` | integer ≥ 0 | **required**; `10000` where the author writes nothing | optional; falls back to the handler's |
-| `max_retry_attempts` | integer ≥ 0 | **required**; `3` where the author writes nothing | optional; falls back to the handler's |
-| `retry_delay` | integer ms ≥ 0, or a function `(event, record \| null, attempt, max_retry_attempts) → integer ms` | **required**; `300` where the author writes nothing | optional; falls back to the handler's |
-| `run_timeout` | integer ms > 0, or `null` for unbounded | **required**; `30000` where the author writes nothing | optional; falls back to the handler's |
-| `execution_timeout` | integer ms > 0, or `null` for unbounded | **required**; `null` where the author writes nothing | optional; falls back to the handler's |
-| `collect` | `all` \| `each` | **required**; `all` where the author writes nothing | optional; falls back to the handler's |
-| `handler_error_domain` | a domain literal, or one of the four source identifiers under **Domain** | **required**; `none` where the author writes nothing | optional; falls back to the handler's |
+| Option | Type | Handler level | Version level | Hashable |
+|---|---|---|---|---|
+| `max_depth` | integer ≥ 0 | **required**; `10000` where the author writes nothing | optional; falls back to the handler's | yes |
+| `max_retry_attempts` | integer ≥ 0 | **required**; `3` where the author writes nothing | optional; falls back to the handler's | yes |
+| `retry_delay` | integer ms ≥ 0, or a function `(event, record \| null, attempt, max_retry_attempts) → integer ms` | **required**; `300` where the author writes nothing | optional; falls back to the handler's | number form yes; function form **no** |
+| `run_timeout` | integer ms > 0, or `null` for unbounded | **required**; `30000` where the author writes nothing | optional; falls back to the handler's | yes |
+| `execution_timeout` | integer ms > 0, or `null` for unbounded | **required**; `null` where the author writes nothing | optional; falls back to the handler's | yes |
+| `collect` | `all` \| `each` | **required**; `all` where the author writes nothing | optional; falls back to the handler's | yes |
+| `handler_error_domain` | a domain literal, or one of the four source identifiers under **Domain** | **required**; `none` where the author writes nothing | optional; falls back to the handler's | yes — the literal, or the source identifier |
 
 **The handler level is complete.** A handler always holds a value for every one of the seven. An author who writes nothing for one gets the value in the third column, which the protocol defines; there is no state in which a handler lacks an option. **The version level is sparse.** A version declares only what it wants to differ, and an option it does not declare is `null`, meaning *inherited*.
 
@@ -719,7 +719,7 @@ Every part of this is pinned, for the same reason the `execution_id` derivation 
 |---|---|
 | `self` | the self contract's canonical form (ADR-005), with `versions` reduced to the single entry for this version, and `description` and `metadata` removed |
 | `state_schema` | the schema this version's executor declared for `data`, or `null` |
-| `options` | an object with exactly the keys `max_depth`, `max_retry_attempts`, `retry_delay`, `run_timeout`, `execution_timeout`, `collect`, `handler_error_domain`, each holding **what this version itself declared**, or JSON `null` where the version declared nothing and inherits the handler's value (**Options**). Handler-level values are never hashed. `handler_error_domain` in its literal form is the literal; in its source form it is the **name of the source chosen**, from the fixed set under **Domain** (`none`, `target_contract`, `self_contract`, `delivered_event`), so that switching sources is drift. `retry_delay` in its number form is the number; in its function form it is JSON `null`, because a function has no value until a delivery and no canonical form to hash. **A retry-delay function is therefore excluded from the hash and from drift detection entirely**: its internal logic may change freely without any in-flight execution seeing drift, and this is the one declared option for which that is so. Switching between a number and a function is still visible, since the key's value changes. An unbounded timeout is represented by JSON `null`. |
+| `options` | an object with exactly the keys `max_depth`, `max_retry_attempts`, `retry_delay`, `run_timeout`, `execution_timeout`, `collect`, `handler_error_domain`, each holding **what this version itself declared where the option is hashable** (**Options**, the Hashable column), and JSON `null` otherwise — where the version declared nothing and inherits the handler's value, or where the declared value is of a form the column marks as not hashable. Handler-level values are never hashed. `handler_error_domain` in its literal form is the literal; in its source form it is the **name of the source chosen**, from the fixed set under **Domain** (`none`, `target_contract`, `self_contract`, `delivered_event`), so that switching sources is drift. A retry-delay function is the one non-hashable form: it has no value until a delivery and no canonical form to hash, so its internal logic may change freely without any in-flight execution seeing drift. Switching between a number and a function is still visible, since the key's value changes between a number and `null`. An unbounded timeout is represented by JSON `null`. |
 | `services` | an array, sorted by `uri` ascending by Unicode code point, of each declared service contract's canonical form with `versions` reduced to the single entry for the declared version, and `description` and `metadata` removed |
 
 The canonical form is what ADR-005 defines, and this ADR does not restate its fields: whatever a canonical form contains is what is hashed, less the two reductions above. Nothing else is included. In particular: `description` and `metadata`, which ADR-005 makes informational; every other version of the self contract; every version of a service contract other than the declared one; the executor; the dependency value or factory; and anything a mechanism supplies.
