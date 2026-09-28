@@ -647,11 +647,11 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `event_ids` | array of `{ id: string, direction: "received" \| "emitted" }` | Every event the execution has touched, each as an `id` and a `direction` of `received` or `emitted`, relative to this handler. |
 | `init_event_id` | string | The `id` of the init event. |
 | `init_event_source` | string | The `source` of the init event — the caller a completion returns to. |
-| `init_event` | ArvoEvent as JSON | The event that began the execution. |
-| `triggering_event` | ArvoEvent as JSON | The event that caused the most recent delivery. |
-| `in_flight_event_map` | object: emitted event `id` string → ArvoEvent as JSON \| `null` | Keyed by the `id` of each event emitted to a service in the current round. The value is the collected response, or `null` while outstanding — the key MUST be present either way, because the key set is what the execution is waiting for. |
+| `init_event` | ArvoEvent as JSON; materialized as an ArvoEvent during hydration | The event that began the execution. |
+| `triggering_event` | ArvoEvent as JSON; materialized as an ArvoEvent during hydration | The event that caused the most recent delivery. |
+| `in_flight_event_map` | object: emitted event `id` string → ArvoEvent as JSON \| `null`; each non-null value materialized as an ArvoEvent during hydration | Keyed by the `id` of each event emitted to a service in the current round. The value is the collected response, or `null` while outstanding — the key MUST be present either way, because the key set is what the execution is waiting for. |
 | `contracts` | object: `{ self: canonical contract, services: canonical contract[] }` | The handler's `self` and `services` contracts, in their canonical form (ADR-005). Carried for a reader's benefit only — nothing in execution consults it. |
-| `data` | JSON value satisfying the declared schema \| `null` | The executor's own business state, governed by the schema that executor declared, or `null` where none is declared or nothing has been written. |
+| `data` | JSON value \| `null`; validated against this version's declared schema during hydration | The executor's own business state, governed by the schema that executor declared, or `null` where none is declared or nothing has been written. |
 
 `execution_id` identifies a record uniquely and `subject` groups the records of one workflow; a mechanism MAY use them as its record and grouping keys, and both are inside the record so that it is self-describing.
 
