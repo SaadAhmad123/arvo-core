@@ -113,23 +113,55 @@ Two versions of one contract share a `type` — ADR-005 makes `type` a property 
 
 What the declaration changes is classification. A recursive request and a recursive reply arrive with the **same** `dataschema` `uri`, and `dataschema` alone can no longer say which is which. **Classification** resolves the overlap by one further field, the event's `type`, and does so unambiguously for the reason just given. Once classified, a recursive delivery is an ordinary init or an ordinary followup, and nothing else in this ADR treats it specially: the child has its own `execution_id`, its own record, one more `depth`, and the parent as its caller.
 
-#### Options: three tiers, one rule
-
-This ADR defines seven **options** that govern a version's behaviour: `max_depth` (**Depth**), `max_retry_attempts` and `retry_delay` (**Retry**), `run_timeout` and `execution_timeout` (**Timeouts**), `collect` (**Collection**), and `handler_error_domain` (**Domain**). Each has a protocol default. Each MAY be declared **per version**, and each MAY also be declared **once on the handler**, as a default for every version the handler implements.
-
-**Resolution is one rule, applied to every option on every delivery:** the version's declared value where the version declared one; else the handler's declared value where the handler declared one; else the protocol default. Three tiers, always in that order, and a version that declares nothing behaves exactly as it did before the handler tier existed.
-
-The handler tier exists for two reasons. The ordinary one is that a handler with many versions should not repeat the same seven values in each. The structural one is that **the gate runs its first six steps before any version is known** (**Entry validation**): a followup's `dataschema` names the service's version, not this handler's, and the record that would say which version owns the execution is what step 3 is trying to read. A fault raised in those steps that needs a version-governed value has no version to take it from, and reads the handler tier — or the protocol default beneath it — instead. Today exactly one such fault exists, `state_resolution_failed`, and exactly two options are consulted for it, the retry pair (**Retry before a version is known**); the rule is stated generally so that nothing new has to be invented when a later step needs one.
-
-**The handler tier is not part of any `version_hash`.** The hash records what a version itself declared, with an inherited option represented as `null` (**The `version_hash` algorithm**). A handler-level default therefore changes without any version's hash changing, and that is deliberate: it belongs to the handler, not to the version, and the hash is a statement about the version. The consequence is stated so no one is surprised by it: **a version that inherits an option can have that option's effective value changed underneath it, and no in-flight execution of that version will see drift.** An author who wants a change to be visible as drift declares the option on the version.
-
-Both tiers are validated at declaration under the same domain rules (**Bad values are refused at declaration**), and a relation between two options — the two timeouts — is checked on each version's *effective* pair, after resolution, since a handler-level run timeout and a per-version execution timeout can disagree just as two per-version values can.
-
 #### Optional business state schema
 
 An executor MAY declare a schema for business state it wishes to remember between deliveries. Where declared, it governs the `data` field of the execution record (see **The execution record**) and is composed into the record's validation at every entry (see **Hydration**).
 
 An executor that declares none is still resumable — it may emit to a service and be re-entered on the response — and still has an execution record. It simply has nothing of its own in it. Resumability is a property of the protocol, carried by the record's own fields; business state is what an executor adds to that, and it is optional.
+
+### Options
+
+#### One table, one rule
+
+Seven **options** govern how a version behaves. They are defined here and nowhere else: every other section says what its option *does*, and refers here for its type, its default, and how its value is found.
+
+| Option | Type | Handler level | Version level |
+|---|---|---|---|
+| `max_depth` | integer ≥ 0 | **required**; `10000` where the author writes nothing | optional; falls back to the handler's |
+| `max_retry_attempts` | integer ≥ 0 | **required**; `3` where the author writes nothing | optional; falls back to the handler's |
+| `retry_delay` | integer ms ≥ 0, or a function `(event, record \| null, attempt, max_retry_attempts) → integer ms` | **required**; `300` where the author writes nothing | optional; falls back to the handler's |
+| `run_timeout` | integer ms > 0, or `null` for unbounded | **required**; `30000` where the author writes nothing | optional; falls back to the handler's |
+| `execution_timeout` | integer ms > 0, or `null` for unbounded | **required**; `null` where the author writes nothing | optional; falls back to the handler's |
+| `collect` | `all` \| `each` | **required**; `all` where the author writes nothing | optional; falls back to the handler's |
+| `handler_error_domain` | a domain literal, or one of the four source identifiers under **Domain** | **required**; `none` where the author writes nothing | optional; falls back to the handler's |
+
+**The handler level is complete.** A handler always holds a value for every one of the seven. An author who writes nothing for one gets the value in the third column, which the protocol defines; there is no state in which a handler lacks an option. **The version level is sparse.** A version declares only what it wants to differ, and an option it does not declare is `null`, meaning *inherited*.
+
+**Resolution is one rule:** the version's value where the version declared one, otherwise the handler's. There is no third step, because the handler is never missing a value. The rule holds identically wherever and whenever an option is read — at declaration, at a gate step, on return — and it does not matter whether a version is known at that moment: **where no version is known, the version side is `null` for every option and the handler's values apply.** Gate steps 1 through 6 run before any version is confirmed, and the one retryable fault among them, `state_resolution_failed`, takes its retry options this way (**Retry before a version is known**). That is an instance of the rule, not an exception to it.
+
+#### What each option governs
+
+| Option | Governs | Defined under |
+|---|---|---|
+| `max_depth` | how deep an execution of this version may sit or reach | **Depth** |
+| `max_retry_attempts`, `retry_delay` | how many attempts a retryable fault may be given, and how long to wait between them | **Retry** |
+| `run_timeout`, `execution_timeout` | how long one attempt may run, and how long the execution may live | **Timeouts** |
+| `collect` | whether the executor is entered once all responses are in, or on each | **Collection** |
+| `handler_error_domain` | the `domain` the handler error event carries | **Domain** |
+
+#### Validated at declaration, at both levels
+
+Every value at either level MUST lie in its type's domain, and a value outside it is a declaration error: the handler MUST be rejected at declaration time, the same treatment the ADR gives a version without an executor and a capability set with a type collision (**Definition and declaration**). A defect in code is visible before any event exists, so no fault is defined for it and no backstop at delivery is needed.
+
+One relation spans two options and is checked on each version's **resolved** pair, after the rule above has been applied: **`execution_timeout` MUST NOT be smaller than `run_timeout`**, and **where `run_timeout` is `null`, `execution_timeout` MUST be `null` too** (**Timeouts** gives the reason). A handler-level `run_timeout` and a per-version `execution_timeout` are checked against each other exactly as two per-version values would be.
+
+#### Names are API shape; the rest is not
+
+What each option is called in a language, and whether the two levels are two objects or one object with overrides, is API shape and each language's own choice (ADR-004). The set of seven, their types, their defaults, the two levels, and the resolution rule are not.
+
+#### Only the version's declarations are hashed
+
+The `version_hash` records what a version itself declared, with an inherited option represented as JSON `null` (**The `version_hash` algorithm**). **The handler level is never hashed.** It belongs to the handler, and the hash is a statement about the version. The consequence is stated so no one is surprised by it: **a version that inherits an option can have its effective value changed at the handler level, and no in-flight execution of that version sees drift.** An author who wants a change seen as drift declares the option on the version.
 
 ### The execution context
 
@@ -340,7 +372,7 @@ Setting it on a service emission would mean something different — the id of th
 
 #### Domain
 
-An executor may give an emitted event a literal domain, or name a **source** for the handler to read one from and resolve before the event exists. Either way the field is absent unless asked for. The handler error event, which an executor does not construct field by field, takes the same two forms as a per-version default (see the appendix for an illustrative option name).
+An executor may give an emitted event a literal domain, or name a **source** for the handler to read one from and resolve before the event exists. Either way the field is absent unless asked for. The handler error event, which an executor does not construct field by field, takes its domain from the option **`handler_error_domain`** (**Options**), which holds the same two forms: a literal, or a source identifier.
 
 This confronts what ADR-005 left here rather than paraphrasing it. ADR-005 says why the field exists on a contract: "a value a contract carries so that events its factories construct can inherit a default without every call site repeating it", and it leaves "resolving a domain from the handler's own contract versus the contract of the event being emitted, from a triggering event, from orchestration parent/child context" to this ADR. Defaulting every emission to absent with no way to reach the contract's value would leave ADR-005's field inert in the one place it was meant to be used. So **the contract's own declared domain is one of the sources a request may name.** Reaching it takes a request rather than happening silently — which is what ADR-005's "carries no resolution logic, no inheritance chain" is about, and what keeps an event's domain something an author chose rather than something it acquired on the way past.
 
@@ -595,15 +627,9 @@ Because the handler fetches the record itself under a key it chooses, a mechanis
 
 ADR-001 gives `depth` its purpose: it "exists for operational comprehension", because unbounded nesting is "an operational risk rather than a structural impossibility". This guard is the one place in the protocol that reads the field for that purpose, and turns a runaway recursion into a diagnosable stop rather than an exhausted store.
 
-#### One option, per version
+#### One option, resolved per version
 
-**A version MAY set a maximum execution depth**:
-
-```
-max depth      a number; 10000 unless set on the version or the handler
-```
-
-Its name is each language's own choice (ADR-004); what this ADR fixes is that it exists, its default, and what it means. It resolves per version under the three-tier rule (**Options: three tiers, one rule**), because two versions of one contract may nest differently and a version's executor is the code whose recursion it bounds; a handler-level value is the default a version inherits, not a bound on the handler.
+The bound is the option **`max_depth`** (**Options**), resolved for the version an execution belongs to. It is resolved per version because two versions of one contract may nest differently and a version's executor is the code whose recursion it bounds; the handler-level value is what a version inherits when it declares none, not a bound on the handler as a whole.
 
 There is no option for what happens when the limit is crossed. **Crossing it is always a non-retryable execution fault.** It has two kinds, one for each place it can be detected: `max_depth_event_received` where an event arrives at or beyond the limit, and `max_depth_event_requested` where the executor returns an event that would go beyond it.
 
@@ -693,7 +719,7 @@ Every part of this is pinned, for the same reason the `execution_id` derivation 
 |---|---|
 | `self` | the self contract's canonical form (ADR-005), with `versions` reduced to the single entry for this version, and `description` and `metadata` removed |
 | `state_schema` | the schema this version's executor declared for `data`, or `null` |
-| `options` | an object with exactly the keys `max_depth`, `max_retry_attempts`, `retry_delay`, `run_timeout`, `execution_timeout`, `collect`, `handler_error_domain`, each holding **what this version itself declared**, or JSON `null` where the version declared nothing and inherits from the handler tier or the protocol default (**Options: three tiers, one rule**). Handler-level values are never hashed. `handler_error_domain` in its literal form is the literal; in its source form it is the **name of the source chosen**, from the fixed set under **Domain** (`none`, `target_contract`, `self_contract`, `delivered_event`), so that switching sources is drift. `retry_delay` in its number form is the number; in its function form it is JSON `null`, because a function has no value until a delivery and no canonical form to hash. **A retry-delay function is therefore excluded from the hash and from drift detection entirely**: its internal logic may change freely without any in-flight execution seeing drift, and this is the one declared option for which that is so. Switching between a number and a function is still visible, since the key's value changes. An unbounded timeout is represented by JSON `null`. |
+| `options` | an object with exactly the keys `max_depth`, `max_retry_attempts`, `retry_delay`, `run_timeout`, `execution_timeout`, `collect`, `handler_error_domain`, each holding **what this version itself declared**, or JSON `null` where the version declared nothing and inherits the handler's value (**Options**). Handler-level values are never hashed. `handler_error_domain` in its literal form is the literal; in its source form it is the **name of the source chosen**, from the fixed set under **Domain** (`none`, `target_contract`, `self_contract`, `delivered_event`), so that switching sources is drift. `retry_delay` in its number form is the number; in its function form it is JSON `null`, because a function has no value until a delivery and no canonical form to hash. **A retry-delay function is therefore excluded from the hash and from drift detection entirely**: its internal logic may change freely without any in-flight execution seeing drift, and this is the one declared option for which that is so. Switching between a number and a function is still visible, since the key's value changes. An unbounded timeout is represented by JSON `null`. |
 | `services` | an array, sorted by `uri` ascending by Unicode code point, of each declared service contract's canonical form with `versions` reduced to the single entry for the declared version, and `description` and `metadata` removed |
 
 The canonical form is what ADR-005 defines, and this ADR does not restate its fields: whatever a canonical form contains is what is hashed, less the two reductions above. Nothing else is included. In particular: `description` and `metadata`, which ADR-005 makes informational; every other version of the self contract; every version of a service contract other than the declared one; the executor; the dependency value or factory; and anything a mechanism supplies.
@@ -869,32 +895,23 @@ A total is worse than redundant: it is uncomputable. The mechanism supplies only
 
 Milliseconds rather than the finest precision available, for three reasons. It keeps that addition honest: a microsecond instant plus a millisecond duration is a unit error waiting to be written. A millisecond epoch sits far inside the range a JSON number represents exactly, where a nanosecond epoch does not — nothing here needs precision a durable format cannot carry. Furthermore, a millisecond clock is something every language implementing AAM can read from its standard library without a platform-specific call.
 
-#### The two retry options and their defaults
+#### The two retry options
 
-**A version MAY set two options** governing retry, both of which a mechanism reads off the fault rather than from the handler's declaration:
-
-```
-max retry attempts   a number; 3 unless set on the version or the handler
-retry delay          a number of milliseconds
-                     or  f(event, state | null, attempt, max attempts) → milliseconds
-                     300ms unless set on the version or the handler
-```
-
-Their names are each language's own choice (ADR-004); what this ADR fixes is that both exist, their defaults, and what they mean. Both resolve under the three-tier rule (**Options: three tiers, one rule**), and both are part of the `version_hash` input as the version declared them (**The `version_hash` algorithm**), so a change to `max retry attempts`, or between a number and a function for `retry delay`, or between two numbers, is visible to an executor as implementation drift. A retry-delay function's internal logic is not: in function form the option is excluded from the hash and from drift detection, for the reason the algorithm gives.
+Retry is governed by two options, **`max_retry_attempts`** and **`retry_delay`** (**Options**), which a mechanism reads off the fault rather than from the handler's declaration. Both are part of the `version_hash` input as the version declared them (**The `version_hash` algorithm**), so a change to `max_retry_attempts`, or between a number and a function for `retry_delay`, or between two numbers, is visible to an executor as implementation drift. A retry-delay function's internal logic is not: in function form the option is excluded from the hash and from drift detection, for the reason the algorithm gives.
 
 In its function form, `retry delay` receives the retry state as well as the delivery: which attempt this was and how many the version allows. That is what makes a backoff expressible — a figure that grows with `attempt`, or one that stretches as the budget nears its end — without the function reaching for state the handler does not hold. It receives no more than that, because nothing else about a retry exists: the record carries no retry state, and no attempt can know about another (**No exhaustion flag, no cross-delivery total**).
 
-`retry delay` is 300ms where a version sets none. The handler must put a number in the fault's `retry_in_ms`, so leaving it undefined is not an option — a mechanism may of course ignore the figure, but it must be given one.
+The handler must put a number in the fault's `retry_in_ms`, so `retry_delay` is never undefined: the handler level always holds a value (**Options**). A mechanism may of course ignore the figure, but it must be given one.
 
 #### Retry before a version is known
 
-`state_resolution_failed` is raised at gate step 3, before the record has been read and therefore, on a followup, before any version is known — a followup's `dataschema` names the service, and the version that owns the execution is inside the record the read failed to produce. On an init the event's own `dataschema` names the version and the version's options apply as usual. **On a followup, the retry options for this fault resolve from the handler tier, or from the protocol defaults beneath it** (**Options: three tiers, one rule**), and the fault's `retry` block carries those figures. Its `message` SHOULD say that handler-level figures were used.
+`state_resolution_failed` is raised at gate step 3, before the record has been read and therefore, on a followup, before any version is known — a followup's `dataschema` names the service, and the version that owns the execution is inside the record the read failed to produce. On an init the event's own `dataschema` names the version and the version's options apply as usual. **On a followup, the version side of every option is `null`, so the handler's values apply** — the ordinary resolution rule with nothing on the version side (**Options**), and the fault's `retry` block carries those figures. Its `message` SHOULD say so.
 
-In its function form `retry delay` is then called with `null` in place of the record, because none was read; a function that a handler declares at that tier MUST accept that. This is the only fault for which the version's own retry options are ever bypassed, and it is bypassed only because they are unreachable.
+In its function form `retry_delay` is then called with `null` in place of the record, because none was read; a handler-level function MUST accept that. This is the one fault today for which a version's own retry options are never consulted, and only because no version can be known.
 
 #### `retry delay` must not be able to fail
 
-In its function form `retry delay` **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute that same 300ms rather than propagate the failure. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
+In its function form `retry delay` **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute the handler level's default for `retry_delay` (**Options**) rather than propagate the failure. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
 
 #### Exhaustion ends retrying
 
@@ -929,28 +946,21 @@ This ADR states what a handler produces and what it requires. Everything between
 
 ### Timeouts
 
-#### Two clocks, per version
+#### Two clocks, resolved per version
 
-**A version MAY bound time in two places**, and the two are different questions:
-
-```
-run timeout          a number of milliseconds, or null; 30000 unless set on the version or the handler
-execution timeout    a number of milliseconds, or null; null unless set on the version or the handler
-```
+Time is bounded in two places by two options, **`run_timeout`** and **`execution_timeout`** (**Options**), and the two are different questions.
 
 The **run clock** bounds one entry into the executor: how long a single attempt may spend in business code before the handler stops waiting. The **execution clock** bounds the execution itself: how long may pass from the init event to the moment this execution's lifecycle becomes terminal. The first asks whether *this attempt* is stuck. The second asks whether *the business process* has taken longer, start to finish, than the version allows.
 
-Their names are each language's own choice (ADR-004); what this ADR fixes is that both exist, their defaults, their domains, and what they mean. Both resolve under the three-tier rule (**Options: three tiers, one rule**), and both are part of the `version_hash` input as the version declared them (**The `version_hash` algorithm**), so a change to either is visible to an executor as implementation drift. Both are in milliseconds, as everything under **Retry** is.
+Both are part of the `version_hash` input as the version declared them (**The `version_hash` algorithm**), so a change to either on the version is visible to an executor as implementation drift. Both are in milliseconds, as everything under **Retry** is.
 
 #### `null` is unbounded
 
 On either clock, `null` means **no bound**: the handler starts no timer and the corresponding check never fails. The run clock defaults to thirty seconds because business code that has not returned in that time is far more often stuck than slow, and a mechanism that is never told so retries nothing and frees nothing. The execution clock defaults to `null` because many workflows legitimately live for hours or days between deliveries, and a default that could end one of those silently would be worse than no default.
 
-#### Bad values are refused at declaration
+#### Why the execution clock cannot be shorter than the run clock
 
-Each clock, where set, MUST be a positive integer number of milliseconds or `null`. **An execution timeout MUST NOT be smaller than the run timeout**: a single attempt could then never complete inside the execution's own bound, and the version could never succeed. The corollary follows: **where the run timeout is `null`, the execution timeout MUST be `null` too**, because an unbounded attempt is longer than any finite bound on the whole. The relation is checked on each version's **effective** pair after three-tier resolution, so a handler-level run timeout and a per-version execution timeout are checked against each other exactly as two per-version values are. A declaration producing any of these is a declaration error, and the handler MUST be rejected at declaration time — the same treatment the ADR gives a version without an executor and a capability set with a type collision (**Definition and declaration**). It is a defect in code, visible before any event exists, so no fault is defined for it and no backstop at delivery is needed.
-
-The same holds for every option this ADR defines, at both tiers (**Options: three tiers, one rule**). `max depth` and `max retry attempts` MUST be non-negative integers, `retry delay` in its number form a non-negative integer, `collect` one of its two values, and `handler_error_domain` a valid domain literal or one of the four source identifiers. An option outside its domain, on the version or on the handler, is rejected at declaration, never discovered on a delivery.
+**Options** requires that a version's resolved `execution_timeout` not be smaller than its resolved `run_timeout`, and that a `null` run timeout force a `null` execution timeout. The reason belongs here. A single attempt that may run longer than the whole execution is allowed to could never complete inside the execution's bound, so the version could never succeed; and an unbounded attempt is longer than any finite bound on the whole. Both are defects in the declaration, visible before any event exists, and **Options** refuses them there.
 
 #### The run clock: what it covers, and what it does not
 
@@ -1005,9 +1015,9 @@ This makes concurrency invisible to an executor. It is entered once per round wi
 
 #### The per-version override: enter on each
 
-A handler MUST allow the join to be overridden **per version**, so that the executor is entered on every response with whatever the collection holds at that moment — some entries answered, others still `null`.
+The join is governed by the option **`collect`** (**Options**): `all` joins, `each` enters the executor on every response with whatever the collection holds at that moment — some entries answered, others still `null`.
 
-Per version rather than per handler, because an executor entered on every response must be safe to enter repeatedly, and that is a property of executor code, which is written per version. State is version-bound too, so a version keeping a running tally may tolerate this where its successor does not. The option is one of the five in the `version_hash` input (**The `version_hash` algorithm**), so changing it is visible to an executor as implementation drift.
+It is resolved per version rather than fixed per handler, because an executor entered on every response must be safe to enter repeatedly, and that is a property of executor code, which is written per version. State is version-bound too, so a version keeping a running tally may tolerate this where its successor does not. The option is part of the `version_hash` input as the version declared it (**The `version_hash` algorithm**), so changing it on the version is visible to an executor as implementation drift.
 
 Under the override, returning nothing on a partial collection is the ordinary case rather than a defect: responses remain outstanding, so the execution stays at `waiting` (**Emitting nothing: `waiting` or `idle`**). An implementation SHOULD document the cost plainly at the point the option is offered, because an executor that is not in fact safe to enter repeatedly will appear to work until two responses arrive close together.
 
@@ -1390,7 +1400,7 @@ Cooperative means the execution stops when it next runs and chooses to. Four lim
 
 **The executor holds the misrouting risk.** Because it returns finished events, a hand-built event with a wrong `subject` or `initid` is structurally valid and passes every check at return. The builder removes the need to take that risk, and the unsafe surface names it, but the protocol cannot make it impossible without refusing pre-built events, which **Considered Alternatives** rejects.
 
-**Two more options, and a rule about their relation.** Every version now has seven options in its hash, and a change to any of their declared values reads as drift to every in-flight execution of that version, including changes that alter nothing an executor could observe. The one exception cuts the other way: a retry-delay function's logic is excluded from the hash, so a change there is never reported, and an author relying on drift to notice it will not. And a handler-level default is not hashed either, so a version that inherits an option can have it changed underneath it without drift; an author who wants the change seen declares the option on the version (**Options: three tiers, one rule**).
+**Two more options, and a rule about their relation.** Every version now has seven options in its hash, and a change to any of their declared values reads as drift to every in-flight execution of that version, including changes that alter nothing an executor could observe. The one exception cuts the other way: a retry-delay function's logic is excluded from the hash, so a change there is never reported, and an author relying on drift to notice it will not. And the handler level is not hashed either, so a version that inherits an option can have it changed underneath it without drift; an author who wants the change seen declares the option on the version (**Options**).
 
 **OpenTelemetry is named.** Mandating an observability API is a mild strain on Infrastructure Independence (**Invariants strained**); the ADR accepts it because the alternative is a workflow trace that fragments at every language boundary.
 
@@ -1565,28 +1575,28 @@ handler
         payments    com_payment_charge @ 1.0.0      a contract it may send to,
                                                     at exactly one version
 
-    options                                         handler-level defaults; all optional;
-                                                    same seven keys as a version's; not hashed
-        max_retry_attempts     5                    every version inherits this unless it says otherwise
+    options                                         handler level: all seven always present;
+                                                    the protocol default fills any the author omits;
+                                                    never hashed -- see Options
+        max_depth              10000                (default)
+        max_retry_attempts     5
+        retry_delay            f(event, record | null, attempt, max) → 200 × attempt
+                                                    record is null when called before a version is known
         run_timeout            10000
-        retry_delay            f(event, state | null, attempt, max) → 200 × attempt
-                                                    state is null when called for a fault
-                                                    raised before a version is known
+        execution_timeout      null                 (default) unbounded
+        collect                all                  (default)
+        handler_error_domain   none                 (default)
 
     version 1.0.0
         state                                       optional; omit for a stateless version
             order_id    string                      the author's schema for record.data,
             attempts    integer                     kept compatible once deployed
-        options                                     all optional; all validated at declaration;
-                                                    unset → the handler's value → the protocol default
-            max_depth              250              protocol default 10000
-            execution_timeout      86400000         protocol default null; never below the
-                                                    effective run_timeout, and null where that is null
-            collect                all              all | each; protocol default all
+        options                                     version level: every key optional;
+                                                    unset means inherit the handler's value
+            max_depth              250
+            execution_timeout      86400000         never below the resolved run_timeout
             handler_error_domain   "orders_failures"
-                                                    a value or a source; protocol default none
-                                                    max_retry_attempts, retry_delay and run_timeout
-                                                    are inherited from the handler above
+                                                    the other four are inherited from the handler above
         execute(ctx) → event | [event, ...] | nothing, or throw
 
     version 1.2.0
