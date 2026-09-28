@@ -327,14 +327,14 @@ This confronts what ADR-005 left here rather than paraphrasing it. ADR-005 says 
 
 The sources a request may name, and how each resolves, are the substance of the deferral. At minimum an implementation MUST offer:
 
-| Source | Resolves to |
-|---|---|
-| none | no domain |
-| the target contract | the `domain` of the contract the event is built from |
-| the self contract | the `domain` of this handler's own contract |
-| the delivered event | the `domain` of the event that caused this delivery |
+| Source | Identifier | Resolves to |
+|---|---|---|
+| none | `none` | no domain |
+| the target contract | `target_contract` | the `domain` of the contract the event is built from |
+| the self contract | `self_contract` | the `domain` of this handler's own contract |
+| the delivered event | `delivered_event` | the `domain` of the event that caused this delivery |
 
-A request naming a source whose value is `null` or absent resolves to no domain rather than failing, so a handler is never broken by context it did not receive. A resolved domain is always a plain value or absent — **a request MUST NOT reach the event**. The names an implementation gives these sources are API shape (ADR-004); the set and the resolution are not.
+A request naming a source whose value is `null` or absent resolves to no domain rather than failing, so a handler is never broken by context it did not receive. A resolved domain is always a plain value or absent — **a request MUST NOT reach the event**. How an implementation lets an executor or a declaration name these sources is API shape (ADR-004); the set, the resolution, and the **identifier** column are not. The identifier is the value that enters the `version_hash` when `handler_error_domain` is declared in source form (**The `version_hash` algorithm**), and it is fixed so that two languages declaring the same source hash the same.
 
 ADR-001 holds that `domain` is "`null` for traffic inside a lattice" and set non-null "by an emitter whose event must be fulfilled elsewhere". The default of absent preserves the first half; the request is how an emitter does the second.
 
