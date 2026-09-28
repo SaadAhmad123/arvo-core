@@ -1,6 +1,6 @@
 # ADR-006: ArvoEventHandler Protocol
 
-- **Status:** Accepted
+- **Status:** Proposed
 - **Date:** 2026-09-27
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)
@@ -606,7 +606,7 @@ An executor does not have to discover the limit by hitting it. The execution con
 
 #### What the caller hears
 
-Because a fault carries its abandonment pair (**Abandonment**), a depth fault is not silence. The fault is non-retryable, so a conformant mechanism gives up at once and, where the fault carries them, publishes the handler error event and commits the record at `failure` (**Required of infrastructure adapters**, obligation 3). The caller learns the work will not be done, in the one shape it is already obliged to handle, and the record says why. On a `max_depth_event_received` fault against an init delivery, the record half is `null` — no execution began — and only the event is published, exactly as for any other init fault.
+Because a fault carries its abandonment pair (**Abandonment**), a depth fault need not be silence. The fault is non-retryable, so a mechanism MUST NOT redeliver it; what it does instead is its own policy. Where it chooses to abandon, it publishes the handler error event and commits the record at `failure` together (**Required of infrastructure adapters**, obligation 3), and the caller learns the work will not be done in the one shape it is already obliged to handle, with the record saying why. On a `max_depth_event_received` fault against an init delivery, the record half is `null` — no execution began — and only the event is available, exactly as for any other init fault.
 
 The fault's `message`, and the `lifecycle_description` of the abandonment record where there is one, MUST state the limit in force, the depth at which the execution sat or the event arrived, and — on `max_depth_event_requested` — the type and would-be depth of each event in the rejected batch, offenders and non-offenders alike, because the batch was rejected whole and a diagnostic showing only part of it would misrepresent what happened.
 
@@ -702,12 +702,12 @@ A terminal record accepts no further delivery (**Entry validation**, step 9). `f
 
 **An executor MUST be able to mark its own execution `cancelled`**, through the **cancel** member of the execution context (**The execution context**), and doing so is terminal. It is how a cooperative wind-down records *why* an execution ended rather than leaving it indistinguishable from an ordinary completion (**Cancellation**).
 
-Marking cancelled does not excuse an execution from answering its caller. Cancelling is a reason to stop, not a way out of the protocol, and the protocol makes silence after a cancel impossible. The three ways a cancelling executor can leave are decided as follows:
+Marking cancelled does not excuse an execution from answering its caller. Cancelling is a reason to stop, not a way out of the protocol, and the protocol never lets a cancel end in silence of the handler's making. The three ways a cancelling executor can leave are decided as follows:
 
 | The executor marks cancelled and… | The handler |
 |---|---|
 | returns an own-`outputs` event | emits it; the record rests at `cancelled`, with the executor's reason in `lifecycle_description`. An explicit statement of why an execution ended outranks what is inferred from what it emitted. |
-| returns nothing, or only service emissions | raises a non-retryable execution fault, `execution_cancelled`. Nothing is emitted and no record is written by the handler. The fault carries the handler error event and the record at `failure` as its abandonment pair (**Abandonment**), with the executor's reason in the fault's `message` and the record's `lifecycle_description`, so the mechanism publishes and commits them at once and the caller hears. A service emission is refused here because a cancelled execution must not open new work. |
+| returns nothing, or only service emissions | raises a non-retryable execution fault, `execution_cancelled`. Nothing is emitted and no record is written by the handler. The fault carries the handler error event and the record at `failure` as its abandonment pair (**Abandonment**), with the executor's reason in the fault's `message` and the record's `lifecycle_description`, so a mechanism that abandons can tell the caller and record why. A service emission is refused here because a cancelled execution must not open new work. |
 | throws | the throw wins: the handler error event is emitted and the record rests at `error`, because a failure after a cancellation is still a failure and the caller should hear it as one. |
 
 An implementation SHOULD make the first row the easy path. The second exists so that a developer who forgets to answer is caught by the protocol rather than by a caller that waits forever, and it uses no machinery the fault does not already have. One consequence follows: the `cancelled` lifecycle appears in a store only where the execution also answered its caller, and an execution that cancelled without answering rests at `failure` with its reason preserved in `lifecycle_description`.
@@ -859,7 +859,7 @@ The handler is the party that applies this because it is the party that knows th
 
 **An exhausted execution ends at `failure`, and only the mechanism can put it there.** This needs stating because it is the one lifecycle no handler can reach under its own steam: a handler runs only when something delivers to it, and this is the case where nothing more will. A fault commits no record of its own, so the stored record still says `waiting` — and an execution abandoned after its retries are spent would otherwise be indistinguishable from one legitimately waiting on a slow service.
 
-On giving up, a mechanism MUST commit the fault's `abandonment_state` and publish its `abandonment_event`, where the fault carries them (**Abandonment**; **Required of infrastructure adapters**, obligation 3). `failure` is terminal, and no delivery to it is ever processed (**Entry validation**, step 9).
+Where a mechanism chooses to abandon, it commits the fault's `abandonment_state` and publishes its `abandonment_event` together, where the fault carries them (**Abandonment**; **Required of infrastructure adapters**, obligation 3). Whether to abandon, dead-letter, alert, or hold the fault for a human is the mechanism's own policy; the protocol requires only that it not retry. `failure` is terminal, and no delivery to it is ever processed (**Entry validation**, step 9).
 
 **Only the mechanism can put an execution there, but it never composes what it writes.** The record it commits and the event it sends were both built by the handler, on the attempt that failed, and carried on the fault against precisely this outcome — so the rule that model data originates in the handler holds without an exception here. What is genuinely the mechanism's, and only its, is the decision that no further attempt will be made. That is a decision no handler can reach, because a handler is entered only when something delivers to it and giving up is the case where nothing will.
 
@@ -876,7 +876,7 @@ Everything that depends on time passing or on nothing happening is outside what 
 - storing, interpreting and acting on the `retry` a fault carries, including whether to honour the delay at all;
 - following up on an execution resting at `waiting` whose responses have not arrived — the handler has no way to notice absence, and the model defines no deadline (ADR-000 defers timers);
 - persisting the record, publishing the events, and delivering them;
-- deciding when to stop, and acting on the abandonment pair at that moment.
+- deciding when to stop, what to do with a fault it will not retry, and whether to act on the abandonment pair.
 
 This ADR states what a handler produces and what it requires. Everything between one delivery and the next belongs to the mechanism, and is deliberately not divided further here.
 
@@ -923,11 +923,11 @@ The clock is measured from the init event's `time` — the delivered event's on 
 
 A handler runs only when an event is delivered, so it cannot watch an execution between deliveries. The bound is therefore enforced at the two moments the handler is present, entry and return, and **the check at either moment is how the bound is enforced, not what the bound means.**
 
-**On entry, at gate step 10** (**Entry validation**): where the version sets an execution timeout and the time from the init event to now is not below it, the delivery is a non-retryable execution fault, `execution_timeout`. It follows the duplicate and lifecycle checks deliberately: a redelivered event is discarded and a late event reaching a finished execution is refused for its lifecycle, so neither can abandon a record that has already concluded. It precedes the checks on the event itself because an execution past its bound has nothing further to do with the event, whatever it carries. It applies on an init delivery too: an init that sat undelivered longer than the version allows is refused on arrival rather than started late, and the caller hears why.
+**On entry, at gate step 10** (**Entry validation**): where the version sets an execution timeout and the time from the init event to now is not below it, the delivery is a non-retryable execution fault, `execution_timeout`. It follows the duplicate and lifecycle checks deliberately: a redelivered event is discarded and a late event reaching a finished execution is refused for its lifecycle, so neither can abandon a record that has already concluded. It precedes the checks on the event itself because an execution past its bound has nothing further to do with the event, whatever it carries. It applies on an init delivery too: an init that sat undelivered longer than the version allows is refused on arrival rather than started late, and the fault carries what a mechanism needs to tell the caller why.
 
 **On return, after the executor finishes**: where the version sets an execution timeout and the time from the init event to the moment of return is not below it, the return is a non-retryable execution fault, `execution_timeout`, and nothing the executor returned is emitted or written. This is what makes the bound a bound on the *end* of the execution rather than on its last entry. Without it, an execution entered a moment before its limit could run for the whole of a run timeout and emit its completion well beyond the bound, and the bound would have meant nothing. Depth is checked at the same two moments for the same reason (**Checked twice: on delivery, and on return**).
 
-Being non-retryable, the fault carries the abandonment pair (**Abandonment**): the handler error event and a record at `failure`, so a mechanism that gives up can publish and commit at once and the caller learns the process was abandoned for time. The fault's `message` and the record's `lifecycle_description` MUST state the limit in force, the init event's `time`, and the elapsed time as the handler measured it.
+Being non-retryable, the fault carries the abandonment pair (**Abandonment**): the handler error event and a record at `failure`, so a mechanism that chooses to abandon can publish and commit them together and the caller learns the process was abandoned for time. The fault's `message` and the record's `lifecycle_description` MUST state the limit in force, the init event's `time`, and the elapsed time as the handler measured it.
 
 #### Where both expire in one attempt
 
@@ -1145,9 +1145,9 @@ A fault never becomes an event and never writes a record. What it carries is a *
 
 #### Acted on only when a mechanism gives up
 
-The distinction from an ordinary emission is only *when*. **Neither is acted on when the fault is received.** They are acted on at exactly one moment: when a mechanism gives up and stops retrying (obligation 3). Publishing on an attempt that is then retried successfully would deliver a caller both a handler error event and a real completion for the same request, which is worse than the silence this exists to end.
+The distinction from an ordinary emission is only *when*. **Neither is acted on when the fault is received.** They MAY be acted on at exactly one moment: when a mechanism has decided it will not retry, and has chosen to abandon (obligation 3). Publishing on an attempt that is then retried successfully would deliver a caller both a handler error event and a real completion for the same request, which is worse than the silence this exists to end.
 
-At that moment, acting on them is a MUST rather than a mechanism's discretion. A mechanism's judgement belongs in *when it gives up* — its own budgets, its own dead-letter policy — and whether a stranded caller is ever told should not vary by deployment. A non-retryable fault makes the moment immediate: there is no retry to wait for, so a conformant mechanism acts on the pair on receipt.
+**Whether to abandon is the mechanism's decision, and this ADR does not make it.** A non-retryable fault, or an exhausted one, means one thing to a mechanism: it MUST NOT redeliver. What it does instead — abandon with the pair, dead-letter the fault for a human, alert and hold, discard — is policy that belongs to the deployment, because the mechanism knows things the handler cannot: whether a store outage is being repaired, whether a `record_unexpected` was its own redelivery rather than a defect, whether an operator would rather decide. The pair exists so that abandonment, when chosen, needs nothing composed; it does not exist to force the choice. What the protocol fixes is only that a mechanism which abandons MUST use the pair as handed, together, and MUST NOT author a substitute.
 
 #### The handler builds both, the mechanism composes neither
 
@@ -1261,7 +1261,7 @@ What the model provides is enough for an execution to stop itself and say so, an
 
 - **a way to notice.** The dependency factory receives the delivered event and the record (**Dependencies**), so it can consult whatever cancellation signal an application maintains — a flag in a store, a revoked token, a closed ticket — and hand the answer to the executor as part of its dependencies;
 - **a way to record it.** The **cancel** member of the execution context marks the execution `cancelled` with a reason, and `cancelled` is terminal (**Marking an execution `cancelled`**);
-- **a way to be sure the caller hears.** An execution that marks itself cancelled and does not answer its caller raises `execution_cancelled`, non-retryable, carrying the abandonment pair, so silence after a cancel is impossible.
+- **a way for the caller to be told.** An execution that marks itself cancelled and does not answer its caller raises `execution_cancelled`, non-retryable, carrying the abandonment pair, so a mechanism that abandons has the caller's answer ready and nothing to compose.
 
 Everything else — what the signal is, where it lives, who sets it, what an execution does on the way out — is built on those by whoever needs it.
 
@@ -1288,7 +1288,7 @@ Cooperative means the execution stops when it next runs and chooses to. Four lim
 - **It takes effect on the next delivery, not now.** An execution at `waiting` is cancelled only when a response arrives; one whose services never respond is never delivered to again and never reads the signal (**A service that never responds**). Where an application needs a bound on that, the execution timeout is the protocol's instrument (**Timeouts**): it ends the execution for time whether or not any signal was ever read.
 - **A response already in flight still arrives.** It reaches a record at `cancelled`, which is terminal, and is refused at gate step 9 as `lifecycle_terminal`. That refusal is a fault, and the mechanism handles it as one; it is not a defect in the cancelling execution.
 - **The executor decides what winding down means.** The protocol does not know which side effects were made or how to undo them. Compensation is expressed through events the contracts already permit, and where a contract permits none, there is none.
-- **The cancelling execution still answers.** Marking `cancelled` is a reason to stop, not a way out of the protocol, and the three outcomes under **Marking an execution `cancelled`** decide what the caller hears.
+- **The cancelling execution still answers.** Marking `cancelled` is a reason to stop, not a way out of the protocol, and the three outcomes under **Marking an execution `cancelled`** decide what reaches the caller, or what the mechanism is handed to send.
 
 ## Consequences
 
@@ -1304,7 +1304,7 @@ Cooperative means the execution stops when it next runs and chooses to. Four lim
 
 **Every failure has one of two shapes, and a mechanism never guesses.** A fault says on its face whether to retry and when; a handler error is an event the caller already handles. An adapter that reads `retry_safe` and `fault_kind` has all it needs, and never parses a message.
 
-**An abandoned execution still answers its caller and still records how it ended.** The fault carries both, built by the handler before it lost the ability to speak. The failure that most reliably strands a workflow — retries exhausted, a store gone, a depth or time bound crossed — now surfaces in the shape every caller already handles, and a mechanism composes nothing to make it so.
+**An abandoned execution can still answer its caller and record how it ended, with nothing composed by the mechanism.** The fault carries both, built by the handler before it lost the ability to speak. The failure that most reliably strands a workflow — retries exhausted, a store gone, a depth or time bound crossed — can surface in the shape every caller already handles, and the mechanism's only work is to commit and publish what it was handed. Whether it does is its policy; that it can, without inventing model data, is the gain.
 
 **Recursion and time are both bounded by default.** A version that says nothing gets a depth guard and a thirty-second run clock, so a runaway fan-out and a stuck executor both end as named faults with a caller told, rather than as a stack overflow or a process that never returns. A version that says more gets an execution clock, and its total lifetime is bounded too.
 
@@ -1314,7 +1314,7 @@ Cooperative means the execution stops when it next runs and chooses to. Four lim
 
 **Observability is uniform.** Every delivery is a span continuing the event's trace, and every executor reaches the same three OpenTelemetry objects through the context, so a workflow's trace joins up across suspensions and across implementations without an adapter for each backend.
 
-**Silence is impossible where it matters.** An execution cannot cancel without answering, cannot complete a sink version without resting at `success`, and cannot be abandoned without its caller hearing. `idle` remains, and because every legitimate way of returning nothing rests elsewhere, it is a reliable signal that something was forgotten.
+**Silence is never the handler's doing.** An execution cannot cancel without either answering or handing the mechanism the answer, cannot complete a sink version without resting at `success`, and cannot be abandoned without the caller's answer already built. Where a caller is left waiting, it is a mechanism's policy that left it, and a visible one. `idle` remains, and because every legitimate way of returning nothing rests elsewhere, it is a reliable signal that something was forgotten.
 
 ### Paid for
 
@@ -1384,9 +1384,11 @@ Considered, not chosen. It would let an executor say "I failed" and keep running
 
 Considered, not chosen. It looks simpler, since the mechanism is the party that knows abandonment has happened. But addressing a completion needs `to`, `initid`, `executionid`, `subject`, `category`, `dataschema` and a version, all of which are read off a record or an init event by rules this ADR spends a section on — so a mechanism composing one would be reimplementing **Addressing an emitted event**, and any drift between its version and the handler's would misroute a failure at the exact moment a workflow is already in trouble. Carrying a finished event keeps one implementation of the addressing rules and reduces the mechanism's new capability to publishing something it was handed.
 
-### Leaving abandonment publication to the mechanism's discretion
+### Mandating abandonment on every non-retryable fault
 
-Considered, not chosen. It reads as the more respectful division of labour, and a mechanism may well want to dead-letter or alert instead. It was rejected because it makes whether a stranded caller is ever told a property of the deployment rather than of the model, which is the divergence ADR-004 exists to prevent, arriving through mechanisms rather than through languages. A mechanism's discretion is preserved where it belongs: in deciding when to give up, and in whatever else it does alongside publishing.
+Considered, not chosen. A draft required a conformant mechanism to act on the abandonment pair the moment it received a non-retryable or exhausted fault, so that whether a stranded caller is told would be a property of the model rather than of the deployment. It is the more predictable rule, and ADR-004's concern about behaviour varying by deployment weighs in its favour.
+
+It was rejected because it makes the handler decide something only the mechanism can know. A `record_unexpected` on an init may be the mechanism's own redelivery, and publishing a handler error event for it tells the caller its work failed when the work is running. A store outage under `record_invalid` may be minutes from repair. A deployment may want every abandonment reviewed by a person. Under a mandate each of those produces a false or premature error event; under the chosen rule the handler builds the pair so that abandonment costs the mechanism nothing to compose, and the mechanism decides whether this fault is one to abandon on. What the protocol keeps is the part that must not vary: a fault that says no retry is never redelivered, and a mechanism that does abandon uses the pair as handed.
 
 ### Having the mechanism classify the delivery and resolve the record
 
@@ -1436,7 +1438,7 @@ This ADR amends the AAM membership list (ADR-000, *Arvo Application Model*) by e
 
 **It places the observability API inside the model, and leaves the backend outside.** The shape through which an executor reaches trace, log and metric — OpenTelemetry's span, logger and meter — is inside (**Observability**). Collection, retention and export remain outside, exactly where ADR-000 already lists them. The line is drawn at the API because that is where a workflow's trace would otherwise fragment.
 
-**It decides the Deferred Decision on cancellation, interruption and compensation by splitting it.** *Interruption* — one node stopping another — is placed outside the model, and Arvo defines nothing for it. *Compensation* is likewise outside: it happens through events a contract already permits and needs no primitive. What is inside is only what a durable record requires: the terminal `cancelled` lifecycle, `lifecycle_description` to say why, and the `execution_cancelled` fault that makes silence after a cancel impossible. The signal an application reads is not a model concept (**Cancellation**).
+**It decides the Deferred Decision on cancellation, interruption and compensation by splitting it.** *Interruption* — one node stopping another — is placed outside the model, and Arvo defines nothing for it. *Compensation* is likewise outside: it happens through events a contract already permits and needs no primitive. What is inside is only what a durable record requires: the terminal `cancelled` lifecycle, `lifecycle_description` to say why, and the `execution_cancelled` fault that hands a mechanism the caller's answer when an execution cancels without giving one. The signal an application reads is not a model concept (**Cancellation**).
 
 One item ADR-000 lists outside the model is touched and left there. "Retry counts, batching, and other adapter-internal behaviour" remain the mechanism's. What this ADR adds is that the *handler* states a verdict — retry safe or not, and a suggested delay — and the mechanism MUST NOT continue past a fault that says no retry is in prospect (**Exhaustion ends retrying**). How many times it actually tries within that verdict, and whether it honours the delay, stay its own.
 
@@ -1469,7 +1471,7 @@ Five obligations. Each is a behaviour, and how a mechanism achieves it is the me
 
 2. **The mechanism MUST supply the state function, and MUST answer it live.** For every delivery it gives the handler an operation that takes `execution_id`, the delivery's telemetry and the attempt number, and yields absence or a parsed JSON object (**Resolving the existing execution**). The operation MUST read the store on every call rather than yield a value captured earlier; it MUST NOT be given the event or the classification; it MUST NOT branch on anything but the key; and it MUST validate nothing beyond parsing. Whether what it yields is a record, belongs to this event, or is still resumable is the handler's to judge. A mechanism that classifies, derives, or filters on the handler's behalf has taken a decision this ADR gives the handler, and is non-conformant even where it happens to be right.
 
-3. **On abandoning an execution, a mechanism MUST commit the fault's `abandonment_state` and publish its `abandonment_event`.** Where a mechanism gives up — on a fault that is not retry safe, or on one whose attempts are spent — it acts on whichever of the two the fault carries, together, under obligation 1. Both happen at that moment and at no earlier one: publishing on an attempt that then succeeds would hand a caller both an error and a real completion for the same request. Without the record, an abandoned execution is indistinguishable from one still waiting. Without the event, the caller waits forever on an execution already given up on. The mechanism authors neither: only the handler could have addressed the event or written the record's own version and state, so it is handed both finished rather than asked to compose them (**Abandonment**).
+3. **A mechanism that abandons an execution MUST do so with the fault's `abandonment_state` and `abandonment_event`, together, and with nothing of its own.** Whether to abandon is the mechanism's policy: on a fault that is not retry safe, or one whose attempts are spent, it MUST NOT redeliver, and beyond that it may abandon, dead-letter, alert, or hold, as its deployment requires (**Abandonment**). Where it does abandon, it commits whichever of the two the fault carries under obligation 1, and at no earlier moment: publishing on an attempt that then succeeds would hand a caller both an error and a real completion for the same request. Without the record, an abandoned execution is indistinguishable from one still waiting; without the event, the caller waits on an execution already given up on; so a mechanism that abandons does both or neither. It authors neither: only the handler could have addressed the event or written the record's own version and state, so it is handed both finished and MUST NOT compose a substitute.
 
 4. **Every retry MUST be a fresh delivery.** The mechanism re-invokes the handler with the same event and the incremented attempt number, and the handler re-reads the record through the state function, which obligation 2 keeps live. The mechanism MUST NOT cache behind the state function, MUST re-resolve dependencies through the factory where one is supplied, and MUST NOT continue past a fault whose `retry` is `null` (**Retry**). Only the attempt number carries forward, which is the one input a retry genuinely inherits.
 
@@ -1580,7 +1582,7 @@ execute(ctx):
     throw ctx.fault(reason, retry_safe = true)
                             an execution fault, for a delivery that cannot proceed;
                             the caller hears nothing while retries remain, and
-                            afterwards only through the abandonment event
+                            afterwards only if the mechanism abandons with the pair
 
     to report that the work failed, just fail: any error escaping the executor
     becomes the handler error event, which the caller already handles
@@ -1613,9 +1615,10 @@ execute(
     → discarded                          already seen; nothing to do, nothing wrong
     → fault    an ArvoHandlerFault       nothing is committed or emitted now.
                                          read retry_safe and retry; redeliver with
-                                         attempt + 1, or give up. on giving up,
-                                         commit abandonment_state and publish
-                                         abandonment_event, together, where present
+                                         attempt + 1, or do not. what happens to a
+                                         fault you will not retry is your policy; if
+                                         you abandon, commit abandonment_state and
+                                         publish abandonment_event together, as handed
 ```
 
 The asymmetry in that return is the failure model in one place. A handler error comes back as `produced`, because it is a concluded execution that happens to have emitted an error event. Only a fault comes back as `fault`, and only a fault is a mechanism's problem.
