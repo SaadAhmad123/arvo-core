@@ -712,7 +712,7 @@ Marking cancelled does not excuse an execution from answering its caller. Cancel
 | returns nothing, or only service emissions | raises a non-retryable execution fault, `execution_cancelled`. Nothing is emitted and no record is written by the handler. The fault carries the handler error event and the record at `failure` as its abandonment pair (**Abandonment**), with the executor's reason in the fault's `message` and the record's `lifecycle_description`, so a mechanism that abandons can tell the caller and record why. A service emission is refused here because a cancelled execution must not open new work. |
 | throws | the throw wins: the handler error event is emitted and the record rests at `error`, because a failure after a cancellation is still a failure and the caller should hear it as one. |
 
-An implementation SHOULD make the first row the easy path. The second exists so that a developer who forgets to answer is caught by the protocol rather than by a caller that waits forever, and it uses no machinery the fault does not already have. One consequence follows: the `cancelled` lifecycle appears in a store only where the execution also answered its caller, and an execution that cancelled without answering rests at `failure` with its reason preserved in `lifecycle_description`.
+An implementation SHOULD make the first row the easy path. The second exists so that a developer who forgets to answer is caught by the protocol rather than by a caller that waits forever, and it uses no machinery the fault does not already have. One consequence follows: the `cancelled` lifecycle appears in a store only where the execution also answered its caller. An execution that cancelled without answering rests at `failure`, with its reason preserved in `lifecycle_description`, where the mechanism abandons it, and stays as the fault found it where the mechanism does something else.
 
 #### `lifecycle_description`
 
@@ -782,7 +782,7 @@ The state schema is enforced on every entry, at gate step 5, against the schema 
 
 **Once a version has been deployed and has records in a store, any change to its declared state schema MUST be compatible with the `data` those records already hold.** A new field MUST be optional, with a defined meaning when absent. A field MUST NOT be removed and its meaning MUST NOT change. A constraint MUST NOT be tightened. These are the same rules the record envelope holds itself to under **How this record may change later**, applied to the one part of the record the author controls.
 
-The consequence of breaking them is exact. Every in-flight execution of that version fails step 5 on its next delivery with `record_invalid`, which is non-retryable, so each is abandoned and its caller told the work will not be done. Nothing can rescue them: migration is prohibited (**A record belongs to one version for its whole life**), and drift detection does not help, because drift is reported to the executor and the record has already been rejected before the executor runs.
+The consequence of breaking them is exact. Every in-flight execution of that version fails step 5 on its next delivery with `record_invalid`, which is non-retryable, so none is ever redelivered, and a mechanism that abandons them tells each caller the work will not be done. Nothing can rescue them: migration is prohibited (**A record belongs to one version for its whole life**), and drift detection does not help, because drift is reported to the executor and the record has already been rejected before the executor runs.
 
 A change that cannot meet these rules is a new version. It is declared alongside the old one, the old one is drained, and then the old one is removed — the same story as any other version change, and the only one the protocol supports.
 
@@ -857,9 +857,9 @@ In its function form `retry delay` **MUST NOT be able to fail**. Where it does �
 
 The handler is the party that applies this because it is the party that knows the version's limit; the mechanism knows only which attempt it is making. A mechanism MAY stop earlier than the handler tells it to — its own budgets are its own — but it MUST NOT continue past a fault that says no retry is in prospect.
 
-#### An exhausted execution ends at `failure`
+#### Only the mechanism can bring an execution to `failure`
 
-**An exhausted execution ends at `failure`, and only the mechanism can put it there.** This needs stating because it is the one lifecycle no handler can reach under its own steam: a handler runs only when something delivers to it, and this is the case where nothing more will. A fault commits no record of its own, so the stored record still says `waiting` — and an execution abandoned after its retries are spent would otherwise be indistinguishable from one legitimately waiting on a slow service.
+**`failure` is the one lifecycle only the mechanism can reach, and it reaches it by choosing to abandon.** This needs stating because no handler gets there under its own steam: a handler runs only when something delivers to it, and exhaustion is the case where nothing more will. A fault commits no record of its own, so the stored record still says `waiting`. A mechanism that abandons an exhausted execution commits the `failure` record so that it is distinguishable from one legitimately waiting on a slow service; a mechanism that does not abandon leaves the record at `waiting`, and owns the fact that the two now look alike.
 
 Where a mechanism chooses to abandon, it commits the fault's `abandonment_state` and publishes its `abandonment_event` together, where the fault carries them (**Abandonment**; **Required of infrastructure adapters**, obligation 3). Whether to abandon, dead-letter, alert, or hold the fault for a human is the mechanism's own policy; the protocol requires only that it not retry. `failure` is terminal, and no delivery to it is ever processed (**Entry validation**, step 9).
 
@@ -1102,7 +1102,7 @@ What is *not* normative is the shape of the object in a language's own terms: wh
 
 #### `attempt` and `timestamp`
 
-`attempt` and `timestamp` sit on the fault rather than inside `retry`, because both are true whether or not another attempt is coming, while everything inside `retry` is only meaningful if one is. Nulling them alongside the forward-looking figures would lose the attempt count at exactly the moment it is most worth having — the fault that exhausts a retry budget and abandons the execution. Their units, and those of the `retry` block, are pinned under **Units: milliseconds throughout**.
+`attempt` and `timestamp` sit on the fault rather than inside `retry`, because both are true whether or not another attempt is coming, while everything inside `retry` is only meaningful if one is. Nulling them alongside the forward-looking figures would lose the attempt count at exactly the moment it is most worth having — the fault that exhausts a retry budget, on which a mechanism decides whether to abandon. Their units, and those of the `retry` block, are pinned under **Units: milliseconds throughout**.
 
 #### The `fault_kind` vocabulary and retry verdicts
 
@@ -1245,7 +1245,7 @@ Three rules follow, and they are the whole of what the protocol asks:
 
 #### A failing factory is a retry-safe fault
 
-**A factory that fails is an execution fault, `dependency_resolution_failed`, and it is retry safe.** However the language signals the failure, the handler MUST NOT catch and reinterpret it: it surfaces as a fault with the failure rendered into `cause`, and nothing is emitted or written. It is retry safe because constructing a dependency reaches outside the handler — a pool that is exhausted now, a service that is restarting — and what is outside may answer differently a moment later. It is, with the state function, one of the two entry-path faults with that verdict (**The `fault_kind` vocabulary and retry verdicts**), and for the same reason. Like every retry-safe fault it is subject to exhaustion, and on a followup it carries the abandonment pair, so a dependency that never comes back ends the execution at `failure` with the cause on record rather than leaving it at `waiting` forever.
+**A factory that fails is an execution fault, `dependency_resolution_failed`, and it is retry safe.** However the language signals the failure, the handler MUST NOT catch and reinterpret it: it surfaces as a fault with the failure rendered into `cause`, and nothing is emitted or written. It is retry safe because constructing a dependency reaches outside the handler — a pool that is exhausted now, a service that is restarting — and what is outside may answer differently a moment later. It is, with the state function, one of the two entry-path faults with that verdict (**The `fault_kind` vocabulary and retry verdicts**), and for the same reason. Like every retry-safe fault it is subject to exhaustion, and on a followup it carries the abandonment pair, so a mechanism facing a dependency that never comes back can end the execution at `failure` with the cause on record rather than leave it at `waiting` forever.
 
 The factory is not under the run clock (**Timeouts**): the run clock bounds the executor's code, and a factory that hangs is diagnosed as a dependency failure, not as a stuck executor. An implementation MAY bound the factory on its own account, and where it does, expiry is this same fault.
 
@@ -1336,7 +1336,7 @@ Cooperative means the execution stops when it next runs and chooses to. Four lim
 
 **Eager hydration costs every stored event on every delivery.** A handler awaiting many responses pays that repeatedly, and the ADR chooses it so that a corrupt record fails once at entry with its cause named.
 
-**Removing a version strands its executions, by design.** There is no migration path, so deployment acquires a drain step it did not previously have, and an operator who skips it turns every in-flight execution of that version into a `failure` on its next delivery.
+**Removing a version strands its executions, by design.** There is no migration path, so deployment acquires a drain step it did not previously have, and an operator who skips it leaves every in-flight execution of that version unresumable, faulting non-retryably on its next delivery, to be abandoned or held as the mechanism's policy decides.
 
 **A state schema, once deployed, is a contract with the store.** Its author must keep every change compatible with the `data` already written, or take the same drain-and-remove path as any other breaking change. The protocol cannot check this for them.
 
