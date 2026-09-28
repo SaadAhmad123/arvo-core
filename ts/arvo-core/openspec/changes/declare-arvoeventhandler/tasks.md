@@ -37,7 +37,8 @@
 - [ ] 4a.1 Add `src/ArvoEventHandler/types/setup.ts`: `ArvoEventHandlerSetupParam` holding contract, services, options and `types`, and `ArvoDeclaredVersions` recording what a chain has accumulated.
 - [ ] 4a.2 Add `src/ArvoEventHandler/setup.ts` with `ArvoEventHandlerSetup`. `handler(version, declaration)` returns a new setup carrying that version and mutates nothing, so a chain in progress cannot be shared by accident.
 - [ ] 4a.3 Accept both forms at `handler`: a declaration object, and the executor alone. Normalize the shorthand once here so nothing downstream handles two shapes.
-- [ ] 4a.4 Add `src/ArvoEventHandler/types/infer.ts`: `InferArvoHandlerVersion<Setup, V, S>` and `InferArvoHandlerExecutor<Setup, V, S>`, both reading the setup's own type. The schema argument is optional, and where it is absent `state` is typed `never` so a schema declared without one is a compile error rather than a silent loss of typing. Probe that an annotation built from them types `ctx`, and that the `never` case reports where a reader can act on it, before writing the TSDoc.
+- [ ] 4a.4 Add `src/factories/createArvoEventHandlerVersion.ts`, taking the setup, the version, and what `handler` takes inline. It validates nothing and has no `tryCreate` twin. Probe that a version created this way types `ctx` exactly as the inline form does, since that is the whole reason it exists.
+- [ ] 4a.5 Give `handler` its second overload, taking a created version alone and reading the version off it.
 
 ## 5. The class
 
@@ -63,7 +64,7 @@
 - [ ] 7.7 Add `tests/ArvoEventHandler/timeouts.spec.ts`: an execution timeout below a run timeout refused, the two halves declared at different levels refused, a null run timeout with a bounded execution timeout refused, and the legal cases — both null, execution above run, and the two equal.
 - [ ] 7.8 Add `tests/ArvoEventHandler/errors.spec.ts`: two unrelated rules reported together, a non-contract reported alone and marked blocking, every issue carrying a position naming the version and option where one applies, and each option domain rejected individually rather than by a representative sample, per `project.md` — *Testing*.
 - [ ] 7.9 Add `tests/ArvoEventHandler/build.spec.ts`: `build` and `tryBuild` agreeing on a valid declaration, `tryBuild` reporting a failure as `Err` with the same issues `build` throws, an unrelated error propagating out of `tryBuild` unconverted, both entry points producing the same handler, and a chain in progress left unchanged by a further `handler` call.
-- [ ] 7.9a Add `tests/ArvoEventHandler/standalone.spec.ts`: a version declared through `InferArvoHandlerVersion` and one through `InferArvoHandlerExecutor`, each assembled into a chain and each behaving as the inline form does.
+- [ ] 7.9a Add `tests/ArvoEventHandler/standalone.spec.ts`: a version created through `createArvoEventHandlerVersion` with a state schema and one without, each assembled through the single-argument `handler` overload, each behaving exactly as the inline form does, and a created version for an undeclared version refused at `build` like any other.
 - [ ] 7.10 Add `tests/ArvoEventHandler/emittable.spec.ts`: the set for a version, two versions differing while sharing every service type, and a version declaring no outputs.
 
 ## 8. Finishing

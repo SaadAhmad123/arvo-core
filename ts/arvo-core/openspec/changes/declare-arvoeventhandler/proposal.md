@@ -29,7 +29,7 @@ The order is forced by dependency, not preference: the context (4) reads the rec
 
 - **`ArvoEventHandler`'s constructor is not public.** With a terminal `build` there is one way to declare a handler, and the constructor could not validate anything anyway: it never sees the versions. It holds the validation and `tryBuild` is derived from it, per `project.md` — *Result types*.
 
-- **Two helpers type a version written away from the chain**, `InferArvoHandlerVersion` and `InferArvoHandlerExecutor`, so a handler with several substantial versions need not be one file.
+- **`createArvoEventHandlerVersion(setup, version, declaration)` declares a version away from the chain**, taking exactly what `handler` takes inline, so a handler with several substantial versions need not be one file.
 
 - **The `tryX`/`X` pair is at the end of the chain**, `tryBuild` and `build`. Nothing earlier can fail, so nothing earlier returns a `Result`.
 
@@ -80,10 +80,14 @@ class ArvoEventHandlerSetup<
   H extends ArvoMechanismHooks,
   Declared extends ArvoDeclaredVersions = {},   // what has been declared so far
 > {
-  /** Declares one version. Returns a new setup carrying it; nothing is mutated. */
+  /** Declares one version inline. Returns a new setup carrying it; nothing is mutated. */
   handler<V extends keyof M & ArvoSemanticVersion, S extends z.$ZodObject | undefined = undefined>(
     version: V,
     declaration: ArvoVersionDeclaration<T, M, V, X, S, D, H> | ArvoEventHandlerExecutor<T, M, V, X, undefined, D, H>,
+  ): ArvoEventHandlerSetup<T, M, X, D, H, Declared & Record<V, S>>;
+  /** Adds a version made by `createArvoEventHandlerVersion`, which carries its own version. */
+  handler<V extends keyof M & ArvoSemanticVersion, S extends z.$ZodObject | undefined>(
+    created: ArvoCreatedVersion<T, M, V, X, S, D, H>,
   ): ArvoEventHandlerSetup<T, M, X, D, H, Declared & Record<V, S>>;
 
   /** Runs every rule and reports each one broken, or gives back the handler. */
@@ -127,54 +131,43 @@ call on a type-level accumulator was considered and is recorded as rejected in `
 
 ## Writing a version somewhere else
 
-A handler with several substantial versions should not be one file. Two helpers type a version
-written away from the chain, and both take the setup as their first argument, so everything the
-context needs is already known.
+A handler with several substantial versions should not be one file. `createArvoEventHandlerVersion`
+takes the setup, the version, and exactly what `handler` takes inline, so a version can be
+declared anywhere and assembled later.
 
 ```ts
 // one file
 export const setup = setupArvoEventHandler({ contract: orderContract, services, types });
-export const orderState = z.object({ orderId: z.string() });
 
 // another file, fully typed with no chain in sight
-export const v100: InferArvoHandlerVersion<typeof setup, '1.0.0', typeof orderState> = {
-  state: orderState,
+export const v100 = createArvoEventHandlerVersion(setup, '1.0.0', {
+  state: z.object({ orderId: z.string() }),
   options: { maxDepth: 250 },
   execute: async (ctx) => { ctx.setState({ orderId: ctx.event.data.items[0] }) },
-};
+});
 
-// a version that declares no schema. The third argument is optional and omitted here.
-export const v110: InferArvoHandlerVersion<typeof setup, '1.1.0'> = {
+export const v110 = createArvoEventHandlerVersion(setup, '1.1.0', {
   execute: async (ctx) => { ctx.event.data.rush },
-};
+});
 
-// just the executor, where a version is only that
-export const v120: InferArvoHandlerExecutor<typeof setup, '1.2.0'> = async (ctx) => {};
+// a version that is only an executor
+export const v120 = createArvoEventHandlerVersion(setup, '1.2.0', async (ctx) => {});
 
-// assembly
-const handler = setup.handler('1.0.0', v100).handler('1.1.0', v110).handler('1.2.0', v120).build();
+// assembly. A created version knows which version it is, so it is named once overall.
+const handler = setup.handler(v100).handler(v110).handler(v120).build();
 ```
 
-An annotation is resolved before the value it types, so `ctx` is typed from the annotation
-rather than from a sibling key, and the circularity that forces the chain does not arise.
+**It is a function call, which is why it works.** The state schema is settled within the call
+before the executor is checked, exactly as it is inline. The schema is written once, inside the
+declaration it belongs to, and nothing has to be repeated in an annotation.
 
-**Omitting the third argument forbids declaring a schema**, rather than quietly ignoring one:
+**No `tryCreate` twin.** Creating a version cannot fail, because nothing is validated until
+`build`. Per `project.md` — *Result types*, which of the two a function is gets decided before
+it is written, and this one has no failure channel.
 
-```ts
-const bad: InferArvoHandlerVersion<typeof setup, '1.1.0'> = {
-  state: orderState,   // does not compile: the annotation was not told about a schema
-  execute: async (ctx) => {},
-};
-```
-
-Without that, forgetting `typeof orderState` in the annotation would leave the schema declared
-and the executor's state untyped, with nothing to notice it. Untyped state stays reachable
-either way — a version with no schema has `state` as any JSON object — so the rule costs a
-version nothing except the requirement to say what it is doing.
-
-The one cost, and it applies only to a version that declares a schema this way: the schema is
-named twice, once in the annotation and once as the property. Declared inline through `handler`
-it is named once. Both forms are supported and neither is preferred by the protocol.
+**`handler` therefore takes two shapes**: a version and a declaration, for declaring inline, or
+a created version on its own. They are the same declaration reached two ways, and the second
+carries the version it was created with.
 
 ## What an executor will receive
 
@@ -528,15 +521,16 @@ None. `arvo-contract` is read and not changed — a handler names a contract and
 **Affected code**
 
 - `src/ArvoEventHandler/index.ts` (new) — the class, its constructor not exported for use
-- `src/ArvoEventHandler/types/` (new) — one module per group, no barrel: `schema.ts`, `supplied.ts`, `options.ts`, `services.ts`, `context.ts`, `executor.ts`, `declaration.ts`, `infer.ts`
+- `src/ArvoEventHandler/types/` (new) — one module per group, no barrel: `schema.ts`, `supplied.ts`, `options.ts`, `services.ts`, `context.ts`, `executor.ts`, `declaration.ts`, `setup.ts`
 - `src/ArvoEventHandler/setup.ts` (new) — the setup, its `handler` method, and `build`/`tryBuild`
 - `src/ArvoEventHandler/options.ts` (new, internal) — the seven defaults, and version-then-handler resolution. Not exported.
 - `src/ArvoEventHandler/declaration.ts` (new) — the rules that reject a declaration
 - `src/ArvoEventHandler/errors.ts` (new) — `ArvoEventHandlerValidationError`
 - `src/factories/setupArvoEventHandler.ts` (new) — the free function delegating to `ArvoEventHandler.setup`
+- `src/factories/createArvoEventHandlerVersion.ts` (new) — a version declared away from the chain
 - `src/index.ts` — new public exports
 - `tests/ArvoEventHandler/` (new) — mirroring the modules above
-- `ts/sandbox/src/playground.ts` — a section declaring a handler through the chain, one version written standalone through `InferArvoHandlerVersion`, and a refused declaration
+- `ts/sandbox/src/playground.ts` — a section declaring a handler through the chain, one version written standalone through `createArvoEventHandlerVersion`, and a refused declaration
 
 **Dependencies**
 

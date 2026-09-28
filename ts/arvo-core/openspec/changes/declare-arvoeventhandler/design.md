@@ -56,13 +56,17 @@ It is the fiddliest type in the design and it buys the least: a missing version 
 
 *And the constructor is not among them.* `new ArvoEventHandler(...)` is not public. With a terminal `build` it would be a second way to declare, and it could not validate anything, because a constructor taking only the setup has no versions to check. It holds the validation and is called by `tryBuild`, which is the direction `project.md` — *Result types* requires for a class.
 
-### Writing a version away from the chain
+### Writing a version away from the chain is a function, not a type
 
-`InferArvoHandlerVersion<Setup, V, S?>` and `InferArvoHandlerExecutor<Setup, V, S?>` read the setup's own type and give back exactly what that version may be declared as. A type annotation is resolved before the value it types, so the circularity that forces the chain does not arise, and a version can live in its own file with its context fully typed.
+`createArvoEventHandlerVersion(setup, version, declaration)` takes the setup, the version, and exactly what `handler` takes inline. It is a function call, so the state schema is settled within the call before the executor is checked, which is the same reason the chain works at all.
 
-*The third argument is optional, and omitting it forbids a schema rather than ignoring one.* Where it is absent the helper types `state` as `never`, so writing `state: schema` without telling the annotation is a compile error. The alternative — accepting the schema and typing the executor against nothing — loses type safety silently, and the mistake it guards against is forgetting one type argument while writing the property right below it.
+*An annotation was tried first and is worse.* `InferArvoHandlerVersion<typeof setup, V, S>` also types `ctx` correctly, because an annotation is resolved before the value it types. But its schema argument is a type, so the schema has to be named twice — once in the annotation, once as the property — and forgetting the argument silently leaves the executor untyped, which then needs a `never` guard to make safe. The function has none of that: one argument list, the schema written once inside it, and nothing to forget.
 
-*The one asymmetry, and it is inherent.* A version declaring a schema this way names it twice, once in the annotation's third argument and once as the property, because an annotation cannot read a value it is about to type. Declared inline through `handler` the schema is named once. Both are supported; neither is the protocol's preference, and the TSDoc says so rather than implying the inline form is the real one.
+*Which is why only one ships.* Both forms working would be two ways to declare one thing, and the function is better in every case found.
+
+*No `tryCreate` twin.* Creating a version cannot fail. Nothing is validated until `build`, so there is no failure channel to report, and `project.md` — *Result types* asks which of the two a function is before it is written rather than pairing everything by reflex.
+
+*And `handler` takes two shapes.* A version and a declaration, or a created version alone. The second carries the version it was created with, so assembly names it once overall. Two overloads of one method rather than two methods, because they are the same declaration reached two ways.
 
 ### The context is sketched now and built in change 4, and that is why the generics land here
 
