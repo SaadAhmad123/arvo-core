@@ -627,31 +627,31 @@ The fault's `message`, and the `lifecycle_description` of the abandonment record
 
 #### One record, representable as JSON
 
-An execution's entire memory is one record. It MUST be representable as JSON, so that no mechanism has to understand any language's object model to store it, and it MUST carry the fields below under these names. The names are normative — the record is a durable format, and a record written by one language MUST be readable by another (ADR-004). A mechanism stores and returns it; it never authors one (**Resolving the existing execution**).
+An execution's entire memory is one record. It MUST be representable as JSON, so that no mechanism has to understand any language's object model to store it, and it MUST carry the fields below under these names. The **Type** column gives each field's JSON shape, and is as normative as the names: a record whose field holds a value of another shape is `record_invalid` at gate step 5. The names are normative — the record is a durable format, and a record written by one language MUST be readable by another (ADR-004). A mechanism stores and returns it; it never authors one (**Resolving the existing execution**).
 
 #### The fields
 
-| Field | Meaning |
-|---|---|
-| `record_format_version` | The version of this record envelope, as a `MAJOR.MINOR.PATCH` string. Under this ADR it is exactly `1.0.0`. Set by the handler on every record it writes (**`record_format_version`**). |
-| `subject` | The workflow. Grouping key. |
-| `execution_id` | This execution. Record key. |
-| `parent_execution_id` | The execution that caused this one. |
-| `depth` | This execution's nesting level, from the init event that opened it. |
-| `source` | The self contract `type` this execution belongs to, and the `source` of every event it emits. |
-| `version` | The self contract version whose executor owns this execution. |
-| `version_hash` | A hash of this version's declaration as it stood at the last delivery that wrote the record, so that drift in the handler's implementation since then can be detected on the next (**`version_hash` and implementation drift**). |
-| `cas_version` | Non-negative integer. **`0` on the first record of an execution**, the one an init delivery produces; on every later record, **exactly one greater than the record the delivery read**, including the `abandonment_state` a fault prepares against being given up on (**Abandonment**). A mechanism commits records but never authors one, so it never sets or increments this itself. Exists so a mechanism can compare-and-swap (**Required of infrastructure adapters**, obligation 5). |
-| `lifecycle` | `idle`, `waiting`, `success`, `error`, `cancelled`, or `failure`. |
-| `lifecycle_description` | Free text explaining how the execution reached its current `lifecycle`, or `null`. |
-| `event_ids` | Every event the execution has touched, each as an `id` and a `direction` of `received` or `emitted`, relative to this handler. |
-| `init_event_id` | The `id` of the init event. |
-| `init_event_source` | The `source` of the init event — the caller a completion returns to. |
-| `init_event` | The event that began the execution. |
-| `triggering_event` | The event that caused the most recent delivery. |
-| `in_flight_event_map` | Keyed by the `id` of each event emitted to a service in the current round. The value is the collected response, or `null` while outstanding — the key MUST be present either way, because the key set is what the execution is waiting for. |
-| `contracts` | The handler's `self` and `services` contracts, in their canonical form (ADR-005). Carried for a reader's benefit only — nothing in execution consults it. |
-| `data` | The executor's own business state, governed by the schema that executor declared, or `null` where none is declared or nothing has been written. |
+| Field | Type | Meaning |
+|---|---|---|
+| `record_format_version` | string, `MAJOR.MINOR.PATCH` | The version of this record envelope, as a `MAJOR.MINOR.PATCH` string. Under this ADR it is exactly `1.0.0`. Set by the handler on every record it writes (**`record_format_version`**). |
+| `subject` | string | The workflow. Grouping key. |
+| `execution_id` | string, 64 lowercase hex | This execution. Record key. |
+| `parent_execution_id` | string; never `null` — on a root init it equals `subject` | The execution that caused this one. |
+| `depth` | integer ≥ 0 | This execution's nesting level, from the init event that opened it. |
+| `source` | string | The self contract `type` this execution belongs to, and the `source` of every event it emits. |
+| `version` | string, a semver the self contract declares | The self contract version whose executor owns this execution. |
+| `version_hash` | string, 64 lowercase hex | A hash of this version's declaration as it stood at the last delivery that wrote the record, so that drift in the handler's implementation since then can be detected on the next (**`version_hash` and implementation drift**). |
+| `cas_version` | integer ≥ 0 | Non-negative integer. **`0` on the first record of an execution**, the one an init delivery produces; on every later record, **exactly one greater than the record the delivery read**, including the `abandonment_state` a fault prepares against being given up on (**Abandonment**). A mechanism commits records but never authors one, so it never sets or increments this itself. Exists so a mechanism can compare-and-swap (**Required of infrastructure adapters**, obligation 5). |
+| `lifecycle` | `idle` \| `waiting` \| `success` \| `error` \| `cancelled` \| `failure` | `idle`, `waiting`, `success`, `error`, `cancelled`, or `failure`. |
+| `lifecycle_description` | string \| `null` | Free text explaining how the execution reached its current `lifecycle`, or `null`. |
+| `event_ids` | array of `{ id: string, direction: "received" \| "emitted" }` | Every event the execution has touched, each as an `id` and a `direction` of `received` or `emitted`, relative to this handler. |
+| `init_event_id` | string | The `id` of the init event. |
+| `init_event_source` | string | The `source` of the init event — the caller a completion returns to. |
+| `init_event` | ArvoEvent as JSON | The event that began the execution. |
+| `triggering_event` | ArvoEvent as JSON | The event that caused the most recent delivery. |
+| `in_flight_event_map` | object: emitted event `id` string → ArvoEvent as JSON \| `null` | Keyed by the `id` of each event emitted to a service in the current round. The value is the collected response, or `null` while outstanding — the key MUST be present either way, because the key set is what the execution is waiting for. |
+| `contracts` | object: `{ self: canonical contract, services: canonical contract[] }` | The handler's `self` and `services` contracts, in their canonical form (ADR-005). Carried for a reader's benefit only — nothing in execution consults it. |
+| `data` | JSON value satisfying the declared schema \| `null` | The executor's own business state, governed by the schema that executor declared, or `null` where none is declared or nothing has been written. |
 
 `execution_id` identifies a record uniquely and `subject` groups the records of one workflow; a mechanism MAY use them as its record and grouping keys, and both are inside the record so that it is self-describing.
 
