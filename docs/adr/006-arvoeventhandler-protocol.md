@@ -1185,7 +1185,7 @@ The distinction from an ordinary emission is only *when*. **Neither is acted on 
 
 #### The handler builds both, the mechanism composes neither
 
-This is the point of carrying them. A mechanism gains no ability to construct an event and no ability to author a record — it commits one and sends the other, exactly as it does for a delivery that succeeded. It is also why the event must be complete, `id` included, rather than a recipe: should a mechanism crash between publishing and committing and then publish again, the caller's gate discards the second copy at step 8 as already seen, where a regenerated event would arrive as a second, distinct error.
+This is the point of carrying them. A mechanism gains no ability to construct an event and no ability to author a record — it commits one and sends the other, exactly as it does for a delivery that succeeded. It is also why the event must be complete, `id` included, rather than a recipe: should a mechanism commit the pair, publish the event, and crash before it has recorded that the event was sent, it will publish the same committed event again on recovery (obligation 1), and the caller's gate discards the second copy at step 8 as already seen — where a regenerated event would arrive as a second, distinct error.
 
 #### `abandonment_state`
 
