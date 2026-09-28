@@ -1332,7 +1332,7 @@ Cooperative means the execution stops when it next runs and chooses to. Four lim
 
 **The capability set is closed and known before anything runs.** A mechanism can determine what a handler may emit from its declaration, a type system can reject an impermissible emission before deployment, and a declaration that cannot work — a version without an executor, a type collision, two versions of one service, an execution timeout shorter than a run timeout — is refused before any event exists.
 
-**Every failure has one of two shapes, and a mechanism never guesses.** A fault says on its face whether to retry and when; a handler error is an event the caller already handles. An adapter that reads `retry_safe` and `fault_kind` has all it needs, and never parses a message.
+**Every failure has one of two shapes, and a mechanism never guesses.** A fault says on its face whether to retry and when; a handler error is an event the caller already handles. An adapter that reads `retry` and `fault_kind` has all it needs, and never parses a message.
 
 **An abandoned execution can still answer its caller and record how it ended, with nothing composed by the mechanism.** The fault carries both, built by the handler before it lost the ability to speak. The failure that most reliably strands a workflow — retries exhausted, a store gone, a depth or time bound crossed — can surface in the shape every caller already handles, and the mechanism's only work is to commit and publish what it was handed. Whether it does is its policy; that it can, without inventing model data, is the gain.
 
@@ -1649,7 +1649,7 @@ execute(
     → discarded                          already seen; nothing to do, nothing wrong
     → fault    an ArvoHandlerFault       nothing is committed or emitted now.
                                          read retry; where present, redeliver with
-                                         attempt + 1, or do not. what happens to a
+                                         attempt + 1; where null, do not. what happens to a
                                          fault you will not retry is your policy; if
                                          you abandon, commit abandonment_state and
                                          publish abandonment_event together, as handed
