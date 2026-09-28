@@ -368,7 +368,7 @@ Setting it on a service emission would mean something different — the id of th
 
 `source` is the handler's own self contract `type`, held on the record as `state.source`. It identifies the producing node without inventing an identity scheme the model does not have. It is a valid URI-reference under ADR-002 and normalizes to itself, so it satisfies `source`'s format rule unchanged. Every handler stamps it the same way, which is what makes the next default possible.
 
-`to` follows from `source`. A service emission is addressed to the contract that declares it — the service contract's own `type`, which is what a handler implementing that contract expects to see as its `to` (**Entry validation**, step 11). A completion is addressed back to whoever opened this execution, which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults, and both are unsafe to replace — see **What an executor may set**.
+`to` follows from `source`. A service emission is addressed to the contract that declares it — the service contract's own `type`, which is what a handler implementing that contract expects to see as its `to` (**Entry validation**, step 12). A completion is addressed back to whoever opened this execution, which the init event's `source` names, since every handler stamps its own contract type there. Both are defaults, and both are unsafe to replace — see **What an executor may set**.
 
 #### Domain
 
@@ -391,7 +391,7 @@ ADR-001 holds that `domain` is "`null` for traffic inside a lattice" and set non
 
 #### A root event must carry `to`
 
-**A root event MUST carry a `to`, and it SHOULD be its own `type`.** Gate step 11 (**Entry validation**) makes `to` authoritative, so an event arriving with none is a fault — and ADR-001's minimal root event, taking every default, has `to` at `null`. Whatever mints a root event therefore has one obligation this ADR places on it: address the event. `to = type` is the sensible default and the one an implementation SHOULD apply when constructing a root event, since a root event by definition goes to the handler that implements the contract it names.
+**A root event MUST carry a `to`, and it SHOULD be its own `type`.** Gate step 12 (**Entry validation**) makes `to` authoritative, so an event arriving with none is a fault — and ADR-001's minimal root event, taking every default, has `to` at `null`. Whatever mints a root event therefore has one obligation this ADR places on it: address the event. `to = type` is the sensible default and the one an implementation SHOULD apply when constructing a root event, since a root event by definition goes to the handler that implements the contract it names.
 
 This is the only requirement this ADR makes of a participant that is not a handler. It is stated here because a root minter is outside the protocol and will not read the rest of it, and because the failure is otherwise baffling: a perfectly well-formed root event, rejected by every handler it reaches, for a field its author never knew mattered.
 
@@ -507,7 +507,7 @@ A delivery reaches the handler as an event and a **state function**. The mechani
 
 **The state function.** The mechanism MUST supply, alongside the event, an operation that takes an `execution_id` and yields the record stored under it, or nothing where none is. It may take time and may fail, since a store is behind it; how a language expresses that — a promise, a future, a coroutine, a blocking call — is that language's own choice (ADR-004). What is fixed is the input — one `execution_id`, together with the delivery's telemetry (**Observability**) so the read is logged and traced as part of this delivery, and the delivery's attempt number (**Retry**) so the mechanism knows whether this read is the first or a retry of one that already failed; the output, a record or its absence; and the rules below. Telemetry and attempt are read-only context for the mechanism to record against and to tune its own read by — a longer timeout, a different replica — not information that changes which record it returns.
 
-The mechanism behind it validates nothing beyond parsing: what it yields MUST be absence or a parsed JSON object, and whether that object is a record, belongs to this event, or is still resumable is the handler's to judge (**Entry validation**, steps 4, 5 and 11). It MUST read the store on every call rather than yield a value captured earlier, which is what makes a retry re-read the record by construction (**Retry**). It MUST NOT be given the event or the classification, and it MUST NOT branch on anything but the key.
+The mechanism behind it validates nothing beyond parsing: what it yields MUST be absence or a parsed JSON object, and whether that object is a record, belongs to this event, or is still resumable is the handler's to judge (**Entry validation**, steps 4, 5 and 12). It MUST read the store on every call rather than yield a value captured earlier, which is what makes a retry re-read the record by construction (**Retry**). It MUST NOT be given the event or the classification, and it MUST NOT branch on anything but the key.
 
 **The handler chooses the key.** It is the only party that knows which delivery this is, so it is the only party that can. After classification (**`dataschema` decides it**) and before any gate step that reads the record, the handler calls the state function exactly once:
 
@@ -533,7 +533,7 @@ A record under an init's derived key means an execution with this identifier alr
 
 **A response is matched to what it answers by `initid`.** ADR-001 defines `initid` as "the `id` of the init event that opened the execution this event completes", and states that it "is the only field that answers *which request is this the answer to*". `executionid` cannot, because every completion carries the caller's identity and so every response to this execution carries the same value. `parentid` cannot, because it "degrades to noise across suspension boundaries" — a response's `parentid` is whatever event the service last processed, not the request it is answering.
 
-A response is therefore recorded against `in_flight_event_map[response.initid]`, which is the `id` of the event this execution emitted to open that service's execution (**Collection**). A response whose `initid` names no outstanding key is a fault (`response_unawaited`), and one whose `id` has already been recorded is a duplicate and is discarded (**Entry validation**, steps 8 and 14).
+A response is therefore recorded against `in_flight_event_map[response.initid]`, which is the `id` of the event this execution emitted to open that service's execution (**Collection**). A response whose `initid` names no outstanding key is a fault (`response_unawaited`), and one whose `id` has already been recorded is a duplicate and is discarded (**Entry validation**, steps 9 and 15).
 
 ### Entry validation
 
@@ -548,21 +548,22 @@ Before any executor code runs, a handler MUST work through the following gate **
 | 3 | every delivery | **The record is fetched**, once, through the state function, under the key classification selects (**Resolving the existing execution**). | fault, `state_resolution_failed` | yes | **yes** |
 | 4 | every delivery | **Presence matches classification.** An init delivery MUST have fetched nothing; a followup MUST have fetched a record. | fault, `record_unexpected` or `record_expected` | yes | no |
 | 5 | followups | **The record's envelope validates and its events hydrate.** The record validates against the fixed envelope under **The execution record**, with `data` accepted as any JSON value for now, and every event it holds restores to an event value (**Hydration**). No `state.*` value may be read until this passes. | fault, `record_invalid` or `record_event_unrestorable` | yes | no |
-| 6 | followups | **The record's version is still declared, and `data` satisfies it.** The handler MUST still declare an executor for `state.version`; a version withdrawn from a deployed handler strands its in-flight executions (**Version authority**), and this is where that surfaces. Then, and only then, `data` is validated against the schema that version declares, because the schema cannot be chosen until the version is known and confirmed (**Hydration**). | fault, `version_not_declared`, or `record_invalid` for `data` | yes | no |
-| 7 | every delivery | **The event is below the version's maximum depth.** `event.depth < max depth` for the version resolution selected — the event's on an init, the record's on a followup (**Depth**). Placed here because it is the first point at which that version is known and confirmed declared. | fault, `max_depth_event_received` | yes | no |
-| 8 | followups | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. | discard | yes | n/a |
-| 9 | followups | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` or `idle` accepts a followup. | fault, `lifecycle_terminal` | yes | no |
-| 10 | every delivery | **The execution has not outlived its execution timeout.** Where the version sets one, the time from the init event's `time` — the delivered event's on an init, `state.init_event`'s on a followup — to now is below it (**Timeouts**). Where the version sets none, this step passes. Placed after the lifecycle check so that a late event reaching a finished execution is refused for its lifecycle, not abandoned for time; and before the checks on the event itself, because an execution past its bound has nothing further to do with the event whatever it carries. | fault, `execution_timeout` | yes | no |
-| 11 | `event.to` on every delivery; the rest on followups | **Record, handler and event agree.** `event.to == handler's self contract type`; and on a followup `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault, `event_unaddressed` or `addressing_mismatch` | no — all applicable comparisons are reported together | no |
-| 12 | every delivery | **The type is one the resolved contract can send here.** For the self contract, its own `type`. For a service contract, one of that version's `outputs` or its handler error type. | fault, `type_not_receivable` | yes | no |
-| 13 | every delivery | **Payload satisfies its schema**, as declared by the contract and version step 1 resolved. | fault, `event_schema_rejected` | no | no |
-| 14 | followups | **Awaited.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault, `response_unawaited` | yes | no |
+| 6 | followups | **The record's version is still declared.** The handler MUST still declare an executor for `state.version`; a version withdrawn from a deployed handler strands its in-flight executions (**Version authority**), and this is where that surfaces. | fault, `version_not_declared` | yes | no |
+| 7 | followups | **`data` satisfies the owning version's schema.** Validated against the schema the version confirmed at step 6 declares — placed here, and not at step 5, because that schema cannot be chosen until the version is known and confirmed (**Hydration**). Where the version declares no schema, `data` MUST be `null`. | fault, `record_invalid` | yes | no |
+| 8 | every delivery | **The event is below the version's maximum depth.** `event.depth < max depth` for the version resolution selected — the event's on an init, the record's on a followup (**Depth**). Placed here because it is the first point at which that version is known and confirmed declared. | fault, `max_depth_event_received` | yes | no |
+| 9 | followups | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. | discard | yes | n/a |
+| 10 | followups | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` or `idle` accepts a followup. | fault, `lifecycle_terminal` | yes | no |
+| 11 | every delivery | **The execution has not outlived its execution timeout.** Where the version sets one, the time from the init event's `time` — the delivered event's on an init, `state.init_event`'s on a followup — to now is below it (**Timeouts**). Where the version sets none, this step passes. Placed after the lifecycle check so that a late event reaching a finished execution is refused for its lifecycle, not abandoned for time; and before the checks on the event itself, because an execution past its bound has nothing further to do with the event whatever it carries. | fault, `execution_timeout` | yes | no |
+| 12 | `event.to` on every delivery; the rest on followups | **Record, handler and event agree.** `event.to == handler's self contract type`; and on a followup `state.source == handler's self contract type`, `state.execution_id == event.executionid`, `state.subject == event.subject`. `to` is authoritative, so an event carrying none is invalid here. | fault, `event_unaddressed` or `addressing_mismatch` | no — all applicable comparisons are reported together | no |
+| 13 | every delivery | **The type is one the resolved contract can send here.** For the self contract, its own `type`. For a service contract, one of that version's `outputs` or its handler error type. | fault, `type_not_receivable` | yes | no |
+| 14 | every delivery | **Payload satisfies its schema**, as declared by the contract and version step 1 resolved. | fault, `event_schema_rejected` | no | no |
+| 15 | followups | **Awaited.** The response's `initid` names a key of `in_flight_event_map` whose value is still outstanding. | fault, `response_unawaited` | yes | no |
 
-An init delivery has no record, so the steps that read one do not apply to it — which is most of what the **applies to** column records. Only step 11 is split: `event.to` is on the event and is checked either way, while the three comparisons against the record are followups only.
+An init delivery has no record, so the steps that read one do not apply to it — which is most of what the **applies to** column records. Only step 12 is split: `event.to` is on the event and is checked either way, while the three comparisons against the record are followups only.
 
 #### Three ways out: proceed, discard, fault
 
-A delivery leaves the gate one of three ways. **Proceed**: every applicable step passed, the execution context is built (**The execution context**), and the executor is entered — or, under the default join, the response is recorded and the delivery ends without entering it (**Collection**). **Discard**: step 8 recognised a duplicate; nothing is written and nothing is raised. **Fault**: a step failed, and an execution fault is raised carrying every check that failed (**Failure protocol**).
+A delivery leaves the gate one of three ways. **Proceed**: every applicable step passed, the execution context is built (**The execution context**), and the executor is entered — or, under the default join, the response is recorded and the delivery ends without entering it (**Collection**). **Discard**: step 9 recognised a duplicate; nothing is written and nothing is raised. **Fault**: a step failed, and an execution fault is raised carrying every check that failed (**Failure protocol**).
 
 Every fault here but one is non-retryable, and for one reason: each describes a delivery that would fail identically however often it were repeated. The exception is step 3, which reaches a store and may succeed a moment later.
 
@@ -587,33 +588,33 @@ For a followup the record is authoritative, because a response's `dataschema` na
 
 #### Why resolution comes first
 
-Resolution is first because everything else depends on it. It decides which contract and version validate the payload (step 13), which type set the event must belong to (step 12), and — because it classifies the delivery — which key the record is fetched under (step 3) and whether one is expected at all (step 4). A `type` alone could do none of this: ADR-005 makes it a property of the contract, so it cannot name a version, and it is not globally unique, so it cannot reliably name a contract.
+Resolution is first because everything else depends on it. It decides which contract and version validate the payload (step 14), which type set the event must belong to (step 13), and — because it classifies the delivery — which key the record is fetched under (step 3) and whether one is expected at all (step 4). A `type` alone could do none of this: ADR-005 makes it a property of the contract, so it cannot name a version, and it is not globally unique, so it cannot reliably name a contract.
 
 It also settles which kind of delivery this is, which is why `category` follows it rather than preceding it. Classification is read from a required field that ADR-002 constrains and ADR-005 gives a fixed shape; `category` then cross-checks it — a sender's stated intent against a receiver's declarations, which is what ADR-001 put the field there for. Deciding the same question twice by two independent means, with no rule for disagreement, is the thing this ordering removes.
 
 #### Why the record is validated before anything reads it
 
-Every step after 5 that touches the record reads it — step 6 reads `version`, step 8 reads `event_ids`, step 9 reads `lifecycle`, step 11 reads three identifiers, step 14 reads the collection. A gate that compared before it validated would be reading fields off a structure it had not established was a record at all, and would report a mismatch where the truth was corruption. Step 5 is therefore the first step that touches the record's contents, and no step before it does.
+Every step after 5 that touches the record reads it — step 6 reads `version`, step 9 reads `event_ids`, step 10 reads `lifecycle`, step 12 reads three identifiers, step 15 reads the collection. A gate that compared before it validated would be reading fields off a structure it had not established was a record at all, and would report a mismatch where the truth was corruption. Step 5 is therefore the first step that touches the record's contents, and no step before it does.
 
-One field is validated later than the rest, and deliberately. `data` is governed by the schema the owning version declares, and the owning version is `state.version` — a field that cannot be read until step 5 has passed and is not confirmed declared until step 6. Validating `data` at step 5 would need a schema chosen by a value the step is not yet allowed to trust. So step 5 validates the envelope with `data` held as an opaque JSON value, step 6 confirms the version, and step 6 then validates `data` against that version's schema. The whole record is validated before any executor code runs; only the order inside the gate reflects the dependency.
+One field is validated later than the rest, and deliberately. `data` is governed by the schema the owning version declares, and the owning version is `state.version` — a field that cannot be read until step 5 has passed and is not confirmed declared until step 6. Validating `data` at step 5 would need a schema chosen by a value the step is not yet allowed to trust. So step 5 validates the envelope with `data` held as an opaque JSON value, step 6 confirms the version, and step 7 validates `data` against that version's schema. The whole record is validated before any executor code runs; only the order inside the gate reflects the dependency.
 
 #### Why the duplicate check precedes the lifecycle check
 
 A redelivery of the very event that completed an execution would otherwise reach the terminal check first and be reported as a fault — so under at-least-once delivery, the final response of every execution could produce a spurious failure whenever the transport repeated it.
 
-Putting step 8 ahead of step 9 costs nothing, because the two catch disjoint things. Step 8 discards only an event the execution has demonstrably already processed. A genuinely late message — one arriving at a finished execution having never been seen — is not in `event_ids`, passes step 8 untouched, and is reported by step 9 exactly as it should be. Quiet about repetition, loud about lateness.
+Putting step 9 ahead of step 10 costs nothing, because the two catch disjoint things. Step 9 discards only an event the execution has demonstrably already processed. A genuinely late message — one arriving at a finished execution having never been seen — is not in `event_ids`, passes step 9 untouched, and is reported by step 10 exactly as it should be. Quiet about repetition, loud about lateness.
 
 #### Why an idle record admits a followup
 
-Step 9 admits a followup to a record at `idle`, which step 14 will then almost certainly reject, and that is deliberate rather than redundant. `idle` is not terminal, so rejecting at step 9 would report that the execution has ended, which is untrue. Letting it through means step 14 reports what is actually wrong — nothing is awaiting this response. The cost is one extra step evaluated; the gain is a diagnosis that does not send a reader looking for a completion that never happened.
+Step 10 admits a followup to a record at `idle`, which step 15 will then almost certainly reject, and that is deliberate rather than redundant. `idle` is not terminal, so rejecting at step 10 would report that the execution has ended, which is untrue. Letting it through means step 15 reports what is actually wrong — nothing is awaiting this response. The cost is one extra step evaluated; the gain is a diagnosis that does not send a reader looking for a completion that never happened.
 
 #### Every fault names every failed check
 
-**A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported, in the fault's `violations` (**The fault object**). Steps 11 and 13 do not short-circuit for this reason: the four addressing comparisons are reported together, and a payload's schema violations are reported in full. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
+**A fault names every check that failed**, not merely the first — where the sequence allowed more than one to be evaluated, all of them are reported, in the fault's `violations` (**The fault object**). Steps 12 and 14 do not short-circuit for this reason: the four addressing comparisons are reported together, and a payload's schema violations are reported in full. This matches ADR-005, whose contract validation reports every broken rule at once, and it is the difference between one diagnosis and a run of redeliveries each revealing one more problem.
 
 #### Protocol outputs commit atomically
 
-Discarding a duplicate at step 8 is safe because the record that would have been written already exists, carrying that event's id in `event_ids`. **The protocol outputs of one delivery commit atomically**: the emitted events and the next record are preserved together, or neither is (**Required of infrastructure adapters**, obligation 1). **That atomicity covers only those two things. It does not cover anything the executor did outside Arvo.** A database write or an HTTP call made during a delivery that then faults, loses a compare-and-swap, or is redelivered has already happened and will happen again on the next attempt. The protocol offers no partial-completion state for such effects to resume from, so an executor MUST treat every external effect as one that may be repeated, and make it idempotent or cheap to repeat.
+Discarding a duplicate at step 9 is safe because the record that would have been written already exists, carrying that event's id in `event_ids`. **The protocol outputs of one delivery commit atomically**: the emitted events and the next record are preserved together, or neither is (**Required of infrastructure adapters**, obligation 1). **That atomicity covers only those two things. It does not cover anything the executor did outside Arvo.** A database write or an HTTP call made during a delivery that then faults, loses a compare-and-swap, or is redelivered has already happened and will happen again on the next attempt. The protocol offers no partial-completion state for such effects to resume from, so an executor MUST treat every external effect as one that may be repeated, and make it idempotent or cheap to repeat.
 
 Inside the executor code, the developer can leverage two values the protocol already guarantees as idempotency keys. The delivered event's `id` is globally unique (ADR-001) and identical on every retry of the same delivery, so it keys a side effect that must happen once per delivery. The execution's `execution_id` is derived deterministically (**Execution identity**) and identical on every delivery to the same execution, so it keys a side effect that must happen once per execution. Both are on the execution context (**The execution context**). An executor that keys its external writes on one of them has a stable idempotency key on every repeat; whether that yields exactly-once effects depends on the external system honouring the key, which is outside the protocol and the executor's to verify.
 
@@ -639,7 +640,7 @@ There is no option for what happens when the limit is crossed. **Crossing it is 
 
 The guard is applied at two points, with one threshold.
 
-**On delivery, at gate step 7** (**Entry validation**), fault `max_depth_event_received`: the delivered event's `depth` MUST be below the version's maximum. The version is the one resolution selected — the event's on an init, the record's on a followup — which is why the check sits after the version is known and confirmed declared, and not earlier. It catches a caller with a looser limit than this handler's reaching it from too deep.
+**On delivery, at gate step 8** (**Entry validation**), fault `max_depth_event_received`: the delivered event's `depth` MUST be below the version's maximum. The version is the one resolution selected — the event's on an init, the record's on a followup — which is why the check sits after the version is known and confirmed declared, and not earlier. It catches a caller with a looser limit than this handler's reaching it from too deep.
 
 **On return, as part of return validation** (**What an executor returns**), fault `max_depth_event_requested`: for each event the executor returned that would open a new execution — one addressed to a service — the depth it would carry is `state.depth + 1`, and that value MUST be below the maximum. An own-`outputs` event carries `state.depth` and can never violate.
 
@@ -749,7 +750,7 @@ Because every input is drawn from the canonical form or from protocol-defined op
 | `cancelled` | yes | The executor marked the execution cancelled and returned an own `outputs` event. |
 | `failure` | yes | The mechanism abandoned the execution after a fault, and committed the record the handler prepared for that (**Abandonment**). |
 
-A terminal record accepts no further delivery (**Entry validation**, step 9). `failure` is the one value no handler reaches under its own steam: a fault writes no record, so only the mechanism, acting on the fault's `abandonment_state`, can put an execution there (**Retry**).
+A terminal record accepts no further delivery (**Entry validation**, step 10). `failure` is the one value no handler reaches under its own steam: a fault writes no record, so only the mechanism, acting on the fault's `abandonment_state`, can put an execution there (**Retry**).
 
 #### Marking an execution `cancelled`
 
@@ -787,7 +788,7 @@ A batch may carry service emissions and an own `outputs` event together, and the
 
 The completion wins because it is what the caller is waiting for, and the caller awaits exactly one answer to its request. An execution that has answered is finished, whatever else it set in motion on the way out. The service emissions are not suppressed and not deferred: an executor that answers its caller and in the same batch asks a service to do something has said, in one decision, "here is my answer, and also start this" — and both halves are honoured.
 
-**The consequence is that the service's response has nowhere to go.** It arrives carrying this execution's identity, finds a record at `success`, and is refused at gate step 9 as `lifecycle_terminal`, a fault whose abandonment pair is `null` by rule (**`lifecycle_terminal` yields neither**). The mechanism handles it as it handles any fault it will not retry. This is accepted, not accidental: a completing execution that emits to a service is emitting fire-and-forget work, and an implementation SHOULD say so where the pattern is likely to be met, because an author who expected to process that response has misunderstood what completing means. An executor that needs the response completes *after* it arrives, not alongside asking for it.
+**The consequence is that the service's response has nowhere to go.** It arrives carrying this execution's identity, finds a record at `success`, and is refused at gate step 10 as `lifecycle_terminal`, a fault whose abandonment pair is `null` by rule (**`lifecycle_terminal` yields neither**). The mechanism handles it as it handles any fault it will not retry. This is accepted, not accidental: a completing execution that emits to a service is emitting fire-and-forget work, and an implementation SHOULD say so where the pattern is likely to be met, because an author who expected to process that response has misunderstood what completing means. An executor that needs the response completes *after* it arrives, not alongside asking for it.
 
 #### A sink version completes by returning nothing
 
@@ -837,7 +838,7 @@ Removing a version from a deployed handler's self contract — and with it, unde
 
 #### Hydration
 
-On a followup delivery, a handler MUST validate the whole record and MUST restore every event the record holds to an event value before any executor code runs. This happens in two stages of the gate (**Entry validation**): step 5 validates the fixed envelope and hydrates the events, treating `data` as an opaque JSON value; step 6 confirms `state.version` is declared and validates `data` against that version's schema. The split exists because the schema for `data` is chosen by a field the gate cannot read until the envelope has passed. A record that fails any of it is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
+On a followup delivery, a handler MUST validate the whole record and MUST restore every event the record holds to an event value before any executor code runs. This happens in three consecutive steps of the gate (**Entry validation**): step 5 validates the fixed envelope and hydrates the events, treating `data` as an opaque JSON value; step 6 confirms `state.version` is declared; step 7 validates `data` against that version's schema. The split exists because the schema for `data` is chosen by a field the gate cannot read until the envelope has passed. A record that fails any of it is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
 
 #### The cost of eager hydration
 
@@ -845,11 +846,11 @@ On a followup delivery, a handler MUST validate the whole record and MUST restor
 
 #### Changing a deployed version's state schema
 
-The state schema is enforced on every entry, at gate step 6, against the schema the version declares *today*. That creates an obligation the protocol cannot enforce for the author, and it is stated here so the consequence is not discovered in production.
+The state schema is enforced on every entry, at gate step 7, against the schema the version declares *today*. That creates an obligation the protocol cannot enforce for the author, and it is stated here so the consequence is not discovered in production.
 
 **Once a version has been deployed and has records in a store, any change to its declared state schema MUST be compatible with the `data` those records already hold.** A new field MUST be optional, with a defined meaning when absent. A field MUST NOT be removed and its meaning MUST NOT change. A constraint MUST NOT be tightened. These are the same rules the record envelope holds itself to under **How this record may change later**, applied to the one part of the record the author controls.
 
-The consequence of breaking them is exact. Every in-flight execution of that version fails step 6 on its next delivery with `record_invalid`, which is non-retryable, so none is ever redelivered, and a mechanism that abandons them tells each caller the work will not be done. Nothing can rescue them: migration is prohibited (**A record belongs to one version for its whole life**), and drift detection does not help, because drift is reported to the executor and the record has already been rejected before the executor runs.
+The consequence of breaking them is exact. Every in-flight execution of that version fails step 7 on its next delivery with `record_invalid`, which is non-retryable, so none is ever redelivered, and a mechanism that abandons them tells each caller the work will not be done. Nothing can rescue them: migration is prohibited (**A record belongs to one version for its whole life**), and drift detection does not help, because drift is reported to the executor and the record has already been rejected before the executor runs.
 
 A change that cannot meet these rules is a new version. It is declared alongside the old one, the old one is drained, and then the old one is removed — the same story as any other version change, and the only one the protocol supports.
 
@@ -925,7 +926,7 @@ The handler is the party that applies this because it is the party that knows th
 
 **`failure` is the one lifecycle only the mechanism can reach, and it reaches it by choosing to abandon.** This needs stating because no handler gets there under its own steam: a handler runs only when something delivers to it, and exhaustion is the case where nothing more will. A fault commits no record of its own, so the stored record still says `waiting`. A mechanism that abandons an exhausted execution commits the `failure` record so that it is distinguishable from one legitimately waiting on a slow service; a mechanism that does not abandon leaves the record at `waiting`, and owns the fact that the two now look alike.
 
-Where a mechanism chooses to abandon, it commits the fault's `abandonment_state` and publishes its `abandonment_event` together, where the fault carries them (**Abandonment**; **Required of infrastructure adapters**, obligation 3). Whether to abandon, dead-letter, alert, or hold the fault for a human is the mechanism's own policy; the protocol requires only that it not retry. `failure` is terminal, and no delivery to it is ever processed (**Entry validation**, step 9).
+Where a mechanism chooses to abandon, it commits the fault's `abandonment_state` and publishes its `abandonment_event` together, where the fault carries them (**Abandonment**; **Required of infrastructure adapters**, obligation 3). Whether to abandon, dead-letter, alert, or hold the fault for a human is the mechanism's own policy; the protocol requires only that it not retry. `failure` is terminal, and no delivery to it is ever processed (**Entry validation**, step 10).
 
 **Only the mechanism can put an execution there, but it never composes what it writes.** The record it commits and the event it sends were both built by the handler, on the attempt that failed, and carried on the fault against precisely this outcome — so the rule that model data originates in the handler holds without an exception here. What is genuinely the mechanism's, and only its, is the decision that no further attempt will be made. That is a decision no handler can reach, because a handler is entered only when something delivers to it and giving up is the case where nothing will.
 
@@ -974,7 +975,7 @@ The run clock starts when the handler enters the executor and stops when the exe
 
 #### The execution clock: from the init event to this execution's end
 
-**The execution clock spans the whole life of one execution: from the init event that opened it to the moment its lifecycle becomes terminal** — `success`, `error`, `cancelled` or `failure` (**The six lifecycle values**). That is the same notion of finished the gate uses at step 9, and it covers every way an execution can end: a completion emitted, a handler error event emitted, a cancellation, a sink version resting at `success` by returning nothing, and abandonment by a mechanism. Between those two points an execution may emit any number of requests to services and receive any number of their responses. **None of those is an end.** A service request is a step on the way, its response is another, and the clock neither stops at one nor restarts from one. It is one interval, measured once, from start to finish.
+**The execution clock spans the whole life of one execution: from the init event that opened it to the moment its lifecycle becomes terminal** — `success`, `error`, `cancelled` or `failure` (**The six lifecycle values**). That is the same notion of finished the gate uses at step 10, and it covers every way an execution can end: a completion emitted, a handler error event emitted, a cancellation, a sink version resting at `success` by returning nothing, and abandonment by a mechanism. Between those two points an execution may emit any number of requests to services and receive any number of their responses. **None of those is an end.** A service request is a step on the way, its response is another, and the clock neither stops at one nor restarts from one. It is one interval, measured once, from start to finish.
 
 The clock is measured from the init event's `time` — the delivered event's on an init delivery, `state.init_event`'s on a followup. It is the protocol's own notion of when the execution began, it is on the record for the whole life of the execution, and it needs no field this ADR does not already carry. The producer's clock set it, so skew is possible; ADR-001 already accepts that for `time` and this ADR does not tighten it. `time` is used here as a duration's origin, not to order events, which is what ADR-001 forbids.
 
@@ -982,7 +983,7 @@ The clock is measured from the init event's `time` — the delivered event's on 
 
 A handler runs only when an event is delivered, so it cannot watch an execution between deliveries. The bound is therefore enforced at the two moments the handler is present, entry and return, and **the check at either moment is how the bound is enforced, not what the bound means.**
 
-**On entry, at gate step 10** (**Entry validation**): where the version sets an execution timeout and the time from the init event to now is not below it, the delivery is a non-retryable execution fault, `execution_timeout`. It follows the duplicate and lifecycle checks deliberately: a redelivered event is discarded and a late event reaching a finished execution is refused for its lifecycle, so neither can abandon a record that has already concluded. It precedes the checks on the event itself because an execution past its bound has nothing further to do with the event, whatever it carries. It applies on an init delivery too: an init that sat undelivered longer than the version allows is refused on arrival rather than started late, and the fault carries what a mechanism needs to tell the caller why.
+**On entry, at gate step 11** (**Entry validation**): where the version sets an execution timeout and the time from the init event to now is not below it, the delivery is a non-retryable execution fault, `execution_timeout`. It follows the duplicate and lifecycle checks deliberately: a redelivered event is discarded and a late event reaching a finished execution is refused for its lifecycle, so neither can abandon a record that has already concluded. It precedes the checks on the event itself because an execution past its bound has nothing further to do with the event, whatever it carries. It applies on an init delivery too: an init that sat undelivered longer than the version allows is refused on arrival rather than started late, and the fault carries what a mechanism needs to tell the caller why.
 
 **On return, after the executor finishes**: where the version sets an execution timeout and the time from the init event to the moment of return is not below it, the return is a non-retryable execution fault, `execution_timeout`, and nothing the executor returned is emitted or written. This is what makes the bound a bound on the *end* of the execution rather than on its last entry. Without it, an execution entered a moment before its limit could run for the whole of a run timeout and emit its completion well beyond the bound, and the bound would have meant nothing. Depth is checked at the same two moments for the same reason (**Checked twice: on delivery, and on return**).
 
@@ -1031,13 +1032,13 @@ Under the default join this is unobservable, because the executor is entered onl
 
 #### A response is processed only if awaited
 
-**A response is processed only if the collection is awaiting it.** One that is not is a fault, `response_unawaited`, checked at gate step 14 (**Entry validation**).
+**A response is processed only if the collection is awaiting it.** One that is not is a fault, `response_unawaited`, checked at gate step 15 (**Entry validation**).
 
-One rule covers three situations: a response whose key the map was rebuilt without, a response answering a key that already holds an answer, and a response arriving at an execution that has already finished. None of them re-enters the executor, and none reopens a terminal execution — the last is caught earlier still, by the lifecycle check at step 9.
+One rule covers three situations: a response whose key the map was rebuilt without, a response answering a key that already holds an answer, and a response arriving at an execution that has already finished. None of them re-enters the executor, and none reopens a terminal execution — the last is caught earlier still, by the lifecycle check at step 10.
 
 #### Duplicate versus unawaited
 
-The one response delivery that is discarded rather than faulted is an outright duplicate, recognised at gate step 8 by its event `id` already appearing in `event_ids` (**Why the duplicate check precedes the lifecycle check**).
+The one response delivery that is discarded rather than faulted is an outright duplicate, recognised at gate step 9 by its event `id` already appearing in `event_ids` (**Why the duplicate check precedes the lifecycle check**).
 
 The distinction is worth holding onto. A duplicate is the transport doing its job under at-least-once delivery, and the handler has demonstrably already processed that exact event, so there is nothing to report and nothing to do. An unawaited response is a participant sending something nobody asked for, which is a real disagreement between two deployed nodes. Quiet about the first, loud about the second.
 
@@ -1158,7 +1159,7 @@ What is *not* normative is the shape of the object in a language's own terms: wh
 
 `cause` is a string rather than the underlying error value because a fault may be dead-lettered, and dead-lettering means persisting it. That is the same reason the whole object must survive JSON: anything added here later must survive it too.
 
-`violations` exists because **Entry validation** requires a fault to name every check that failed rather than only the first (**Every fault names every failed check**), and a single `message` cannot carry that structurally — a reader would have to parse prose to recover a list, which is the interpreting-a-message this object exists to avoid. **Each entry is a string**, one per failed check, naming the check and the value that failed it; the list is JSON `string[]` and nothing more structured, because a reader in another language needs to display it, not to branch on it — branching is what `fault_kind` is for. Where the gate short-circuited, `violations` holds the one check that stopped it; where it evaluated several, as steps 11 and 13 do, it holds all of them. On a return fault it holds every rejected event in the batch, offenders and non-offenders alike (**One offending event rejects the whole batch**). `message` remains the human-readable rendering of the same thing.
+`violations` exists because **Entry validation** requires a fault to name every check that failed rather than only the first (**Every fault names every failed check**), and a single `message` cannot carry that structurally — a reader would have to parse prose to recover a list, which is the interpreting-a-message this object exists to avoid. **Each entry is a string**, one per failed check, naming the check and the value that failed it; the list is JSON `string[]` and nothing more structured, because a reader in another language needs to display it, not to branch on it — branching is what `fault_kind` is for. Where the gate short-circuited, `violations` holds the one check that stopped it; where it evaluated several, as steps 12 and 14 do, it holds all of them. On a return fault it holds every rejected event in the batch, offenders and non-offenders alike (**One offending event rejects the whole batch**). `message` remains the human-readable rendering of the same thing.
 
 #### `attempt` and `timestamp`
 
@@ -1173,17 +1174,17 @@ What is *not* normative is the shape of the object in a language's own terms: wh
 | gate 3 | the state function failed | `state_resolution_failed` | **yes** |
 | gate 4 | an init delivery arrives with a record | `record_unexpected` | no |
 | gate 4 | a followup delivery arrives without one | `record_expected` | no |
-| gate 5, gate 6 | the record's envelope fails validation, or its `data` fails the owning version's schema | `record_invalid` | no |
+| gate 5, gate 7 | the record's envelope fails validation, or its `data` fails the owning version's schema | `record_invalid` | no |
 | gate 5 | an event in the record fails to restore | `record_event_unrestorable` | no |
 | gate 6 | the record's `version` is no longer declared | `version_not_declared` | no |
-| gate 7 | the delivered event's `depth` is at or beyond the version's maximum | `max_depth_event_received` | no |
-| gate 9 | the delivery reaches a record already at a terminal `lifecycle` | `lifecycle_terminal` | no |
-| gate 10, and return | the execution has outlived the version's execution timeout | `execution_timeout` | no |
-| gate 11 | the event carries no `to` | `event_unaddressed` | no |
-| gate 11 | record, handler and event disagree on `to`, `source`, `execution_id` or `subject` | `addressing_mismatch` | no |
-| gate 12 | the event's type is not one the resolved contract can send here | `type_not_receivable` | no |
-| gate 13 | the delivered event's payload fails its contract's schema | `event_schema_rejected` | no |
-| gate 14 | a response's `initid` names nothing the collection is awaiting | `response_unawaited` | no |
+| gate 8 | the delivered event's `depth` is at or beyond the version's maximum | `max_depth_event_received` | no |
+| gate 10 | the delivery reaches a record already at a terminal `lifecycle` | `lifecycle_terminal` | no |
+| gate 11, and return | the execution has outlived the version's execution timeout | `execution_timeout` | no |
+| gate 12 | the event carries no `to` | `event_unaddressed` | no |
+| gate 12 | record, handler and event disagree on `to`, `source`, `execution_id` or `subject` | `addressing_mismatch` | no |
+| gate 13 | the event's type is not one the resolved contract can send here | `type_not_receivable` | no |
+| gate 14 | the delivered event's payload fails its contract's schema | `event_schema_rejected` | no |
+| gate 15 | a response's `initid` names nothing the collection is awaiting | `response_unawaited` | no |
 | declaration reached a delivery | the handler declares two versions of one service contract | `service_version_conflict` | no |
 | after the gate | resolving the executor's dependencies failed | `dependency_resolution_failed` | **yes** |
 | execution | the executor did not return within the version's run timeout | `run_timeout` | **yes** |
@@ -1215,7 +1216,7 @@ The distinction from an ordinary emission is only *when*. **Neither is acted on 
 
 #### The handler builds both, the mechanism composes neither
 
-This is the point of carrying them. A mechanism gains no ability to construct an event and no ability to author a record — it commits one and sends the other, exactly as it does for a delivery that succeeded. It is also why the event must be complete, `id` included, rather than a recipe: should a mechanism commit the pair, publish the event, and crash before it has recorded that the event was sent, it will publish the same committed event again on recovery (obligation 1), and the caller's gate discards the second copy at step 8 as already seen — where a regenerated event would arrive as a second, distinct error.
+This is the point of carrying them. A mechanism gains no ability to construct an event and no ability to author a record — it commits one and sends the other, exactly as it does for a delivery that succeeded. It is also why the event must be complete, `id` included, rather than a recipe: should a mechanism commit the pair, publish the event, and crash before it has recorded that the event was sent, it will publish the same committed event again on recovery (obligation 1), and the caller's gate discards the second copy at step 9 as already seen — where a regenerated event would arrive as a second, distinct error.
 
 #### `abandonment_state`
 
@@ -1233,7 +1234,7 @@ Each attempt builds its own pair from the record it was given, which is what the
 
 #### `lifecycle_terminal` yields neither
 
-`lifecycle_terminal` yields `null` for both, by rule rather than by inability. That execution already answered its caller and already rests terminal; a second completion would be discarded or refused at the caller's gate, and overwriting its lifecycle would erase how it actually ended. The same holds for `response_unawaited`, `event_unaddressed` and `addressing_mismatch` on a record already terminal, since step 9 refuses those deliveries before the later steps run.
+`lifecycle_terminal` yields `null` for both, by rule rather than by inability. That execution already answered its caller and already rests terminal; a second completion would be discarded or refused at the caller's gate, and overwriting its lifecycle would erase how it actually ended. The same holds for `response_unawaited`, `event_unaddressed` and `addressing_mismatch` on a record already terminal, since step 10 refuses those deliveries before the later steps run.
 
 #### What the abandonment event carries
 
@@ -1350,7 +1351,7 @@ What the model does not provide is a scope of its own, and this is deliberate. A
 Cooperative means the execution stops when it next runs and chooses to. Four limits follow, and an application relying on the pattern MUST be told them:
 
 - **It takes effect on the next delivery, not now.** An execution at `waiting` is cancelled only when a response arrives; one whose services never respond is never delivered to again and never reads the signal (**A service that never responds**). Where an application needs a bound on that, the execution timeout is the protocol's instrument (**Timeouts**): it ends the execution for time whether or not any signal was ever read.
-- **A response already in flight still arrives.** It reaches a record at `cancelled`, which is terminal, and is refused at gate step 9 as `lifecycle_terminal`. That refusal is a fault, and the mechanism handles it as one; it is not a defect in the cancelling execution.
+- **A response already in flight still arrives.** It reaches a record at `cancelled`, which is terminal, and is refused at gate step 10 as `lifecycle_terminal`. That refusal is a fault, and the mechanism handles it as one; it is not a defect in the cancelling execution.
 - **The executor decides what winding down means.** The protocol does not know which side effects were made or how to undo them. Compensation is expressed through events the contracts already permit, and where a contract permits none, there is none.
 - **The cancelling execution still answers.** Marking `cancelled` is a reason to stop, not a way out of the protocol, and the three outcomes under **Marking an execution `cancelled`** decide what reaches the caller, or what the mechanism is handed to send.
 
