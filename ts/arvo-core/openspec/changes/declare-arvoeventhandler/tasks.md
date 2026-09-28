@@ -7,12 +7,12 @@
 
 ## 2. Types
 
-- [ ] 2.1 Add `src/ArvoEventHandler/types.ts`: `ArvoEventHandlerOptions` as the complete seven, `ArvoRetryDelayFn`, `ArvoServiceMap`, `ArvoMechanismHooks`, `ArvoEventHandlerExecutor`, `ArvoVersionDeclarations`, `StateSchemaOf`, `PayloadOf`, `ArvoEventHandlerParam`. `PayloadOf` is the conditional helper §1.4 found necessary: `z.infer` off an unresolved schema does not satisfy `ArvoEvent`'s payload constraint without it. Both option sites take `Partial<ArvoEventHandlerOptions>`; the resolved shape is the unpartialled type and no second type is introduced for it.
-- [ ] 2.2 Carry every generic the context sketch in `proposal.md` needs — the contract's type and version map, the services map as written, the per-version state schema, the dependency type and the hook type — even though nothing reads them yet. §1.4 is what proves they survive inference.
+- [x] 2.1 Add `src/ArvoEventHandler/types/`, one module per group and no barrel — `schema.ts`, `supplied.ts`, `options.ts`, `services.ts`, `context.ts`, `executor.ts`, `declaration.ts`. Between them: `ArvoEventHandlerOptions` as the complete seven, `ArvoRetryDelayFn`, `ArvoServiceMap`, `ArvoMechanismHooks`, `ArvoEventHandlerExecutor`, `ArvoVersionDeclarations`, `StateSchemaOf`, `PayloadOf`, `ArvoEventHandlerParam`. `PayloadOf` is the conditional helper §1.4 found necessary: `z.infer` off an unresolved schema does not satisfy `ArvoEvent`'s payload constraint without it. Both option sites take `Partial<ArvoEventHandlerOptions>`; the resolved shape is the unpartialled type and no second type is introduced for it.
+- [x] 2.2 Carry every generic the context sketch in `proposal.md` needs — the contract's type and version map, the services map as written, the per-version state schema, the dependency type and the hook type — even though nothing reads them yet. §1.4 is what proves they survive inference.
 - [ ] 2.2a Add the `types` witness field: `Partial<{ mechanismHooks: H; dependencies: D }>`, both constrained to `Record<string, any>` and both defaulting to `Record<string, never>`. It is read by nothing and stored by nothing. TSDoc it as types only, name the empty default, and name the interface-versus-type-alias constraint trap from `design.md`.
-- [ ] 2.3 Accept a version declared as the executor alone, as well as the object form, and normalize the shorthand to the object form once on the way in so nothing downstream handles two shapes.
-- [ ] 2.4 TSDoc `ArvoEventHandlerExecutor` to say what it is and that its parameter type arrives with the execution context, so a consumer hovering it is not left guessing why it is loose. State the return union ADR-006 fixes.
-- [ ] 2.5 TSDoc `ArvoEventHandlerParam` in full, per `project.md` — *Documentation in source*: it is where a caller meets the input rules, so it carries them and the constructed object's members stay to one line each. Include the widening trap from §1.1 on `contract`, and the local-name-only rule on `services`.
+- [x] 2.3 Accept a version declared as the executor alone, as well as the object form. Normalizing the shorthand to the object form is runtime and belongs with the constructor in §5.
+- [x] 2.4 TSDoc `ArvoEventHandlerExecutor` to say what it is and that its parameter type arrives with the execution context, so a consumer hovering it is not left guessing why it is loose. State the return union ADR-006 fixes.
+- [x] 2.5 TSDoc `ArvoEventHandlerParam` in full, per `project.md` — *Documentation in source*: it is where a caller meets the input rules, so it carries them and the constructed object's members stay to one line each. Include the widening trap from §1.1 on `contract`, and the local-name-only rule on `services`.
 
 ## 3. Options
 
@@ -32,17 +32,24 @@
 - [ ] 4.7 Implement the timeout relation on each version's **resolved** pair, after §3.3, reporting the version. Cover both halves: an execution timeout below a run timeout, and a non-null execution timeout against a null run timeout.
 - [ ] 4.8 Add `buildEmittableTypes(contract, services)` returning one `ReadonlySet<string>` per version, computed once and reused by §4.6 rather than recomputed.
 
+## 4a. The setup and the chain
+
+- [ ] 4a.1 Add `src/ArvoEventHandler/types/setup.ts`: `ArvoEventHandlerSetupParam` holding contract, services, options and `types`, and `ArvoDeclaredVersions` recording what a chain has accumulated.
+- [ ] 4a.2 Add `src/ArvoEventHandler/setup.ts` with `ArvoEventHandlerSetup`. `handler(version, declaration)` returns a new setup carrying that version and mutates nothing, so a chain in progress cannot be shared by accident.
+- [ ] 4a.3 Accept both forms at `handler`: a declaration object, and the executor alone. Normalize the shorthand once here so nothing downstream handles two shapes.
+- [ ] 4a.4 Add `src/ArvoEventHandler/types/infer.ts`: `InferArvoHandlerVersion<Setup, V, S>` and `InferArvoHandlerExecutor<Setup, V, S>`, both reading the setup's own type. The schema argument is optional, and where it is absent `state` is typed `never` so a schema declared without one is a compile error rather than a silent loss of typing. Probe that an annotation built from them types `ctx`, and that the `never` case reports where a reader can act on it, before writing the TSDoc.
+
 ## 5. The class
 
-- [ ] 5.1 Add `src/ArvoEventHandler/index.ts` with the class. Public: `contract`, `services` and `versions` as declared. Internal: the resolved handler options, the resolved per-version options, and the emittable sets.
-- [ ] 5.2 Implement the constructor: resolve handler options, run every rule from §4, throw one `ArvoEventHandlerValidationError` carrying every issue, and freeze what it holds. Per `project.md` — *Result types*, the constructor is the only place holding this logic.
+- [ ] 5.1 Add `src/ArvoEventHandler/index.ts` with the class. Public: `contract`, `services` and `versions` as declared, and the static `setup`. Internal: the constructor, the resolved handler options, the resolved per-version options, and the emittable sets.
+- [ ] 5.2 Implement the constructor over a completed declaration: resolve handler options, run every rule from §4 including completeness, throw one `ArvoEventHandlerValidationError` carrying every issue, and freeze what it holds. Not exported for use; `tryBuild` is what reaches it.
 - [ ] 5.3 Hold the resolved per-version options from §3.3 and the emittable sets from §4.8 as internal fields. Neither is exposed and neither is exported: the declaration is the whole public surface, and both are derived from it.
 - [ ] 5.4 TSDoc the class and its members to one line each, with an `@example` declaring a handler. State that a handler processes no event yet — a consumer who installs this and expects to run one should learn it from the hover, not from trying.
 
 ## 6. Reaching it, and the public surface
 
-- [ ] 6.1 Add `src/factories/createArvoEventHandler.ts`: `tryCreateArvoEventHandler` wrapping the constructor, converting only `ArvoEventHandlerValidationError` into `Err` and rethrowing anything else, matching `createArvoContract.ts`. Build the `Result` through `src/result.ts` and never as a literal.
-- [ ] 6.2 Add `createArvoEventHandler` as the thin unwrap over `tryCreateArvoEventHandler`, carrying no logic of its own.
+- [ ] 6.1 Implement `tryBuild` on the setup, wrapping the constructor, converting only `ArvoEventHandlerValidationError` into `Err` and rethrowing anything else, matching `createArvoContract.ts`. Build the `Result` through `src/result.ts` and never as a literal.
+- [ ] 6.2 Implement `build` as the thin unwrap over `tryBuild`, carrying no logic of its own, and `setupArvoEventHandler` in `src/factories/` as the thin delegate to `ArvoEventHandler.setup`.
 - [ ] 6.3 Export from `src/index.ts`: the class, the pair, the error, and the types a consumer writes against — `ArvoEventHandlerParam`, `ArvoVersionDeclarations`, `ArvoEventHandlerOptions`, `ArvoEventHandlerExecutor`, `ArvoRetryDelayFn`, `ArvoServiceMap`, `ArvoMechanismHooks`. Export neither the resolver nor the emittable-set builder.
 
 ## 7. Tests
@@ -55,7 +62,8 @@
 - [ ] 7.6 Extend it with the unset-versus-null pair, which is the requirement most easily lost to a refactor: a version omitting `runTimeout` inherits, a version writing `runTimeout: null` is unbounded, and a version writing `runTimeout: undefined` behaves as omission.
 - [ ] 7.7 Add `tests/ArvoEventHandler/timeouts.spec.ts`: an execution timeout below a run timeout refused, the two halves declared at different levels refused, a null run timeout with a bounded execution timeout refused, and the legal cases — both null, execution above run, and the two equal.
 - [ ] 7.8 Add `tests/ArvoEventHandler/errors.spec.ts`: two unrelated rules reported together, a non-contract reported alone and marked blocking, every issue carrying a position naming the version and option where one applies, and each option domain rejected individually rather than by a representative sample, per `project.md` — *Testing*.
-- [ ] 7.9 Add `tests/factories/createArvoEventHandler.spec.ts`: the pair agreeing on a valid declaration, `tryX` reporting a declaration failure as `Err` with the same issues the constructor throws, `X` throwing it, and an unrelated error propagating out of `tryX` unconverted.
+- [ ] 7.9 Add `tests/ArvoEventHandler/build.spec.ts`: `build` and `tryBuild` agreeing on a valid declaration, `tryBuild` reporting a failure as `Err` with the same issues `build` throws, an unrelated error propagating out of `tryBuild` unconverted, both entry points producing the same handler, and a chain in progress left unchanged by a further `handler` call.
+- [ ] 7.9a Add `tests/ArvoEventHandler/standalone.spec.ts`: a version declared through `InferArvoHandlerVersion` and one through `InferArvoHandlerExecutor`, each assembled into a chain and each behaving as the inline form does.
 - [ ] 7.10 Add `tests/ArvoEventHandler/emittable.spec.ts`: the set for a version, two versions differing while sharing every service type, and a version declaring no outputs.
 
 ## 8. Finishing

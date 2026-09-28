@@ -25,16 +25,20 @@ The order is forced by dependency, not preference: the context (4) reads the rec
 
 - **New capability `event-handler`** — the handler primitive. This change gives it declaration; changes 2 through 6 accumulate into the same capability, per `project.md` — *Capability conventions*.
 
-- **New class `ArvoEventHandler`, constructed with `new`.** A declaration names one self contract, the service contracts it may send to, one executor per version of the self contract, and options at two levels. The constructor validates the whole declaration and throws on any rule it breaks.
+- **A declaration is built in three steps.** `setupArvoEventHandler(...)`, or `ArvoEventHandler.setup(...)` for the same thing, holds the contract implemented, the services, the handler-level options and the two type shapes. `.handler(version, ...)` declares one version and is repeated. `.build()` runs every rule and returns the handler.
 
-- **A `tryX`/`X` pair reaching it**, `tryCreateArvoEventHandler` and `createArvoEventHandler`, following `createArvoContract`. Per `project.md` — *Result types*, the constructor holds the logic and `tryX` is derived from it, not the other way round.
+- **`ArvoEventHandler`'s constructor is not public.** With a terminal `build` there is one way to declare a handler, and the constructor could not validate anything anyway: it never sees the versions. It holds the validation and `tryBuild` is derived from it, per `project.md` — *Result types*.
+
+- **Two helpers type a version written away from the chain**, `InferArvoHandlerVersion` and `InferArvoHandlerExecutor`, so a handler with several substantial versions need not be one file.
+
+- **The `tryX`/`X` pair is at the end of the chain**, `tryBuild` and `build`. Nothing earlier can fail, so nothing earlier returns a `Result`.
 
 - **Every declaration rule ADR-006 states, checked at declaration:**
 
 | Rule | ADR-006 |
 |---|---|
-| an executor for every version the self contract declares | *One executor per version* |
-| no executor naming a version the contract does not declare | *One executor per version* |
+| a handler for every version the self contract declares | *One executor per version* |
+| no handler declared for a version the contract does not declare | *One executor per version* |
 | no two declared capabilities sharing an event type | *No two capabilities may share an event type* |
 | no two versions of one service contract | *No two versions of one service contract* |
 | every option within its type's domain, at both levels | *Options* — *Validated at declaration* |
@@ -54,125 +58,123 @@ The order is forced by dependency, not preference: the context (4) reads the rec
 
 Illustrative, not normative — the spec governs.
 
+A declaration is built in three steps: **setup** holds everything there is exactly one of,
+**handler** is repeated once per version, and **build** is where every rule runs and where a
+handler comes into existence. Nothing before build can fail, so nothing before it returns a
+`Result`.
+
 ```ts
-class ArvoEventHandler<
-  T extends string,                             // the implemented contract's type
-  M extends ArvoContractVersionMapParam,        // its versions, as declared
-  S extends ArvoServiceMap,                     // the services, as declared
-  D extends ArvoDependencies = ArvoNone,        // dependencies, as declared through `types`
-  H extends ArvoMechanismHooks = ArvoNone,      // hooks, as declared through `types`
-  VD extends ArvoVersionDeclarations<T, M, S, D, H> = ArvoVersionDeclarations<T, M, S, D, H>,
+/** Starts a declaration. Returns a setup, not a handler. */
+function setupArvoEventHandler<T, M, X, D, H>(
+  param: ArvoEventHandlerSetupParam<T, M, X, D, H>,
+): ArvoEventHandlerSetup<T, M, X, D, H>;
+
+/** The same thing under a static name. One implementation, two ways to reach it. */
+ArvoEventHandler.setup(param);
+
+class ArvoEventHandlerSetup<
+  T extends string,
+  M extends ArvoContractVersionMapParam,
+  X extends ArvoServiceMap,
+  D extends ArvoDependencies,
+  H extends ArvoMechanismHooks,
+  Declared extends ArvoDeclaredVersions = {},   // what has been declared so far
 > {
-  /** The contract this handler implements. */
-  readonly contract: ArvoContract<T, M>;
-  /** The contracts it may send to, each at one version, under the name given. */
-  readonly services: Readonly<S>;
-  /** One entry per version of the contract: its executor, state schema and options as declared. */
-  readonly versions: Readonly<VD>;
+  /** Declares one version. Returns a new setup carrying it; nothing is mutated. */
+  handler<V extends keyof M & ArvoSemanticVersion, S extends z.$ZodObject | undefined = undefined>(
+    version: V,
+    declaration: ArvoVersionDeclaration<T, M, V, X, S, D, H> | ArvoEventHandlerExecutor<T, M, V, X, undefined, D, H>,
+  ): ArvoEventHandlerSetup<T, M, X, D, H, Declared & Record<V, S>>;
 
-  /**
-   * Runs one delivery. The only way a handler does anything, and the whole of its boundary:
-   * it names no broker, store, scheduler, transport or runtime, and reaches outward only
-   * through the state function it is handed.
-   */
-  tryExecute(param: ArvoDeliveryParam<D, H>): AsyncResult<ArvoDelivered, ArvoHandlerFault>;
-  /** {@link tryExecute}, throwing the fault instead of reporting it. */
-  execute(param: ArvoDeliveryParam<D, H>): Promise<ArvoDelivered>;
-
-  constructor(param: ArvoEventHandlerParam<T, M, S, D, H, VD>);
+  /** Runs every rule and reports each one broken, or gives back the handler. */
+  tryBuild(): Result<ArvoEventHandler<T, M, X, D, H, Declared>, ArvoEventHandlerValidationError>;
+  /** {@link tryBuild}, throwing instead of reporting. */
+  build(): ArvoEventHandler<T, M, X, D, H, Declared>;
 }
-
-const tryCreateArvoEventHandler: <T, M, S, D, H, VD>(
-  param: ArvoEventHandlerParam<T, M, S, D, H, VD>,
-) => Result<ArvoEventHandler<T, M, S, D, H, VD>, ArvoEventHandlerValidationError>;
 ```
 
-The handler exposes what was declared and nothing derived from it. Resolved options and the
-per-version emittable set are computed at declaration and held internally, where the changes
-that run a delivery read them.
-
-The input, and where each part comes from:
+The setup holds what a handler has one of:
 
 ```ts
-type ArvoEventHandlerParam<T, M, S, D, H, VD> = {
-  /** The contract implemented. A contract, not a version -- every version gets an executor. */
+type ArvoEventHandlerSetupParam<T, M, X, D, H> = {
+  /** The contract implemented. A contract, not a version. */
   contract: ArvoContract<T, M>;
-  /** Contracts this handler may send to, each at exactly one version. The name is yours. */
-  services?: S;
+  /** The contracts it may send to, each at one version, under the name you give. */
+  services?: X;
   /** Defaults for every version. Omit one and the protocol's own default fills it. */
   options?: Partial<ArvoEventHandlerOptions>;
-  /**
-   * Types only. Neither member carries a value or is read at runtime -- each exists so the
-   * declaration can say what shape a mechanism will supply at delivery, and both reach an
-   * executor through its context. Omit either and it is an empty object.
-   */
-  types?: Partial<{
-    /** Whatever this handler's mechanism exposes to an executor. */
-    mechanismHooks: H;
-    /** Whatever this handler's executors are given to work with. */
-    dependencies: D;
-  }>;
-  /** One entry per declared version. A missing version does not compile, and does not construct. */
-  versions: VD;
+  /** Types only. Neither is stored, and both are empty when omitted. */
+  types?: Partial<{ mechanismHooks: H; dependencies: D }>;
 };
 
-/**
- * Each version declares its own state schema, so each executor's context differs.
- * A version needing neither state nor options is written as the executor alone.
- */
-type ArvoVersionDeclarations<T, M, S, D, H> = {
-  [V in keyof M & ArvoSemanticVersion]:
-    | ArvoExecutor<T, M, V, S, undefined, D, H>        // shorthand: stateless, all options inherited
-    | {
-        /** Schema for this version's business state. Omit for a version that remembers nothing. */
-        state?: z.$ZodObject;
-        /** Options for this version. Omit one and the handler's value applies. */
-        options?: Partial<ArvoEventHandlerOptions>;
-        /** Business code for this version. */
-        execute: ArvoExecutor<T, M, V, S, z.$ZodObject | undefined, D, H>;
-      };
-};
-
-/** A version's state schema as written, or `undefined` where it declared none. */
-type StateSchemaOf<VD, V extends keyof VD> =
-  VD[V] extends { state: infer St extends z.$ZodObject } ? St : undefined;
-
-/** The services a handler declares, by the local name it gives each. */
-type ArvoServiceMap = Record<string, VersionedArvoContract>;
-
-/** Whatever a mechanism chooses to expose to an executor. */
-type ArvoMechanismHooks = Record<string, any>;
-
-/** Whatever an executor is given to work with. Outside the model, and never stored. */
-type ArvoDependencies = Record<string, any>;
-
-/** Declared neither, so there is nothing to reach for. */
-type ArvoNone = Record<string, never>;
-
-type ArvoEventHandlerOptions = {
-  maxDepth: number;                  // default 10000
-  maxRetryAttempts: number;          // default 3
-  retryDelay: number | ArvoRetryDelayFn;  // default 300 (ms)
-  runTimeout: number | null;         // default 30000 (ms); null is unbounded
-  executionTimeout: number | null;   // default null, unbounded
-  collect: 'all' | 'each';           // default 'all'
-  handlerErrorDomain: ArvoDomainInput;    // default ArvoDomain.LOCAL
+/** One version, where it has more to say than its executor. */
+type ArvoVersionDeclaration<T, M, V, X, S, D, H> = {
+  state?: S;
+  options?: Partial<ArvoEventHandlerOptions>;
+  execute: ArvoEventHandlerExecutor<T, M, V, X, S, D, H>;
 };
 ```
 
-`types` earns its place by being the only position from which a caller's dependency and hook
-shapes can be inferred. Both are supplied by the mechanism at delivery and appear nowhere else in
-the declaration, so without it a caller wanting either typed would have to write every type
-argument by hand — the contract, its version map, the services and the version declarations
-included. Writing one optional field is the smaller price, and a handler needing neither omits it.
+**Why a chain rather than a map of versions.** A version's `execute` has to be typed by that
+version's own `state` schema, and TypeScript will not read one key of an object literal to type
+another key of the same literal. Each `handler` call is its own inference, so the schema is
+settled before the executor is checked. The version is named once, as the argument, which no
+other shape achieved.
 
-Both sit at the handler and not at a version, because a mechanism runs a handler rather than a
-version: one handler, one mechanism, one shape each. Every version's executor therefore sees the
-same two types, and a version wanting a narrower dependency narrows it in its own body. The state
-schema is the one of the three that is per version, because ADR-006 puts it on the executor's own
-declaration.
+**Completeness is checked at build, not by the compiler.** A handler missing a version the
+contract declares is refused when `build` runs, alongside every other rule. Gating the terminal
+call on a type-level accumulator was considered and is recorded as rejected in `design.md`.
 
-`handlerErrorDomain` takes `ArvoDomainInput`, the type `ArvoDomain` already ships: a literal, or one of four symbols naming where to read a domain from. Those four are ADR-006's four sources under a different spelling, which ADR-004 leaves to each language, so nothing new is invented here.
+## Writing a version somewhere else
+
+A handler with several substantial versions should not be one file. Two helpers type a version
+written away from the chain, and both take the setup as their first argument, so everything the
+context needs is already known.
+
+```ts
+// one file
+export const setup = setupArvoEventHandler({ contract: orderContract, services, types });
+export const orderState = z.object({ orderId: z.string() });
+
+// another file, fully typed with no chain in sight
+export const v100: InferArvoHandlerVersion<typeof setup, '1.0.0', typeof orderState> = {
+  state: orderState,
+  options: { maxDepth: 250 },
+  execute: async (ctx) => { ctx.setState({ orderId: ctx.event.data.items[0] }) },
+};
+
+// a version that declares no schema. The third argument is optional and omitted here.
+export const v110: InferArvoHandlerVersion<typeof setup, '1.1.0'> = {
+  execute: async (ctx) => { ctx.event.data.rush },
+};
+
+// just the executor, where a version is only that
+export const v120: InferArvoHandlerExecutor<typeof setup, '1.2.0'> = async (ctx) => {};
+
+// assembly
+const handler = setup.handler('1.0.0', v100).handler('1.1.0', v110).handler('1.2.0', v120).build();
+```
+
+An annotation is resolved before the value it types, so `ctx` is typed from the annotation
+rather than from a sibling key, and the circularity that forces the chain does not arise.
+
+**Omitting the third argument forbids declaring a schema**, rather than quietly ignoring one:
+
+```ts
+const bad: InferArvoHandlerVersion<typeof setup, '1.1.0'> = {
+  state: orderState,   // does not compile: the annotation was not told about a schema
+  execute: async (ctx) => {},
+};
+```
+
+Without that, forgetting `typeof orderState` in the annotation would leave the schema declared
+and the executor's state untyped, with nothing to notice it. Untyped state stays reachable
+either way — a version with no schema has `state` as any JSON object — so the rule costs a
+version nothing except the requirement to say what it is doing.
+
+The one cost, and it applies only to a version that declares a schema this way: the schema is
+named twice, once in the annotation and once as the property. Declared inline through `handler`
+it is named once. Both forms are supported and neither is preferred by the protocol.
 
 ## What an executor will receive
 
@@ -448,66 +450,66 @@ is eventually for.
 ## Using it
 
 ```ts
-// A handler implementing one contract, calling one service, with two versions.
-const handler = new ArvoEventHandler({
-  contract: orderContract,                       // declares 1.0.0 and 1.1.0
+// A handler implementing one contract, calling one service, with three versions.
+const handler = setupArvoEventHandler({
+  contract: orderContract,                       // declares 1.0.0, 1.1.0 and 1.2.0
   services: { payments: paymentContract.versions['1.0.0'] },
   options: { maxRetryAttempts: 5, runTimeout: 10_000 },
-  versions: {
-    '1.0.0': {
-      state: z.object({ orderId: z.string(), attempts: z.number() }),
-      options: { maxDepth: 250, executionTimeout: 86_400_000 },
-      execute: async (ctx) => { /* typed against this version -- see above */ },
-    },
-    '1.1.0': {
-      execute: async (ctx) => { /* stateless: no state schema */ },
-    },
-    '1.2.0': async (ctx) => { /* stateless: no state schema can also be definde as this with no otehr config */ },
-  },
-});
+})
+  .handler('1.0.0', {
+    state: z.object({ orderId: z.string(), attempts: z.number() }),
+    options: { maxDepth: 250, executionTimeout: 86_400_000 },
+    execute: async (ctx) => { /* ctx.state is typed by the schema above */ },
+  })
+  .handler('1.1.0', { options: { collect: 'each' }, execute: async (ctx) => {} })
+  .handler('1.2.0', async (ctx) => { /* nothing but an executor */ })
+  .build();
 ```
 
 Options resolve version-then-handler, and a consumer never sees the resolution: for the handler
 above, version `1.0.0` runs with its own maximum depth of 250, the handler's five retry attempts,
-and the protocol's own `'all'` collection strategy, while `1.1.0` and `1.2.0` inherit all seven.
-That is an internal function the changes which run a delivery read, not a method on the class.
+and the protocol's own `'all'` collection strategy, while `1.2.0` inherits all seven. That is an
+internal function the changes which run a delivery read, not a method on anything.
 
 ```ts
 // Omitted inherits; a written null is a value. The two are never the same answer.
-new ArvoEventHandler({ ..., options: { runTimeout: 10_000 },
-  versions: { '1.0.0': { execute, options: {} } } });            // runTimeout 10_000
-new ArvoEventHandler({ ..., options: { runTimeout: 10_000 },
-  versions: { '1.0.0': { execute, options: { runTimeout: null } } } });  // unbounded
+setupArvoEventHandler({ contract, options: { runTimeout: 10_000 } })
+  .handler('1.0.0', { options: {}, execute })                       // runTimeout 10_000
+  .build();
+
+setupArvoEventHandler({ contract, options: { runTimeout: 10_000 } })
+  .handler('1.0.0', { options: { runTimeout: null }, execute })     // unbounded
+  .build();
 ```
 
 ```ts
 // Declaring what the mechanism will hand every executor. Types only -- no value is stored.
-const handler = new ArvoEventHandler({
+ArvoEventHandler.setup({
   contract: orderContract,
-  versions: { '1.0.0': async (ctx) => { ctx.dependencies.db.find(); ctx.hooks.scheduler; } },
   types: { dependencies: {} as { db: Db }, mechanismHooks: {} as { scheduler: Scheduler } },
-});
+}).handler('1.0.0', async (ctx) => { ctx.dependencies.db.find(); ctx.hooks.scheduler });
 // Omit `types` and both are empty: ctx.dependencies.db does not compile, because none was declared.
 ```
 
 ```ts
 // A handler may call itself. Recursion is permitted, and is not a collision.
-new ArvoEventHandler({
+setupArvoEventHandler({
   contract: treeWalkContract,
   services: { self: treeWalkContract.versions['1.0.0'] },
-  versions: { '1.0.0': { execute } },
-});
+}).handler('1.0.0', execute).build();
 ```
 
 ```ts
-// Declaration errors, all of them, before any event exists.
-new ArvoEventHandler({ contract: orderContract, versions: { '1.0.0': { execute } } });
-// throws ArvoEventHandlerValidationError -- no executor for 1.1.0
+// Declaration errors, all of them, at build and before any event exists.
+setupArvoEventHandler({ contract: orderContract }).handler('1.0.0', execute).build();
+// throws ArvoEventHandlerValidationError -- no handler for 1.1.0 or 1.2.0
 
-new ArvoEventHandler({ ..., options: { runTimeout: 30_000, executionTimeout: 5_000 } });
+setupArvoEventHandler({ contract, options: { runTimeout: 30_000, executionTimeout: 5_000 } })
+  .handler('1.0.0', execute)
+  .build();
 // throws -- an attempt could never finish inside the execution's own bound
 
-const attempt = tryCreateArvoEventHandler({ ... });
+const attempt = setup.handler('1.0.0', execute).tryBuild();
 if (!attempt.ok) attempt.error.issues;   // every rule broken, each with its position
 ```
 
@@ -525,15 +527,16 @@ None. `arvo-contract` is read and not changed — a handler names a contract and
 
 **Affected code**
 
-- `src/ArvoEventHandler/index.ts` (new) — the class
-- `src/ArvoEventHandler/types.ts` (new) — the param types, the executor type, the options types
+- `src/ArvoEventHandler/index.ts` (new) — the class, its constructor not exported for use
+- `src/ArvoEventHandler/types/` (new) — one module per group, no barrel: `schema.ts`, `supplied.ts`, `options.ts`, `services.ts`, `context.ts`, `executor.ts`, `declaration.ts`, `infer.ts`
+- `src/ArvoEventHandler/setup.ts` (new) — the setup, its `handler` method, and `build`/`tryBuild`
 - `src/ArvoEventHandler/options.ts` (new, internal) — the seven defaults, and version-then-handler resolution. Not exported.
 - `src/ArvoEventHandler/declaration.ts` (new) — the rules that reject a declaration
 - `src/ArvoEventHandler/errors.ts` (new) — `ArvoEventHandlerValidationError`
-- `src/factories/createArvoEventHandler.ts` (new) — the `tryX`/`X` pair
+- `src/factories/setupArvoEventHandler.ts` (new) — the free function delegating to `ArvoEventHandler.setup`
 - `src/index.ts` — new public exports
 - `tests/ArvoEventHandler/` (new) — mirroring the modules above
-- `ts/sandbox/src/playground.ts` — a section declaring a handler, including the shorthand version form, and showing a refused declaration
+- `ts/sandbox/src/playground.ts` — a section declaring a handler through the chain, one version written standalone through `InferArvoHandlerVersion`, and a refused declaration
 
 **Dependencies**
 

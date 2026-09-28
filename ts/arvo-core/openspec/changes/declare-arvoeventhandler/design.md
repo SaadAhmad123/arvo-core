@@ -26,6 +26,44 @@ See `proposal.md` — Why and The plan. The constraints that shape this slice:
 
 ## Decisions
 
+### A declaration is a chain, because a version's executor must be typed by that version's schema
+
+An earlier draft declared versions as one object keyed by version, each entry carrying a `state` schema and an `execute`. It does not work, and the probes under **What the probes established** are where that surfaced: TypeScript will not read one key of an object literal to type another key of the same literal, so `execute` received an untyped context and a version's own state schema governed nothing. The step 1 probe had stubbed that position as `any` and so missed it.
+
+Three shapes were tried against a compiler, and all three fix it:
+
+| | what it costs |
+|---|---|
+| a generic wrapper per stateful version | a wrapper call, and the version named twice |
+| state schemas hoisted into their own map | a version's schema and its executor declared apart |
+| **a chain of `handler` calls** | **a terminal `build`, and completeness no longer free** |
+
+The chain wins because each call is its own inference, so the schema is settled before the executor is checked, and the version is named once as an argument rather than twice. Neither of the other two manages both.
+
+*What it costs, named rather than discovered.* The constructor no longer sees the versions, so it cannot validate a declaration, and every rule moves to `build`. And the mapped type over `keyof M` that made a missing version a compile error is gone with the map.
+
+### Completeness is checked at build, and not by the compiler
+
+A type-level accumulator could gate `build` so that it will not compile until every declared version has one. It was considered and rejected for this change.
+
+It is the fiddliest type in the design and it buys the least: a missing version is caught either way, and caught before any event exists either way, because `build` runs at module load in every real declaration. What it would cost is a `build` whose error message, when a version is missing, is whatever TypeScript makes of an unsatisfied conditional — reliably worse than an `ArvoEventHandlerValidationError` naming the version.
+
+*Left open rather than closed.* Adding the gate later is additive, since it only narrows what already compiles.
+
+### Two entry points, one implementation
+
+`ArvoEventHandler.setup(...)` and `setupArvoEventHandler(...)` do the same thing, matching `new ArvoContract(...)` and `createArvoContract(...)`. The static holds it; the free function delegates and carries no logic, so the two cannot drift.
+
+*And the constructor is not among them.* `new ArvoEventHandler(...)` is not public. With a terminal `build` it would be a second way to declare, and it could not validate anything, because a constructor taking only the setup has no versions to check. It holds the validation and is called by `tryBuild`, which is the direction `project.md` — *Result types* requires for a class.
+
+### Writing a version away from the chain
+
+`InferArvoHandlerVersion<Setup, V, S?>` and `InferArvoHandlerExecutor<Setup, V, S?>` read the setup's own type and give back exactly what that version may be declared as. A type annotation is resolved before the value it types, so the circularity that forces the chain does not arise, and a version can live in its own file with its context fully typed.
+
+*The third argument is optional, and omitting it forbids a schema rather than ignoring one.* Where it is absent the helper types `state` as `never`, so writing `state: schema` without telling the annotation is a compile error. The alternative — accepting the schema and typing the executor against nothing — loses type safety silently, and the mistake it guards against is forgetting one type argument while writing the property right below it.
+
+*The one asymmetry, and it is inherent.* A version declaring a schema this way names it twice, once in the annotation's third argument and once as the property, because an annotation cannot read a value it is about to type. Declared inline through `handler` the schema is named once. Both are supported; neither is the protocol's preference, and the TSDoc says so rather than implying the inline form is the real one.
+
 ### The context is sketched now and built in change 4, and that is why the generics land here
 
 `proposal.md` — What an executor will receive carries the context in full types. Nothing in this change constructs one, and the type itself lands with change 4: `fault` is typed against ADR-008 and the record-backed halves of `identity` and `collected` against ADR-007, neither of which exists.
@@ -36,7 +74,7 @@ The alternative was to define the context now. ADR-006 fixes sixteen members and
 
 *The cost, named rather than discovered:* tightening the executor's signature in change 4 is a breaking type change for anyone who wrote an executor against this release. Nothing is published, and a handler that cannot run has no callers to break, so the cost is real but paid by nobody.
 
-### One entry point, and it is the `tryX`/`X` pair like everything else
+### Running a delivery is one operation, and it is the `tryX`/`X` pair like everything else
 
 A handler does one thing and there is one operation for it, and that operation is the whole boundary: **the mechanism is whatever wraps it**, and nothing on either side of the call knows more about the other than the signature says. It takes the delivered event, a function that reads the store, an attempt number, dependencies, hooks and a telemetry context. Nothing in it names a broker, a store, a scheduler, a transport or a runtime, so the same handler runs under a queue consumer, a serverless invocation, a test, or a loop in a script. Adapting it is reading the result, not implementing an interface.
 
@@ -76,13 +114,11 @@ A handler does one thing and there is one operation for it, and that operation i
 
 An array would match the ADR's wording more literally. The record wins on two counts: a name is how an author refers to a dependency when reading their own declaration back, and change 4 can surface `services.payments.type` to an executor without inventing a lookup. Nothing in the protocol reads the key, and the spec says so, so an implementation in another language declining to offer names is still conformant.
 
-### Completeness is checked twice, and the compile-time half is free
+### Completeness is a runtime rule, and the widening trap is why that is no loss
 
-`versions` is a mapped type over `keyof M & ArvoSemanticVersion`, so a contract declaring `1.0.0` and `1.1.0` will not compile against a handler declaring one of them. That is ADR-006's *One executor per version* enforced by the type system at no cost.
+A handler declaring fewer versions than its contract does is refused at `build`, naming each version with no handler, and one declaring a version the contract does not know is refused the same way.
 
-It is still checked at runtime. `project.md` — *Validation* is explicit that compile-time types do not substitute for runtime validation, and ADR-000 gives the reason: a JavaScript caller, a value crossing a cast, or a contract built dynamically all reach the constructor with the types erased.
-
-*The trap that rides along, and it is the contract's own:* `ArvoContractVersionMapParam` widens `keyof M` when a caller annotates their versions map with it. `ArvoContract` already documents this on the type. A handler inherits the consequence — an annotated contract gives a handler whose `versions` key is `ArvoSemanticVersion` rather than the two it declares, so the compile-time half silently stops working while the runtime half still holds. The TSDoc says so where a caller meets it.
+An earlier draft had the compiler catch the first through a mapped type over `keyof M`, and the probes showed what that was actually worth: a contract whose versions map was annotated `ArvoContractVersionMapParam` widens its keys, so a handler built from it accepted *no versions at all* and compiled. The compile-time half was already unreliable in exactly the case a large codebase reaches first. The runtime rule has no such hole, runs at module load in every real declaration, and reports a version by name.
 
 ### `unset` inherits, a written `null` is a value, and this departs from *Optional inputs*
 

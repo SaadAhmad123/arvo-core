@@ -8,6 +8,8 @@ An ArvoEventHandler implements one contract, declares the contracts it may send 
 
 The system SHALL build a handler from a declaration naming the contract it implements, an executor for each of that contract's versions, and optionally the contracts it may send events to, options for the handler, options for a version, and a state schema for a version.
 
+A declaration SHALL be assembled in two stages: what a handler has one of, declared once, and then each version, declared one at a time. No rule SHALL be checked until the declaration is complete, and every rule SHALL be checked then.
+
 The contract SHALL be named as a contract and not as a version. Each contract the handler may send events to SHALL be named at exactly one version.
 
 A version needing neither a state schema nor options of its own SHALL be declarable as its executor alone, and SHALL be understood exactly as the same executor declared with neither.
@@ -35,7 +37,7 @@ A handler built from a declaration SHALL process no event, read no record and ca
 - **AND** that version holds no state schema
 
 #### Scenario: A version declared as its executor alone
-- **WHEN** a handler is declared with a version given as an executor rather than as a declaration naming one
+- **WHEN** a version is declared as an executor rather than as a declaration naming one
 - **THEN** the handler is built
 - **AND** that version holds that executor
 - **AND** it holds no state schema
@@ -61,6 +63,8 @@ The system SHALL require one executor for each version the implemented contract 
 
 The system SHALL refuse a declaration naming an executor for a version the implemented contract does not declare.
 
+The system SHALL refuse a declaration naming the same version more than once.
+
 #### Scenario: Every version has an executor
 - **WHEN** a handler is declared for a contract with two versions, with an executor for each
 - **THEN** the handler is built
@@ -72,6 +76,11 @@ The system SHALL refuse a declaration naming an executor for a version the imple
 
 #### Scenario: An executor names an undeclared version
 - **WHEN** a handler is declared with an executor for a version the contract does not declare
+- **THEN** the declaration is refused
+- **AND** the report names that version
+
+#### Scenario: One version declared twice
+- **WHEN** a handler is declared naming the same version twice
 - **THEN** the declaration is refused
 - **AND** the report names that version
 
