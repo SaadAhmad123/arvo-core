@@ -386,7 +386,7 @@ ADR-001 holds that `domain` is "`null` for traffic inside a lattice" and set non
 
 #### A root event must carry `to`
 
-**A root event MUST carry a `to`, and it SHOULD be its own `type`.** Gate step 12 (**Entry validation**) makes `to` authoritative, so an event arriving with none is a fault — and ADR-001's minimal root event, taking every default, has `to` at `null`. Whatever mints a root event therefore has one obligation this ADR places on it: address the event. `to = type` is the sensible default and the one an implementation SHOULD apply when constructing a root event, since a root event by definition goes to the handler that implements the contract it names.
+**A root event MUST carry a `to`, and it MUST be its own `type`.** Gate step 12 (**Entry validation**) makes `to` authoritative and requires it to equal the receiving handler's self contract type. A root event names a contract, the handler that implements that contract has that contract's `type` as its own, and so the only value of `to` any handler will accept is the event's own `type` — anything else is refused by every handler that could receive it. ADR-001's minimal root event, taking every default, has `to` at `null`, and is refused for the same reason. Whatever mints a root event therefore has one obligation this ADR places on it: set `to = type`. An implementation constructing a root event MUST apply that, not offer it as a default.
 
 This is the only requirement this ADR makes of a participant that is not a handler. It is stated here because a root minter is outside the protocol and will not read the rest of it, and because the failure is otherwise baffling: a perfectly well-formed root event, rejected by every handler it reaches, for a field its author never knew mattered.
 
