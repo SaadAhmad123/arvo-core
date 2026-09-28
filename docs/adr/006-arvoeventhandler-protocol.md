@@ -123,17 +123,17 @@ An executor that declares none is still resumable — it may emit to a service a
 
 #### One table, one rule
 
-Seven **options** govern how a version behaves. They are defined here and nowhere else: every other section says what its option *does*, and refers here for its type, its default, and how its value is found.
+Seven **options** govern how a version behaves. They are defined here and nowhere else: every other section says what its option *does*, and refers here for its type, its default, how its value is found, and what the protocol substitutes where a resolved value cannot be used at the moment it is needed — the **Fallback** column, which is N/A for every option whose value is a plain number or literal, since those cannot fail at use.
 
-| Option | Type | Handler level | Version level |
-|---|---|---|---|
-| `max_depth` | integer ≥ 0 | **required**; `10000` where the author writes nothing | optional; falls back to the handler's |
-| `max_retry_attempts` | integer ≥ 0 | **required**; `3` where the author writes nothing | optional; falls back to the handler's |
-| `retry_delay` | integer ms ≥ 0, or a function `(event, record \| null, attempt, max_retry_attempts) → integer ms` | **required**; `300` where the author writes nothing | optional; falls back to the handler's |
-| `run_timeout` | integer ms > 0, or `null` for unbounded | **required**; `30000` where the author writes nothing | optional; falls back to the handler's |
-| `execution_timeout` | integer ms > 0, or `null` for unbounded | **required**; `null` where the author writes nothing | optional; falls back to the handler's |
-| `collect` | `all` \| `each` | **required**; `all` where the author writes nothing | optional; falls back to the handler's |
-| `handler_error_domain` | a domain literal, or one of the four source identifiers under **Domain** | **required**; `none` where the author writes nothing | optional; falls back to the handler's |
+| Option | Type | Handler level | Version level | Fallback |
+|---|---|---|---|---|
+| `max_depth` | integer ≥ 0 | **required**; `10000` where the author writes nothing | optional; falls back to the handler's | N/A |
+| `max_retry_attempts` | integer ≥ 0 | **required**; `3` where the author writes nothing | optional; falls back to the handler's | N/A |
+| `retry_delay` | integer ms ≥ 0, or a function `(event, record \| null, attempt, max_retry_attempts) → integer ms` | **required**; `300` where the author writes nothing | optional; falls back to the handler's | `300` ms, where the function form fails at use (**`retry delay` must not be able to fail**) |
+| `run_timeout` | integer ms > 0, or `null` for unbounded | **required**; `30000` where the author writes nothing | optional; falls back to the handler's | N/A |
+| `execution_timeout` | integer ms > 0, or `null` for unbounded | **required**; `null` where the author writes nothing | optional; falls back to the handler's | N/A |
+| `collect` | `all` \| `each` | **required**; `all` where the author writes nothing | optional; falls back to the handler's | N/A |
+| `handler_error_domain` | a domain literal, or one of the four source identifiers under **Domain** | **required**; `none` where the author writes nothing | optional; falls back to the handler's | N/A |
 
 **The handler level is complete.** A handler always holds a value for every one of the seven. An author who writes nothing for one gets the value in the third column, which the protocol defines; there is no state in which a handler lacks an option. **The version level is sparse.** A version declares only what it wants to differ, and an option it does not declare is `null`, meaning *inherited*.
 
@@ -877,7 +877,7 @@ In its function form `retry_delay` is then called with `null` in place of the re
 
 #### `retry delay` must not be able to fail
 
-In its function form `retry delay` **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute the handler level's default for `retry_delay` (**Options**) rather than propagate the failure. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
+In its function form `retry delay` **MUST NOT be able to fail**. Where it does — throwing, or returning anything that is not a usable number — an implementation MUST substitute the fixed protocol fallback for `retry_delay`, `300` ms from the Fallback column under **Options**, rather than propagate the failure. The fallback is never a declared value: a handler-level function that fails would otherwise be its own fallback. A failure while working out how long to wait before retrying would turn a recoverable situation into an unrecoverable one, which is the one outcome the retry path exists to prevent.
 
 #### Exhaustion ends retrying
 
