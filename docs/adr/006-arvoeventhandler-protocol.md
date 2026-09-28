@@ -137,7 +137,7 @@ Seven **options** govern how a version behaves. They are defined here and nowher
 
 **The handler level is complete.** A handler always holds a value for every one of the seven. An author who writes nothing for one gets the value in the third column, which the protocol defines; there is no state in which a handler lacks an option. **The version level is sparse.** A version declares only what it wants to differ, and an option it does not declare is `null`, meaning *inherited*.
 
-**Resolution is one rule:** the version's value where the version declared one, otherwise the handler's. There is no third step, because the handler is never missing a value. The rule holds identically wherever and whenever an option is read — at declaration, at a gate step, on return — and it does not matter whether a version is known at that moment: **where no version is known, the version side is `null` for every option and the handler's values apply.** Gate steps 1 through 6 run before any version is confirmed, and the one retryable fault among them, `state_resolution_failed`, takes its retry options this way (**Retry before a version is known**). That is an instance of the rule, not an exception to it.
+**Resolution is one rule:** the version's value where the version declared one, otherwise the handler's. There is no third step, because the handler is never missing a value. The rule holds identically wherever and whenever an option is read — at declaration, at a gate step, on return — and it does not matter whether a version is known at that moment: **where no version is known, the version side is `null` for every option and the handler's values apply.**
 
 #### What each option governs
 
