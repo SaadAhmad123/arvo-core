@@ -258,6 +258,7 @@ There is no fifth. A return that is none of these — a value that is not an eve
 **Every returned event is validated before anything leaves the handler**, and an event that fails is a non-retryable execution fault for the whole batch: nothing is emitted, no record is written. The checks are:
 
 - its `type` is in the emittable set for this version and is not the handler error type (**Definition and declaration**) — else `emission_not_permitted`;
+- it is not a second own-`outputs` event in the same batch — a batch carries at most one completion, because the caller awaits exactly one answer to its request (**A mixed batch completes**) — else `emission_not_permitted`;
 - its `data` satisfies the schema that `type` selects, at the declared version — else `emission_schema_rejected`;
 - its `depth` passes the version's guard (**Depth**) — else `max_depth_event_requested`;
 - it is structurally valid under ADR-001 and ADR-002, which an event built through the builder is by construction and a hand-built event may not be — else `emission_not_permitted`.
@@ -693,7 +694,7 @@ Because every input is drawn from the canonical form or from protocol-defined op
 |---|---|---|
 | `idle` | no | Alive, with nothing outstanding and nothing completed. |
 | `waiting` | no | One or more responses are outstanding. |
-| `success` | yes | An own `outputs` event was emitted; or, for a version with empty `outputs` in a handler with no service contracts, the executor returned nothing (**A sink version completes by returning nothing**). |
+| `success` | yes | An own `outputs` event was emitted, whether alone or alongside service emissions in the same batch (**A mixed batch completes**); or, for a version with empty `outputs` in a handler with no service contracts, the executor returned nothing (**A sink version completes by returning nothing**). |
 | `error` | yes | The handler error event was emitted because the executor failed. |
 | `cancelled` | yes | The executor marked the execution cancelled and returned an own `outputs` event. |
 | `failure` | yes | The mechanism abandoned the execution after a fault, and committed the record the handler prepared for that (**Abandonment**). |
@@ -721,6 +722,22 @@ An implementation SHOULD make the first row the easy path. The second exists so 
 #### Emitting nothing: `waiting` or `idle`
 
 **An executor that returns nothing rests at `waiting` or `idle`, depending on what is still outstanding** (**What an executor returns**). Returning nothing says only "no new events"; it does not say the execution has nothing to wait for. Under the per-version override that enters the executor on each response (**Collection**), returning nothing on a partial collection is the ordinary case — responses remain outstanding, so the execution stays at `waiting`. Where nothing is outstanding and nothing terminal was emitted, it rests at `idle` — except for a sink version, which rests at `success` (below).
+
+#### A mixed batch completes
+
+A batch may carry service emissions and an own `outputs` event together, and the rule for it is simple: **every event in the batch is emitted, and the execution rests terminal.** The lifecycle a batch produces depends only on whether a completion is among its events:
+
+| The batch carries | The execution rests at |
+|---|---|
+| service emissions only | `waiting`, with each recorded in `in_flight_event_map` (**Collection**) |
+| one own `outputs` event only | `success` — or `cancelled`, where the executor marked it so |
+| service emissions and one own `outputs` event | `success` — or `cancelled` — and the service emissions are emitted and recorded exactly as in the first row |
+| nothing | `waiting`, `idle`, or `success` for a sink version (**Emitting nothing: `waiting` or `idle`**) |
+| more than one own `outputs` event | nothing; the batch is a fault, `emission_not_permitted` (**What an executor returns**) |
+
+The completion wins because it is what the caller is waiting for, and the caller awaits exactly one answer to its request. An execution that has answered is finished, whatever else it set in motion on the way out. The service emissions are not suppressed and not deferred: an executor that answers its caller and in the same batch asks a service to do something has said, in one decision, "here is my answer, and also start this" — and both halves are honoured.
+
+**The consequence is that the service's response has nowhere to go.** It arrives carrying this execution's identity, finds a record at `success`, and is refused at gate step 9 as `lifecycle_terminal`, a fault whose abandonment pair is `null` by rule (**`lifecycle_terminal` yields neither**). The mechanism handles it as it handles any fault it will not retry. This is accepted, not accidental: a completing execution that emits to a service is emitting fire-and-forget work, and an implementation SHOULD say so where the pattern is likely to be met, because an author who expected to process that response has misunderstood what completing means. An executor that needs the response completes *after* it arrives, not alongside asking for it.
 
 #### A sink version completes by returning nothing
 
@@ -945,7 +962,7 @@ An execution that calls out to services has to know what it is waiting for, and 
 
 #### Recording emissions as outstanding
 
-When an executor returns one or more events addressed to service contracts, the handler records each in `in_flight_event_map` before the delivery ends, keyed by the `id` of the event it is emitting, with `null` as the value. The execution then rests at `waiting` (**The execution record**).
+When an executor returns one or more events addressed to service contracts, the handler records each in `in_flight_event_map` before the delivery ends, keyed by the `id` of the event it is emitting, with `null` as the value. The execution then rests at `waiting` (**The execution record**) — unless the same batch also carried an own `outputs` event, in which case the emissions still go out and are still recorded, but the execution rests terminal (**A mixed batch completes**).
 
 The key is the emitted event's `id` because that is the value a response carries back in `initid` (**Matching a response by `initid`**). The key MUST be present while the answer is outstanding, because the key set — not the values — is what says what the execution is waiting for. A response arriving for a key replaces that key's `null` with the response event.
 
@@ -1129,7 +1146,7 @@ What is *not* normative is the shape of the object in a language's own terms: wh
 | execution | the executor did not return within the version's run timeout | `run_timeout` | **yes** |
 | execution | the executor marked the execution cancelled and returned no own-`outputs` event | `execution_cancelled` | no |
 | execution | a fault the executor raised deliberately through the context | `executor_raised` | **executor's choice; yes unless stated** |
-| return | a returned value is not an event, or an event's type is not emittable by this version, or it is structurally invalid | `emission_not_permitted` | no |
+| return | a returned value is not an event, or an event's type is not emittable by this version, or it is structurally invalid, or a batch carries more than one own-`outputs` event | `emission_not_permitted` | no |
 | return | a returned event's payload is rejected by its schema | `emission_schema_rejected` | no |
 | return | a returned event would go beyond the version's maximum depth | `max_depth_event_requested` | no |
 | return | the value written through `set state` is rejected by the declared schema | `state_schema_rejected` | no |
