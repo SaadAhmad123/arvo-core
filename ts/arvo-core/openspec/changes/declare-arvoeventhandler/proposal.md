@@ -333,6 +333,77 @@ type ArvoDelivered =
   | { readonly kind: 'discarded' };
 ```
 
+The fault an adapter reads is an error in its own right, so `execute` can throw it and a
+`catch` can name it. Change 3 builds it; its shape decides what an adapter may branch on, so it
+belongs beside the call that returns it.
+
+```ts
+/** Every fault ADR-008 defines, and nothing else. The verdict of each is fixed there. */
+type ArvoFaultKind =
+  // the gate, in order
+  | 'event_unclassifiable' | 'category_mismatch' | 'state_resolution_failed'
+  | 'record_unexpected' | 'record_expected' | 'record_invalid'
+  | 'record_event_unrestorable' | 'version_not_declared' | 'max_depth_event_received'
+  | 'lifecycle_terminal' | 'execution_timeout' | 'event_unaddressed'
+  | 'addressing_mismatch' | 'type_not_receivable' | 'event_schema_rejected'
+  | 'response_unawaited' | 'dependency_resolution_failed'
+  // a declaration that reached a delivery
+  | 'service_version_conflict'
+  // the executor
+  | 'run_timeout' | 'execution_cancelled' | 'executor_raised'
+  // what it returned
+  | 'emission_not_permitted' | 'emission_schema_rejected' | 'max_depth_event_requested'
+  | 'state_schema_rejected' | 'state_not_serializable';
+
+/** Present where a retry is in prospect, `null` where none is. Milliseconds throughout. */
+type ArvoFaultRetry = {
+  readonly max_retry_attempts_allowed: number;
+  readonly retry_in_ms: number;
+  /** `timestamp + retry_in_ms`, as ms since the Unix epoch. */
+  readonly retry_at: number;
+};
+
+/**
+ * Why a delivery could not be carried through. An error, so `execute` throws it and
+ * `tryExecute` reports it, and a durable format, so a mechanism may dead-letter it and
+ * another language may read what it dead-lettered.
+ */
+class ArvoHandlerFault extends Error {
+  override readonly name = 'ArvoHandlerFault';
+  readonly fault_kind: ArvoFaultKind;
+  /** The underlying failure rendered as a string, so the whole object survives JSON. */
+  override readonly cause: string | null;
+  override readonly stack: string | undefined;
+  /** Every check that failed, not only the first. One readable line each. */
+  readonly violations: readonly string[];
+
+  readonly subject: string;
+  /** The key the state function was called with. `null` only where classification failed. */
+  readonly execution_id: string | null;
+  readonly event_id: string;
+
+  readonly attempt: number;
+  /** When this delivery was processed, as ms since the Unix epoch. */
+  readonly timestamp: number;
+  readonly retry: ArvoFaultRetry | null;
+
+  /**
+   * What to act on if this execution is abandoned, and only then. Neither is acted on
+   * when the fault is received, and whether to abandon at all is the mechanism's policy.
+   */
+  readonly abandonment_event: ArvoEvent | null;
+  readonly abandonment_state: ArvoExecutionRecord | null;
+
+  /** The whole object as JSON, for a mechanism that stores it. */
+  toJSON(): ArvoSerializedHandlerFault;
+}
+```
+
+Its field names are ADR-008's own rather than this package's camel case, for the reason
+`ArvoEvent` carries ADR-001's: both are durable formats, a fault stored by one language must be
+readable by another, and a second spelling is a second format. `name`, `message`, `stack` and
+`cause` are the ones `Error` already has, each narrowed rather than added.
+
 ```ts
 // The whole of an adapter, for a mechanism that has a queue and a store.
 const delivery = await handler.tryExecute({

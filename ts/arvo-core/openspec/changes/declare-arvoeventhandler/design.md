@@ -48,6 +48,8 @@ A handler does one thing and there is one operation for it, and that operation i
 
 *What is not converted.* Only an `ArvoHandlerFault` becomes `Err`. Anything else escaping the handler is a defect in this package and propagates out of `tryExecute` unconverted, per *Result types*: a `Result`'s error type is a claim about what kind of failure occurred, and swallowing an arbitrary exception into it makes that claim false.
 
+*The fault extends `Error`, and that is what makes the pair work.* ADR-008 has it extend the language's native error type, so `execute` throws it, a `catch` can name it, and `tryExecute` reports it as `Err` without wrapping. Four of its members — `name`, `message`, `stack` and `cause` — are `Error`'s own, narrowed rather than added: `name` to the literal ADR-008 fixes, `cause` from `unknown` to `string | null` because the whole object must survive JSON. Its remaining field names are ADR-008's spelling and not this package's camel case, for the reason `ArvoEvent` carries ADR-001's: a durable format read across languages cannot have two spellings. Change 3 builds it; it is sketched in `proposal.md` because its shape decides what an adapter may branch on.
+
 *One naming collision, accepted.* The business code a version declares is also called `execute`. `handler.execute` runs a delivery; `versions['1.0.0'].execute` is the executor that delivery may enter. ADR-006 keeps the two apart as *handler* and *executor*, and the nesting makes the relationship read correctly at a call site. The TSDoc on each says which is which.
 
 ### Dependencies and hooks are declared as types, through one witness field
