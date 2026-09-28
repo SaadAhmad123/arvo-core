@@ -1,6 +1,6 @@
 # ADR-008: Execution Faults and Abandonment
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-28
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000) — places the fault object's field names and the value `ArvoHandlerFault` inside the model as a durable format; supplies the representation of two of the three failure boundaries ADR-000's *Explicit Failure Boundaries* names

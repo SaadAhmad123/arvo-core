@@ -1,6 +1,6 @@
 # ADR-007: Execution Record
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-28
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000) — places the execution record's field names inside the model as a durable format

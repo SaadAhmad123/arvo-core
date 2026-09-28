@@ -1,6 +1,6 @@
 # ADR-006: ArvoEventHandler Protocol
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-28
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)

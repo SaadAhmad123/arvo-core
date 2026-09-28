@@ -1,6 +1,6 @@
 # ADR-010: Delivery Classification and Entry Validation
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-28
 - **Scope:** Arvo ecosystem
 - **Amends:** nothing in the AAM membership list; refines the handler lifecycle semantics [ADR-006](./006-arvoeventhandler-protocol.md) places inside the model
