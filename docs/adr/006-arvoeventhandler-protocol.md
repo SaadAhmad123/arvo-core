@@ -841,7 +841,7 @@ Five obligations. Each is a behaviour, and how a mechanism achieves it is the me
    |---|---|
    | event and record | commit the record and publish the event together, under obligation 1 |
    | event only — an init fault raised in the gate | publish the event; no execution began, so there is no record to commit and none is invented |
-   | event and a first record — an init fault raised after the gate has passed, from dependency resolution onward | commit the record the handler built at `cas_version` `0` and publish the event together; the create-if-absent under obligation 5 refuses it where a redelivered init got there first |
+   | event and record — an init fault raised after the gate has passed, from dependency resolution onward | exactly as the first row: commit the record and publish the event together. The record is the execution's first, built by the handler at `failure` with `cas_version` `0`, and the create-if-absent under obligation 5 refuses it where a redelivered init got there first |
    | neither — `event_unclassifiable`, a pre-record followup fault, `lifecycle_terminal` | there is nothing to act on; what the mechanism does with the fault is entirely its own |
 
    It authors neither: only the handler could have addressed the event or written the record's own version and state, so it is handed both finished and MUST NOT compose a substitute.
