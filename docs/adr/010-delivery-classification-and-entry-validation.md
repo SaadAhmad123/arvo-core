@@ -121,7 +121,7 @@ An init delivery has no record, so the steps that read one do not apply to it �
 
 A delivery leaves the gate one of three ways. **Proceed**: every applicable step passed, the execution context is built ([ADR-006](./006-arvoeventhandler-protocol.md), **The execution context**), and the executor is entered — or, under the default join, the response is recorded and the delivery ends without entering it ([ADR-009](./009-execution-bounds.md), **Collection**). **Discard**: step 9 recognised a duplicate; nothing is written and nothing is raised. **Fault**: a step failed, and an execution fault is raised carrying every check that failed ([ADR-008](./008-execution-faults-and-abandonment.md), **Failure protocol**).
 
-Every fault here but one is non-retryable, and for one reason: each describes a delivery that would fail identically however often it were repeated. The exception is step 3, which reaches a store and may succeed a moment later.
+Every fault here but two is non-retryable, and for one reason: each describes a delivery that would fail identically however often it were repeated. The exceptions are steps 3 and 16, the two that reach outside the handler — a store and a dependency factory — and may succeed a moment later.
 
 #### Resolution, and which executor runs
 
