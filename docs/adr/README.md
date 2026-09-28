@@ -24,3 +24,8 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | [ADR-003](./003-arvoevent-cloudevent-transformation.md) | ArvoEvent–CloudEvent Transformation | Accepted |
 | [ADR-004](./004-multi-language-implementation-governance.md) | Multi-Language Implementation Governance | Accepted |
 | [ADR-005](./005-arvocontract-structure.md) | ArvoContract Structure | Accepted |
+| [ADR-006](./006-arvoeventhandler-protocol.md) | ArvoEventHandler Protocol | Accepted |
+| [ADR-007](./007-execution-record.md) | Execution Record | Accepted |
+| [ADR-008](./008-execution-faults-and-abandonment.md) | Execution Faults and Abandonment | Accepted |
+| [ADR-009](./009-execution-bounds.md) | Execution Bounds | Accepted |
+| [ADR-010](./010-delivery-classification-and-entry-validation.md) | Delivery Classification and Entry Validation | Accepted |
