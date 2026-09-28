@@ -128,6 +128,20 @@ It is deliberately not `ArvoHandlerFault`. ADR-008 defines a fault as something 
 
 *One rule is blocking, and only one.* If `contract` is not an `ArvoContract`, every other rule is unanswerable: completeness, collisions and the per-version timeout check all read it. Per `project.md` — *Validation*, that issue carries a `blockingReason` and the rest are not attempted. Everything else collects: a missing executor, a colliding type, a bad option and an impossible timeout pair are all reported together.
 
+## What the probes established
+
+Written as one file under `src/`, typechecked, and deleted. `tsc --noEmit` reported nothing, which means every positive case compiled and every `@ts-expect-error` fired.
+
+- **Completeness works in both directions.** A mapped type over `keyof M & ArvoSemanticVersion` rejects a handler declaring fewer versions than the contract and rejects one naming a version the contract does not declare. Neither needs a runtime check to be a compile error.
+- **The widening trap is real and silent.** A contract whose versions map was annotated `ArvoContractVersionMapParam` accepts a handler declaring *no* versions at all, because `keyof M` has widened to every semantic version. The runtime check is what catches it, which is why both halves exist.
+- **`in` cannot be trusted for `unset`.** `Partial<T>` over `number | null` gives an omitted key, a written `null` and an explicit `undefined` the same property type, and an explicit `undefined` is a present key at runtime. Resolution keys off `value === undefined`, as §3.2 and §3.3 require.
+- **A bare `VersionedArvoContract` exposes what the rules need** — `uri`, `type`, `version`, `outputs` and `error.type` — with no cast.
+- **Every generic the context needs survives inference from one call.** The services map infers as written rather than widening, so `services.payments.type` is the literal `'com_payment_charge'`. A version's own `state` schema is readable back out of the same object literal that declares it. A version written as the executor alone infers as stateless. `D` and `H` infer off the `types` witness field and fall to the empty record when it is omitted.
+- **The union must be written as a union of intersections.** `(Base & InitArm) | (Base & FollowArm)` narrows on `entry`; `Omit<Base & (InitArm | FollowArm), never>` does not. This is the collapse the factories change hit with `span`, confirmed again here.
+- **All of it holds against `zod/v4/core`.** A schema written with full zod satisfies `$ZodObject`, and `zc.infer` reads it, so the shipped types use core throughout with no loss.
+
+One thing the probes found that no task anticipated. **`z.infer<M[V]['input']>` does not satisfy `ArvoEvent`'s own `D extends Record<string, any>` constraint generically**, because TypeScript cannot prove a payload inferred from an unresolved schema is an object. A conditional helper that re-establishes it is needed wherever a version's payload types an event, and §2.1 carries it as `PayloadOf`. Without it the context's `event` member does not compile at all, which would have surfaced in change 4 with change 1 already shipped.
+
 ## Risks / Trade-offs
 
 - **A typed hole for one release.** An executor written against this change's loose signature will not typecheck against change 4's. Accepted: nothing is published, and an executor that cannot be called has no behaviour to preserve.
