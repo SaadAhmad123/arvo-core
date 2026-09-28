@@ -848,11 +848,11 @@ On a followup delivery, a handler MUST validate the whole record and MUST restor
 
 The state schema is enforced on every entry, at gate step 7, against the schema the version declares *today*. That creates an obligation the protocol cannot enforce for the author, and it is stated here so the consequence is not discovered in production.
 
-**Once a version has been deployed and has records in a store, any change to its declared state schema MUST be compatible with the `data` those records already hold.** A new field MUST be optional, with a defined meaning when absent. A field MUST NOT be removed and its meaning MUST NOT change. A constraint MUST NOT be tightened. These are the same rules the record envelope holds itself to under **How this record may change later**, applied to the one part of the record the author controls.
+**Once a version has been deployed and has records in a store, any change to its declared state schema MUST be compatible with the `data` those records already hold.** That is the whole of the obligation. The schema is the version author's, not the protocol's — the protocol validates `data` against it and does nothing else with it — so *how* compatibility is kept is the author's affair, and this ADR places no rule on it. The rules the record envelope holds itself to under **How this record may change later** are one way to keep it and are offered as such, not imposed.
 
 The consequence of breaking them is exact. Every in-flight execution of that version fails step 7 on its next delivery with `record_invalid`, which is non-retryable, so none is ever redelivered, and a mechanism that abandons them tells each caller the work will not be done. Nothing can rescue them: migration is prohibited (**A record belongs to one version for its whole life**), and drift detection does not help, because drift is reported to the executor and the record has already been rejected before the executor runs.
 
-A change that cannot meet these rules is a new version. It is declared alongside the old one, the old one is drained, and then the old one is removed — the same story as any other version change, and the only one the protocol supports.
+A change the author cannot make compatibly is a new version. It is declared alongside the old one, the old one is drained, and then the old one is removed — the same story as any other version change, and the only one the protocol supports.
 
 #### Serializability of `data`
 
@@ -1487,7 +1487,7 @@ Considered, not chosen. It is the obvious answer to the drain cost under **Paid 
 
 ### Defining compatibility rules for a version's state schema
 
-Considered, not chosen. A draft wrote a rule set for how `data`'s schema may change after deployment — which fields may be added, which constraints tightened — mirroring the rules the record envelope holds itself to. It was withdrawn because the schema is the version author's, not the protocol's: the protocol composes it into validation and does nothing else with it, and a rule set it cannot enforce would be advice dressed as a requirement. What remains is the one fact the protocol can state, that an incompatible change fails every in-flight execution at gate step 5, and the one obligation that follows from it (**Changing a deployed version's state schema**).
+Considered, not chosen. A draft wrote a rule set for how `data`'s schema may change after deployment — which fields may be added, which constraints tightened — mirroring the rules the record envelope holds itself to. It was withdrawn because the schema is the version author's, not the protocol's: the protocol composes it into validation and does nothing else with it, and a rule set it cannot enforce would be advice dressed as a requirement. What remains is the one fact the protocol can state, that an incompatible change fails every in-flight execution at gate step 7, and the one obligation that follows from it (**Changing a deployed version's state schema**).
 
 ### Requiring a specific concurrency mechanism
 
