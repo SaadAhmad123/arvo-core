@@ -115,7 +115,7 @@ What the declaration changes is classification. A recursive request and a recurs
 
 #### Optional business state schema
 
-An executor MAY declare a schema for business state it wishes to remember between deliveries. Where declared, it governs the `data` field of the execution record (see **The execution record**) and is composed into the record's validation at every entry (see **Hydration**).
+An executor MAY declare a schema for business state it wishes to remember between deliveries. Where declared, it governs the `data` field of the execution record (see **The execution record**) and is validated against `data` at every entry, once the version is known (see **Hydration**).
 
 An executor that declares none is still resumable — it may emit to a service and be re-entered on the response — and still has an execution record. It simply has nothing of its own in it. Resumability is a property of the protocol, carried by the record's own fields; business state is what an executor adds to that, and it is optional.
 
@@ -547,8 +547,8 @@ Before any executor code runs, a handler MUST work through the following gate **
 | 2 | every delivery | **`category` agrees with the classification.** `io.arvo.init` on a delivery classified as an init, `io.arvo.complete` on one classified as a followup. Absent or unrecognised, it is not consulted. | fault, `category_mismatch` | yes | no |
 | 3 | every delivery | **The record is fetched**, once, through the state function, under the key classification selects (**Resolving the existing execution**). | fault, `state_resolution_failed` | yes | **yes** |
 | 4 | every delivery | **Presence matches classification.** An init delivery MUST have fetched nothing; a followup MUST have fetched a record. | fault, `record_unexpected` or `record_expected` | yes | no |
-| 5 | followups | **The record validates and hydrates.** It validates against the fixed envelope composed with the executor's declared schema at `data`, and every event it holds restores to an event value (**Hydration**). No `state.*` value may be read until this passes. | fault, `record_invalid` or `record_event_unrestorable` | yes | no |
-| 6 | followups | **The record's version is still declared.** The handler MUST still declare an executor for `state.version`; a version withdrawn from a deployed handler strands its in-flight executions (**Version authority**), and this is where that surfaces. | fault, `version_not_declared` | yes | no |
+| 5 | followups | **The record's envelope validates and its events hydrate.** The record validates against the fixed envelope under **The execution record**, with `data` accepted as any JSON value for now, and every event it holds restores to an event value (**Hydration**). No `state.*` value may be read until this passes. | fault, `record_invalid` or `record_event_unrestorable` | yes | no |
+| 6 | followups | **The record's version is still declared, and `data` satisfies it.** The handler MUST still declare an executor for `state.version`; a version withdrawn from a deployed handler strands its in-flight executions (**Version authority**), and this is where that surfaces. Then, and only then, `data` is validated against the schema that version declares, because the schema cannot be chosen until the version is known and confirmed (**Hydration**). | fault, `version_not_declared`, or `record_invalid` for `data` | yes | no |
 | 7 | every delivery | **The event is below the version's maximum depth.** `event.depth < max depth` for the version resolution selected — the event's on an init, the record's on a followup (**Depth**). Placed here because it is the first point at which that version is known and confirmed declared. | fault, `max_depth_event_received` | yes | no |
 | 8 | followups | **Already seen.** The delivered event's `id` is already in `event_ids` as `received`, so this delivery has been processed. | discard | yes | n/a |
 | 9 | followups | **Lifecycle admits the delivery.** A record at `success`, `error`, `cancelled` or `failure` accepts nothing further. A record at `waiting` or `idle` accepts a followup. | fault, `lifecycle_terminal` | yes | no |
@@ -594,6 +594,8 @@ It also settles which kind of delivery this is, which is why `category` follows 
 #### Why the record is validated before anything reads it
 
 Every step after 5 that touches the record reads it — step 6 reads `version`, step 8 reads `event_ids`, step 9 reads `lifecycle`, step 11 reads three identifiers, step 14 reads the collection. A gate that compared before it validated would be reading fields off a structure it had not established was a record at all, and would report a mismatch where the truth was corruption. Step 5 is therefore the first step that touches the record's contents, and no step before it does.
+
+One field is validated later than the rest, and deliberately. `data` is governed by the schema the owning version declares, and the owning version is `state.version` — a field that cannot be read until step 5 has passed and is not confirmed declared until step 6. Validating `data` at step 5 would need a schema chosen by a value the step is not yet allowed to trust. So step 5 validates the envelope with `data` held as an opaque JSON value, step 6 confirms the version, and step 6 then validates `data` against that version's schema. The whole record is validated before any executor code runs; only the order inside the gate reflects the dependency.
 
 #### Why the duplicate check precedes the lifecycle check
 
@@ -835,7 +837,7 @@ Removing a version from a deployed handler's self contract — and with it, unde
 
 #### Hydration
 
-On a followup delivery, a handler MUST validate the whole record — a fixed envelope, composed with the executor's own declared schema at `data` — and MUST restore every event the record holds to an event value before any executor code runs (**Entry validation**, step 5). A record that fails either is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
+On a followup delivery, a handler MUST validate the whole record and MUST restore every event the record holds to an event value before any executor code runs. This happens in two stages of the gate (**Entry validation**): step 5 validates the fixed envelope and hydrates the events, treating `data` as an opaque JSON value; step 6 confirms `state.version` is declared and validates `data` against that version's schema. The split exists because the schema for `data` is chosen by a field the gate cannot read until the envelope has passed. A record that fails any of it is a fault. Validating eagerly costs every stored event on every delivery; the ADR chooses that so a corrupt record fails once, at entry, with its cause named, rather than surfacing from inside business logic where it cannot be attributed.
 
 #### The cost of eager hydration
 
@@ -843,11 +845,11 @@ On a followup delivery, a handler MUST validate the whole record — a fixed env
 
 #### Changing a deployed version's state schema
 
-The state schema is enforced on every entry, at gate step 5, against the schema the version declares *today*. That creates an obligation the protocol cannot enforce for the author, and it is stated here so the consequence is not discovered in production.
+The state schema is enforced on every entry, at gate step 6, against the schema the version declares *today*. That creates an obligation the protocol cannot enforce for the author, and it is stated here so the consequence is not discovered in production.
 
 **Once a version has been deployed and has records in a store, any change to its declared state schema MUST be compatible with the `data` those records already hold.** A new field MUST be optional, with a defined meaning when absent. A field MUST NOT be removed and its meaning MUST NOT change. A constraint MUST NOT be tightened. These are the same rules the record envelope holds itself to under **How this record may change later**, applied to the one part of the record the author controls.
 
-The consequence of breaking them is exact. Every in-flight execution of that version fails step 5 on its next delivery with `record_invalid`, which is non-retryable, so none is ever redelivered, and a mechanism that abandons them tells each caller the work will not be done. Nothing can rescue them: migration is prohibited (**A record belongs to one version for its whole life**), and drift detection does not help, because drift is reported to the executor and the record has already been rejected before the executor runs.
+The consequence of breaking them is exact. Every in-flight execution of that version fails step 6 on its next delivery with `record_invalid`, which is non-retryable, so none is ever redelivered, and a mechanism that abandons them tells each caller the work will not be done. Nothing can rescue them: migration is prohibited (**A record belongs to one version for its whole life**), and drift detection does not help, because drift is reported to the executor and the record has already been rejected before the executor runs.
 
 A change that cannot meet these rules is a new version. It is declared alongside the old one, the old one is drained, and then the old one is removed — the same story as any other version change, and the only one the protocol supports.
 
@@ -1171,7 +1173,7 @@ What is *not* normative is the shape of the object in a language's own terms: wh
 | gate 3 | the state function failed | `state_resolution_failed` | **yes** |
 | gate 4 | an init delivery arrives with a record | `record_unexpected` | no |
 | gate 4 | a followup delivery arrives without one | `record_expected` | no |
-| gate 5 | the record fails validation | `record_invalid` | no |
+| gate 5, gate 6 | the record's envelope fails validation, or its `data` fails the owning version's schema | `record_invalid` | no |
 | gate 5 | an event in the record fails to restore | `record_event_unrestorable` | no |
 | gate 6 | the record's `version` is no longer declared | `version_not_declared` | no |
 | gate 7 | the delivered event's `depth` is at or beyond the version's maximum | `max_depth_event_received` | no |
