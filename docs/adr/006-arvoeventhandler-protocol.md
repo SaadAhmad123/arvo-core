@@ -617,6 +617,24 @@ Inside the executor code, the developer can leverage two values the protocol alr
 
 Because the handler fetches the record itself under a key it chooses, a mechanism need not classify, derive, or compare anything before dispatch. What the gate asks is that the state function answer honestly (**Resolving the existing execution**), and that a redelivered init find the record its first delivery wrote — which follows from committing the record durably under `execution_id` (obligation 1) and nothing else. A redelivered init then fetches a record at step 3 and faults at step 4 with `record_unexpected`, and a mechanism MAY treat that kind as a signal to stop redelivering rather than as an error to escalate.
 
+### One delivery, in order
+
+Every rule in this ADR and its companions applies at a definite point inside one delivery. The points are listed here in the order they occur, so that an implementation assembles the sequence from the specification rather than from inference. Each step is defined where the reference says; this list adds only the order.
+
+1. **Receive.** The mechanism hands the handler the delivered event, the state function, dependencies as a value or a factory, the attempt number, the delivery's OpenTelemetry context, and hooks or an empty object (**Required of infrastructure adapters**).
+2. **Open the delivery span**, continuing the delivered event's trace (**Observability**). Everything after this records against it.
+3. **Run the gate**, steps 1 through 15 in sequence (**Entry validation**). A fault at any step ends the delivery at step 11 below; a discard at step 8 ends it with nothing to do.
+4. **Resolve every option** for the version the gate confirmed (**Options**). Before this point only the handler level was available; from here the version's declarations apply.
+5. **Resolve dependencies.** Where a factory was supplied, call it exactly once with the delivered event, the hydrated record or absence, and the attempt number. A failure is `dependency_resolution_failed` (**Dependencies**). The run clock is not running.
+6. **Build the execution context** for this delivery and nothing else (**The execution context**).
+7. **Start the run clock and enter the executor** ([ADR-009](./009-execution-bounds.md), **Timeouts**). Nothing before this step is timed by it.
+8. **On return, stop the run clock.** Where it expired, evaluate the execution clock before reporting, so the broader verdict wins ([ADR-009](./009-execution-bounds.md), **Where both expire in one attempt**). Where the executor returned in time, evaluate the execution clock anyway, since a return after the bound is a fault at return.
+9. **Validate everything returned**, whole: each event's type, schema, depth and structure; the batch's composition; the value written through `set state` against the declared schema and for a JSON round trip (**What an executor returns**; [ADR-007](./007-execution-record.md), **A mixed batch completes**). A failure anywhere rejects the batch.
+10. **Build the outputs.** On success, the emitted events and the next record, `cas_version` set, lifecycle decided by the batch ([ADR-007](./007-execution-record.md), **The execution record**). On a fault at any step above, the fault with its contingencies — the abandonment event where the caller can be addressed, the record at `failure` where one exists or can be built ([ADR-008](./008-execution-faults-and-abandonment.md), **Abandonment**).
+11. **Record the outcome on the span and return** the produced pair, the discard, or the fault to the mechanism (**Instrumenting the protocol itself**). The handler retains nothing.
+
+Two things the order settles that are otherwise stated only in passing: the run clock covers the executor alone, because it starts at step 7 and stops at step 8 with the gate, dependency resolution and return validation outside it; and a version's options are never consulted before step 4, because until the gate has confirmed the version there is no version to consult.
+
 ### Dependencies
 
 #### Outside the model, supplied per delivery
