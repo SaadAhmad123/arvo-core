@@ -127,17 +127,17 @@ Seven **options** govern how a version behaves. They are defined here and nowher
 
 | Option | Type | Handler level | Version level | Fallback |
 |---|---|---|---|---|
-| `max_depth` | integer ≥ 0 | **required**; `10000` where the author writes nothing | optional; falls back to the handler's | N/A |
-| `max_retry_attempts` | integer ≥ 0 | **required**; `3` where the author writes nothing | optional; falls back to the handler's | N/A |
-| `retry_delay` | integer ms ≥ 0, or a function `(event, record \| null, attempt, max_retry_attempts) → integer ms` | **required**; `300` where the author writes nothing | optional; falls back to the handler's | `300` ms, where the function form fails at use (**`retry delay` must not be able to fail**) |
-| `run_timeout` | integer ms > 0, or `null` for unbounded | **required**; `30000` where the author writes nothing | optional; falls back to the handler's | N/A |
-| `execution_timeout` | integer ms > 0, or `null` for unbounded | **required**; `null` where the author writes nothing | optional; falls back to the handler's | N/A |
-| `collect` | `all` \| `each` | **required**; `all` where the author writes nothing | optional; falls back to the handler's | N/A |
-| `handler_error_domain` | a domain literal, or one of the four source identifiers under **Domain** | **required**; `none` where the author writes nothing | optional; falls back to the handler's | N/A |
+| `max_depth` | integer ≥ 0 | **required**; `10000` where the author writes nothing | unset inherits the handler's; a written value, `null` included, is the version's | N/A |
+| `max_retry_attempts` | integer ≥ 0 | **required**; `3` where the author writes nothing | unset inherits the handler's; a written value, `null` included, is the version's | N/A |
+| `retry_delay` | integer ms ≥ 0, or a function `(event, record \| null, attempt, max_retry_attempts) → integer ms` | **required**; `300` where the author writes nothing | unset inherits the handler's; a written value, `null` included, is the version's | `300` ms, where the function form fails at use (**`retry delay` must not be able to fail**) |
+| `run_timeout` | integer ms > 0, or `null` for unbounded | **required**; `30000` where the author writes nothing | unset inherits the handler's; a written value, `null` included, is the version's | N/A |
+| `execution_timeout` | integer ms > 0, or `null` for unbounded | **required**; `null` where the author writes nothing | unset inherits the handler's; a written value, `null` included, is the version's | N/A |
+| `collect` | `all` \| `each` | **required**; `all` where the author writes nothing | unset inherits the handler's; a written value, `null` included, is the version's | N/A |
+| `handler_error_domain` | a domain literal, or one of the four source identifiers under **Domain** | **required**; `none` where the author writes nothing | unset inherits the handler's; a written value, `null` included, is the version's | N/A |
 
-**The handler level is complete.** A handler always holds a value for every one of the seven. An author who writes nothing for one gets the value in the third column, which the protocol defines; there is no state in which a handler lacks an option. **The version level is sparse.** A version declares only what it wants to differ, and an option it does not declare is `null`, meaning *inherited*.
+**The handler level is complete.** A handler always holds a value for every one of the seven. An author who writes nothing for one gets the value in the third column, which the protocol defines; there is no state in which a handler lacks an option. **The version level is sparse.** A version declares only what it wants to differ, and an option it leaves **unset** is inherited. *Unset* is a protocol concept — the option was not written — and each language spells it natively: an absent key, an undefined member, an empty optional. It is not the same as writing `null`. For the two timeouts `null` is a value, meaning unbounded, and a version that writes it has declared something. **An implementation MUST distinguish an option that is unset from one set to `null`, and MUST NOT collapse the two**: a version that inherits a thirty-second run clock and one that declares no run clock behave differently, and a language whose declaration surface cannot tell them apart cannot implement this ADR.
 
-**Resolution is one rule:** the version's value where the version declared one, otherwise the handler's. There is no third step, because the handler is never missing a value. The rule holds identically wherever and whenever an option is read — at declaration, at a gate step, on return — and it does not matter whether a version is known at that moment: **where no version is known, the version side is `null` for every option and the handler's values apply.**
+**Resolution is one rule:** the version's value where the version wrote one — `null` counts as written — otherwise the handler's. There is no third step, because the handler is never missing a value. The rule holds identically wherever and whenever an option is read — at declaration, at a gate step, on return — and it does not matter whether a version is known at that moment: **where no version is known, the version side is `null` for every option and the handler's values apply.**
 
 #### What each option governs
 
