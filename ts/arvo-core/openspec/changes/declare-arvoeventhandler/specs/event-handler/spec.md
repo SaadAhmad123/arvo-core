@@ -12,6 +12,8 @@ The contract SHALL be named as a contract and not as a version. Each contract th
 
 A version needing neither a state schema nor options of its own SHALL be declarable as its executor alone, and SHALL be understood exactly as the same executor declared with neither.
 
+A declaration MAY state the shape of the dependencies and of the mechanism hooks its executors will be given. Both are supplied by whatever runs the handler and neither is part of what a handler holds, so stating either SHALL NOT change what is built and SHALL NOT be stored.
+
 A declaration that breaks any rule of this capability SHALL be refused, and the handler SHALL NOT be built.
 
 A handler built from a declaration SHALL process no event, read no record and call no executor. Declaring a handler is the whole of what this capability does.
@@ -43,6 +45,11 @@ A handler built from a declaration SHALL process no event, read no record and ca
 - **WHEN** a handler is declared with a version that names a state schema
 - **THEN** the handler is built
 - **AND** that version holds that schema unchanged
+
+#### Scenario: Declared dependency and hook shapes are not stored
+- **WHEN** a handler is declared stating the shape of its dependencies and of its mechanism hooks
+- **THEN** the handler is built
+- **AND** it holds neither
 
 #### Scenario: Services are held at the version named
 - **WHEN** a handler is declared naming a service contract at one of its versions

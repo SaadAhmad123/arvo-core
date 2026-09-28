@@ -59,9 +59,9 @@ class ArvoEventHandler<
   T extends string,                             // the implemented contract's type
   M extends ArvoContractVersionMapParam,        // its versions, as declared
   S extends ArvoServiceMap,                     // the services, as declared
-  D,                                            // dependencies, as a mechanism supplies them
-  H extends ArvoMechanismHooks,                 // hooks, as a mechanism exposes them
-  VD extends ArvoVersionDeclarations<T, M, S, D, H>,   // the versions, as written
+  D extends ArvoDependencies = ArvoNone,        // dependencies, as declared through `types`
+  H extends ArvoMechanismHooks = ArvoNone,      // hooks, as declared through `types`
+  VD extends ArvoVersionDeclarations<T, M, S, D, H> = ArvoVersionDeclarations<T, M, S, D, H>,
 > {
   /** The contract this handler implements. */
   readonly contract: ArvoContract<T, M>;
@@ -94,6 +94,17 @@ type ArvoEventHandlerParam<T, M, S, D, H, VD> = {
   options?: Partial<ArvoEventHandlerOptions>;
   /** One entry per declared version. A missing version does not compile, and does not construct. */
   versions: VD;
+  /**
+   * Types only. Neither member carries a value or is read at runtime -- each exists so the
+   * declaration can say what shape a mechanism will supply at delivery, and both reach an
+   * executor through its context. Omit either and it is an empty object.
+   */
+  types?: Partial<{
+    /** Whatever this handler's mechanism exposes to an executor. */
+    mechanismHooks: H;
+    /** Whatever this handler's executors are given to work with. */
+    dependencies: D;
+  }>;
 };
 
 /**
@@ -120,8 +131,14 @@ type StateSchemaOf<VD, V extends keyof VD> =
 /** The services a handler declares, by the local name it gives each. */
 type ArvoServiceMap = Record<string, VersionedArvoContract>;
 
-/** Whatever a mechanism chooses to expose to an executor. Empty where it exposes none. */
-type ArvoMechanismHooks = Record<string, unknown>;
+/** Whatever a mechanism chooses to expose to an executor. */
+type ArvoMechanismHooks = Record<string, any>;
+
+/** Whatever an executor is given to work with. Outside the model, and never stored. */
+type ArvoDependencies = Record<string, any>;
+
+/** Declared neither, so there is nothing to reach for. */
+type ArvoNone = Record<string, never>;
 
 type ArvoEventHandlerOptions = {
   maxDepth: number;                  // default 10000
@@ -133,6 +150,18 @@ type ArvoEventHandlerOptions = {
   handlerErrorDomain: ArvoDomainInput;    // default ArvoDomain.LOCAL
 };
 ```
+
+`types` earns its place by being the only position from which a caller's dependency and hook
+shapes can be inferred. Both are supplied by the mechanism at delivery and appear nowhere else in
+the declaration, so without it a caller wanting either typed would have to write every type
+argument by hand — the contract, its version map, the services and the version declarations
+included. Writing one optional field is the smaller price, and a handler needing neither omits it.
+
+Both sit at the handler and not at a version, because a mechanism runs a handler rather than a
+version: one handler, one mechanism, one shape each. Every version's executor therefore sees the
+same two types, and a version wanting a narrower dependency narrows it in its own body. The state
+schema is the one of the three that is per version, because ADR-006 puts it on the executor's own
+declaration.
 
 `handlerErrorDomain` takes `ArvoDomainInput`, the type `ArvoDomain` already ships: a literal, or one of four symbols naming where to read a domain from. Those four are ADR-006's four sources under a different spelling, which ADR-004 leaves to each language, so nothing new is invented here.
 
@@ -190,8 +219,8 @@ interface ArvoContextCore<T, M, V, S, D, H> {
     readonly responses: ReadonlyMap<string, ArvoAnyResponse<S> | null>;
     readonly outstanding: ReadonlySet<string>;
   };
-  readonly dependencies: D;
-  readonly hooks: H;
+  readonly dependencies: D;   // as declared through `types`, or empty
+  readonly hooks: H;          // as declared through `types`, or empty
   readonly atMaxDepth: boolean;
   readonly timeRemaining: { readonly run: number | null; readonly execution: number | null };
   readonly telemetry: { readonly span: Span; readonly logger: Logger; readonly meter: Meter };
@@ -288,6 +317,16 @@ new ArvoEventHandler({ ..., options: { runTimeout: 10_000 },
   versions: { '1.0.0': { execute, options: {} } } });            // runTimeout 10_000
 new ArvoEventHandler({ ..., options: { runTimeout: 10_000 },
   versions: { '1.0.0': { execute, options: { runTimeout: null } } } });  // unbounded
+```
+
+```ts
+// Declaring what the mechanism will hand every executor. Types only -- no value is stored.
+const handler = new ArvoEventHandler({
+  contract: orderContract,
+  versions: { '1.0.0': async (ctx) => { ctx.dependencies.db.find(); ctx.hooks.scheduler; } },
+  types: { dependencies: {} as { db: Db }, mechanismHooks: {} as { scheduler: Scheduler } },
+});
+// Omit `types` and both are empty: ctx.dependencies.db does not compile, because none was declared.
 ```
 
 ```ts

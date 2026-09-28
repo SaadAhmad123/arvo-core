@@ -36,6 +36,20 @@ The alternative was to define the context now. ADR-006 fixes sixteen members and
 
 *The cost, named rather than discovered:* tightening the executor's signature in change 4 is a breaking type change for anyone who wrote an executor against this release. Nothing is published, and a handler that cannot run has no callers to break, so the cost is real but paid by nobody.
 
+### Dependencies and hooks are declared as types, through one witness field
+
+`types?: Partial<{ mechanismHooks: H; dependencies: D }>` carries no value and is never read at runtime. It exists so that TypeScript has a position from which to infer the two shapes a mechanism supplies at delivery.
+
+*Why it is needed at all.* Both are given to the handler per delivery, so neither appears anywhere else in a declaration. A generic that appears in no parameter cannot be inferred, so without this field a caller who wanted either typed would have to supply every type argument explicitly — the contract's type, its version map, the services map and the version declarations included. That is not an API anyone would use, and the alternative of leaving both `any` gives up the type safety the context sketch exists for.
+
+*Why a witness field rather than explicit type arguments.* One optional field a caller writes once, against six type arguments they would otherwise have to spell at every declaration. The cost is that a caller writes a value purely to carry a type, conventionally `{} as MyDeps`, which reads oddly the first time. The TSDoc says outright that nothing is stored.
+
+*Why both sit at the handler.* A mechanism runs a handler, not a version, so there is one dependency shape and one hook shape per handler. Both thread down into every version's executor. The state schema is the one of the three that is per version, because ADR-006 puts it on the executor's own declaration rather than on the handler's.
+
+*Both default to `Record<string, never>`* rather than `{}`. `{}` in TypeScript means "any non-nullish value" and would let an executor reach for a dependency that was never declared. The empty record makes the absence real: `ctx.dependencies.db` does not compile where no dependencies were declared, which is the honest answer.
+
+*The constraint, and its one trap.* Both are constrained to `Record<string, any>`, matching how the package already constrains an event's payload. TypeScript gives an object type alias an implicit index signature and does not give one to an `interface`, so a dependency bag declared as an interface will not satisfy the constraint while the identical `type` alias will. That is a TypeScript rule rather than a decision here, and the TSDoc names it where a caller meets it.
+
 ### Services are a named record, and the name means nothing to the protocol
 
 `services: Record<string, VersionedArvoContract>`, the key chosen by the author. ADR-006 speaks of "the set of contract versions" and derives an emitted event's destination from its `type`, never from a name, so the key is API shape and ADR-004 leaves it to each language. ADR-006's own appendix sketches services with names, which is the precedent followed.
