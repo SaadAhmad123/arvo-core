@@ -333,6 +333,19 @@ type ArvoDelivered =
   | { readonly kind: 'discarded' };
 ```
 
+**Everything the protocol does happens inside that one call.** Classification, the sixteen-step
+gate, reading and validating the record, hydrating its events, resolving options and dependencies,
+building the context, entering the executor, validating what it returns, building the next record,
+and building a fault with its abandonment pair where any of it refuses. ADR-010's *One delivery,
+in order* is the sequence, and `tryExecute` is where that sequence lives. A caller does not
+assemble it and cannot reach into the middle of it.
+
+Behind the call it is many files, not one. The decomposition follows the sequence — a module per
+gate step group, one for classification, one for hydration, one for the context, one for return
+validation, one for building each of the two things a delivery can produce — and every one of them
+is internal. None is exported, none appears in `src/index.ts`, and the boundary stays two methods
+wide however many modules sit behind it.
+
 The fault an adapter reads is an error in its own right, so `execute` can throw it and a
 `catch` can name it. Change 3 builds it; its shape decides what an adapter may branch on, so it
 belongs beside the call that returns it.
