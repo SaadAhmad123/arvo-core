@@ -36,6 +36,14 @@ The alternative was to define the context now. ADR-006 fixes sixteen members and
 
 *The cost, named rather than discovered:* tightening the executor's signature in change 4 is a breaking type change for anyone who wrote an executor against this release. Nothing is published, and a handler that cannot run has no callers to break, so the cost is real but paid by nobody.
 
+### One entry point, `execute`, and it returns three outcomes rather than a `Result`
+
+A handler does one thing and there is one method for it, and that method is the whole boundary: **the mechanism is whatever wraps `execute`**, and nothing on either side of the call knows more about the other than the signature says. `execute` takes the delivered event, a function that reads the store, an attempt number, dependencies, hooks and a telemetry context, and returns produced, discarded, or fault. Nothing in the signature names a broker, a store, a scheduler, a transport or a runtime, so the same handler runs under a queue consumer, a serverless invocation, a test, or a loop in a script. Adapting it is reading the outcome, not implementing an interface.
+
+*Why not a `Result`.* `project.md` — *Result types* requires every fallible operation to be `tryX` returning a `Result`. `execute` is not fallible in that sense. A fault is not `execute` failing; it is `execute` succeeding at deciding this delivery cannot proceed, and ADR-008 is explicit that it is a value a mechanism reads and acts on rather than an error it catches. Wrapping it in `Err` would make every conformant delivery look like a failure, and would leave `discarded` with nowhere sensible to sit. So `execute` returns a three-way discriminated outcome and throws only on a defect, which is the same shape ADR-006's own appendix gives it.
+
+*One naming collision, accepted.* The business code a version declares is also called `execute`. `handler.execute` runs a delivery; `versions['1.0.0'].execute` is the executor that delivery may enter. ADR-006 keeps the two apart as *handler* and *executor*, and the nesting makes the relationship read correctly at a call site. The TSDoc on each says which is which.
+
 ### Dependencies and hooks are declared as types, through one witness field
 
 `types?: Partial<{ mechanismHooks: H; dependencies: D }>` carries no value and is never read at runtime. It exists so that TypeScript has a position from which to infer the two shapes a mechanism supplies at delivery.

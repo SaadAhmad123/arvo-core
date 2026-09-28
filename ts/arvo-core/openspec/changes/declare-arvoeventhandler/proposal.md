@@ -17,7 +17,7 @@ Six changes. Each compiles against the one before it, and each is shippable on i
 | 3 | `arvo-handler-faults` | `ArvoHandlerFault`, the `fault_kind` vocabulary, and the abandonment pair | ADR-008 |
 | 4 | `arvo-execution-context` | the context an executor receives, the event builder, addressing, and validation of what an executor returns | ADR-006 *The execution context*, *Addressing an emitted event* |
 | 5 | `arvo-execution-bounds` | depth, retry, the two timeouts, and collection | ADR-009 |
-| 6 | `arvo-handler-delivery` | classification, the sixteen-step gate, and the delivery a mechanism invokes | ADR-010 |
+| 6 | `arvo-handler-delivery` | classification, the sixteen-step gate, and `handler.execute(...)` — the one mechanism-agnostic entry point | ADR-010 |
 
 The order is forced by dependency, not preference: the context (4) reads the record (2) and builds faults (3), the gate (6) uses all of them, and the bounds (5) are what two of its steps enforce. Nothing runs until 6.
 
@@ -70,6 +70,13 @@ class ArvoEventHandler<
   /** One entry per version of the contract: its executor, state schema and options as declared. */
   readonly versions: Readonly<VD>;
 
+  /**
+   * Runs one delivery, and is the only way a handler does anything.
+   * Mechanism-agnostic: it names no broker, store, scheduler, transport or runtime, and
+   * reaches outward only through the state function it is handed.
+   */
+  execute(param: ArvoDeliveryParam<D, H>): Promise<ArvoDeliveryOutcome>;
+
   constructor(param: ArvoEventHandlerParam<T, M, S, D, H, VD>);
 }
 
@@ -92,8 +99,6 @@ type ArvoEventHandlerParam<T, M, S, D, H, VD> = {
   services?: S;
   /** Defaults for every version. Omit one and the protocol's own default fills it. */
   options?: Partial<ArvoEventHandlerOptions>;
-  /** One entry per declared version. A missing version does not compile, and does not construct. */
-  versions: VD;
   /**
    * Types only. Neither member carries a value or is read at runtime -- each exists so the
    * declaration can say what shape a mechanism will supply at delivery, and both reach an
@@ -105,6 +110,8 @@ type ArvoEventHandlerParam<T, M, S, D, H, VD> = {
     /** Whatever this handler's executors are given to work with. */
     dependencies: D;
   }>;
+  /** One entry per declared version. A missing version does not compile, and does not construct. */
+  versions: VD;
 };
 
 /**
@@ -284,6 +291,70 @@ execute: async (ctx) => {
 }
 ```
 
+## How a handler is run
+
+One method, `execute`, taking values and returning values. **The mechanism is whatever wraps that
+call, and the handler never knows which one it is.** Everything ADR-006 requires of the thing
+running a handler is expressed as an input to it or an outcome from it, so the same handler runs
+under a queue consumer, a serverless invocation, a test, or a loop in a script. There is no
+interface to implement and nothing to register: a mechanism is code that calls `execute` and acts
+on what comes back.
+
+```ts
+type ArvoDeliveryParam<D, H> = {
+  /** The event delivered. */
+  event: ArvoEvent;
+  /**
+   * Reads whatever is stored under an execution id. The handler calls it once per delivery and
+   * judges everything about what comes back; it takes no event and never branches on one.
+   */
+  state: (param: {
+    executionId: string;
+    attempt: number;
+    telemetry: ArvoTelemetry;
+  }) => PromiseAble<JSONObject | null>;
+  /** Which attempt this delivery is, counting from 0. Defaults to 0. */
+  attempt?: number;
+  /** A value, or a factory called once for this delivery. Defaults to an empty object. */
+  dependencies?: D | ((param: ArvoDependencyFactoryParam<D>) => PromiseAble<D>);
+  /** Whatever this mechanism exposes to executors. Defaults to an empty object. */
+  hooks?: H;
+  /** The delivery's OpenTelemetry context. Defaults to the active one. */
+  telemetry?: ArvoTelemetry;
+};
+
+type ArvoDeliveryOutcome =
+  /** Commit the record and publish the events together, then publish. */
+  | { readonly kind: 'produced'; readonly events: ArvoEvent[]; readonly record: ArvoExecutionRecord }
+  /** Already seen. Nothing to do, nothing wrong. */
+  | { readonly kind: 'discarded' }
+  /** Nothing is committed or emitted. Read `retry`; decide what to do with what you will not retry. */
+  | { readonly kind: 'fault'; readonly fault: ArvoHandlerFault };
+```
+
+```ts
+// The whole of an adapter, for a mechanism that has a queue and a store.
+const outcome = await handler.execute({
+  event: incoming,
+  attempt: message.deliveryCount,
+  state: ({ executionId }) => store.read(executionId),
+  dependencies: () => ({ db }),
+});
+
+if (outcome.kind === 'produced') await store.commitAndPublish(outcome.record, outcome.events);
+if (outcome.kind === 'fault')    await policy.handle(outcome.fault);
+```
+
+Three outcomes and no `Result`, which is a deliberate departure from the package's `tryX`
+convention and is recorded in `design.md`. A fault is not `execute` failing. It is `execute`
+succeeding at deciding that this delivery cannot proceed, and ADR-008 makes it a value a
+mechanism reads rather than an error it catches.
+
+**This is change 6, not change 1.** It needs the gate, the record and the fault object, so it
+cannot exist before them. It is sketched here because the shape of the whole decides what the
+declaration has to carry, and because a reader of change 1 is owed an answer to what any of it
+is eventually for.
+
 ## Using it
 
 ```ts
@@ -390,7 +461,7 @@ None added. `zod/v4/core` for the state schema's type, `ArvoDomain` for the erro
 
 Everything the plan assigns to changes 2 through 6, and specifically:
 
-- **Running anything.** No event is classified, no record is read or written, no executor is called. A declared handler is inert in this change, and the spec says so rather than implying a delivery path exists.
+- **Running anything.** `execute` is sketched under **How a handler is run** and built in change 6. In this change no event is classified, no record is read or written, and no executor is called. A declared handler is inert, and the spec says so rather than implying a delivery path exists.
 - **Building the execution context.** Its shape is sketched above, and change 1 carries the generics it needs, but nothing constructs one here. Two of its members — `fault` and the record-backed half of `identity` and `collected` — are typed against changes 2 and 3, so the type itself lands with change 4 alongside the code that fills it.
 - **The state schema's contents.** ADR-007 makes a version's state schema the author's, and the protocol places no rule on how it changes. This change holds the schema; it validates nothing against it.
 - **Emission.** The per-version emittable set is computed because the collision rule needs it, and held internally. Deriving `to`, `subject` or any other field from a type is ADR-006's *Addressing an emitted event* and belongs to change 4.
