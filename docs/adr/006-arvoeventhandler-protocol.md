@@ -793,7 +793,7 @@ After the first delivery, the record is the only place the handler's own version
 
 #### Removing a version strands its executions
 
-Removing a version from a deployed handler's self contract — and with it, under **One executor per version**, its executor — therefore strands that version's in-flight executions, permanently. Each will fault at gate step 6 on its next delivery and, being non-retryable, be abandoned. A version is drained before it is removed, and that is the whole of the migration story.
+Removing a version from a deployed handler's self contract — and with it, under **One executor per version**, its executor — therefore strands that version's in-flight executions, permanently. Each will fault at gate step 6 on its next delivery and, being non-retryable, will never be redelivered; whether it is then abandoned or held is the mechanism's policy, and either way it never resumes. A version is drained before it is removed, and that is the whole of the migration story.
 
 #### Hydration
 
@@ -1337,7 +1337,7 @@ Cooperative means the execution stops when it next runs and chooses to. Four lim
 
 **An abandoned execution can still answer its caller and record how it ended, with nothing composed by the mechanism.** The fault carries both, built by the handler before it lost the ability to speak. The failure that most reliably strands a workflow — retries exhausted, a store gone, a depth or time bound crossed — can surface in the shape every caller already handles, and the mechanism's only work is to commit and publish what it was handed. Whether it does is its policy; that it can, without inventing model data, is the gain.
 
-**Recursion and time are both bounded by default.** A version that says nothing gets a depth guard and a thirty-second run clock, so a runaway fan-out and a stuck executor both end as named faults with a caller told, rather than as a stack overflow or a process that never returns. A version that says more gets an execution clock, and its total lifetime is bounded too.
+**Recursion and time are both bounded by default.** A version that says nothing gets a depth guard and a thirty-second run clock, so a runaway fan-out and a stuck executor both end as named faults carrying the caller's answer ready for a mechanism to send, rather than as a stack overflow or a process that never returns. A version that says more gets an execution clock, and its total lifetime is bounded too.
 
 **Drift is visible.** A record remembers the hash of the declaration that last wrote it, so an executor can learn that its own code has changed since the execution began, and decide what that means for itself. Two languages compute the same hash, so the signal survives a language boundary.
 
