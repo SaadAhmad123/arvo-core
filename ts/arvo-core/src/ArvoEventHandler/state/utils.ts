@@ -20,10 +20,8 @@ export type ArvoExecutionStateMutation<TState extends ArvoExecutionState> =
  * carried across, reporting the outcome rather than throwing. `current` is
  * not modified.
  *
- * A field omitted from `next` is carried across; a field written as
- * `undefined` is not, and the new record is refused for it. Its data is not
- * checked, a record carrying no schema to check it against; everything else
- * is.
+ * A field written as `undefined` is not treated as absent, and the record
+ * is refused for it. Data is not checked, a record carrying no schema.
  *
  * @param current - The record as it stands.
  * @param next - The fields to replace.
@@ -79,10 +77,8 @@ export const tryMutateState = <TState extends ArvoExecutionState>(
  * A new record with the fields in `next` replaced and every other one
  * carried across. `current` is not modified.
  *
- * A field omitted from `next` is carried across; a field written as
- * `undefined` is not, and the new record is refused for it. Its data is not
- * checked, a record carrying no schema to check it against; everything else
- * is.
+ * A field written as `undefined` is not treated as absent, and the record
+ * is refused for it. Data is not checked, a record carrying no schema.
  *
  * @param current - The record as it stands.
  * @param next - The fields to replace.

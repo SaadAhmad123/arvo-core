@@ -8,14 +8,9 @@ import type { ArvoFaultKind, ArvoFaultRetry } from './types.js';
  * The kinds a redelivery could plausibly fix, per ADR-008's `fault_kind`
  * table.
  *
- * Three, and the reason each is here: the state function and the dependency
- * factory reach outside the handler, and what is outside may answer
- * differently a moment later; a run timeout says only that this attempt did
- * not finish. Every other kind is reproduced exactly by a redelivery.
- *
- * `executor_raised` is deliberately absent. It is the one kind whose
- * verdict the vocabulary does not fix — the executor chooses, retry safe
- * unless it says otherwise.
+ * Every other kind is reproduced exactly by a redelivery.
+ * `executor_raised` is absent deliberately: it is the one kind whose
+ * verdict the vocabulary leaves to the executor.
  */
 export const ARVO_RETRY_SAFE_FAULT_KINDS: ReadonlySet<ArvoFaultKind> =
   Object.freeze(
@@ -84,11 +79,8 @@ export type ArvoRetryVerdictParam = {
  *
  * `null` for a failure nothing would fix, and `null` once the attempts are
  * spent — a retry is in prospect while `attempt < maxRetryAttempts`, both
- * halves counting from 0.
- *
- * Whether the failure is the fixable sort is decided before this, by
- * {@link isRetrySafeFaultKind}. Exhaustion does not change that answer:
- * the budget ran out, not the nature.
+ * counting from 0. Whether a failure is fixable is decided beforehand, by
+ * {@link isRetrySafeFaultKind}.
  */
 export const resolveRetry = (
   param: ArvoRetryVerdictParam,

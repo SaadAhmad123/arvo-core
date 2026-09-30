@@ -384,4 +384,33 @@ describe('ArvoExecutionStateSerializer', () => {
       expect(typeof (await serializer.serialize(buildState()))).toBe('string');
     });
   });
+
+  describe('one built without a schema', () => {
+    const writeOnly = new ArvoExecutionStateSerializer();
+
+    it('writes a record out', async () => {
+      expect(typeof (await writeOnly.serialize(buildState()))).toBe('string');
+    });
+
+    it('writes what a bound one writes', async () => {
+      const state = buildState();
+      expect(await writeOnly.serialize(state)).toBe(
+        await serializer.serialize(state),
+      );
+    });
+
+    it('refuses to read one back, having nothing to check data against', async () => {
+      const result = await writeOnly.tryDeserialize(
+        await writeOnly.serialize(buildState()),
+      );
+      expect(!result.ok && result.error).toBeInstanceOf(
+        ArvoExecutionStateSerializerError,
+      );
+    });
+
+    it('says why it refuses', async () => {
+      const result = await writeOnly.tryDeserialize('{}');
+      expect(!result.ok && result.error.message).toContain('without a schema');
+    });
+  });
 });

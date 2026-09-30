@@ -21,7 +21,7 @@ export type SuppliedByContract = 'type' | 'dataschema' | 'data' | 'domain';
  * Restated here because `Omit` collapses it — the two arms share no key, so
  * omitting anything from `ArvoEventParam` drops the whole union.
  */
-type TraceContextParam =
+export type TraceContextParam =
   | {
       /** Raw W3C `traceparent`. Mutually exclusive with `span`. */
       traceparent?: string;

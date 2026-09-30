@@ -146,6 +146,51 @@ What is read back SHALL carry everything that was written.
 - **WHEN** a record is read back against a schema its data does not satisfy
 - **THEN** it is reported rather than returned
 
+### Requirement: Building An Event To Emit
+
+The system SHALL let an executor produce a fully addressed event from an event type and a payload, without that executor knowing any addressing rule.
+
+Such an event SHALL carry every default the protocol fixes for its role. An event to a service SHALL carry this execution's own identity, one more than its depth, and no correlation to a request being answered. An event completing this execution SHALL carry the caller's identity, this execution's own depth, and the event that opened the execution as the request it answers. Both SHALL carry the workflow, the contract this execution implements, the event that caused this delivery, and the role the event plays.
+
+A type this version may not emit SHALL be refused. The handler error event's type SHALL be refused, an executor having no means to produce one.
+
+A payload the schema for that type refuses SHALL be refused.
+
+An executor SHALL be able to set what is its own to choose without reaching past a boundary, and SHALL be able to set what is not only by reaching past one that is named as such.
+
+#### Scenario: An event to a service
+- **WHEN** an executor builds an event of a declared service's input type
+- **THEN** it is addressed to that service
+- **AND** it carries this execution's identity, and one more than its depth
+- **AND** it answers no request
+
+#### Scenario: An event completing this execution
+- **WHEN** an executor builds an event of one of this version's own output types
+- **THEN** it is addressed to whoever opened this execution
+- **AND** it carries the caller's identity, and this execution's own depth
+- **AND** it names the event that opened the execution as the request it answers
+
+#### Scenario: A type this version may not emit
+- **WHEN** an executor builds an event of a type that is neither a declared service's input nor one of this version's outputs
+- **THEN** it is refused
+
+#### Scenario: The handler error event
+- **WHEN** an executor builds an event of this version's handler error type
+- **THEN** it is refused
+
+#### Scenario: A payload the schema refuses
+- **WHEN** an executor builds an event whose payload does not satisfy the schema its type selects
+- **THEN** it is refused
+
+#### Scenario: Setting what is the executor's to choose
+- **WHEN** an executor sets the processing path or the cost figure
+- **THEN** the event carries what was set
+
+#### Scenario: Setting what is not
+- **WHEN** an executor sets a field whose wrong value would spoil something beyond this execution
+- **THEN** it does so only through a surface named as unsafe
+- **AND** the event carries what was set
+
 ### Requirement: An Executor For Every Version, And For No Other
 
 The system SHALL require one executor for each version the implemented contract declares, and SHALL refuse a declaration that omits one.

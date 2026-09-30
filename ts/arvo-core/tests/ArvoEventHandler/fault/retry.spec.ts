@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ArvoRetryVerdictParam } from '../../../src/ArvoEventHandler/fault/retry.js';
 import {
   ARVO_RETRY_SAFE_FAULT_KINDS,
   isRetrySafeFaultKind,
@@ -6,9 +7,10 @@ import {
   resolveRetryDelayMs,
 } from '../../../src/ArvoEventHandler/fault/retry.js';
 import type { ArvoFaultKind } from '../../../src/ArvoEventHandler/fault/types.js';
+import type { ArvoRetryDelayFn } from '../../../src/ArvoEventHandler/types/options.js';
 import { chargedEvent } from '../fixtures.js';
 
-const verdict = (overrides: Record<string, unknown> = {}) =>
+const verdict = (overrides: Partial<ArvoRetryVerdictParam> = {}) =>
   resolveRetry({
     retrySafe: true,
     attempt: 0,
@@ -18,7 +20,7 @@ const verdict = (overrides: Record<string, unknown> = {}) =>
     state: null,
     timestamp: 1_700_000_000_000,
     ...overrides,
-  } as never);
+  });
 
 describe('which faults a redelivery could fix', () => {
   it.each([
@@ -74,34 +76,27 @@ describe('how long to wait', () => {
   });
 
   it('is what the function works out', () => {
-    const backoff = (
-      _event: unknown,
-      _state: unknown,
-      attempt: number,
-    ): number => 200 * (attempt + 1);
-    expect(
-      resolveRetryDelayMs(backoff as never, chargedEvent, null, 2, 3),
-    ).toBe(600);
+    const backoff: ArvoRetryDelayFn = (_event, _state, attempt) =>
+      200 * (attempt + 1);
+    expect(resolveRetryDelayMs(backoff, chargedEvent, null, 2, 3)).toBe(600);
   });
 
   it('tells the function everything a backoff can turn on', () => {
     const seen: unknown[] = [];
-    const record = (...args: unknown[]): number => {
+    const record: ArvoRetryDelayFn = (...args) => {
       seen.push(...args);
       return 1;
     };
-    resolveRetryDelayMs(record as never, chargedEvent, null, 2, 5);
+    resolveRetryDelayMs(record, chargedEvent, null, 2, 5);
     expect(seen).toEqual([chargedEvent, null, 2, 5]);
   });
 
   describe('a function that cannot be trusted', () => {
     it('falls back where it throws', () => {
-      const broken = () => {
+      const broken: ArvoRetryDelayFn = () => {
         throw new Error('no');
       };
-      expect(
-        resolveRetryDelayMs(broken as never, chargedEvent, null, 0, 3),
-      ).toBe(300);
+      expect(resolveRetryDelayMs(broken, chargedEvent, null, 0, 3)).toBe(300);
     });
 
     it.each([
@@ -111,10 +106,9 @@ describe('how long to wait', () => {
       ['a negative wait', -1],
       ['something unmeasurable', Number.NaN],
     ])('falls back where it returns %s', (_label, returned) => {
-      const odd = () => returned;
-      expect(resolveRetryDelayMs(odd as never, chargedEvent, null, 0, 3)).toBe(
-        300,
-      );
+      // Deliberately not a count of milliseconds: the point of the test.
+      const odd = () => returned as unknown as number;
+      expect(resolveRetryDelayMs(odd, chargedEvent, null, 0, 3)).toBe(300);
     });
   });
 });

@@ -19,12 +19,12 @@ import { checkExecutionState, isPlainObject } from './validator.js';
  * Everything an execution remembers about itself, as one immutable value.
  *
  * Its own business data, where it came from, where it rests, what it has
- * touched and what it is still waiting on. Every field is read-only, and a
- * record never changes: an execution moves forward by minting the next one.
+ * touched and what it is still waiting on. Never changes: an execution
+ * moves forward by minting the next one.
  *
- * Checked as it is built, so a record that exists is one that was valid.
- * Its data is the exception — the schema governing that is a type parameter
- * and is never carried, so whoever writes or reads one back supplies it.
+ * Checked as it is built, so a record that exists was valid. Its data is
+ * the exception — the schema is never carried, and is supplied by whoever
+ * writes or reads one back.
  *
  * @example
  * ```typescript
@@ -162,15 +162,12 @@ export class ArvoExecutionState<
    * A record rebuilt from something that is not one yet — a row from a
    * store, a fixture, a replay — reporting the outcome rather than throwing.
    *
-   * Both events must already be events, and what is awaited must already be
-   * a `Map`. Restoring either from however it was stored is the caller's.
-   * Data is checked against `dataschema` but never rewritten by it: what
-   * comes back is what was stored, with nothing defaulted or transformed on
-   * the way in.
+   * Both events must already be events, and what is awaited a `Map`.
+   * Restoring either is the caller's. Data is checked against `dataschema`
+   * but never rewritten by it.
    *
    * @param input - What the record was stored as.
-   * @param dataschema - The schema governing that version's data, the one
-   * thing a record does not carry.
+   * @param dataschema - The schema governing that version's data.
    *
    * @example
    * ```typescript
@@ -232,15 +229,12 @@ export class ArvoExecutionState<
    * A record rebuilt from something that is not one yet — a row from a
    * store, a fixture, a replay.
    *
-   * Both events must already be events, and what is awaited must already be
-   * a `Map`. Restoring either from however it was stored is the caller's.
-   * Data is checked against `dataschema` but never rewritten by it: what
-   * comes back is what was stored, with nothing defaulted or transformed on
-   * the way in.
+   * Both events must already be events, and what is awaited a `Map`.
+   * Restoring either is the caller's. Data is checked against `dataschema`
+   * but never rewritten by it.
    *
    * @param input - What the record was stored as.
-   * @param dataschema - The schema governing that version's data, the one
-   * thing a record does not carry.
+   * @param dataschema - The schema governing that version's data.
    * @throws {ArvoExecutionStateValidationError} If any field is of the wrong
    * shape, naming every one of them rather than only the first.
    *

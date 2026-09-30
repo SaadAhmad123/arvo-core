@@ -1,6 +1,5 @@
 import type * as z from 'zod/v4/core';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
-import type { ARVO_LOOSE_DATA_SCHEMA } from '../helpers/defaults.js';
 import type { ArvoExecutionState } from '../state/index.js';
 import type { ArvoRecordContracts } from '../state/types.js';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
@@ -27,10 +26,8 @@ export type ArvoEntryKind = 'init' | 'followup';
  * Anything one delivery can carry: the event this version takes in, or
  * whatever a declared service answered with, its handler error included.
  *
- * A union rather than a type that narrows by how the delivery was
- * classified. Every member has a literal `type` and no two can share one,
- * because the collision rule refuses that at declaration, so narrowing on
- * `type` reaches the exact payload and needs nothing else to help it.
+ * Narrow on `type` to reach the exact payload. No two members share one,
+ * the collision rule refusing that at declaration.
  */
 export type ArvoDeliveredEvent<
   TSelf extends VersionedArvoContract,
@@ -109,29 +106,18 @@ export type ArvoExecutionContextParam<
   hooks: TMechanismHooks;
 };
 
-/**
- * The schema actually governing a version's data: the one it declared, or
- * the loose one where it declared none.
- *
- * A version may pass `null` to say it remembers nothing in particular.
- * Resolving that here rather than at each call site is what lets the data's
- * type follow from the same call that builds a context.
- */
-export type ArvoDataSchemaInForce<TDeclared extends z.$ZodObject | null> =
-  TDeclared extends z.$ZodObject ? TDeclared : typeof ARVO_LOOSE_DATA_SCHEMA;
-
 /** What both context factories need, whichever way the delivery arrived. */
 type ArvoContextFactoryCommon<
   TSelf extends VersionedArvoContract,
   TServices extends ArvoServiceMap,
-  TDeclaredSchema extends z.$ZodObject | null,
+  TDataSchema extends z.$ZodObject,
   TDependencies extends ArvoDependencies,
   TMechanismHooks extends ArvoMechanismHooks,
 > = {
   /** This version of the contract implemented, and what it may send to. */
   contracts: { self: TSelf; services: TServices };
-  /** The schema this version declared, or `null` where it declared none. */
-  dataSchema: TDeclaredSchema;
+  /** The schema governing this version's data. */
+  dataSchema: TDataSchema;
   /** Which attempt this delivery is, counting from 0. */
   attempt: number;
   /** The options in force for this version, every one of them settled. */
@@ -151,13 +137,13 @@ type ArvoContextFactoryCommon<
 export type ArvoInitContextParam<
   TSelf extends VersionedArvoContract,
   TServices extends ArvoServiceMap,
-  TDeclaredSchema extends z.$ZodObject | null,
+  TDataSchema extends z.$ZodObject,
   TDependencies extends ArvoDependencies,
   TMechanismHooks extends ArvoMechanismHooks,
 > = ArvoContextFactoryCommon<
   TSelf,
   TServices,
-  TDeclaredSchema,
+  TDataSchema,
   TDependencies,
   TMechanismHooks
 > & {
@@ -186,13 +172,13 @@ export type ArvoInitContextParam<
 export type ArvoFollowupContextParam<
   TSelf extends VersionedArvoContract,
   TServices extends ArvoServiceMap,
-  TDeclaredSchema extends z.$ZodObject | null,
+  TDataSchema extends z.$ZodObject,
   TDependencies extends ArvoDependencies,
   TMechanismHooks extends ArvoMechanismHooks,
 > = ArvoContextFactoryCommon<
   TSelf,
   TServices,
-  TDeclaredSchema,
+  TDataSchema,
   TDependencies,
   TMechanismHooks
 > & {

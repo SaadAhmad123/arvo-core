@@ -5,7 +5,6 @@ import { fromNeverthrow } from '../../result.js';
 import type { AsyncResult, Result } from '../../types.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
 import {
-  ARVO_LOOSE_DATA_SCHEMA,
   ARVO_OPENING_CAS_VERSION,
   ARVO_OPENING_LIFECYCLE,
   ARVO_RECORD_FORMAT_VERSION,
@@ -23,42 +22,45 @@ import type {
 import { ArvoExecutionContext } from './index.js';
 import type {
   ArvoContextState,
-  ArvoDataSchemaInForce,
   ArvoFollowupContextParam,
   ArvoInitContextParam,
 } from './types.js';
 
-/** The schema a version declared, or the loose one where it declared none. */
-const schemaInForce = <TDeclared extends z.$ZodObject | null>(
-  declared: TDeclared,
-): ArvoDataSchemaInForce<TDeclared> =>
-  (declared ?? ARVO_LOOSE_DATA_SCHEMA) as ArvoDataSchemaInForce<TDeclared>;
-
 /**
- * An executor's context for a delivery that opens an execution, reporting
- * the outcome rather than throwing.
+ * An executor's context for a delivery that opens an execution.
  *
- * There is no stored record, so one is built. What it holds comes from the
- * event and the contracts wherever it can: the workflow, the depth, what is
- * implemented and which version of it. What cannot be read from either is
- * supplied — the execution's own identity, and the contracts as they are to
- * be stored.
+ * There is no stored record, so one is built. The workflow, the depth and
+ * what is implemented are read off the event and the contracts. The
+ * execution's identity and the contracts snapshot are supplied, never
+ * derived here.
  *
- * The identity is never derived here. Whatever looked for a record already
- * had to know which execution it was looking for, so deriving it again
- * would be the same value computed in two places.
+ * @example
+ * ```typescript
+ * const opened = createInitArvoExecutionContext({
+ *   contracts: { self: orderContract.versions['1.0.0'], services },
+ *   event: initEvent,
+ *   executionId,
+ *   parentExecutionId: initEvent.executionid,
+ *   contractsSnapshot,
+ *   dataSchema: orderData,
+ *   options: resolvedOptions,
+ *   attempt: 0,
+ *   dependencies: { db },
+ *   hooks: {},
+ * });
+ * ```
  */
-export const tryCreateInitArvoExecutionContext = <
+export const createInitArvoExecutionContext = <
   TSelf extends VersionedArvoContract,
   TServices extends ArvoServiceMap,
-  TDeclaredSchema extends z.$ZodObject | null,
+  TDataSchema extends z.$ZodObject,
   TDependencies extends ArvoDependencies,
   TMechanismHooks extends ArvoMechanismHooks,
 >(
   param: ArvoInitContextParam<
     TSelf,
     TServices,
-    TDeclaredSchema,
+    TDataSchema,
     TDependencies,
     TMechanismHooks
   >,
@@ -66,7 +68,7 @@ export const tryCreateInitArvoExecutionContext = <
   ArvoExecutionContext<
     TSelf,
     TServices,
-    ArvoDataSchemaInForce<TDeclaredSchema>,
+    TDataSchema,
     TDependencies,
     TMechanismHooks
   >,
@@ -97,13 +99,13 @@ export const tryCreateInitArvoExecutionContext = <
         new ArvoExecutionContext<
           TSelf,
           TServices,
-          ArvoDataSchemaInForce<TDeclaredSchema>,
+          TDataSchema,
           TDependencies,
           TMechanismHooks
         >({
           contracts: param.contracts,
           state: state,
-          dataSchema: schemaInForce(param.dataSchema),
+          dataSchema: param.dataSchema,
           entry: 'init',
           attempt: param.attempt,
           options: param.options,
@@ -121,25 +123,21 @@ export const tryCreateInitArvoExecutionContext = <
 };
 
 /**
- * An executor's context for a delivery that opens an execution.
+ * An executor's context for a delivery that answers something an execution
+ * was waiting for.
  *
- * There is no stored record, so one is built. What it holds comes from the
- * event and the contracts wherever it can: the workflow, the depth, what is
- * implemented and which version of it. What cannot be read from either is
- * supplied — the execution's own identity, and the contracts as they are to
- * be stored.
- *
- * @throws {ArvoExecutionStateValidationError} If what was supplied does not
- * make a valid record, naming every field at fault.
+ * The record answers everything opening one had to be told, so only the
+ * row and the execution it must name are supplied. The event log and what
+ * is awaited are left as stored. The one field replaced is the event that
+ * caused this delivery; the stored one belongs to the delivery before.
  *
  * @example
  * ```typescript
- * const ctx = createInitArvoExecutionContext({
+ * const resumed = await createFollowupArvoExecutionContext({
  *   contracts: { self: orderContract.versions['1.0.0'], services },
- *   event: initEvent,
+ *   event: chargedEvent,
+ *   state: rowFromStore,
  *   executionId,
- *   parentExecutionId: initEvent.executionid,
- *   contractsSnapshot,
  *   dataSchema: orderData,
  *   options: resolvedOptions,
  *   attempt: 0,
@@ -148,55 +146,17 @@ export const tryCreateInitArvoExecutionContext = <
  * });
  * ```
  */
-export const createInitArvoExecutionContext = <
+export const createFollowupArvoExecutionContext = async <
   TSelf extends VersionedArvoContract,
   TServices extends ArvoServiceMap,
-  TDeclaredSchema extends z.$ZodObject | null,
-  TDependencies extends ArvoDependencies,
-  TMechanismHooks extends ArvoMechanismHooks,
->(
-  param: ArvoInitContextParam<
-    TSelf,
-    TServices,
-    TDeclaredSchema,
-    TDependencies,
-    TMechanismHooks
-  >,
-): ArvoExecutionContext<
-  TSelf,
-  TServices,
-  ArvoDataSchemaInForce<TDeclaredSchema>,
-  TDependencies,
-  TMechanismHooks
-> => {
-  const result = tryCreateInitArvoExecutionContext(param);
-  if (result.ok) return result.value;
-  throw result.error;
-};
-
-/**
- * An executor's context for a delivery that answers something an execution
- * was waiting for, reporting the outcome rather than throwing.
- *
- * The record answers everything opening one had to be told, so only the row
- * itself and the execution it is expected to be are supplied. The event log
- * and what is awaited are left exactly as they were stored: both are the
- * caller's bookkeeping, not this factory's to edit.
- *
- * The one field it does replace is the event that caused this delivery. The
- * stored one belongs to the delivery before it.
- */
-export const tryCreateFollowupArvoExecutionContext = async <
-  TSelf extends VersionedArvoContract,
-  TServices extends ArvoServiceMap,
-  TDeclaredSchema extends z.$ZodObject | null,
+  TDataSchema extends z.$ZodObject,
   TDependencies extends ArvoDependencies,
   TMechanismHooks extends ArvoMechanismHooks,
 >(
   param: ArvoFollowupContextParam<
     TSelf,
     TServices,
-    TDeclaredSchema,
+    TDataSchema,
     TDependencies,
     TMechanismHooks
   >,
@@ -204,13 +164,13 @@ export const tryCreateFollowupArvoExecutionContext = async <
   ArvoExecutionContext<
     TSelf,
     TServices,
-    ArvoDataSchemaInForce<TDeclaredSchema>,
+    TDataSchema,
     TDependencies,
     TMechanismHooks
   >,
   ArvoExecutionStateSerializerError | ArvoExecutionStateValidationError
 > => {
-  const dataSchema = schemaInForce(param.dataSchema);
+  const dataSchema = param.dataSchema;
   const serializer = new ArvoExecutionStateSerializer(dataSchema);
   const stored = await serializer.tryDeserialize(param.state);
   if (!stored.ok) return stored;
@@ -234,7 +194,7 @@ export const tryCreateFollowupArvoExecutionContext = async <
       new ArvoExecutionContext<
         TSelf,
         TServices,
-        ArvoDataSchemaInForce<TDeclaredSchema>,
+        TDataSchema,
         TDependencies,
         TMechanismHooks
       >({
@@ -243,11 +203,7 @@ export const tryCreateFollowupArvoExecutionContext = async <
         // serializer has no contracts to say otherwise. The contracts here do.
         state: mutateState(stored.value, {
           triggeringEvent: param.event,
-        }) as ArvoContextState<
-          TSelf,
-          TServices,
-          ArvoDataSchemaInForce<TDeclaredSchema>
-        >,
+        }) as ArvoContextState<TSelf, TServices, TDataSchema>,
         dataSchema,
         entry: 'followup',
         attempt: param.attempt,
@@ -257,62 +213,4 @@ export const tryCreateFollowupArvoExecutionContext = async <
       }),
     ),
   );
-};
-
-/**
- * An executor's context for a delivery that answers something an execution
- * was waiting for.
- *
- * The record answers everything opening one had to be told, so only the row
- * itself and the execution it is expected to be are supplied. The event log
- * and what is awaited are left exactly as they were stored. The event that
- * caused this delivery is replaced, the stored one belonging to the
- * delivery before it.
- *
- * @throws {ArvoExecutionStateSerializerError} If the row is not a stored
- * record at all.
- * @throws {ArvoExecutionStateValidationError} If it reads but is wrong, or
- * names a different execution than the one this delivery is for.
- *
- * @example
- * ```typescript
- * const ctx = await createFollowupArvoExecutionContext({
- *   contracts: { self: orderContract.versions['1.0.0'], services },
- *   event: chargedEvent,
- *   state: rowFromStore,
- *   executionId,
- *   dataSchema: orderData,
- *   options: resolvedOptions,
- *   attempt: 0,
- *   dependencies: { db },
- *   hooks: {},
- * });
- * ```
- */
-export const createFollowupArvoExecutionContext = async <
-  TSelf extends VersionedArvoContract,
-  TServices extends ArvoServiceMap,
-  TDeclaredSchema extends z.$ZodObject | null,
-  TDependencies extends ArvoDependencies,
-  TMechanismHooks extends ArvoMechanismHooks,
->(
-  param: ArvoFollowupContextParam<
-    TSelf,
-    TServices,
-    TDeclaredSchema,
-    TDependencies,
-    TMechanismHooks
-  >,
-): Promise<
-  ArvoExecutionContext<
-    TSelf,
-    TServices,
-    ArvoDataSchemaInForce<TDeclaredSchema>,
-    TDependencies,
-    TMechanismHooks
-  >
-> => {
-  const result = await tryCreateFollowupArvoExecutionContext(param);
-  if (result.ok) return result.value;
-  throw result.error;
 };

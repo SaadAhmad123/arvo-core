@@ -1,15 +1,12 @@
 import { describeValue } from '../../../utils/error-issue.js';
 
 /**
- * Thrown when the boundary between a record and a string fails: a string
- * that is not JSON, JSON that is not a record at all, or a record holding a
- * value that cannot be turned into JSON.
+ * Thrown where a record and a string will not cross: a string that is not
+ * JSON, JSON that is not a record, or a record that will not stringify.
  *
- * Distinct from a record being wrong, which is reported as
- * `ArvoExecutionStateValidationError` and names the fields at fault. This
- * says nothing was readable enough to judge.
- *
- * `cause` is always the original error, never discarded.
+ * A record that reads but is wrong is an
+ * `ArvoExecutionStateValidationError` instead. `cause` is always the
+ * original error.
  */
 export class ArvoExecutionStateSerializerError extends Error {
   /** Discriminant for identifying this error without an `instanceof` check. */

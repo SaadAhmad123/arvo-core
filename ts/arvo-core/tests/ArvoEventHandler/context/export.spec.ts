@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createInitArvoExecutionContext } from '../../../src/ArvoEventHandler/context/factory.js';
+import type { ArvoInitContextParam } from '../../../src/ArvoEventHandler/context/types.js';
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
-import { ArvoExecutionState } from '../../../src/ArvoEventHandler/state/index.js';
 import { ArvoExecutionStateSerializer } from '../../../src/ArvoEventHandler/state/serializer/index.js';
+import type {
+  ArvoDependencies,
+  ArvoMechanismHooks,
+} from '../../../src/ArvoEventHandler/types/supplied.js';
 import {
   initEvent,
   orderContract,
@@ -16,8 +20,22 @@ const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
 const EXECUTION_ID = 'a'.repeat(64);
 
-const opened = (overrides: Record<string, unknown> = {}) =>
-  createInitArvoExecutionContext({
+/** What a fixture may vary about opening an execution. */
+type InitOverrides<TData extends z.core.$ZodObject = typeof orderData> =
+  Partial<
+    ArvoInitContextParam<
+      typeof orderVersion,
+      typeof services,
+      TData,
+      ArvoDependencies,
+      ArvoMechanismHooks
+    >
+  >;
+
+const opened = <TData extends z.core.$ZodObject = typeof orderData>(
+  overrides: InitOverrides<TData> = {},
+) => {
+  const result = createInitArvoExecutionContext({
     contracts: { self: orderVersion, services },
     event: initEvent,
     executionId: EXECUTION_ID,
@@ -26,29 +44,34 @@ const opened = (overrides: Record<string, unknown> = {}) =>
       self: { uri: orderContract.uri, type: orderContract.type },
       services: [],
     },
-    dataSchema: orderData,
+    dataSchema: orderData as unknown as TData,
     attempt: 0,
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     dependencies: {},
     hooks: {},
     ...overrides,
-  } as never);
+  });
+  if (!result.ok) throw result.error;
+  return result.value;
+};
 
 /** A context that has done everything an execution is expected to do. */
-const finished = (overrides: Record<string, unknown> = {}) => {
+const finished = async (overrides: InitOverrides = {}) => {
   const ctx = opened(overrides);
-  ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
+  await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
   return ctx;
 };
 
 describe('exporting what an execution finished as', () => {
   describe('what it gives back', () => {
     it('is a string, ready for whatever stores it', async () => {
-      expect(typeof (await finished().exportFinalState())).toBe('string');
+      expect(typeof (await (await finished()).exportFinalState())).toBe(
+        'string',
+      );
     });
 
     it('reads back as the record the execution ended on', async () => {
-      const ctx = finished();
+      const ctx = await finished();
       const restored = await new ArvoExecutionStateSerializer(
         orderData,
       ).deserialize(await ctx.exportFinalState());
@@ -58,7 +81,7 @@ describe('exporting what an execution finished as', () => {
     });
 
     it('carries the events the execution held', async () => {
-      const ctx = finished();
+      const ctx = await finished();
       const restored = await new ArvoExecutionStateSerializer(
         orderData,
       ).deserialize(await ctx.exportFinalState());
@@ -68,16 +91,16 @@ describe('exporting what an execution finished as', () => {
     });
 
     it('does not change the context it was read from', async () => {
-      const ctx = finished();
+      const ctx = await finished();
       const before = ctx.state;
       await ctx.exportFinalState();
       expect(ctx.state).toBe(before);
     });
   });
 
-  describe('the revision it writes at', () => {
+  describe('the revision it writes at', async () => {
     it('is one past the revision the execution held', async () => {
-      const ctx = finished();
+      const ctx = await finished();
       const restored = await new ArvoExecutionStateSerializer(
         orderData,
       ).deserialize(await ctx.exportFinalState());
@@ -86,12 +109,12 @@ describe('exporting what an execution finished as', () => {
     });
 
     it('is the same on a second call, the context not having moved', async () => {
-      const ctx = finished();
+      const ctx = await finished();
       expect(await ctx.exportFinalState()).toBe(await ctx.exportFinalState());
     });
   });
 
-  describe('an execution that remembered nothing', () => {
+  describe('an execution that remembered nothing', async () => {
     /** The fault raised by writing out an execution that wrote nothing. */
     const refused = async (overrides: Record<string, unknown> = {}) => {
       try {
@@ -117,43 +140,43 @@ describe('exporting what an execution finished as', () => {
       expect(fault.eventId).toBe(initEvent.id);
     });
 
-    it('carries what the execution would be abandoned with', async () => {
+    it('carries what the execution would be abandoned with, written out', async () => {
       const fault = await refused();
-      expect(fault.abandonmentEvent).not.toBeNull();
-      expect(fault.abandonmentState).toBeInstanceOf(ArvoExecutionState);
+      expect(typeof fault.abandonmentEvent).toBe('string');
+      expect(typeof fault.abandonmentState).toBe('string');
     });
 
-    it('is refused whether or not the version declared a schema of its own', async () => {
-      expect((await refused({ dataSchema: null })).faultKind).toBe(
+    it('is refused whatever schema the version declared', async () => {
+      expect((await refused({ dataSchema: z.looseObject({}) })).faultKind).toBe(
         'state_schema_rejected',
       );
     });
 
     it('accepts a version that remembers nothing in particular saying so', async () => {
-      const ctx = opened({ dataSchema: null });
-      ctx.setState({ data: {} });
+      const ctx = opened({ dataSchema: z.looseObject({}) });
+      await ctx.setState({ data: {} });
       expect(typeof (await ctx.exportFinalState())).toBe('string');
     });
   });
 
   describe('an execution holding something it cannot write out', () => {
-    const unwritable = () => {
-      const ctx = opened({ dataSchema: null });
+    const unwritable = async () => {
+      const ctx = opened({ dataSchema: z.looseObject({}) });
       const circular: Record<string, unknown> = {};
       circular.self = circular;
-      ctx.setState({ data: { circular } as never });
+      await ctx.setState({ data: { circular } as never });
       return ctx;
     };
 
     it('raises a fault', async () => {
-      await expect(unwritable().exportFinalState()).rejects.toBeInstanceOf(
-        ArvoHandlerFault,
-      );
+      await expect(
+        (await unwritable()).exportFinalState(),
+      ).rejects.toBeInstanceOf(ArvoHandlerFault);
     });
 
     it('names it as the record not being serializable', async () => {
       try {
-        await unwritable().exportFinalState();
+        await (await unwritable()).exportFinalState();
       } catch (raised) {
         expect((raised as ArvoHandlerFault).faultKind).toBe(
           'state_not_serializable',
@@ -165,7 +188,7 @@ describe('exporting what an execution finished as', () => {
 
     it('keeps what went wrong underneath', async () => {
       try {
-        await unwritable().exportFinalState();
+        await (await unwritable()).exportFinalState();
       } catch (raised) {
         expect((raised as ArvoHandlerFault).cause).toContain('circular');
         return;

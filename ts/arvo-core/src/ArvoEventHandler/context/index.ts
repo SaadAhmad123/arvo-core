@@ -1,11 +1,16 @@
 import * as z from 'zod/v4/core';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
-import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import { createArvoEventFactory } from '../../factories/ArvoEventFactory/index.js';
+import { ArvoEventSerializer } from '../../serializers/ArvoEventSerializer/index.js';
+import { tryBuildEmittedEvent } from '../emission/index.js';
+import type {
+  ArvoEmissionParam,
+  ArvoEmittedEvent,
+  ArvoUnsafeEmissionFields,
+} from '../emission/types.js';
 import { ArvoHandlerFault } from '../fault/index.js';
 import { isRetrySafeFaultKind, resolveRetry } from '../fault/retry.js';
 import type { ArvoFaultKind } from '../fault/types.js';
-import type { ArvoExecutionState } from '../state/index.js';
 import { ArvoExecutionStateSerializer } from '../state/serializer/index.js';
 import { mutateState } from '../state/utils.js';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
@@ -126,7 +131,7 @@ export class ArvoExecutionContext<
    * @throws {ArvoHandlerFault} `state_schema_rejected` where the schema
    * refuses the value. What is remembered is left as it was.
    */
-  setState(param: { data: ArvoDataWrite<TDataSchema> }): void {
+  async setState(param: { data: ArvoDataWrite<TDataSchema> }): Promise<void> {
     const next =
       typeof param.data === 'function'
         ? (param.data as (current: z.output<TDataSchema> | null) => unknown)(
@@ -144,7 +149,7 @@ export class ArvoExecutionContext<
       const reason = `state does not satisfy the schema this version declared for it: ${checked.error.issues
         .map((issue) => `${at(issue)} ${issue.message}`)
         .join('; ')}`;
-      throw this.fault({
+      throw await this.fault({
         faultKind: 'state_schema_rejected',
         message: reason,
         violations,
@@ -156,14 +161,10 @@ export class ArvoExecutionContext<
   /**
    * What this execution finished as, written out for whatever stores it.
    *
-   * The revision is advanced as part of writing it out, and nowhere else,
-   * so the string is safe to commit against a store comparing revisions.
-   *
-   * Data must not be empty. An execution that remembers nothing in
-   * particular writes `{}` rather than leaving it unset.
-   *
-   * Reads the context rather than changing it, so calling it twice produces
-   * the same string.
+   * The revision is advanced as part of writing it out, and nowhere else.
+   * Data must not be empty: an execution remembering nothing in particular
+   * writes `{}`. Reads the context rather than changing it, so calling it
+   * twice produces the same string.
    *
    * @throws {ArvoHandlerFault} `state_schema_rejected` where data is empty,
    * `state_not_serializable` where the record holds something that cannot
@@ -178,7 +179,7 @@ export class ArvoExecutionContext<
    */
   async exportFinalState(): Promise<string> {
     if (this.#state.data === null) {
-      throw this.fault({
+      throw await this.fault({
         faultKind: 'state_schema_rejected',
         message:
           'this execution finished having remembered nothing, and a record is only written for one that did something',
@@ -192,11 +193,60 @@ export class ArvoExecutionContext<
     );
     if (written.ok) return written.value;
 
-    throw this.fault({
+    throw await this.fault({
       faultKind: 'state_not_serializable',
       message:
         'this execution finished holding something that cannot be written out',
       cause: written.error.message,
+    });
+  }
+
+  /**
+   * A fully addressed event, from a type and a payload.
+   *
+   * The type decides where it goes: one of this version's outputs completes
+   * the execution, a declared service's input opens one there. Every other
+   * field is set for you, per ADR-006, *The complete field defaults*.
+   *
+   * @param param.type - A declared service's input type, or one of this
+   * version's outputs. The handler error type is refused: producing one is
+   * the handler's, never an executor's.
+   * @param param.data - The payload, checked against the schema `type`
+   * selects.
+   * @param param.domain - Which processing path fulfils this event. Omit
+   * for none.
+   * @param param.executionunits - What this event cost.
+   * @param param.unsafe - Fields whose wrong value spoils something beyond
+   * this execution. See {@link ArvoUnsafeEmissionFields}.
+   * @throws {ArvoHandlerFault} `emission_not_permitted` for a type this
+   * version may not emit, `emission_schema_rejected` for a payload the
+   * schema refuses. Neither is worth another attempt.
+   *
+   * @example
+   * ```typescript
+   * const charge = ctx.build({
+   *   type: 'com_payment_charge',
+   *   data: { amount: 4200 },
+   * });
+   * return [charge];
+   * ```
+   */
+  async build<TParam extends ArvoEmissionParam<TSelf, TServices>>(
+    param: TParam,
+  ): Promise<ArvoEmittedEvent<TSelf, TServices, TParam['type']>> {
+    const built = tryBuildEmittedEvent(
+      {
+        self: this.contracts.self,
+        services: this.contracts.services,
+        state: this.#state,
+      },
+      param,
+    );
+    if (built.ok) return built.value;
+    throw await this.fault({
+      faultKind: built.error.faultKind,
+      message: built.error.message,
+      violations: built.error.violations,
     });
   }
 
@@ -226,7 +276,7 @@ export class ArvoExecutionContext<
    * @example
    * ```typescript
    * if (!charge.ok) {
-   *   throw ctx.fault({
+   *   throw await ctx.fault({
    *     faultKind: 'executor_raised',
    *     message: 'the payment gateway refused the charge',
    *     cause: charge.error.message,
@@ -234,15 +284,15 @@ export class ArvoExecutionContext<
    * }
    * ```
    */
-  fault(param: {
+  async fault(param: {
     faultKind: ArvoFaultKind;
     message: string;
     cause?: string;
     violations?: readonly string[];
     retryable?: boolean;
-  }): ArvoHandlerFault {
+  }): Promise<ArvoHandlerFault> {
     const timestamp = Date.now();
-    const abandonment = this.#abandonment(param.message);
+    const abandonment = await this.#abandonment(param.message);
     return new ArvoHandlerFault({
       faultKind: param.faultKind,
       message: param.message,
@@ -280,10 +330,9 @@ export class ArvoExecutionContext<
    */
   // The event is null rather than thrown on: a fault that must be raised
   // must not be lost to a second failure while raising it.
-  #abandonment(message: string): {
-    event: ArvoEvent | null;
-    state: ArvoExecutionState;
-  } {
+  async #abandonment(
+    message: string,
+  ): Promise<{ event: string | null; state: string | null }> {
     const built = createArvoEventFactory(this.contracts.self).tryCreateError({
       error: new Error(message),
       domain: this.options.handlerErrorDomain ?? undefined,
@@ -297,17 +346,29 @@ export class ArvoExecutionContext<
     });
 
     const event = built.ok ? built.value : null;
+    const written =
+      event === null
+        ? null
+        : await new ArvoEventSerializer({ type: 'arvoevent' }).trySerialize(
+            event,
+          );
+
+    const record = mutateState(this.#state, {
+      lifecycle: 'failure',
+      lifecycleDescription: message,
+      eventIds:
+        event === null
+          ? this.#state.eventIds
+          : [...this.#state.eventIds, { id: event.id, direction: 'emitted' }],
+      casVersion: this.#state.casVersion + 1,
+    });
+    const storedRecord = await new ArvoExecutionStateSerializer().trySerialize(
+      record,
+    );
+
     return {
-      event,
-      state: mutateState(this.#state, {
-        lifecycle: 'failure',
-        lifecycleDescription: message,
-        eventIds:
-          event === null
-            ? this.#state.eventIds
-            : [...this.#state.eventIds, { id: event.id, direction: 'emitted' }],
-        casVersion: this.#state.casVersion + 1,
-      }),
+      event: written?.ok ? written.value : null,
+      state: storedRecord.ok ? storedRecord.value : null,
     };
   }
 }

@@ -5,12 +5,10 @@ import type { ArvoRecordContracts, ArvoTouchedEvent } from '../types.js';
  * What an execution's memory looks like once written out.
  *
  * Everything a record holds, with the two parts JSON cannot express turned
- * into something it can: each event as the object `ArvoEventSerializer`
- * produces in its own format, and what is awaited as a list of pairs rather
- * than a `Map`.
+ * into something it can: each event in the event's own format, and what is
+ * awaited as a list of pairs rather than a `Map`.
  *
- * Read one of these by hand only to inspect a stored record. Building one
- * to hand back is not supported — a record is restored through the
+ * For inspecting a stored record. Restoring one goes through the
  * serializer, which is where the events become events again.
  */
 export type ArvoExecutionStateWire = {

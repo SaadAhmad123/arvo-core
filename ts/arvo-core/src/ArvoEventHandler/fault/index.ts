@@ -1,6 +1,4 @@
-import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { JSONObject } from '../../types.js';
-import type { ArvoExecutionState } from '../state/index.js';
 import type {
   ArvoFaultKind,
   ArvoFaultRetry,
@@ -10,21 +8,20 @@ import type {
 /**
  * Why a delivery could not be carried through.
  *
- * Not a failure of the work, which is reported to your caller as that
- * contract's handler error event. This says the delivery itself could not
- * be trusted to a conclusion: a precondition it needed, or an obligation it
- * had to meet, was not there. Nothing is emitted and no record is written.
+ * Not a failure of the work — that reaches a caller as the contract's
+ * handler error event. This says the delivery could not be trusted to a
+ * conclusion, so nothing is emitted and no record is written.
  *
- * An Error, so it can be thrown and caught as one. Also a durable format,
- * because whatever runs the handler may store it and another language may
- * read what it stored, which is why every field survives JSON.
+ * An `Error`, and every field survives JSON, for whatever stores it.
  *
  * @example
+ * ```typescript
  * try {
- *   ctx.setState({ orderId: 42 });
+ *   await ctx.setState({ data: { orderId: 42 } });
  * } catch (raised) {
- *   if (raised instanceof ArvoHandlerFault) raised.faultKind; // 'state_schema_rejected'
+ *   if (raised instanceof ArvoHandlerFault) raised.faultKind;
  * }
+ * ```
  */
 export class ArvoHandlerFault extends Error {
   /** Identifies this error without an `instanceof` check, and survives JSON. */
@@ -58,16 +55,14 @@ export class ArvoHandlerFault extends Error {
   readonly retry: ArvoFaultRetry | null;
 
   /**
-   * The event to publish if this execution is abandoned, or `null` where the
-   * delivery could address nothing.
-   *
-   * Not acted on when the fault is raised. It is what a mechanism sends if
-   * it decides to give up, so a caller hears rather than waiting forever.
+   * The event to publish if this execution is abandoned, written out, or
+   * `null` where the delivery could address nothing. Not acted on by
+   * raising the fault.
    */
-  readonly abandonmentEvent: ArvoEvent | null;
+  readonly abandonmentEvent: string | null;
 
-  /** The record to commit alongside {@link abandonmentEvent}, or `null`. */
-  readonly abandonmentState: ArvoExecutionState | null;
+  /** The record to commit alongside {@link abandonmentEvent}, written out. */
+  readonly abandonmentState: string | null;
 
   constructor(param: ArvoHandlerFaultParam) {
     super(param.message);
@@ -89,9 +84,8 @@ export class ArvoHandlerFault extends Error {
   /**
    * The whole fault as JSON, for whatever stores it.
    *
-   * `name`, `message` and `stack` are included because an `Error` does not
-   * serialize them by default, and a stored fault missing what failed is
-   * not worth storing.
+   * Includes `name`, `message` and `stack`, which an `Error` serializes
+   * none of. The abandonment pair arrives already written out.
    */
   toJSON(): JSONObject {
     return {
@@ -107,10 +101,8 @@ export class ArvoHandlerFault extends Error {
       attempt: this.attempt,
       timestamp: this.timestamp,
       retry: this.retry === null ? null : { ...this.retry },
-      abandonmentEvent:
-        this.abandonmentEvent === null ? null : { ...this.abandonmentEvent },
-      abandonmentState:
-        this.abandonmentState === null ? null : this.abandonmentState.toJSON(),
+      abandonmentEvent: this.abandonmentEvent,
+      abandonmentState: this.abandonmentState,
     } as JSONObject;
   }
 }

@@ -5,12 +5,11 @@ import type { ArvoExecutionState } from '../state/index.js';
 /**
  * How long to wait before another attempt, worked out per attempt.
  *
- * Given what was delivered, what the execution remembers, which attempt has
+ * Given what was delivered, what the execution remembers, which attempt
  * just failed, and how many are allowed. Returns milliseconds.
  *
- * It must not be able to fail. Where it throws or returns something that is
- * not a count of milliseconds, the protocol substitutes its own delay
- * rather than letting a retry policy take an execution down with it.
+ * It must not be able to fail: where it throws or returns anything that is
+ * not a count of milliseconds, the protocol substitutes its own delay.
  */
 export type ArvoRetryDelayFn = (
   event: ArvoEvent,
@@ -25,13 +24,11 @@ export type ArvoCollectMode = 'all' | 'each';
 /**
  * Every option governing how a version behaves, all of them settled.
  *
- * Complete: every option holds a value. A version declares only what it
- * wants to differ and inherits the rest, but that resolution happens before
- * anything reads these, so nothing downstream asks whether an option is
- * there.
+ * Every option holds a value: a version declares only what it wants to
+ * differ, and that resolution happens before anything reads these.
  *
- * `null` on either timeout means unbounded, and is a value a version can
- * declare rather than the absence of one.
+ * `null` on either timeout means unbounded, which is a value a version
+ * declares rather than the absence of one.
  */
 export type ArvoEventHandlerOptions = {
   /** How deep an execution of this version may sit, or reach. */

@@ -1,6 +1,3 @@
-import type { ArvoEvent } from '../../ArvoEvent/index.js';
-import type { ArvoExecutionState } from '../state/index.js';
-
 /**
  * Every way a delivery can fail to be carried through.
  *
@@ -87,8 +84,11 @@ export type ArvoHandlerFaultParam = {
   /** When another attempt is due, or `null` where none is in prospect. */
   retry: ArvoFaultRetry | null;
 
-  /** The event to publish if this execution is abandoned, or `null`. */
-  abandonmentEvent: ArvoEvent | null;
-  /** The record to commit alongside it, or `null`. */
-  abandonmentState: ArvoExecutionState | null;
+  /**
+   * The event to publish if this execution is abandoned, already written
+   * out in the event's own format, or `null` where there is none.
+   */
+  abandonmentEvent: string | null;
+  /** The record to commit alongside it, written out, or `null`. */
+  abandonmentState: string | null;
 };

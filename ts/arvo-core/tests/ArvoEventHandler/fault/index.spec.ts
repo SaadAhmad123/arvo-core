@@ -1,32 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
-import { ArvoExecutionState } from '../../../src/ArvoEventHandler/state/index.js';
-import { chargedEvent, initEvent, orderContract } from '../fixtures.js';
+import type { ArvoHandlerFaultParam } from '../../../src/ArvoEventHandler/fault/types.js';
+import { initEvent } from '../fixtures.js';
 
-/** The record a mechanism would commit if it gave up on this execution. */
-const abandonedRecord = new ArvoExecutionState({
-  data: { orderId: 'o-1' },
-  subject: initEvent.subject,
-  executionId: initEvent.executionid,
-  parentExecutionId: initEvent.executionid,
-  depth: 0,
-  source: 'com_order_create',
-  version: '1.0.0',
-  lifecycle: 'failure',
-  lifecycleDescription: 'abandoned: state_schema_rejected',
-  initEvent,
-  triggeringEvent: chargedEvent,
-  eventIds: [{ id: initEvent.id, direction: 'received' }],
-  inFlightEventMap: new Map([['emitted-1', null]]),
-  recordFormatVersion: '1.0.0',
-  casVersion: 1,
-  contracts: {
-    self: { uri: orderContract.uri, type: orderContract.type },
-    services: [],
-  },
-} as never);
-
-const minimal = (overrides: Record<string, unknown> = {}) =>
+const minimal = (overrides: Partial<ArvoHandlerFaultParam> = {}) =>
   new ArvoHandlerFault({
     faultKind: 'state_schema_rejected',
     message: 'state does not satisfy the schema',
@@ -41,7 +18,7 @@ const minimal = (overrides: Record<string, unknown> = {}) =>
     abandonmentEvent: null,
     abandonmentState: null,
     ...overrides,
-  } as never);
+  });
 
 describe('ArvoHandlerFault', () => {
   it('is an Error, so it can be thrown and caught as one', () => {
@@ -141,15 +118,16 @@ describe('ArvoHandlerFault', () => {
     });
 
     it('carries the event to publish where one could be addressed', () => {
-      expect(minimal({ abandonmentEvent: initEvent }).abandonmentEvent).toBe(
-        initEvent,
+      const written = JSON.stringify(initEvent);
+      expect(minimal({ abandonmentEvent: written }).abandonmentEvent).toBe(
+        written,
       );
     });
 
     it('carries the record to commit alongside it', () => {
-      const record = { lifecycle: 'failure' };
-      expect(minimal({ abandonmentState: record }).abandonmentState).toBe(
-        record,
+      const written = JSON.stringify({ lifecycle: 'failure' });
+      expect(minimal({ abandonmentState: written }).abandonmentState).toBe(
+        written,
       );
     });
   });
@@ -161,29 +139,46 @@ describe('ArvoHandlerFault', () => {
     }).toThrow();
   });
 
-  describe('as a stored fault', () => {
-    it('survives JSON, because a mechanism may dead-letter it', () => {
-      const fault = minimal({
+  describe('writing one out for whatever stores it', () => {
+    it('carries what failed, and where', () => {
+      const written = minimal({
         cause: 'ZodError',
         violations: ['orderId: expected string'],
-        retry: { maxRetryAttemptsAllowed: 3, retryInMs: 300, retryAt: 1 },
-      });
-      const stored = JSON.parse(JSON.stringify(fault));
-      expect(stored.name).toBe('ArvoHandlerFault');
-      expect(stored.faultKind).toBe('state_schema_rejected');
-      expect(stored.subject).toBe(initEvent.subject);
-      expect(stored.violations).toEqual(['orderId: expected string']);
-      expect(stored.retry.retryInMs).toBe(300);
+      }).toJSON();
+      expect(written.name).toBe('ArvoHandlerFault');
+      expect(written.faultKind).toBe('state_schema_rejected');
+      expect(written.message).toBe('state does not satisfy the schema');
+      expect(written.cause).toBe('ZodError');
+      expect(written.violations).toEqual(['orderId: expected string']);
     });
 
-    it('carries the abandonment event, so a mechanism can publish what was stored', () => {
-      const stored = minimal({ abandonmentEvent: initEvent }).toJSON();
-      expect((stored.abandonmentEvent as Record<string, unknown>).id).toBe(
-        initEvent.id,
-      );
+    it('carries the delivery it happened on', () => {
+      const written = minimal().toJSON();
+      expect(written.subject).toBe(initEvent.subject);
+      expect(written.executionId).toBe(initEvent.executionid);
+      expect(written.eventId).toBe(initEvent.id);
+      expect(written.attempt).toBe(0);
+      expect(written.timestamp).toBe(1_700_000_000_000);
     });
 
-    it('serializes no stack as null rather than dropping the field', () => {
+    it('carries when another attempt is due', () => {
+      const retry = {
+        maxRetryAttemptsAllowed: 3,
+        retryInMs: 300,
+        retryAt: 1_700_000_000_300,
+      };
+      expect(minimal({ retry }).toJSON().retry).toEqual(retry);
+    });
+
+    it('says none is due where none is', () => {
+      expect(minimal().toJSON().retry).toBeNull();
+    });
+
+    it('carries its stack, a stored fault without one being worth little', () => {
+      expect(typeof minimal().toJSON().stack).toBe('string');
+    });
+
+    it('writes no stack as null rather than dropping the field', () => {
       const stackless = Object.create(ArvoHandlerFault.prototype, {
         stack: { value: undefined },
         name: { value: 'ArvoHandlerFault' },
@@ -203,32 +198,36 @@ describe('ArvoHandlerFault', () => {
       expect(stackless.toJSON().stack).toBeNull();
     });
 
-    it('carries its stack where the runtime gave it one', () => {
-      expect(
-        typeof minimal().stack === 'string' || minimal().stack === null,
-      ).toBe(true);
+    it('survives being turned into a string', () => {
+      const written = JSON.parse(JSON.stringify(minimal()));
+      expect(written.faultKind).toBe('state_schema_rejected');
     });
   });
 
-  describe('the record it carries for an abandonment', () => {
-    it('holds it as a record, not as something already flattened', () => {
-      expect(
-        minimal({ abandonmentState: abandonedRecord }).abandonmentState,
-      ).toBeInstanceOf(ArvoExecutionState);
+  describe('the abandonment pair it carries', () => {
+    const storedEvent = JSON.stringify(initEvent);
+    const storedRecord = JSON.stringify({ lifecycle: 'failure' });
+
+    it('holds both already written out, so nothing is serialized later', () => {
+      const fault = minimal({
+        abandonmentEvent: storedEvent,
+        abandonmentState: storedRecord,
+      });
+      expect(fault.abandonmentEvent).toBe(storedEvent);
+      expect(fault.abandonmentState).toBe(storedRecord);
     });
 
-    it("writes that record out in the record's own shape", () => {
-      const stored = minimal({ abandonmentState: abandonedRecord }).toJSON();
-      expect(stored.abandonmentState).toEqual(abandonedRecord.toJSON());
+    it('passes both through untouched when written out', () => {
+      const written = minimal({
+        abandonmentEvent: storedEvent,
+        abandonmentState: storedRecord,
+      }).toJSON();
+      expect(written.abandonmentEvent).toBe(storedEvent);
+      expect(written.abandonmentState).toBe(storedRecord);
     });
 
-    it('survives being turned into a string', () => {
-      const fault = minimal({ abandonmentState: abandonedRecord });
-      const stored = JSON.parse(JSON.stringify(fault));
-      expect(stored.abandonmentState.lifecycle).toBe('failure');
-      expect(stored.abandonmentState.inFlightEventMap).toEqual([
-        ['emitted-1', null],
-      ]);
+    it('says there is nothing to publish where there is not', () => {
+      expect(minimal().toJSON().abandonmentEvent).toBeNull();
     });
 
     it('says there is nothing to commit where there is not', () => {
