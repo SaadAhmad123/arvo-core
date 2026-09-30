@@ -132,21 +132,33 @@ ADR-006 requires an implementation to distinguish an option that was not written
 
 *Consequence worth pinning:* `{ runTimeout: undefined }` written explicitly must behave as omission, because TypeScript cannot tell an absent key from a present undefined one at a call site. Resolution therefore keys off `value === undefined`, not on key presence, and a test covers the explicit-undefined spelling alongside the absent one.
 
-### Option resolution is internal, and the declaration is the whole public surface
+### Every generic in the module is named, and the handler's four are defaulted
 
-One internal function implements ADR-006's rule, and nothing exposes it. The handler level is resolved once in the constructor and stored complete — every one of the seven holds a value after defaulting — so resolution is a single coalesce per option rather than a walk, which is what ADR-006 means by "there is no third step, because the handler is never missing a value".
+No single letters anywhere in `ArvoEventHandler`. Every type parameter carries a `T` prefix and says what it is — `TSelf`, `TServices`, `TDependencies`, `TMechanismHooks`, `TVersion`, `TState`, `TSchema` — and the four the handler is generic in appear in that order wherever they appear together. Lettered parameters are a lookup table a reader has to hold in their head, and these recur across the executor, the context, the version, the version map and the setup, so the cost is paid at every signature.
 
-*Why it is not a method.* An earlier draft put `optionsFor(version)` on the class. It reads well and it is genuinely useful to a consumer debugging a declaration, and that is the problem: it makes the resolution rule part of the published surface, so a consumer can branch on a value the protocol reserves for itself, and every later change to how an option is resolved becomes a breaking change to an API nobody needed. What a consumer declares is theirs; what the protocol makes of it is the protocol's. The same reasoning retires the per-version emittable set from the surface — it is derived, not declared.
+*The handler's four each have a default,* so `ArvoEventHandler` with no arguments is a usable type — what a consumer writes when they hold a handler without caring which. `TServices` defaults to the service map rather than to nothing, because an unparameterised handler should mean "some services" and not "none".
 
-*What the changes that run a delivery use instead.* The internal function, imported directly. Keeping it a free function rather than a private method also keeps it testable without reaching through a class.
+*The contract carries its own versions, so nothing threads a version map.* An earlier draft took `T extends string` and `M extends ArvoContractVersionMapParam` as a pair and passed both everywhere. `TSelf['type']` and `TSelf['versions']` are the same two things read off one parameter, and `keyof TSelf['versions']` is what makes `versions.get('9.9.9')` a compile error for free.
 
-*One function, and the fallback is always an argument.* `resolveOptions(declared, fallback)` is the whole of it. An earlier draft had `resolveHandlerOptions` reach for the defaults itself and `resolveVersionOptions` take the handler's, which made two near-identical functions and hid what each fell back to. There is nothing about handlers or versions in merging a partial set onto a complete one, so the level is the caller's to state: a handler resolves against `DEFAULT_OPTIONS`, a version against the handler's, and both read that way on the line.
+*And no accumulator.* A draft carried a `Declared` parameter recording which versions had been chained and what schema each had. It bought one thing: typing `.state` on a version read back afterwards. The key being checked comes from the contract, the non-optional return comes from `build` having refused an incomplete declaration, and typing an executor happens inside each `handler` call. Nothing needed what it remembered, and it threaded through every signature to provide it.
 
-### The per-version emittable set is computed once and held internally
+### The contracts are declared together
 
-The collision rule needs it — service input types, that version's `outputs` keys, and its handler error type — so it is computed while checking and kept rather than recomputed. Change 4 validates what an executor returns against the same set, and change 1 is where it is cheapest to build, once, at declaration.
+`contracts: { self, services }` rather than two properties at the top of the setup. They are the same kind of thing — what this handler is bound to — and the one place a reader looks to answer "what does this talk to". Options and the type witnesses sit beside them because they are about the handler rather than about its contracts.
 
-It is not exposed, for the reason above: it is derived from the declaration rather than part of it.
+### One accessor answers everything about a version, and it returns a class
+
+`handler.versions.get('1.0.0')` is the only way to read a version, and what comes back is an `ArvoHandlerVersion`: the version, the state schema it declared, the options in force, the event types it may emit, and the code that runs it.
+
+*Typed on both sides.* The map's key is the contract's declared versions, so `.get('9.9.9')` does not compile, and it returns a version rather than a version-or-nothing, because `build` has already refused a declaration missing one. Completeness being a runtime rule is what makes that safe: by the time a handler exists, every declared version has an entry.
+
+*A class rather than a record, because a version is the unit that runs.* Holding the schema, the resolved options and the emittable set beside the executor puts everything a delivery needs about one version in one place, and gives change 4 somewhere to add validating what the executor returned rather than restructuring to make room for it.
+
+*One `options`, always complete.* Inheritance is applied before a consumer sees it. There is deliberately no second property holding what was declared: they wrote that and it is in their source, so reading it back answers no question. The TSDoc says the set is in force rather than as-written, which is the one thing a reader could otherwise get wrong.
+
+*What this replaced, and why that was wrong.* An earlier draft kept the resolved options and the emittable sets in a lookup outside the handler, so that a consumer could not read them at all. Two things were confused there. Freezing stops a value being changed, and these were already frozen; hiding stops it being read, and the case for hiding a frozen value derived from a declaration the consumer wrote turns out to be thin. The hiding also needed a whole mechanism — a keyed store and an accessor module — to achieve something never clearly worth achieving. One typed accessor is less code and a better answer.
+
+*The same rule applies to the execution context, and will.* Anything that owns behaviour is a class in its own file, and `types/` keeps only what is genuinely type-level. `ArvoContextCore` and `ArvoContextState` describe an object that becomes a class in change 4, and exist now only because the executor's parameter needs a name before that class does. They are placeholders and are marked as such rather than left to look permanent.
 
 ### The error-domain option takes `ArvoDomainInput`
 

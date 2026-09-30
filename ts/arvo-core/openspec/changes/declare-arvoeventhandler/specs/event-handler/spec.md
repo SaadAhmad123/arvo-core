@@ -242,7 +242,7 @@ The comparison SHALL be made on the values in force for that version after resol
 
 The system SHALL report every rule a declaration breaks rather than the first, each naming its position within the declaration and the value found.
 
-Neither the resolved options of a version nor the set of event types it may emit SHALL be part of what a declared handler exposes. Both are derived from the declaration, and the declaration is what a handler holds.
+A declaration failure SHALL be reported before any of it takes effect: a handler SHALL NOT be built at all where any rule was broken.
 
 Where the contract implemented is not a contract, the system SHALL report that alone, marked as blocking, and SHALL attempt no other rule.
 
@@ -261,6 +261,33 @@ A declaration failure SHALL be reported as a validation failure and SHALL NOT be
 #### Scenario: A position for every report
 - **WHEN** a declaration is refused for a version's option
 - **THEN** the report names the version and the option
+
+### Requirement: Reading A Version Of A Built Handler
+
+The system SHALL report, for any version a built handler declares, one immutable value carrying that version: the state schema it declared or its absence, the options in force for it, the event types it may emit, and the means to run its executor.
+
+Reading a version the handler declares SHALL always yield such a value, a handler having been refused where any declared version had none.
+
+The options reported SHALL be the complete set in force, inheritance already applied. What a version declared SHALL NOT be reported separately.
+
+#### Scenario: Reading a declared version
+- **WHEN** a version of a built handler is read
+- **THEN** a value for that version is reported
+- **AND** it carries the state schema that version declared
+
+#### Scenario: A version that declared no schema
+- **WHEN** a version that declared no state schema is read
+- **THEN** the absence of a schema is reported rather than a schema
+
+#### Scenario: The options reported are the ones in force
+- **WHEN** a version declaring one option is read, its handler declaring another
+- **THEN** every option is reported
+- **AND** the version's own value is reported for the one it declared
+- **AND** the handler's value is reported for the one it did not
+
+#### Scenario: What was read cannot be changed
+- **WHEN** a version of a built handler is read
+- **THEN** neither it nor the options it reports can be modified
 
 ### Requirement: The Event Types A Version May Emit
 

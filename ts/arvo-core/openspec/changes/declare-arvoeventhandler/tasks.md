@@ -8,7 +8,8 @@
 ## 2. Types
 
 - [x] 2.1 Add `src/ArvoEventHandler/types/`, one module per group and no barrel — `schema.ts`, `supplied.ts`, `options.ts`, `services.ts`, `context.ts`, `executor.ts`, `declaration.ts`, `setup.ts`. Between them: `ArvoEventHandlerOptions` as the complete seven, `ArvoRetryDelayFn`, `ArvoServiceMap`, `ArvoMechanismHooks`, `ArvoEventHandlerExecutor`, `ArvoVersionDeclaration`, `ArvoVersionInput`, `ArvoCreatedVersion`, `PayloadOf`, `ArvoDeclaredVersions`, `ArvoEventHandlerSetupParam`. `PayloadOf` is the conditional helper §1.4 found necessary: `z.infer` off an unresolved schema does not satisfy `ArvoEvent`'s payload constraint without it. Both option sites take `Partial<ArvoEventHandlerOptions>`; the resolved shape is the unpartialled type and no second type is introduced for it.
-- [x] 2.2 Carry every generic the context sketch in `proposal.md` needs — the contract's type and version map, the services map as written, the per-version state schema, the dependency type and the hook type — even though nothing reads them yet. §1.4 is what proves they survive inference.
+- [x] 2.2 Carry every generic the context sketch in `proposal.md` needs. §1.4 is what proves they survive inference.
+- [ ] 2.2b Rename every generic in the module to a `T`-prefixed descriptive name, with no single letters left anywhere: `TSelf`, `TServices`, `TDependencies`, `TMechanismHooks`, `TVersion`, `TState`, `TSchema`. The handler's four appear in that order wherever they appear together and each carries a default. The self contract carries its own versions, so the separate contract-type and version-map pair goes, and so does the `Declared` accumulator.
 - [ ] 2.2a Add the `types` witness field: `Partial<{ mechanismHooks: H; dependencies: D }>`, both constrained to `Record<string, any>` and both defaulting to `Record<string, never>`. It is read by nothing and stored by nothing. TSDoc it as types only, name the empty default, and name the interface-versus-type-alias constraint trap from `design.md`.
 - [x] 2.3 Accept a version declared as the executor alone, as well as the object form, through `ArvoVersionInput`. Normalizing the shorthand is runtime and belongs with `handler` in §4a.
 - [x] 2.4 TSDoc `ArvoEventHandlerExecutor` to say what it is and that its parameter type arrives with the execution context, so a consumer hovering it is not left guessing why it is loose. State the return union ADR-006 fixes.
@@ -42,9 +43,10 @@
 
 ## 5. The class
 
-- [ ] 5.1 Add `src/ArvoEventHandler/index.ts` with the class. Public: `contract`, `services` and `versions` as declared, and the static `setup`. Internal: the constructor, the resolved handler options, the resolved per-version options, and the emittable sets.
-- [ ] 5.2 Implement the constructor over a completed declaration: resolve handler options, run every rule from §4 including completeness, throw one `ArvoEventHandlerValidationError` carrying every issue, and freeze what it holds. Not exported for use; `tryBuild` is what reaches it.
-- [ ] 5.3 Hold the resolved per-version options from §3.3 and the emittable sets from §4.8 as internal fields. Neither is exposed and neither is exported: the declaration is the whole public surface, and both are derived from it.
+- [ ] 5.1 Add `src/ArvoEventHandler/version.ts` with `ArvoHandlerVersion`: the version, the state schema, the options in force, the emittable types, and `execute`, which for now calls the declared executor and gains return validation in change 4.
+- [ ] 5.1a Add `types/version-map.ts` with `ArvoVersion` and `ArvoVersionMap`, keyed off `keyof TSelf['versions']` so `.get` is checked and returns a version rather than a version-or-nothing. A real `Map` underneath; this retypes its surface only.
+- [ ] 5.2 Add `src/ArvoEventHandler/index.ts` with the class, holding `contract`, `services` and the version map. Implement the constructor over a completed declaration: resolve handler options, run every rule from §4 including completeness, throw one `ArvoEventHandlerValidationError` carrying every issue, and freeze what it holds. Not exported for use; `tryBuild` is what reaches it.
+- [ ] 5.3 Delete `helpers/derived.ts` and its spec. Resolved values live on the version a consumer reads, not in a store beside the handler.
 - [ ] 5.4 TSDoc the class and its members to one line each, with an `@example` declaring a handler. State that a handler processes no event yet — a consumer who installs this and expects to run one should learn it from the hover, not from trying.
 
 ## 6. Reaching it, and the public surface
