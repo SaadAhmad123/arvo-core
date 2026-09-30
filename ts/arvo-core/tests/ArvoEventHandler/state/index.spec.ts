@@ -218,7 +218,7 @@ describe('ArvoExecutionState', () => {
       expect(result.ok && result.value.data).toBeNull();
     });
 
-    it('reads back what the schema produced', () => {
+    it('reads back what was stored, not what the schema would produce', () => {
       const withDefault = z.object({
         orderId: z.string(),
         currency: z.string().default('GBP'),
@@ -227,10 +227,20 @@ describe('ArvoExecutionState', () => {
         whole({ data: { orderId: 'o-1' } }),
         withDefault,
       );
-      expect(result.ok && result.value.data).toEqual({
-        orderId: 'o-1',
-        currency: 'GBP',
+      expect(result.ok && result.value.data).toEqual({ orderId: 'o-1' });
+    });
+
+    it('judges the data against the schema without applying it', () => {
+      const withDefault = z.object({
+        orderId: z.string(),
+        currency: z.string().default('GBP'),
       });
+      expect(
+        ArvoExecutionState.tryBuild(
+          whole({ data: { orderId: 42 } }),
+          withDefault,
+        ).ok,
+      ).toBe(false);
     });
 
     it('throws through the other form', () => {

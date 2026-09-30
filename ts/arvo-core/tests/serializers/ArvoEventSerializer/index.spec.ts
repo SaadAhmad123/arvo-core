@@ -107,6 +107,43 @@ describe('ArvoEventSerializer', () => {
       expect(wire).toBe(expected);
     });
 
+    it('arvoevent mode: an event that will not stringify reports ArvoEventSerializerError rather than rejecting', async () => {
+      const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
+      const circular: Record<string, unknown> = {};
+      circular.self = circular;
+      const unserializable = Object.create(ArvoEvent.prototype) as ArvoEvent;
+      Object.assign(unserializable, { ...baseEvent(), data: circular });
+
+      const result = await serializer.trySerialize(unserializable);
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.error).toBeInstanceOf(
+        ArvoEventSerializerError,
+      );
+    });
+
+    it('arvoevent mode: that failure keeps the TypeError as its cause', async () => {
+      const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
+      const circular: Record<string, unknown> = {};
+      circular.self = circular;
+      const unserializable = Object.create(ArvoEvent.prototype) as ArvoEvent;
+      Object.assign(unserializable, { ...baseEvent(), data: circular });
+
+      const result = await serializer.trySerialize(unserializable);
+      expect(!result.ok && result.error.cause).toBeInstanceOf(TypeError);
+    });
+
+    it('arvoevent mode: serialize throws that same error', async () => {
+      const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
+      const circular: Record<string, unknown> = {};
+      circular.self = circular;
+      const unserializable = Object.create(ArvoEvent.prototype) as ArvoEvent;
+      Object.assign(unserializable, { ...baseEvent(), data: circular });
+
+      await expect(serializer.serialize(unserializable)).rejects.toBeInstanceOf(
+        ArvoEventSerializerError,
+      );
+    });
+
     it("trySerialize never rejects/throws in either mode's default configuration", async () => {
       for (const mode of [
         { type: 'arvoevent' as const },

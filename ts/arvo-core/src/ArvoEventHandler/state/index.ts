@@ -134,8 +134,9 @@ export class ArvoExecutionState<
    *
    * Both events must already be events, and what is awaited must already be
    * a `Map`. Restoring either from however it was stored is the caller's.
-   * Data is checked against `dataschema` and read back as that schema
-   * produced it.
+   * Data is checked against `dataschema` but never rewritten by it: what
+   * comes back is what was stored, with nothing defaulted or transformed on
+   * the way in.
    *
    * @param input - What the record was stored as.
    * @param dataschema - The schema governing that version's data, the one
@@ -165,13 +166,12 @@ export class ArvoExecutionState<
     }
 
     const issues: ErrorIssue[] = [];
-    let data = input.data;
 
-    if (isPlainObject(data)) {
-      const checked = z.safeParse(dataschema, data);
-      if (checked.success) {
-        data = checked.data;
-      } else {
+    if (isPlainObject(input.data)) {
+      // Judged against the schema, never replaced by what it produced: a
+      // record read back is what was stored, defaults and all.
+      const checked = z.safeParse(dataschema, input.data);
+      if (!checked.success) {
         issues.push(
           ...checked.error.issues.map(
             (issue) =>
@@ -184,8 +184,7 @@ export class ArvoExecutionState<
       }
     }
 
-    const candidate = { ...input, data };
-    issues.push(...checkExecutionState(candidate));
+    issues.push(...checkExecutionState(input));
 
     if (issues.length > 0) {
       return fromNeverthrow(err(new ArvoExecutionStateValidationError(issues)));
@@ -193,7 +192,7 @@ export class ArvoExecutionState<
     return fromNeverthrow(
       ok(
         new ArvoExecutionState<TDataSchema>(
-          candidate as unknown as ArvoExecutionStateParam<TDataSchema>,
+          input as unknown as ArvoExecutionStateParam<TDataSchema>,
         ),
       ),
     );
@@ -205,8 +204,9 @@ export class ArvoExecutionState<
    *
    * Both events must already be events, and what is awaited must already be
    * a `Map`. Restoring either from however it was stored is the caller's.
-   * Data is checked against `dataschema` and read back as that schema
-   * produced it.
+   * Data is checked against `dataschema` but never rewritten by it: what
+   * comes back is what was stored, with nothing defaulted or transformed on
+   * the way in.
    *
    * @param input - What the record was stored as.
    * @param dataschema - The schema governing that version's data, the one
