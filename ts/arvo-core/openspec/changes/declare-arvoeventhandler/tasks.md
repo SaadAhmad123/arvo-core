@@ -23,14 +23,14 @@
 
 ## 4. Declaration rules
 
-- [ ] 4.1 Add `src/ArvoEventHandler/errors.ts`: `ArvoEventHandlerValidationError`, following `ArvoContractValidationError` in shape and carrying `ErrorIssue[]`.
-- [ ] 4.2 Add `src/ArvoEventHandler/declaration.ts` with one function per rule, each taking the declaration and returning issues rather than throwing, so the constructor collects across all of them.
-- [ ] 4.3 Implement the contract guard, and mark its issue blocking with a `blockingReason` naming what depends on it. Every other rule reads the contract, so nothing else runs when this one fails.
-- [ ] 4.4 Implement version completeness both ways: an issue per declared version with no executor, and an issue per executor naming a version the contract does not declare.
-- [ ] 4.5 Implement the duplicate-service rule on `uri`, reporting the contract named twice.
-- [ ] 4.6 Implement the type-collision rule per version over the emittable set — service input types, that version's `outputs` keys, that version's handler error type — reporting the version and the shared type. Take no special case for the implemented contract appearing among the services: ADR-005's within-contract disjointness already makes that legal, and a guard here would forbid the recursion ADR-006 permits.
-- [ ] 4.7 Implement the timeout relation on each version's **resolved** pair, after §3.3, reporting the version. Cover both halves: an execution timeout below a run timeout, and a non-null execution timeout against a null run timeout.
-- [ ] 4.8 Add `buildEmittableTypes(contract, services)` returning one `ReadonlySet<string>` per version, computed once and reused by §4.6 rather than recomputed.
+- [x] 4.1 Add `src/ArvoEventHandler/errors.ts`: `ArvoEventHandlerValidationError`, following `ArvoContractValidationError` in shape and carrying `ErrorIssue[]`. Its TSDoc says outright that it never means a delivery failed.
+- [x] 4.2 One file per rule under `helpers/`, each returning issues rather than throwing so the constructor collects across all of them: `check-contract.ts`, `check-versions.ts`, `check-services.ts`, `check-collisions.ts`, plus `at.ts` for rendering a map key into a path.
+- [x] 4.3 Implement the contract guard, and mark its issue blocking with a `blockingReason` naming what depends on it. Every other rule reads the contract, so nothing else runs when this one fails.
+- [x] 4.4 Implement version completeness both ways, and separately a version declared more than once, which only became reachable when versions started arriving one at a time.
+- [x] 4.5 Implement the duplicate-service rule on `uri`, reporting the contract named twice and naming the service it was first declared as.
+- [x] 4.6 Implement the type-collision rule per version over the emittable set — service input types, that version's `outputs` keys, that version's handler error type — reporting the version, the shared type and both sides of the clash. No special case for the implemented contract appearing among the services: ADR-005's within-contract disjointness already makes that legal, and a guard here would forbid the recursion ADR-006 permits.
+- [x] 4.7 Implement the timeout relation on each version's **resolved** pair, in §3.4, reporting the version. Both halves covered.
+- [x] 4.8 Add `helpers/emittable-types.ts` returning one `ReadonlySet<string>` for a version, read by §4.6 and by change 4's return validation.
 
 ## 4a. The setup and the chain
 
@@ -55,17 +55,21 @@
 
 ## 7. Tests
 
+Tests are written before the code they describe, and each step ends at 100%
+coverage of what it added. §3 and §4 are done and their specs are in place.
+
+
 - [ ] 7.1 Add `tests/ArvoEventHandler/declaration.spec.ts`: a one-version handler built, a handler with no services built, a version with and without a state schema, a version declared as its executor alone, services held at the version named, and a declaration carrying `types` built with nothing of it stored on the handler.
-- [ ] 7.2 Extend it with completeness: two versions each with an executor built, a missing executor refused naming the version, and an executor for an undeclared version refused naming it.
-- [ ] 7.3 Add `tests/ArvoEventHandler/collisions.spec.ts`: two services sharing a type, a service colliding with an output, a service colliding with a handler error type, a collision in one version of two reported against that version, and — the legal cases, which a rejection-only suite would miss — two versions declaring the same output type built, and two different contracts at one version each built.
-- [ ] 7.4 Add `tests/ArvoEventHandler/recursion.spec.ts`: the implemented contract declared as a service is built, and is still built when that version declares outputs. ADR-006 permits this and §4.6 has no guard, so this is the test that stops one being added.
-- [ ] 7.5 Add `tests/ArvoEventHandler/options.spec.ts`: every default present where nothing is declared, each of the seven asserted against ADR-006's stated value, a handler-level value kept, a version's value winning, an undeclared option inheriting, an option declared nowhere falling to its default, and per-version independence across two versions.
-- [ ] 7.6 Extend it with the unset-versus-null pair, which is the requirement most easily lost to a refactor: a version omitting `runTimeout` inherits, a version writing `runTimeout: null` is unbounded, and a version writing `runTimeout: undefined` behaves as omission.
-- [ ] 7.7 Add `tests/ArvoEventHandler/timeouts.spec.ts`: an execution timeout below a run timeout refused, the two halves declared at different levels refused, a null run timeout with a bounded execution timeout refused, and the legal cases — both null, execution above run, and the two equal.
+- [x] 7.2 Added as `tests/ArvoEventHandler/helpers/check-versions.spec.ts`, with completeness: two versions each with an executor built, a missing executor refused naming the version, and an executor for an undeclared version refused naming it.
+- [x] 7.3 Added as `tests/ArvoEventHandler/helpers/check-collisions.spec.ts` and `check-services.spec.ts`:: two services sharing a type, a service colliding with an output, a service colliding with a handler error type, a collision in one version of two reported against that version, and — the legal cases, which a rejection-only suite would miss — two versions declaring the same output type built, and two different contracts at one version each built.
+- [x] 7.4 Covered in `check-collisions.spec.ts` and `check-services.spec.ts`:: the implemented contract declared as a service is built, and is still built when that version declares outputs. ADR-006 permits this and §4.6 has no guard, so this is the test that stops one being added.
+- [x] 7.5 Added as `tests/ArvoEventHandler/helpers/resolve-options.spec.ts` and `check-options.spec.ts`:: every default present where nothing is declared, each of the seven asserted against ADR-006's stated value, a handler-level value kept, a version's value winning, an undeclared option inheriting, an option declared nowhere falling to its default, and per-version independence across two versions.
+- [x] 7.6 Covered in `resolve-options.spec.ts`: the unset-versus-null pair, which is the requirement most easily lost to a refactor: a version omitting `runTimeout` inherits, a version writing `runTimeout: null` is unbounded, and a version writing `runTimeout: undefined` behaves as omission.
+- [x] 7.7 Added as `tests/ArvoEventHandler/helpers/check-timeouts.spec.ts`:: an execution timeout below a run timeout refused, the two halves declared at different levels refused, a null run timeout with a bounded execution timeout refused, and the legal cases — both null, execution above run, and the two equal.
 - [ ] 7.8 Add `tests/ArvoEventHandler/errors.spec.ts`: two unrelated rules reported together, a non-contract reported alone and marked blocking, every issue carrying a position naming the version and option where one applies, and each option domain rejected individually rather than by a representative sample, per `project.md` — *Testing*.
 - [ ] 7.9 Add `tests/ArvoEventHandler/build.spec.ts`: `build` and `tryBuild` agreeing on a valid declaration, `tryBuild` reporting a failure as `Err` with the same issues `build` throws, an unrelated error propagating out of `tryBuild` unconverted, both entry points producing the same handler, and a chain in progress left unchanged by a further `handler` call.
 - [ ] 7.9a Add `tests/ArvoEventHandler/standalone.spec.ts`: a version created through `createArvoEventHandlerVersion` with a state schema and one without, each assembled through the single-argument `handler` overload, each behaving exactly as the inline form does, and a created version for an undeclared version refused at `build` like any other.
-- [ ] 7.10 Add `tests/ArvoEventHandler/emittable.spec.ts`: the set for a version, two versions differing while sharing every service type, and a version declaring no outputs.
+- [x] 7.10 Added as `tests/ArvoEventHandler/helpers/emittable-types.spec.ts`:: the set for a version, two versions differing while sharing every service type, and a version declaring no outputs.
 
 ## 8. Finishing
 
