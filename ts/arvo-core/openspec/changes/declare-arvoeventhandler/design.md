@@ -68,15 +68,31 @@ It is the fiddliest type in the design and it buys the least: a missing version 
 
 *And `handler` takes two shapes.* A version and a declaration, or a created version alone. The second carries the version it was created with, so assembly names it once overall. Two overloads of one method rather than two methods, because they are the same declaration reached two ways.
 
-### The context is sketched now and built in change 4, and that is why the generics land here
+### Built inward out: the context, then the version, then the handler
 
-`proposal.md` — What an executor will receive carries the context in full types. Nothing in this change constructs one, and the type itself lands with change 4: `fault` is typed against ADR-008 and the record-backed halves of `identity` and `collected` against ADR-007, neither of which exists.
+The context is the innermost thing and everything above it is shaped by what it needs, so it is written first. The version's `execute` takes one, and the handler holds versions.
 
-Sketching it now is not decoration. It is what proves the declaration carries enough type information for the inference to be possible at all — the services map as written, the state schema per version, the dependency and hook types. A declaration generic only in the contract would make every one of those `any` later, and discovering that in change 4 would mean reopening change 1. So the generics land here and the executor's parameter is typed loosely for one release.
+*Why not the other way, which is what an earlier draft did.* Writing the shells first means guessing the inner interface and then bending the inner thing to fit the guess. The tell was in the version's own spec: it called `version.execute({} as never)`, testing a seam there was nothing to fill. A layer written against a placeholder is a layer nothing has checked.
 
-The alternative was to define the context now. ADR-006 fixes sixteen members and nine of them are typed against things that do not exist: `state` and `setState` against the version's schema *and* the record, `identity` and `collected` against the record (ADR-007), `fault` against `ArvoHandlerFault` (ADR-008), `build` against the addressing rules, `atMaxDepth` and `timeRemaining` against the bounds (ADR-009). Defining them would mean writing four changes' worth of types to ship one change's behaviour, and every one of those types would be written before the code that has to satisfy it.
+*What that cost, stated rather than hidden.* This change was scoped to declaration alone, and building the context here pulls most of what the plan called change 4 into change 1. The plan's boundaries moved, and `proposal.md` — The plan says so. The alternative was to keep the boundary and ship a version whose only argument is untestable.
 
-*The cost, named rather than discovered:* tightening the executor's signature in change 4 is a breaking type change for anyone who wrote an executor against this release. Nothing is published, and a handler that cannot run has no callers to break, so the cost is real but paid by nobody.
+*What the context still does not have.* Five members need machinery that does not exist: `fault`, `build`, `atMaxDepth`, `timeRemaining`, and `identity`, `collected` and `cancel`. It is a class from the start so each of those is an addition rather than a reshaping, which is the whole reason for building it now rather than describing it as a type.
+
+### One context class, and the event's own type narrows it
+
+`ArvoExecutionContext` is one class. `entry` is a plain `'init' | 'followup'` saying how the delivery was classified, and `event` is a union of precisely typed events: the one this version takes in, and everything each declared service may answer with.
+
+*Narrowing comes from the event, not from the entry.* Every member of that union carries a literal `type`, and no two can share one because the collision rule refuses that at declaration. So the union is discriminated by construction, and `if (ctx.event.type === 'evt_payment_charged')` reaches the exact payload in one step.
+
+*Two shapes were tried first and are worse.* A base class with an init subclass and a followup subclass narrows on `entry` but is three classes where one does. One class generic in the entry kind, with `event` conditional on it, also narrows and was probed working, but adds a type parameter to every signature that mentions a context to buy a narrowing the event already provides. ADR-006 asks that a payload be unreachable until the case is settled; narrowing on `type` settles it more precisely than narrowing on `entry` does.
+
+### A version is self-contained, and works out what it can
+
+`ArvoHandlerVersion` takes its own `VersionedArvoContract`, the services, its schema, its resolved options and its executor. From the first two it works out its own emittable types.
+
+*What that replaced.* An earlier draft passed the whole contract plus a version key, and had the handler compute the emittable set and the resolved options and inject them. That made the version a record the handler fills in rather than a thing that knows what it is, and tied it to the handler's construction order.
+
+*Its options are complete on the way in.* Resolution happens before a version is built, so there is never a moment where one exists holding a sparse set nothing has finished. That is the same rule that removed the hidden store: no half-resolved object, ever.
 
 ### Running a delivery is one operation, and it is the `tryX`/`X` pair like everything else
 
