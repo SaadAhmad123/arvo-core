@@ -86,11 +86,53 @@ An executor reads the whole record — its subject, its identity, its lifecycle,
 
 *Why a new one per write rather than mutation.* Three things follow and each is the reason rather than a side effect. An executor cannot change the lifecycle, the identity or the event log even by accident, because they are carried rather than writable. A value read before a write is still that value after one, so nothing captured goes stale underneath. And a delivery keeps the last state produced, with no merge step and no question of which copy is current.
 
-*Why the record carries its own schema.* `dataschema` sits on the state, so checking a write consults nothing else. That is what lets the check happen in `setState` rather than being deferred to whoever knows which version is running.
+*Why the record carries no schema.* A draft put `dataschema` on the state so a write could be checked without consulting anything else. That made a record carry a rule, and a record is data while a schema is code: the two have different lifetimes, and a stored record holding a serialized schema could be checked against a copy the code has since changed. The schema is a type parameter and nothing more. Whoever acts on a record supplies it — the context on a write, the serializer on a read — and both already know which version they are dealing with.
+
+### Changing data is a function, not a method
+
+`mutateData(state, data)` returns a new state with that data and every other field carried across. It is generic in the state it is given, so what comes back is the same kind of state rather than a widened one.
+
+*Why not a method.* The record is fields and no behaviour, which is what lets it be serialized, stored, read back and compared without anything travelling alongside it. A method invites the next one, and the one after that is `withLifecycle`, which an executor must never have.
+
+*Why not just spreading.* `new ArvoExecutionState({ ...previous, data })` works today because the constructor's param and the field set are identical. The moment they diverge the spread silently produces a wrong record, where one function that knows the record's shape does not. The knowledge of what a record is made of stays in the module that defines it.
+
+### A record validates itself as it is built, like an event does
+
+The constructor checks the whole envelope and throws `ArvoExecutionStateValidationError`, and `tryParse` is the reporting form for something that is not yet a record. This is exactly `ArvoEvent`'s shape, down to the pair of statics, because it is exactly the same problem.
+
+*Why at construction rather than only at the boundary.* A record that exists is then a record that was valid, so nothing downstream re-checks it and nothing carries a "has this been validated" flag. The serializer becomes thin: parse the string, restore the events, hand the rest to `tryParse`.
+
+*What the envelope check covers, and what it does not.* Shapes and domains — the identifiers are strings, `depth` and `casVersion` are non-negative integers, `lifecycle` is one of six values, `recordFormatVersion` is a semantic version, and the two events are events. It does not check that the record agrees with the contract it names, or that its events still belong to it. Those need contracts a record does not hold, and they belong to the gate.
+
+*Two errors, not one.* `ArvoExecutionStateValidationError` says the record is wrong. `ArvoExecutionStateSerializerError` says the boundary failed — a string that is not JSON, a value that will not stringify. An event already keeps those apart for the same reason, and collapsing them would make "your stored record is corrupt" indistinguishable from "this is not JSON".
+
+### The record is generic in the events it holds, and the context stops holding them
+
+`ArvoExecutionState<TDataSchema, TInitEvent, TTriggeringEvent>`. Three parameters, each typing one field the record actually has.
+
+*Why nothing an executor can read from the state is also on the context.* Two ways to read one value is two things to keep in step, and the second one drifts. ADR-007 already puts the init event and the triggering event on the record, so that is where they are read: `ctx.state.initEvent` and `ctx.state.triggeringEvent`.
+
+*What stays on the context, and why it is not duplication.* The attempt and the entry kind describe the delivery rather than the execution, and ADR-006 is explicit that the attempt is not part of the record. Dependencies and hooks come from the mechanism. And `contracts` differs in kind: the context holds live contracts to resolve against, while the record holds the canonical-form snapshot ADR-007 says nothing may resolve or validate against. Same word, different jobs, and the record's own TSDoc says so.
+
+*Why generic in the events and not in the contracts.* An earlier suggestion of mine was to make the record generic in the self contract, the services and the entry kind, so it could compute its own event types. That puts most of the handler's type surface onto a thing that is meant to be data, and the record neither resolves a contract nor routes against one. It holds events, so it is generic in events, and the context — which does hold contracts — computes what to pass.
+
+*`initEventId` and `initEventSource` went with them.* They were the caller's address read off the init event, and the init event is on the record. One value, one place.
+
+### A record reaches a store through a serializer, not through itself
+
+`ArvoExecutionStateSerializer` sits beside `ArvoEventSerializer` and works the same way: `trySerialize`/`serialize`, `tryDeserialize`/`deserialize`, and its own error carrying the original cause.
+
+*Why a separate class rather than methods on the state.* An event does not serialize itself either, and for the same reason: turning a value into a wire string is a boundary concern with its own failure modes, and putting it on the value makes every reader of the value carry them. It lives under `state/` rather than beside `ArvoEventSerializer`, because everything about what an execution remembers belongs in one place and a reader looking for it will look there.
+
+*Why reading back is where hydration happens.* A stored record is JSON, so its events are plain objects and its collection is an object rather than a map. Deserializing restores each event, rebuilds the map, and checks `data`. There is no useful half-way point: a record whose events are still objects is not a record anything can run against, so it is reported rather than returned.
+
+*Why the serializer is bound to a schema rather than given one per call.* A record carries the shape of its data but not the schema governing it, because a schema is code and a record is data. Whoever reads records back is reading records of one version, so the schema belongs on the serializer, named once. That also makes the return type exact — `deserialize` gives back a state typed by that schema — where a per-call argument would leave a caller asserting. Storing a serialized schema in the record instead would mean one that could be checked against a copy the code has since changed.
+
+*Why synchronous, where the event serializer is not.* That one is asynchronous because a CloudEvent converter may be and a caller may supply their own. A record has one format and no converter, so there is nothing to await, and making it `async` for symmetry would cost every caller an `await` that never yields.
 
 ### A rejected write raises the fault, at the line that made it
 
-`setState` checks against the schema as it writes, and raises `ArvoHandlerFault` with `state_schema_rejected` where the value is refused.
+`setState` checks against the schema the context holds, then mints the new state, and raises `ArvoHandlerFault` with `state_schema_rejected` where the value is refused.
 
 *Why not defer it.* ADR-008 places `state_schema_rejected` at return, and an earlier draft had `setState` store anything and let the handler check afterwards. That reports the failure with nothing to point at: the executor may have written three times and the stack is gone. Raising at the write keeps the diagnosis where the mistake is.
 
@@ -98,7 +140,9 @@ An executor reads the whole record — its subject, its identity, its lifecycle,
 
 *What that pulled forward.* ADR-007's record and ADR-008's fault object were both separate changes in the original plan. Keeping them there would have meant a context built against two placeholders. The plan's boundaries moved instead, and `proposal.md` — The plan says so.
 
-*Two defaults that are not defaults.* `z.object({})` strips every key it does not declare, so a version declaring no schema must be given a loose one or its data would be silently emptied on every write. And a schema with a required field has no value to show before the first write, which is why the record's `data` starts empty and a write is what fills it.
+*Only `data` is nullable, and that is the whole of it.* An execution knows its subject, its identity, its depth, where it rests and what opened it from the moment it opens. What its business logic will remember is the one thing it cannot know, and a schema with a required field has no value to show before the first write. So a record is whole from the start with `data` alone `null`. The alternative — no record until something is written — would leave every other field unreachable on the delivery that most needs them.
+
+*And one default that is not a default.* `z.object({})` strips every key it does not declare, so a version declaring no schema must be given a loose one or its data would be silently emptied on every write.
 
 ### One context class, and the event's own type narrows it
 

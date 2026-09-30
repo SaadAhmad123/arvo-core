@@ -59,22 +59,41 @@ A handler built from a declaration SHALL process no event, read no record and ca
 
 ### Requirement: What An Execution Remembers
 
-The system SHALL represent what an execution remembers as one immutable value carrying the schema governing its own data, that data, the execution's identity and depth, the contract and version it belongs to, where it rests and why, the events it has touched, what it is waiting on, and the bookkeeping whatever stores it requires.
+The system SHALL represent what an execution remembers as one immutable value carrying its own data, the execution's identity and depth, the contract and version it belongs to, where it rests and why, the event that opened it, the event that caused the delivery being processed, the events it has touched, what it is waiting on, and the bookkeeping whatever stores it requires.
+
+Such a value SHALL be checked as it is built, and SHALL NOT come into being where any field it carries is of the wrong shape. What is checked is shape and domain; whether the record agrees with the contract it names is not checked here.
 
 Replacing that data SHALL produce a new such value, carrying every other field across unchanged. The value replaced SHALL NOT be altered.
 
 Data SHALL be replaceable by a value, or by a function given what is remembered now.
 
-Replacing data SHALL check it against the schema carried alongside it, at the moment of the write. Data the schema refuses SHALL be reported as an execution fault naming that, and SHALL leave what is remembered unchanged.
+Replacing data SHALL check it against the schema governing that version, at the moment of the write. That schema SHALL be supplied by whatever performs the write and SHALL NOT be part of what is remembered. Data the schema refuses SHALL be reported as an execution fault naming that, and SHALL leave what is remembered unchanged.
 
 What is remembered SHALL be what the schema produced, so that a value the schema fills in or transforms reads back as the schema left it.
 
+Data SHALL be empty until something writes it, every other field being known from the moment an execution opens. The value itself SHALL NOT be absent on that account.
+
 Nothing other than data SHALL be replaceable by an executor.
+
+#### Scenario: A record of the wrong shape
+- **WHEN** a value of the wrong shape is offered as what an execution remembers
+- **THEN** it is refused, and no such value comes into being
+
+#### Scenario: An execution that has written nothing
+- **WHEN** the state of an execution that has just opened is read
+- **THEN** its data is empty
+- **AND** its identity, its depth and where it rests are all reported
 
 #### Scenario: Reading what an execution remembers
 - **WHEN** an execution's state is read
 - **THEN** its data is reported
 - **AND** so are its identity, where it rests, and what it is waiting on
+- **AND** so are the event that opened it and the event that caused this delivery
+
+#### Scenario: One place to read one value
+- **WHEN** an executor reads the delivered event, or the event that opened the execution
+- **THEN** each is reached through what the execution remembers
+- **AND** neither is reported a second time elsewhere
 
 #### Scenario: Replacing the data
 - **WHEN** an execution's data is replaced
@@ -99,6 +118,33 @@ Nothing other than data SHALL be replaceable by an executor.
 #### Scenario: What the schema fills in is what is remembered
 - **WHEN** data is replaced by a value the schema completes or transforms
 - **THEN** what is remembered is what the schema produced
+
+### Requirement: Storing What An Execution Remembers
+
+The system SHALL turn what an execution remembers into a string, and SHALL turn such a string back into what an execution remembers, against the schema governing that version's data.
+
+Reading one back SHALL restore every event it holds to an event value, and SHALL check its data against the schema supplied.
+
+A string that is not what was written, a record missing what it must carry, an event that will not restore, or data the schema refuses SHALL each be reported rather than returned, and no partly restored record SHALL be given back.
+
+What is read back SHALL carry everything that was written.
+
+#### Scenario: A round trip
+- **WHEN** what an execution remembers is turned into a string and back
+- **THEN** every field it carried is what it was
+- **AND** its data is what it was
+
+#### Scenario: Events come back as events
+- **WHEN** a record holding events is read back
+- **THEN** each of them is an event value rather than the plain object it was stored as
+
+#### Scenario: A string that is not a record
+- **WHEN** something that is not what was written is read back
+- **THEN** it is reported rather than returned
+
+#### Scenario: Data the schema refuses
+- **WHEN** a record is read back against a schema its data does not satisfy
+- **THEN** it is reported rather than returned
 
 ### Requirement: An Executor For Every Version, And For No Other
 

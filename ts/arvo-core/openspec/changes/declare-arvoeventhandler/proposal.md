@@ -44,6 +44,8 @@ rather than a restructuring.
 
 - **`createArvoEventHandlerVersion(setup, version, declaration)` declares a version away from the chain**, taking exactly what `handler` takes inline, so a handler with several substantial versions need not be one file.
 
+- **A record reaches a store and comes back.** `ArvoExecutionStateSerializer` reads like `ArvoEventSerializer`: a `tryX` pair each way, its own error, and no opinion about where the string goes. It is bound to one version's data schema, that being the one thing a record does not carry. Reading back is where a record's events are restored and its data is checked.
+
 - **Five classes, built inward out.** `ArvoExecutionState` is what an execution remembers, `ArvoHandlerFault` is why a delivery could not be carried through, `ArvoExecutionContext` is what an executor receives, `ArvoHandlerVersion` is what runs against it, and `ArvoEventHandler` holds versions. Each is written against the ones below it rather than against a placeholder.
 
 - **`ctx.state` is the execution record, and `setState` writes only its data.** An executor reads everything the execution knows about itself and changes the one field it owns. Each write mints a new state with the rest carried across, so the lifecycle, the identity and the event log cannot be touched even by accident.
@@ -251,11 +253,11 @@ export const setup = setupArvoEventHandler({ contracts: { self: orderContract, s
 export const v100 = createArvoEventHandlerVersion(setup, '1.0.0', {
   state: z.object({ orderId: z.string() }),
   options: { maxDepth: 250 },
-  execute: async (ctx) => { ctx.setState({ orderId: ctx.event.data.items[0] }) },
+  execute: async (ctx) => { ctx.setState({ data: { orderId: ctx.state.initEvent.data.items[0] } }) },
 });
 
 export const v110 = createArvoEventHandlerVersion(setup, '1.1.0', {
-  execute: async (ctx) => { ctx.event.data.rush },
+  execute: async (ctx) => { ctx.state.initEvent.data.rush },
 });
 
 // a version that is only an executor
@@ -285,7 +287,43 @@ so nothing is annotated by hand and nothing is `any`.
 
 ```ts
 class ArvoExecutionContext<
-  TSelf, TServices, TStateSchema, TArvoEntryKind, TDependencies, TMechanismHooks,
+  TSelf, TServices, TDataSchema, TArvoEntryKind, TDependencies, TMechanismHooks,
+> {
+  /** This version of the contract implemented, and what it may send to. */
+  readonly contracts: { readonly self: TSelf; readonly services: Readonly<TServices> };
+
+  /** Whether this delivery opened the execution or answers something it awaited. */
+  readonly entry: TArvoEntryKind;
+  /** Which attempt this delivery is, counting from 0. */
+  readonly attempt: number;
+
+  /** What this delivery's executor is given to work with, or empty. */
+  readonly dependencies: TDependencies;
+  /** What the mechanism running this handler exposed, or empty. */
+  readonly hooks: TMechanismHooks;
+
+  /**
+   * Everything this execution remembers about itself, the delivered event
+   * included. Typed from the contracts above, so nothing here is widened.
+   */
+  get state(): ArvoExecutionState<
+    TDataSchema,
+    ArvoInitEvent<TSelf>,
+    ArvoDeliveredEvent<TSelf, TServices, TArvoEntryKind>
+  >;
+
+  /** Replaces this execution's own data, and nothing else about it. */
+  setState(param: { data: ArvoDataWrite<TDataSchema> }): void;
+}
+```
+
+**Nothing is on the context that the state already answers.** The delivered event and the event
+that opened the execution are both on the record, so they are read there:
+`ctx.state.triggeringEvent` and `ctx.state.initEvent`. What stays on the context is what the
+record does not have — how this delivery was classified, which attempt it is, what the mechanism
+supplied, and the live contracts, which are not the informational snapshot the record carries.ts
+class ArvoExecutionContext<
+  TSelf, TServices, TDataSchema, TArvoEntryKind, TDependencies, TMechanismHooks,
 > {
   /** This version of the contract implemented, and what it may send to. */
   readonly contracts: { readonly self: TSelf; readonly services: Readonly<TServices> };
@@ -305,9 +343,9 @@ class ArvoExecutionContext<
   readonly hooks: TMechanismHooks;
 
   /** Everything this execution remembers about itself. */
-  get state(): ArvoExecutionState<TStateSchema>;
+  get state(): ArvoExecutionState<TDataSchema>;
   /** Replaces this execution's own data, and nothing else about it. */
-  setState(param: { data: ArvoDataWrite<TStateSchema> }): void;
+  setState(param: { data: ArvoDataWrite<TDataSchema> }): void;
 }
 ```
 
@@ -315,13 +353,16 @@ class ArvoExecutionContext<
 classified.** An init carries the event this version takes in. A followup carries whatever a
 declared service answered with, its handler error included. Each member of that union has a
 literal `type` and no two can share one, because the collision rule refuses that at declaration,
-so narrowing on `event.type` reaches the exact payload.
+so narrowing reaches the exact payload.
 
 ```ts
 execute: async (ctx) => {
-  if (ctx.event.type === 'evt_payment_charged') ctx.event.data.receipt;
-  ctx.entry;                    // 'init' | 'followup', how it was classified
-  ctx.dependencies.db.find();   // what `types.dependencies` declared
+  const delivered = ctx.state.triggeringEvent;
+  if (delivered.type === 'evt_payment_charged') delivered.data.receipt;
+
+  ctx.state.initEvent.data.items;   // what opened this execution
+  ctx.entry;                        // 'init' | 'followup', how it was classified
+  ctx.dependencies.db.find();       // what `types.dependencies` declared
 }
 ```
 
@@ -334,13 +375,38 @@ change 3, `cancel` with change 4. Each is an addition to a class that already ex
 the execution knows about itself, and write only the one field it owns.
 
 ```ts
-class ArvoExecutionState<TStateSchema extends z.$ZodObject> {
-  constructor(param: ArvoExecutionStateParam<TStateSchema>);
+class ArvoExecutionState<
+  TDataSchema extends z.$ZodObject = z.$ZodObject,
+  TInitEvent extends ArvoEvent = ArvoEvent,
+  TTriggeringEvent extends ArvoEvent = ArvoEvent,
+> {
+  /**
+   * Checks the whole record as it is built, and throws
+   * {@link ArvoExecutionStateValidationError} where any of it is wrong. A
+   * record that exists is a record that was valid.
+   */
+  constructor(param: ArvoExecutionStateParam<TDataSchema, TInitEvent, TTriggeringEvent>);
 
-  /** The schema governing `data`, carried so a write can be checked without asking elsewhere. */
-  readonly dataschema: TStateSchema;
-  /** This executor's own business state. The only field an executor may change. */
-  readonly data: z.output<TStateSchema>;
+  /** From something that is not yet a record, reporting rather than throwing. */
+  static tryParse<TDataSchema extends z.$ZodObject>(
+    input: unknown,
+    dataschema: TDataSchema,
+  ): Result<ArvoExecutionState<TDataSchema>, ArvoExecutionStateValidationError>;
+  /** {@link tryParse}, throwing instead. */
+  static parse<TDataSchema extends z.$ZodObject>(
+    input: unknown,
+    dataschema: TDataSchema,
+  ): ArvoExecutionState<TDataSchema>;
+
+  /**
+   * This executor's own business state, and the only field an executor may
+   * change. `null` until something writes: every other field is known the
+   * moment an execution opens, and this one is not.
+   *
+   * The schema is a type parameter and nothing more. It types this field and
+   * is never carried, because a record is data and a schema is code.
+   */
+  readonly data: z.output<TDataSchema> | null;
 
   /** Identity, and where this execution sits. */
   readonly subject: string;
@@ -354,10 +420,12 @@ class ArvoExecutionState<TStateSchema extends z.$ZodObject> {
   readonly lifecycle: ArvoExecutionLifecycle;
   readonly lifecycleDescription: string | null;
 
+  /** What opened it, and what caused the delivery being processed. */
+  readonly initEvent: TInitEvent;
+  readonly triggeringEvent: TTriggeringEvent;
+
   /** What it has touched, and what it is waiting on. */
   readonly eventIds: readonly ArvoTouchedEvent[];
-  readonly initEventId: string;
-  readonly initEventSource: string;
   readonly inFlightEventMap: ReadonlyMap<string, ArvoEvent | null>;
 
   /** Bookkeeping a mechanism needs, and a reader years later. */
@@ -365,10 +433,37 @@ class ArvoExecutionState<TStateSchema extends z.$ZodObject> {
   readonly casVersion: number;
   readonly contracts: ArvoRecordContracts;
 }
+
+/**
+ * A new state with different data and everything else carried across.
+ *
+ * A function rather than a method, so the record stays a record: fields and
+ * no behaviour. Generic in the state it is given, so what comes back is the
+ * same kind of state and not a widened one.
+ */
+declare function mutateData<TState extends ArvoExecutionState>(
+  state: TState,
+  data: TState['data'],
+): TState;
 ```
 
-**Writing mints a new one.** `setState({ data })` produces a fresh `ArvoExecutionState` with the
-new data and every other field carried across unchanged. Three things follow, and each is the
+**The envelope is checked as a record is built, the way an event's is.** Every field has a
+shape: the identifiers are strings, `depth` and `casVersion` are non-negative integers,
+`lifecycle` is one of six values, `recordFormatVersion` is a semantic version, and the two
+events are events. A record that exists is a record that was valid, so nothing downstream
+re-checks it, and `ArvoExecutionState.tryParse` is how one is rebuilt from something that is
+not yet a record — a row from a store, a fixture, a replay.
+
+**Generic in the two events it holds, not in the contracts they came from.** A record holds
+events; it does not resolve contracts, route against them or validate with them. Typing it by
+what it holds keeps it a record, and whoever builds one already knows which events they are.
+
+**`initEventId` and `initEventSource` are gone.** They were the caller's address, read off the
+init event, and the init event is right here. One value, one place.
+
+**Writing mints a new one.** `setState({ data })` checks the value against the schema the
+context holds, then produces a fresh `ArvoExecutionState` with the checked data and every other
+field carried across unchanged. Three things follow, and each is the
 point rather than a side effect:
 
 - **An executor cannot touch what is not its own.** The lifecycle, the identity, the event log
@@ -379,16 +474,98 @@ point rather than a side effect:
   copy is current.
 
 **`data` takes a value or a function.** The function receives what is there now, so building on
-it is not the caller's bookkeeping. Every write is checked against `dataschema` as it happens,
-and a rejected one raises `ArvoHandlerFault` at the line that wrote it rather than surfacing
-later with nothing to point at.
+it is not the caller's bookkeeping. Every write is checked as it happens, against the schema the
+context was given, and a rejected one raises `ArvoHandlerFault` at the line that wrote it rather
+than surfacing later with nothing to point at.
+
+**Only `data` is ever empty.** An execution knows its subject, its identity, its depth, where it
+rests and what opened it from the moment it opens. It does not know what its business logic will
+choose to remember, and a schema with a required field has no value to show before the first
+write. So the record is whole from the start with `data` alone `null`, rather than the record
+itself being absent.
+
+**The state itself checks nothing, and holds no schema.** It carries what an execution
+remembers; the schema that governs its data is supplied by whoever is doing something with it —
+the context on a write, the serializer on a read. That keeps a record purely data, which is what
+lets it be stored and read back without a rule travelling alongside it and going stale.
 
 ```ts
-ctx.state.data;                                      // what is remembered
+ctx.state.data;                                      // null until something writes
 ctx.state.lifecycle;                                 // 'waiting', and not writable
 ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
-ctx.setState({ data: (current) => ({ ...current, attempts: current.attempts + 1 }) });
+ctx.setState({ data: (current) => ({ ...current, attempts: (current?.attempts ?? 0) + 1 }) });
 ```
+
+## Storing what an execution remembers, and reading it back
+
+A record outlives the delivery that wrote it, so it has to reach a store and come back. That is
+`ArvoExecutionStateSerializer`, which reads the way `ArvoEventSerializer` already does: a `tryX`
+pair at each direction, its own error carrying the original cause, and no opinion about where
+the string goes.
+
+```ts
+class ArvoExecutionStateSerializer<
+  TDataSchema extends z.$ZodObject,
+  TInitEvent extends ArvoEvent = ArvoEvent,
+  TTriggeringEvent extends ArvoEvent = ArvoEvent,
+> {
+  /**
+   * Bound to one version's data schema, because every record it reads back
+   * belongs to that version and a schema is the one thing a record does not
+   * carry.
+   */
+  constructor(dataschema: TDataSchema);
+
+  /** To a wire string, reporting the outcome rather than throwing. */
+  trySerialize(
+    state: ArvoExecutionState<TDataSchema, TInitEvent, TTriggeringEvent>,
+  ): Result<string, ArvoExecutionStateSerializerError>;
+  /** {@link trySerialize}, throwing instead. */
+  serialize(state: ArvoExecutionState<TDataSchema, TInitEvent, TTriggeringEvent>): string;
+
+  /** Back to a state, checked and with its events restored. */
+  tryDeserialize(
+    data: string,
+  ): Result<
+    ArvoExecutionState<TDataSchema, TInitEvent, TTriggeringEvent>,
+    ArvoExecutionStateSerializerError
+  >;
+  /** {@link tryDeserialize}, throwing instead. */
+  deserialize(data: string): ArvoExecutionState<TDataSchema, TInitEvent, TTriggeringEvent>;
+}
+```
+
+```ts
+const serializer = new ArvoExecutionStateSerializer(orderState);
+
+const wire = serializer.serialize(ctx.state);   // to whatever stores it
+const restored = serializer.deserialize(wire);
+
+restored.data.orderId;              // typed, and checked on the way back
+restored.inFlightEventMap;          // every stored event, an ArvoEvent again
+```
+
+**Reading back restores, and the record checks itself.** A stored record is JSON: its events
+are plain objects and its collection is an object rather than a map. The serializer parses the
+string, turns each event back into an `ArvoEvent`, rebuilds the map, and hands the result to
+`ArvoExecutionState.tryParse`, which checks the envelope and the data. Nothing is checked twice
+and nothing half-restored comes back.
+
+**What it checks on the way back, and what it does not.** It restores every event to a
+structurally valid `ArvoEvent` and checks `data` against the schema it was built with. It does
+not check an event against a contract: whether a stored event still belongs to the contract it
+claims is a delivery's question, not a reader's. The two event type parameters are therefore the
+caller's statement of which events these are, and the gate is what confirms it.
+
+**Bound to a schema once rather than given one per call.** Whoever reads records back is reading
+records of one version, so the schema belongs on the serializer rather than repeated at every
+call. It also makes the return type exact: `deserialize` gives back a state typed by that
+schema, with nothing for a caller to assert.
+
+**Synchronous, where the event serializer is asynchronous.** That one is async because a
+CloudEvent converter may be, and a caller may supply their own. A record has one format and no
+converter, so there is nothing to await and pretending otherwise would cost every caller an
+`await` for nothing.
 
 ## How a handler is run
 
@@ -633,8 +810,10 @@ None. `arvo-contract` is read and not changed — a handler names a contract and
 
 A directory per concept, a file per helper, and no barrel exports.
 
-- `src/ArvoEventHandler/state/` (new) — `index.ts` holding `ArvoExecutionState`, `types.ts`
-  holding what one is built from and the record's own vocabulary
+- `src/ArvoEventHandler/state/` (new) — everything about what an execution remembers:
+  `index.ts` holding `ArvoExecutionState`, `types.ts` holding what one is built from and the
+  record's own vocabulary, `utils.ts` holding `mutateData`, `serializer.ts` holding
+  `ArvoExecutionStateSerializer`, and `errors.ts` holding its error
 - `src/ArvoEventHandler/fault/` (new) — `index.ts` holding `ArvoHandlerFault`, `types.ts`
   holding the `fault_kind` vocabulary and the retry block
 - `src/ArvoEventHandler/context/` (new) — `index.ts` holding `ArvoExecutionContext`,
@@ -677,7 +856,7 @@ Everything the plan assigns to changes 2 through 6, and specifically:
 
 - **Running a delivery.** `tryExecute` and `execute` are sketched under **How a handler is run** and built in change 6. Nothing here classifies an event, reads or writes a record, or enters an executor of its own accord. A built handler is inert.
 - **The context members that need what does not exist.** `build` with change 2, `atMaxDepth` and `timeRemaining` with change 3, `cancel` with change 4. The class exists here so each is an addition rather than a reshaping.
-- **Storing the execution record, and reading one back.** The record exists here as a value an executor reads and writes. Hydrating a stored one, validating it against a version, and the compare-and-swap a mechanism commits it with all belong to change 4, which is where a delivery exists to do them.
+- **Committing a record, and deciding when to.** Turning one into a string and back is here. Where the string goes, the compare-and-swap it is committed under, and which record a delivery should read are all a mechanism's, and what the handler asks of a mechanism is change 4.
 - **The state schema's contents.** ADR-007 makes a version's state schema the author's, and the protocol places no rule on how it changes. This change checks a write against whatever schema it was given and has no opinion on the schema itself.
 - **Emission.** A version works out what it may emit because the collision rule needs it. Deriving `to`, `subject` or any other field from a type is ADR-006's *Addressing an emitted event* and belongs to change 4, along with checking that what an executor returned is in that set.
 - **Abandonment.** A fault carries the pair as `null` here. Building the event and the record to go with it needs a delivery that knows it is giving up, which is change 4.
