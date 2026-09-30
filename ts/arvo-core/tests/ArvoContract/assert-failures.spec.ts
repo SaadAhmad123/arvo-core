@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ArvoContractAssertionError } from '../../src/ArvoContract/errors.js';
 import { ArvoContract } from '../../src/ArvoContract/index.js';
 import { ArvoEvent } from '../../src/ArvoEvent/index.js';
+import type { Result } from '../../src/types.js';
 
 const contract = new ArvoContract({
   type: 'com_order_create',
@@ -20,7 +21,7 @@ const v1 = contract.versions['1.0.0'];
 const event = (
   type: string,
   data: Record<string, unknown>,
-  dataschema = v1.dataschema,
+  dataschema: string = v1.dataschema,
 ) =>
   new ArvoEvent({
     source: 'com.test.suite',
@@ -32,7 +33,7 @@ const event = (
 
 /** The issues of a failed assertion, or a failure if it succeeded. */
 const issuesOf = (
-  attempt: ReturnType<typeof v1.tryAssert>,
+  attempt: Result<unknown, ArvoContractAssertionError>,
 ): readonly { path: string; isBlocking: boolean }[] => {
   if (attempt.ok) throw new Error('expected the assertion to fail');
   return attempt.error.issues;

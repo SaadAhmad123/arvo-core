@@ -23,7 +23,7 @@ Run from this directory. `package.json` is the source of truth for the script li
 | `pnpm test:coverage` | With coverage |
 | `pnpm lint` | Biome — **required before finishing any change** |
 | `pnpm build` | `tsc` to `dist/` |
-| `npx tsc --noEmit` | Typecheck without emitting |
+| `pnpm typecheck` | Typecheck **`src` and `tests`** — `tsconfig.json` excludes `tests`, so `npx tsc --noEmit` checks neither the specs nor their fixtures |
 
 Node ≥22 (`.nvmrc` pins v22.23.1) and pnpm 11 — the OpenSpec CLI and pnpm both fail on older runtimes.
 

@@ -15,7 +15,7 @@ const crossOnce = (input: z.ZodType): ArvoContract => {
 };
 
 const input = (contract: ArvoContract) =>
-  contract.versions['1.0.0']?.input as z.ZodType;
+  contract.versions['1.0.0']?.input as unknown as z.ZodType;
 
 describe('one crossing keeps what the form can express', () => {
   // One crossing only. Repeated crossings are deliberately not covered — see

@@ -20,7 +20,7 @@ const v1 = contract.versions['1.0.0'];
 const event = (
   type: string,
   data: Record<string, unknown>,
-  dataschema = v1.dataschema,
+  dataschema: string = v1.dataschema,
 ) =>
   new ArvoEvent({
     source: 'com.test.suite',
@@ -179,14 +179,14 @@ describe('the payload', () => {
       type: 'com_order_create',
       versions: {
         '1.0.0': {
-          input: z.object({ items: z.array(z.string()) }).check((ctx) =>
+          input: z.object({ items: z.array(z.string()) }).check((ctx) => {
             ctx.issues.push({
               code: 'custom',
               message: 'items must be priced',
               path: ['items', 0, 'price'],
               input: ctx.value,
-            }),
-          ),
+            });
+          }),
           outputs: {},
         },
       },

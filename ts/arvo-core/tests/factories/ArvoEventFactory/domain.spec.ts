@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ArvoContract } from '../../../src/ArvoContract/index.js';
 import { ArvoDomain } from '../../../src/ArvoDomain/index.js';
+import type { ArvoDomainInput } from '../../../src/ArvoDomain/types.js';
 import { ArvoEvent } from '../../../src/ArvoEvent/index.js';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
 
@@ -110,7 +111,10 @@ describe('options bound on the factory', () => {
   const bound = createArvoEventFactory(version('orders'), {
     domainCtx: { triggeringEvent },
   });
-  const param = { source: 'com.web', domain: ArvoDomain.FROM_TRIGGERING_EVENT };
+  const param: { source: string; domain: ArvoDomainInput } = {
+    source: 'com.web',
+    domain: ArvoDomain.FROM_TRIGGERING_EVENT,
+  };
 
   it('reaches the event the version takes in', () => {
     expect(bound.createInput({ ...param, data: {} }).domain).toBe('inbound');
@@ -146,7 +150,11 @@ describe("options bound on the factory are the factory's own", () => {
     data: {},
     domain: 'elsewhere',
   });
-  const param = {
+  const param: {
+    source: string;
+    data: Record<string, never>;
+    domain: ArvoDomainInput;
+  } = {
     source: 'com.web',
     data: {},
     domain: ArvoDomain.FROM_TRIGGERING_EVENT,
@@ -213,12 +221,13 @@ describe('a source with nothing to give', () => {
 
 describe('a request never reaching the event', () => {
   it('leaves a value or nothing, never the symbol', () => {
-    for (const domain of [
+    const everySymbol: ArvoDomainInput[] = [
       ArvoDomain.LOCAL,
       ArvoDomain.FROM_EVENT_CONTRACT,
       ArvoDomain.FROM_SELF_CONTRACT,
       ArvoDomain.FROM_TRIGGERING_EVENT,
-    ]) {
+    ];
+    for (const domain of everySymbol) {
       const value = built({ source: 'com.web', data: {}, domain });
       expect(value === null || typeof value === 'string').toBe(true);
     }

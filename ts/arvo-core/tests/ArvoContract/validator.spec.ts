@@ -46,26 +46,29 @@ describe('validateArvoContract', () => {
   });
 
   describe('normalization runs before validation', () => {
+    /** What a declaration normalizes to, for one that is not blocked. */
+    const normalized = (...args: Parameters<typeof validateArvoContract>) => {
+      const checked = validateArvoContract(...args);
+      if (checked.blocked) throw new Error('expected a normalized contract');
+      return checked.value;
+    };
+
     it('derives uri from type, replacing every underscore', () => {
-      expect(validateArvoContract(valid()).value.uri).toBe(
-        '#/com/order/create',
-      );
+      expect(normalized(valid()).uri).toBe('#/com/order/create');
     });
 
     it('derives uri for a single-segment type', () => {
-      expect(validateArvoContract(valid({ type: 'payment' })).value.uri).toBe(
-        '#/payment',
-      );
+      expect(normalized(valid({ type: 'payment' })).uri).toBe('#/payment');
     });
 
     it('keeps an explicit uri', () => {
-      expect(
-        validateArvoContract(valid({ uri: '#/services/orders' })).value.uri,
-      ).toBe('#/services/orders');
+      expect(normalized(valid({ uri: '#/services/orders' })).uri).toBe(
+        '#/services/orders',
+      );
     });
 
     it('materializes the optional fields at their defaults', () => {
-      const { value } = validateArvoContract(valid());
+      const value = normalized(valid());
       expect(value.description).toBeNull();
       expect(value.domain).toBeNull();
       expect(value.metadata).toEqual({});

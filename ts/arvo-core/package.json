@@ -25,6 +25,7 @@
     "test": "vitest run --passWithNoTests",
     "test:coverage": "vitest run --coverage",
     "lint": "biome check",
+    "typecheck": "tsc -p tsconfig.test.json",
     "lint:fix": "biome check --fix",
     "format": "biome format --fix",
     "changeset": "changeset",

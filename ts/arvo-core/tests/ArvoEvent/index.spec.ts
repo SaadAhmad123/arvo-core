@@ -446,7 +446,7 @@ describe('ArvoEvent', () => {
       const date = new Date('2024-01-01T00:00:00.000Z');
       const event = new ArvoEvent({
         ...baseParam(),
-        data: { a: date } as never,
+        data: { a: date as unknown as string },
       });
       expect(event.data.a).toBe('2024-01-01T00:00:00.000Z');
     });
@@ -516,7 +516,12 @@ describe('ArvoEvent', () => {
       }
       const event = new ArvoEvent({
         ...baseParam(),
-        data: { price: new Money(500) } as never,
+        data: {
+          price: new Money(500) as unknown as {
+            cents: number;
+            currency: string;
+          },
+        },
       });
       expect(event.data.price).toEqual({ cents: 500, currency: 'USD' });
     });
@@ -527,7 +532,7 @@ describe('ArvoEvent', () => {
       const date = new Date('2024-06-15T10:30:00.000Z');
       const event = new ArvoEvent({
         ...baseParam(),
-        data: { when: date } as never,
+        data: { when: date as unknown as string },
       });
       expect(event.data.when).toBe('2024-06-15T10:30:00.000Z');
     });
@@ -541,7 +546,7 @@ describe('ArvoEvent', () => {
       }
       const event = new ArvoEvent({
         ...baseParam(),
-        data: { tags: [new Tag('a'), new Tag('b')] } as never,
+        data: { tags: [new Tag('a'), new Tag('b')] as unknown as string[] },
       });
       expect(event.data.tags).toEqual(['a', 'b']);
     });
@@ -631,7 +636,10 @@ describe('ArvoEvent', () => {
       const shared = new Id('shared-id');
       const event = new ArvoEvent({
         ...baseParam(),
-        data: { a: shared, b: shared } as never,
+        data: {
+          a: shared as unknown as string,
+          b: shared as unknown as string,
+        },
       });
       expect(event.data.a).toBe('shared-id');
       expect(event.data.b).toBe('shared-id');
@@ -676,7 +684,7 @@ describe('ArvoEvent', () => {
     it('omits a map key whose value is undefined', () => {
       const event = new ArvoEvent({
         ...baseParam(),
-        data: { a: undefined, b: 1 } as never,
+        data: { a: undefined as unknown as number, b: 1 },
       });
       expect('a' in event.data).toBe(false);
       expect(event.data.b).toBe(1);
@@ -685,7 +693,7 @@ describe('ArvoEvent', () => {
     it('replaces an undefined array element with null, preserving positions', () => {
       const event = new ArvoEvent({
         ...baseParam(),
-        data: { list: [1, undefined, 3] } as never,
+        data: { list: [1, undefined, 3] as unknown as number[] },
       });
       expect(event.data.list).toEqual([1, null, 3]);
     });
