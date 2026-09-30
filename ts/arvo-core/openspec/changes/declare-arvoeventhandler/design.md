@@ -138,7 +138,9 @@ One internal function implements ADR-006's rule, and nothing exposes it. The han
 
 *Why it is not a method.* An earlier draft put `optionsFor(version)` on the class. It reads well and it is genuinely useful to a consumer debugging a declaration, and that is the problem: it makes the resolution rule part of the published surface, so a consumer can branch on a value the protocol reserves for itself, and every later change to how an option is resolved becomes a breaking change to an API nobody needed. What a consumer declares is theirs; what the protocol makes of it is the protocol's. The same reasoning retires the per-version emittable set from the surface — it is derived, not declared.
 
-*What the changes that run a delivery use instead.* The internal function, imported directly. Keeping it a free function in `options.ts` rather than a private method also keeps it testable without reaching through a class, which matters because it is the module carrying every default.
+*What the changes that run a delivery use instead.* The internal function, imported directly. Keeping it a free function rather than a private method also keeps it testable without reaching through a class.
+
+*One function, and the fallback is always an argument.* `resolveOptions(declared, fallback)` is the whole of it. An earlier draft had `resolveHandlerOptions` reach for the defaults itself and `resolveVersionOptions` take the handler's, which made two near-identical functions and hid what each fell back to. There is nothing about handlers or versions in merging a partial set onto a complete one, so the level is the caller's to state: a handler resolves against `DEFAULT_OPTIONS`, a version against the handler's, and both read that way on the line.
 
 ### The per-version emittable set is computed once and held internally
 

@@ -16,10 +16,10 @@
 
 ## 3. Options
 
-- [ ] 3.1 Add `src/ArvoEventHandler/options.ts` holding the seven defaults as one frozen object and nothing else spelling a default. Each carries a one-line comment naming the ADR-006 value it implements.
-- [ ] 3.2 Add `resolveHandlerOptions(param)` returning a complete `ArvoEventHandlerOptions`, coalescing on `value === undefined` per §1.2 so an explicit `undefined` behaves as omission.
-- [ ] 3.3 Add `resolveVersionOptions(handler, version)` returning a complete `ArvoEventHandlerOptions`, taking the version's value where it wrote one and the handler's otherwise. Coalesce on `undefined` only, so a written `null` is carried rather than replaced.
-- [ ] 3.4 Add `checkOptionDomains(options, path)` reporting an `ErrorIssue` per option outside its domain: non-negative integers for `maxDepth` and `maxRetryAttempts`, a non-negative integer or a function for `retryDelay`, a positive integer or `null` for each timeout, one of two literals for `collect`, and a string or an `ArvoDomain` symbol for `handlerErrorDomain`. It reports and does not throw.
+- [x] 3.1 Add `src/ArvoEventHandler/helpers/defaults.ts` holding the seven defaults as one frozen object, and the key list so nothing iterates a hand-written one. The only place in the package that spells a default.
+- [x] 3.2 Add `helpers/resolve-options.ts` with one `resolveOptions(declared, fallback)`. The fallback is always passed and never assumed, so which level is being resolved reads at the call site and the function knows nothing of levels. Coalesce per option on `value === undefined` per §1.2, so an explicit `undefined` behaves as omission and a written `null` survives; `null` for the whole bag is what says nothing was declared.
+- [x] 3.3 Add `helpers/check-options.ts` with `checkOptions(declared, path)`, reporting an `ErrorIssue` per option outside what it accepts. It judges what was written and not what was resolved, so an inherited value is not reported twice against a version that never wrote it.
+- [x] 3.4 Add `helpers/check-timeouts.ts` with `checkTimeouts(inForce, path)`, judging the one relation that spans two options on the resolved pair. Both halves: an execution timeout below a run timeout, and a non-null one against a null run timeout.
 
 ## 4. Declaration rules
 
