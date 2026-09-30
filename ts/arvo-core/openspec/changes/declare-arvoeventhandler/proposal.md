@@ -388,12 +388,12 @@ class ArvoExecutionState<
   constructor(param: ArvoExecutionStateParam<TDataSchema, TInitEvent, TTriggeringEvent>);
 
   /** From something that is not yet a record, reporting rather than throwing. */
-  static tryParse<TDataSchema extends z.$ZodObject>(
+  static tryBuild<TDataSchema extends z.$ZodObject>(
     input: unknown,
     dataschema: TDataSchema,
   ): Result<ArvoExecutionState<TDataSchema>, ArvoExecutionStateValidationError>;
-  /** {@link tryParse}, throwing instead. */
-  static parse<TDataSchema extends z.$ZodObject>(
+  /** {@link tryBuild}, throwing instead. */
+  static build<TDataSchema extends z.$ZodObject>(
     input: unknown,
     dataschema: TDataSchema,
   ): ArvoExecutionState<TDataSchema>;
@@ -435,15 +435,25 @@ class ArvoExecutionState<
 }
 
 /**
- * A new state with different data and everything else carried across.
+ * A new state with the fields named replaced and every other one carried
+ * across. The only way a record changes.
  *
  * A function rather than a method, so the record stays a record: fields and
  * no behaviour. Generic in the state it is given, so what comes back is the
  * same kind of state and not a widened one.
  */
-declare function mutateData<TState extends ArvoExecutionState>(
-  state: TState,
-  data: TState['data'],
+declare function tryMutateState<TState extends ArvoExecutionState>(
+  current: TState,
+  next: Partial<ArvoExecutionStateFields<
+    TState['data'], TState['initEvent'], TState['triggeringEvent']
+  >>,
+): Result<TState, ArvoExecutionStateValidationError>;
+/** {@link tryMutateState}, throwing instead. */
+declare function mutateState<TState extends ArvoExecutionState>(
+  current: TState,
+  next: Partial<ArvoExecutionStateFields<
+    TState['data'], TState['initEvent'], TState['triggeringEvent']
+  >>,
 ): TState;
 ```
 
@@ -451,7 +461,7 @@ declare function mutateData<TState extends ArvoExecutionState>(
 shape: the identifiers are strings, `depth` and `casVersion` are non-negative integers,
 `lifecycle` is one of six values, `recordFormatVersion` is a semantic version, and the two
 events are events. A record that exists is a record that was valid, so nothing downstream
-re-checks it, and `ArvoExecutionState.tryParse` is how one is rebuilt from something that is
+re-checks it, and `ArvoExecutionState.tryBuild` is how one is rebuilt from something that is
 not yet a record — a row from a store, a fixture, a replay.
 
 **Generic in the two events it holds, not in the contracts they came from.** A record holds
@@ -548,7 +558,7 @@ restored.inFlightEventMap;          // every stored event, an ArvoEvent again
 **Reading back restores, and the record checks itself.** A stored record is JSON: its events
 are plain objects and its collection is an object rather than a map. The serializer parses the
 string, turns each event back into an `ArvoEvent`, rebuilds the map, and hands the result to
-`ArvoExecutionState.tryParse`, which checks the envelope and the data. Nothing is checked twice
+`ArvoExecutionState.tryBuild`, which checks the envelope and the data. Nothing is checked twice
 and nothing half-restored comes back.
 
 **What it checks on the way back, and what it does not.** It restores every event to a
@@ -812,7 +822,7 @@ A directory per concept, a file per helper, and no barrel exports.
 
 - `src/ArvoEventHandler/state/` (new) — everything about what an execution remembers:
   `index.ts` holding `ArvoExecutionState`, `types.ts` holding what one is built from and the
-  record's own vocabulary, `utils.ts` holding `mutateData`, `serializer.ts` holding
+  record's own vocabulary, `utils.ts` holding the `mutateState` pair, `serializer.ts` holding
   `ArvoExecutionStateSerializer`, and `errors.ts` holding its error
 - `src/ArvoEventHandler/fault/` (new) — `index.ts` holding `ArvoHandlerFault`, `types.ts`
   holding the `fault_kind` vocabulary and the retry block

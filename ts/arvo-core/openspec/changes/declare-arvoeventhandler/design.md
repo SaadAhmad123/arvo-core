@@ -90,7 +90,9 @@ An executor reads the whole record — its subject, its identity, its lifecycle,
 
 ### Changing data is a function, not a method
 
-`mutateData(state, data)` returns a new state with that data and every other field carried across. It is generic in the state it is given, so what comes back is the same kind of state rather than a widened one.
+`tryMutateState(current, next)`, and `mutateState` as the thin unwrap over it, return a new state with the fields `next` names replaced and every other one carried across. It is generic in the state it is given, so what comes back is the same kind of state rather than a widened one.
+
+*Why the whole record and not only data.* A record is immutable, so every advance of an execution mints the next one — data, but also the lifecycle reaching terminal, the revision a store writes against, an awaited answer arriving. One function that knows the field set serves all of them, and the alternative is a family of near-identical functions or a spread at each call site. That an executor may change only its data is enforced where an executor is, which is `setState`, not here.
 
 *Why not a method.* The record is fields and no behaviour, which is what lets it be serialized, stored, read back and compared without anything travelling alongside it. A method invites the next one, and the one after that is `withLifecycle`, which an executor must never have.
 
@@ -98,9 +100,9 @@ An executor reads the whole record — its subject, its identity, its lifecycle,
 
 ### A record validates itself as it is built, like an event does
 
-The constructor checks the whole envelope and throws `ArvoExecutionStateValidationError`, and `tryParse` is the reporting form for something that is not yet a record. This is exactly `ArvoEvent`'s shape, down to the pair of statics, because it is exactly the same problem.
+The constructor checks the whole envelope and throws `ArvoExecutionStateValidationError`, and `tryBuild` is the reporting form for something that is not yet a record. This is exactly `ArvoEvent`'s shape, down to the pair of statics, because it is exactly the same problem.
 
-*Why at construction rather than only at the boundary.* A record that exists is then a record that was valid, so nothing downstream re-checks it and nothing carries a "has this been validated" flag. The serializer becomes thin: parse the string, restore the events, hand the rest to `tryParse`.
+*Why at construction rather than only at the boundary.* A record that exists is then a record that was valid, so nothing downstream re-checks it and nothing carries a "has this been validated" flag. The serializer becomes thin: parse the string, restore the events, hand the rest to `tryBuild`.
 
 *What the envelope check covers, and what it does not.* Shapes and domains — the identifiers are strings, `depth` and `casVersion` are non-negative integers, `lifecycle` is one of six values, `recordFormatVersion` is a semantic version, and the two events are events. It does not check that the record agrees with the contract it names, or that its events still belong to it. Those need contracts a record does not hold, and they belong to the gate.
 
