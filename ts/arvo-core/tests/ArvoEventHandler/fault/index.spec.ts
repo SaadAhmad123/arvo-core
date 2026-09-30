@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
-import { initEvent } from '../fixtures.js';
+import { ArvoExecutionState } from '../../../src/ArvoEventHandler/state/index.js';
+import { chargedEvent, initEvent, orderContract } from '../fixtures.js';
+
+/** The record a mechanism would commit if it gave up on this execution. */
+const abandonedRecord = new ArvoExecutionState({
+  data: { orderId: 'o-1' },
+  subject: initEvent.subject,
+  executionId: initEvent.executionid,
+  parentExecutionId: initEvent.executionid,
+  depth: 0,
+  source: 'com_order_create',
+  version: '1.0.0',
+  lifecycle: 'failure',
+  lifecycleDescription: 'abandoned: state_schema_rejected',
+  initEvent,
+  triggeringEvent: chargedEvent,
+  eventIds: [{ id: initEvent.id, direction: 'received' }],
+  inFlightEventMap: new Map([['emitted-1', null]]),
+  recordFormatVersion: '1.0.0',
+  casVersion: 1,
+  contracts: {
+    self: { uri: orderContract.uri, type: orderContract.type },
+    services: [],
+  },
+} as never);
 
 const minimal = (overrides: Record<string, unknown> = {}) =>
   new ArvoHandlerFault({
@@ -183,6 +207,32 @@ describe('ArvoHandlerFault', () => {
       expect(
         typeof minimal().stack === 'string' || minimal().stack === null,
       ).toBe(true);
+    });
+  });
+
+  describe('the record it carries for an abandonment', () => {
+    it('holds it as a record, not as something already flattened', () => {
+      expect(
+        minimal({ abandonmentState: abandonedRecord }).abandonmentState,
+      ).toBeInstanceOf(ArvoExecutionState);
+    });
+
+    it("writes that record out in the record's own shape", () => {
+      const stored = minimal({ abandonmentState: abandonedRecord }).toJSON();
+      expect(stored.abandonmentState).toEqual(abandonedRecord.toJSON());
+    });
+
+    it('survives being turned into a string', () => {
+      const fault = minimal({ abandonmentState: abandonedRecord });
+      const stored = JSON.parse(JSON.stringify(fault));
+      expect(stored.abandonmentState.lifecycle).toBe('failure');
+      expect(stored.abandonmentState.inFlightEventMap).toEqual([
+        ['emitted-1', null],
+      ]);
+    });
+
+    it('says there is nothing to commit where there is not', () => {
+      expect(minimal().toJSON().abandonmentState).toBeNull();
     });
   });
 });

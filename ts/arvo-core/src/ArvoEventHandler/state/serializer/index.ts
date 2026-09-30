@@ -78,22 +78,10 @@ export class ArvoExecutionStateSerializer<
       return fromNeverthrow(
         ok(
           JSON.stringify({
-            data: state.data,
-            subject: state.subject,
-            executionId: state.executionId,
-            parentExecutionId: state.parentExecutionId,
-            depth: state.depth,
-            source: state.source,
-            version: state.version,
-            lifecycle: state.lifecycle,
-            lifecycleDescription: state.lifecycleDescription,
+            ...state.toJSON(),
             initEvent: initEvent.value,
             triggeringEvent: triggeringEvent.value,
-            eventIds: state.eventIds,
             inFlightEventMap: inFlight,
-            recordFormatVersion: state.recordFormatVersion,
-            casVersion: state.casVersion,
-            contracts: state.contracts,
           }),
         ),
       );

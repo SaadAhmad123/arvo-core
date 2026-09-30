@@ -6,6 +6,7 @@ import type { ArvoSemanticVersion } from '../../semver/index.js';
 import type { Result } from '../../types.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
 import { ArvoExecutionStateValidationError } from './errors.js';
+import type { ArvoExecutionStateWire } from './serializer/types.js';
 import type {
   ArvoExecutionLifecycle,
   ArvoExecutionStateParam,
@@ -126,6 +127,35 @@ export class ArvoExecutionState<
     });
 
     Object.freeze(this);
+  }
+
+  /**
+   * The record as plain JSON: every field, with the two things JSON cannot
+   * express turned into something it can.
+   *
+   * What is awaited becomes a list of pairs rather than a `Map`. The events
+   * serialize as themselves. The one definition of a record's plain shape,
+   * so anything writing one out agrees with everything else.
+   */
+  toJSON(): ArvoExecutionStateWire {
+    return {
+      data: this.data,
+      subject: this.subject,
+      executionId: this.executionId,
+      parentExecutionId: this.parentExecutionId,
+      depth: this.depth,
+      source: this.source,
+      version: this.version,
+      lifecycle: this.lifecycle,
+      lifecycleDescription: this.lifecycleDescription,
+      initEvent: this.initEvent,
+      triggeringEvent: this.triggeringEvent,
+      eventIds: [...this.eventIds],
+      inFlightEventMap: [...this.inFlightEventMap],
+      recordFormatVersion: this.recordFormatVersion,
+      casVersion: this.casVersion,
+      contracts: this.contracts,
+    } as unknown as ArvoExecutionStateWire;
   }
 
   /**

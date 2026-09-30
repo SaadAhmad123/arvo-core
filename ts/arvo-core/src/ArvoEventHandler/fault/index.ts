@@ -1,5 +1,6 @@
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { JSONObject } from '../../types.js';
+import type { ArvoExecutionState } from '../state/index.js';
 import type {
   ArvoFaultKind,
   ArvoFaultRetry,
@@ -66,7 +67,7 @@ export class ArvoHandlerFault extends Error {
   readonly abandonmentEvent: ArvoEvent | null;
 
   /** The record to commit alongside {@link abandonmentEvent}, or `null`. */
-  readonly abandonmentState: JSONObject | null;
+  readonly abandonmentState: ArvoExecutionState | null;
 
   constructor(param: ArvoHandlerFaultParam) {
     super(param.message);
@@ -108,7 +109,8 @@ export class ArvoHandlerFault extends Error {
       retry: this.retry === null ? null : { ...this.retry },
       abandonmentEvent:
         this.abandonmentEvent === null ? null : { ...this.abandonmentEvent },
-      abandonmentState: this.abandonmentState,
+      abandonmentState:
+        this.abandonmentState === null ? null : this.abandonmentState.toJSON(),
     } as JSONObject;
   }
 }

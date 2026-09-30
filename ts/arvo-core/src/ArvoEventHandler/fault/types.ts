@@ -1,5 +1,5 @@
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
-import type { JSONObject } from '../../types.js';
+import type { ArvoExecutionState } from '../state/index.js';
 
 /**
  * Every way a delivery can fail to be carried through.
@@ -90,5 +90,5 @@ export type ArvoHandlerFaultParam = {
   /** The event to publish if this execution is abandoned, or `null`. */
   abandonmentEvent: ArvoEvent | null;
   /** The record to commit alongside it, or `null`. */
-  abandonmentState: JSONObject | null;
+  abandonmentState: ArvoExecutionState | null;
 };
