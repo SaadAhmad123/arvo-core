@@ -191,6 +191,56 @@ An executor SHALL be able to set what is its own to choose without reaching past
 - **THEN** it does so only through a surface named as unsafe
 - **AND** the event carries what was set
 
+### Requirement: Seeing A Bound Before Crossing It
+
+The system SHALL tell an executor whether an event it sends to a service could still be sent, so that reaching the limit is a choice rather than a failure. That SHALL be true exactly when such an event could no longer sit one deeper without reaching the maximum this version allows.
+
+The system SHALL tell an executor how long it has left, on each of the two clocks the version bounds: the one covering this attempt, and the one covering the execution from the event that opened it until it rests. A clock the version leaves unbounded SHALL be reported as having no limit rather than as a figure.
+
+Those figures SHALL be worked out afresh whenever they are read, so that an executor running for a long time sees what is left rather than what was left when it started. The moment the executor was entered, which is where the clock on the attempt starts, SHALL be readable.
+
+A clock already overrun SHALL report a figure below zero rather than none.
+
+#### Scenario: Room to send to a service
+- **WHEN** an execution sits further than one step from the maximum
+- **THEN** it is told it may still send to a service
+
+#### Scenario: No room left
+- **WHEN** an execution sits one step from the maximum
+- **THEN** it is told it may not
+
+#### Scenario: How long is left
+- **WHEN** an executor reads what time it has
+- **THEN** it is told what remains of this attempt
+- **AND** what remains of the whole execution, measured from the event that opened it
+
+#### Scenario: A clock the version left unbounded
+- **WHEN** a version sets no limit on a clock
+- **THEN** that clock is reported as having none
+
+#### Scenario: Time passing while an executor runs
+- **WHEN** an executor reads what time it has, works for a while, and reads again
+- **THEN** the second reading is smaller than the first
+
+#### Scenario: A clock already overrun
+- **WHEN** an executor reads a clock it has already passed
+- **THEN** it is told by how much
+
+### Requirement: Ending An Execution Deliberately
+
+The system SHALL let an executor end its own execution with a reason, leaving it at rest and unable to continue.
+
+What is remembered SHALL otherwise be unchanged, and the reason SHALL be carried on it.
+
+#### Scenario: An executor ends its execution
+- **WHEN** an executor cancels with a reason
+- **THEN** the execution is at rest
+- **AND** the reason is carried on what it remembers
+
+#### Scenario: Nothing else moves
+- **WHEN** an executor cancels
+- **THEN** its data, its identity and its event log are what they were
+
 ### Requirement: An Executor For Every Version, And For No Other
 
 The system SHALL require one executor for each version the implemented contract declares, and SHALL refuse a declaration that omits one.

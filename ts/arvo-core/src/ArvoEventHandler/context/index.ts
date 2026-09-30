@@ -42,8 +42,8 @@ import type {
  * ctx.state.initEvent.data.items;  // what opened the execution
  * ctx.entry;                       // 'init' | 'followup'
  *
- * ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
- * ctx.setState({ data: (now) => ({ ...now, attempts: now.attempts + 1 }) });
+ * await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
+ * await ctx.setState({ data: (now) => ({ ...now, attempts: now.attempts + 1 }) });
  * ctx.state.data.attempts;         // 2
  * ```
  */
@@ -78,6 +78,20 @@ export class ArvoExecutionContext<
   /** What the mechanism running this handler exposed, or empty where it exposed none. */
   readonly hooks: TMechanismHooks;
 
+  /**
+   * Whether one more step would reach the depth this version allows.
+   *
+   * Emitting to a service once it is true is refused, so read it before
+   * deciding what to return. See ADR-009, *Depth*.
+   */
+  readonly atMaxDepth: boolean;
+
+  /**
+   * When the executor was entered, as ms since the Unix epoch. Where the
+   * run clock starts, and what {@link timeRemaining} counts from.
+   */
+  readonly enteredAt: number;
+
   // Private, not a property: freezing the context must stop every other
   // member being replaced without also stopping a write.
   #state: ArvoContextState<TSelf, TServices, TDataSchema>;
@@ -102,6 +116,8 @@ export class ArvoExecutionContext<
     this.dependencies = param.dependencies;
     this.hooks = param.hooks;
     this.#state = param.state;
+    this.atMaxDepth = param.state.depth + 1 >= param.options.maxDepth;
+    this.enteredAt = Date.now();
     Object.freeze(this);
   }
 
@@ -116,18 +132,13 @@ export class ArvoExecutionContext<
   }
 
   /**
-   * Replaces this execution's data whole.
+   * Replaces this execution's data whole. No partial write, no merge.
    *
-   * Pass a value, or a function given what is remembered now and returning
-   * what replaces it. That function receives `null` on the first write.
-   * There is no partial write and no merge.
+   * Nothing else about the execution moves, and what is remembered is what
+   * the schema produced rather than what was written.
    *
-   * Nothing else about the execution moves. What is remembered afterwards
-   * is what the schema produced, so a value it fills in or transforms reads
-   * back as the schema left it.
-   *
-   * @param param.data - The whole of the new data, or a function producing
-   * it.
+   * @param param.data - The whole of the new data, or a function given
+   * what is remembered now, which is `null` on the first write.
    * @throws {ArvoHandlerFault} `state_schema_rejected` where the schema
    * refuses the value. What is remembered is left as it was.
    */
@@ -161,10 +172,9 @@ export class ArvoExecutionContext<
   /**
    * What this execution finished as, written out for whatever stores it.
    *
-   * The revision is advanced as part of writing it out, and nowhere else.
-   * Data must not be empty: an execution remembering nothing in particular
-   * writes `{}`. Reads the context rather than changing it, so calling it
-   * twice produces the same string.
+   * The revision is advanced here and nowhere else. Data must not be
+   * empty: an execution remembering nothing in particular writes `{}`.
+   * Reads the context rather than changing it.
    *
    * @throws {ArvoHandlerFault} `state_schema_rejected` where data is empty,
    * `state_not_serializable` where the record holds something that cannot
@@ -173,7 +183,7 @@ export class ArvoExecutionContext<
    *
    * @example
    * ```typescript
-   * ctx.setState({ data: { orderId: 'o-1' } });
+   * await ctx.setState({ data: { orderId: 'o-1' } });
    * await store.put(ctx.state.subject, await ctx.exportFinalState());
    * ```
    */
@@ -202,6 +212,56 @@ export class ArvoExecutionContext<
   }
 
   /**
+   * Milliseconds left on each of the version's two clocks: `run` for this
+   * attempt, `execution` from the event that opened it. `null` for a clock
+   * left unbounded, negative once one is overrun. Worked out per read.
+   *
+   * @example
+   * ```typescript
+   * while (ctx.timeRemaining.run !== null && ctx.timeRemaining.run > 1_000) {
+   *   await pollOnce();
+   * }
+   * ```
+   */
+  get timeRemaining(): {
+    readonly run: number | null;
+    readonly execution: number | null;
+  } {
+    const now = Date.now();
+    return {
+      run:
+        this.options.runTimeout === null
+          ? null
+          : this.options.runTimeout - (now - this.enteredAt),
+      execution:
+        this.options.executionTimeout === null
+          ? null
+          : this.options.executionTimeout -
+            (now - Date.parse(this.#state.initEvent.time)),
+    };
+  }
+
+  /**
+   * Ends this execution deliberately, at rest and with a reason.
+   *
+   * Nothing else about the execution moves. The reason is what a caller
+   * and an operator read afterwards.
+   *
+   * @param reason - Why the execution was ended.
+   *
+   * @example
+   * ```typescript
+   * if (order.withdrawn) return ctx.cancel('the customer withdrew the order');
+   * ```
+   */
+  cancel(reason: string): void {
+    this.#state = mutateState(this.#state, {
+      lifecycle: 'cancelled',
+      lifecycleDescription: reason,
+    });
+  }
+
+  /**
    * A fully addressed event, from a type and a payload.
    *
    * The type decides where it goes: one of this version's outputs completes
@@ -224,7 +284,7 @@ export class ArvoExecutionContext<
    *
    * @example
    * ```typescript
-   * const charge = ctx.build({
+   * const charge = await ctx.build({
    *   type: 'com_payment_charge',
    *   data: { amount: 4200 },
    * });
@@ -253,12 +313,9 @@ export class ArvoExecutionContext<
   /**
    * A fault about this delivery, ready to throw.
    *
-   * Built, not thrown. The workflow, the execution, the event and which
-   * attempt this is are filled in from the record, so say only what went
-   * wrong.
-   *
-   * The pair a mechanism would abandon this execution with is built with
-   * it. Neither is published nor committed here.
+   * Built, not thrown. The delivery is filled in from the record, so say
+   * only what went wrong. The pair a mechanism would abandon this
+   * execution with is built with it, and neither half is acted on here.
    *
    * @param param.faultKind - Which fault this is. Read by a mechanism to
    * decide what to do, so it comes from the fixed vocabulary.
@@ -322,13 +379,12 @@ export class ArvoExecutionContext<
 
   /**
    * What a mechanism would publish and commit if it gave up on this
-   * execution. Built here, never acted on here.
+   * execution, both already written out. Built here, never acted on here.
    *
    * Addressed to the caller per ADR-006, *Addressing*. `#`-private because
-   * ADR-006 forbids an executor constructing the handler error event, and
-   * `private` alone would erase at runtime.
+   * that ADR forbids an executor constructing the handler error event.
    */
-  // The event is null rather than thrown on: a fault that must be raised
+  // Either half is null rather than thrown on: a fault that must be raised
   // must not be lost to a second failure while raising it.
   async #abandonment(
     message: string,

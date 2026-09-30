@@ -522,10 +522,12 @@ describe('ArvoExecutionContext', async () => {
 
     it('exposes nothing beyond what a delivery gives it', () => {
       expect(Object.keys(onInit()).sort()).toEqual([
+        'atMaxDepth',
         'attempt',
         'contracts',
         'dataSchema',
         'dependencies',
+        'enteredAt',
         'entry',
         'hooks',
         'options',
