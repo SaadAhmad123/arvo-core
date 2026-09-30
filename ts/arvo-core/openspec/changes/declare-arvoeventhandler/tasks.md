@@ -5,6 +5,16 @@
 - [x] 1.3 Probe that `VersionedArvoContract` exposes `uri`, `type`, `version`, `outputs` and `error.type` off a value typed only as `VersionedArvoContract`, so the collision and duplicate-service rules can read them without a cast.
 - [x] 1.4 Probe the generics the context sketch in `proposal.md` depends on, since every one of them has to be inferable from a single `new ArvoEventHandler({...})` call and none can be annotated by hand. Four things, and each has been wrong in a draft: that the services map infers as written rather than widening to `Record<string, VersionedArvoContract>`; that `StateSchemaOf<VD, V>` reads a version's own `state` back out of the same object literal that declares it; that a version written as the executor alone infers as stateless; that `H` and `D` infer off the `types` witness field and fall to `Record<string, never>` when it is omitted; and that a union of intersections narrows on `entry` where an intersection carrying a union does not — the collapse the factories change already hit with `Omit<A & (B | C), K>`. Record what compiles, because §2.2 is written against the answer.
 
+## 1a. The execution state and the fault
+
+Both were separate changes until the context needed them. Tests first, as every step from here.
+
+- [x] 1a.1 Add `src/ArvoEventHandler/fault/types.ts`: the `fault_kind` vocabulary, the retry block, and what a fault is built from. No field optional; where there is nothing to say, say `null`.
+- [x] 1a.2 Add `src/ArvoEventHandler/fault/index.ts`: `ArvoHandlerFault`, an `Error` so it can be thrown and caught as one, frozen, with a `toJSON` because whatever runs the handler may store it.
+- [ ] 1a.3 Add `src/ArvoEventHandler/state/types.ts`: what an `ArvoExecutionState` is built from, the lifecycle vocabulary, and the shapes of what it holds. No field optional.
+- [ ] 1a.4 Add `src/ArvoEventHandler/state/index.ts`: `ArvoExecutionState`, frozen, carrying its own `dataschema`. `withData` mints a new one with everything else carried across, checks the write against that schema, and raises `state_schema_rejected` where it is refused.
+- [ ] 1a.5 Probe that a version declaring no schema must be given a loose one: `z.object({})` strips every undeclared key, so a closed default would silently empty an execution's data on every write. Pin both behaviours.
+
 ## 2. Types
 
 - [x] 2.1 Add `src/ArvoEventHandler/types/`, one module per group and no barrel — `schema.ts`, `supplied.ts`, `options.ts`, `services.ts`, `context.ts`, `executor.ts`, `declaration.ts`, `setup.ts`. Between them: `ArvoEventHandlerOptions` as the complete seven, `ArvoRetryDelayFn`, `ArvoServiceMap`, `ArvoMechanismHooks`, `ArvoEventHandlerExecutor`, `ArvoVersionDeclaration`, `ArvoVersionInput`, `ArvoCreatedVersion`, `PayloadOf`, `ArvoDeclaredVersions`, `ArvoEventHandlerSetupParam`. `PayloadOf` is the conditional helper §1.4 found necessary: `z.infer` off an unresolved schema does not satisfy `ArvoEvent`'s payload constraint without it. Both option sites take `Partial<ArvoEventHandlerOptions>`; the resolved shape is the unpartialled type and no second type is introduced for it.

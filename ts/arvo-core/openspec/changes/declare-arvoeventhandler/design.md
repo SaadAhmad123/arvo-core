@@ -78,6 +78,28 @@ The context is the innermost thing and everything above it is shaped by what it 
 
 *What the context still does not have.* Five members need machinery that does not exist: `fault`, `build`, `atMaxDepth`, `timeRemaining`, and `identity`, `collected` and `cancel`. It is a class from the start so each of those is an addition rather than a reshaping, which is the whole reason for building it now rather than describing it as a type.
 
+### `ctx.state` is the execution record, and a write mints a new one
+
+An executor reads the whole record — its subject, its identity, its lifecycle, what it has emitted, what it is waiting on — and writes exactly one field of it. `setState({ data })` produces a fresh `ArvoExecutionState` with the new data and everything else carried across unchanged.
+
+*Why the record and not a bare payload.* An executor deciding what to do next often needs to know where it is: how deep it sits, what it is still awaiting, what opened it. Handing it only its own data means every one of those has to be threaded onto the context separately, and the context becomes a second, partial copy of a record that already exists.
+
+*Why a new one per write rather than mutation.* Three things follow and each is the reason rather than a side effect. An executor cannot change the lifecycle, the identity or the event log even by accident, because they are carried rather than writable. A value read before a write is still that value after one, so nothing captured goes stale underneath. And a delivery keeps the last state produced, with no merge step and no question of which copy is current.
+
+*Why the record carries its own schema.* `dataschema` sits on the state, so checking a write consults nothing else. That is what lets the check happen in `setState` rather than being deferred to whoever knows which version is running.
+
+### A rejected write raises the fault, at the line that made it
+
+`setState` checks against the schema as it writes, and raises `ArvoHandlerFault` with `state_schema_rejected` where the value is refused.
+
+*Why not defer it.* ADR-008 places `state_schema_rejected` at return, and an earlier draft had `setState` store anything and let the handler check afterwards. That reports the failure with nothing to point at: the executor may have written three times and the stack is gone. Raising at the write keeps the diagnosis where the mistake is.
+
+*Why the fault and not a bare error.* An error escaping an executor becomes the handler error event, which tells a caller the work failed. A fault says the delivery could not be carried through, which is a different thing with different consequences for retry and abandonment. Throwing the fault means no conversion step, and nothing between the write and the mechanism has to know to perform one.
+
+*What that pulled forward.* ADR-007's record and ADR-008's fault object were both separate changes in the original plan. Keeping them there would have meant a context built against two placeholders. The plan's boundaries moved instead, and `proposal.md` — The plan says so.
+
+*Two defaults that are not defaults.* `z.object({})` strips every key it does not declare, so a version declaring no schema must be given a loose one or its data would be silently emptied on every write. And a schema with a required field has no value to show before the first write, which is why the record's `data` starts empty and a write is what fills it.
+
 ### One context class, and the event's own type narrows it
 
 `ArvoExecutionContext` is one class. `entry` is a plain `'init' | 'followup'` saying how the delivery was classified, and `event` is a union of precisely typed events: the one this version takes in, and everything each declared service may answer with.

@@ -8,27 +8,31 @@ It delivers the one thing every later change rests on, and nothing else: **a dec
 
 ## The plan
 
-Six changes, built inward out. Each compiles against the one before it, and each is shippable
+Four changes, built inward out. Each compiles against the one before it, and each is shippable
 on its own.
 
 | | Change | Builds | From |
 |---|---|---|---|
-| **1** | **`declare-arvoeventhandler`** — this one | the execution context an executor receives, the version that runs against it, the handler that holds versions, and every rule that refuses a declaration | ADR-006 *Definition and declaration*, *Options*, *The execution context* |
-| 2 | `arvo-execution-record` | the execution record: its fields, its lifecycle, validation, hydration, self-consistency, `cas_version` | ADR-007 |
-| 3 | `arvo-handler-faults` | `ArvoHandlerFault`, the `fault_kind` vocabulary, the abandonment pair, and `ctx.fault` | ADR-008 |
-| 4 | `arvo-event-emission` | the event builder, addressing, validation of what an executor returns, and `ctx.build` | ADR-006 *Addressing an emitted event* |
-| 5 | `arvo-execution-bounds` | depth, retry, the two timeouts, collection, and `ctx.atMaxDepth` and `ctx.timeRemaining` | ADR-009 |
-| 6 | `arvo-handler-delivery` | classification, the sixteen-step gate, `tryExecute` / `execute`, and `ctx.identity`, `ctx.collected` and `ctx.cancel` | ADR-010 |
+| **1** | **`declare-arvoeventhandler`** — this one | the execution state an execution remembers, the fault a delivery raises, the context an executor receives, the version that runs against it, the handler that holds versions, and every rule that refuses a declaration | ADR-006 *Definition and declaration*, *Options*, *The execution context*; ADR-007; ADR-008's fault object |
+| 2 | `arvo-event-emission` | the event builder, addressing, validation of what an executor returns, and `ctx.build` | ADR-006 *Addressing an emitted event* |
+| 3 | `arvo-execution-bounds` | depth, retry, the two timeouts, collection, and `ctx.atMaxDepth` and `ctx.timeRemaining` | ADR-009 |
+| 4 | `arvo-handler-delivery` | classification, the sixteen-step gate, `tryExecute` / `execute`, hydration, the abandonment pair, and `ctx.cancel` | ADR-010; ADR-008's abandonment |
 
-**Built inward out, and that decides the order within this change too.** The context is the
-innermost thing and everything above it is shaped by what it needs, so it is written first, then
-the version that runs against it, then the handler that holds versions. Building the shells
-first means guessing the inner interface and bending the inner thing to fit the guess.
+**Built inward out, and that is what moved the boundaries.** The context is the innermost thing
+and everything above it is shaped by what it needs, so it is written first, then the version that
+runs against it, then the handler that holds versions. Writing the shells first means guessing
+the inner interface and bending the inner thing to fit the guess.
 
-**The context arrives here and grows twice more.** Most of its members are the delivered event,
-the entry kind, the attempt, the state and what the mechanism supplied, all of which need
-nothing that does not exist. Changes 3 through 6 add the five that do. It is a class from the
-start so those are additions rather than a restructuring.
+**Which pulled two changes forward into this one.** The context holds the execution state, so
+ADR-007's record had to exist rather than be described. Writing state checks it, and a rejected
+write raises the fault ADR-008 names for it, so the fault object had to exist too. Both were
+originally their own changes; keeping them separate would have meant a context built against
+placeholders, which is the thing this ordering exists to avoid. What remains of ADR-008 for
+change 4 is the abandonment pair, which needs a delivery to build one.
+
+**The context arrives here and grows twice more.** Changes 2 and 3 add `build`, `atMaxDepth` and
+`timeRemaining`; change 4 adds `cancel`. It is a class from the start so those are additions
+rather than a restructuring.
 
 ## What Changes
 
@@ -40,7 +44,11 @@ start so those are additions rather than a restructuring.
 
 - **`createArvoEventHandlerVersion(setup, version, declaration)` declares a version away from the chain**, taking exactly what `handler` takes inline, so a handler with several substantial versions need not be one file.
 
-- **Three classes, built inward out.** `ArvoExecutionContext` is what an executor receives, `ArvoHandlerVersion` is what runs against it, and `ArvoEventHandler` holds versions. Each is written against the one below it rather than against a placeholder.
+- **Five classes, built inward out.** `ArvoExecutionState` is what an execution remembers, `ArvoHandlerFault` is why a delivery could not be carried through, `ArvoExecutionContext` is what an executor receives, `ArvoHandlerVersion` is what runs against it, and `ArvoEventHandler` holds versions. Each is written against the ones below it rather than against a placeholder.
+
+- **`ctx.state` is the execution record, and `setState` writes only its data.** An executor reads everything the execution knows about itself and changes the one field it owns. Each write mints a new state with the rest carried across, so the lifecycle, the identity and the event log cannot be touched even by accident.
+
+- **A rejected write raises a fault, not a bare error.** `ArvoHandlerFault` carries ADR-008's full field set, and a state the schema refuses raises `state_schema_rejected` at the line that wrote it.
 
 - **The `tryX`/`X` pair is at the end of the chain**, `tryBuild` and `build`. Nothing earlier can fail, so nothing earlier returns a `Result`.
 
@@ -272,133 +280,114 @@ carries the version it was created with.
 ## What an executor will receive
 
 A class, built fresh for one delivery, and the innermost thing in this change. Every type on it
-is read off the declaration — the contract implemented, the version running, the services
-declared — so nothing is annotated by hand and nothing is `any`.
+is read off the declaration — the version of the contract implemented, the services declared —
+so nothing is annotated by hand and nothing is `any`.
 
 ```ts
-/** The event that opens an execution of one version. */
-type ArvoInitEvent<TSelf> = ArvoEvent<TSelf['type'], PayloadOf<TSelf['input']>>;
-
-/** Anything one service may answer with: one of its outputs, or its handler error. */
-type ArvoServiceResponse<TContract> =
-  | { [TType in keyof TContract['outputs'] & string]:
-        ArvoEvent<TType, PayloadOf<TContract['outputs'][TType]>> }[keyof TContract['outputs'] & string]
-  | ArvoEvent<TContract['error']['type'], PayloadOf<TContract['error']['schema']>>;
-
-/** Anything any declared service may answer with. */
-type ArvoAnyServiceResponse<TServices> =
-  { [TName in keyof TServices]: ArvoServiceResponse<TServices[TName]> }[keyof TServices];
-```
-
-```ts
-/** What one is built from. A delivery supplies all of it. */
-type ArvoExecutionContextParam<TSelf, TServices, TState, TDependencies, TMechanismHooks> = {
-  /** This version of the contract implemented, and the contracts it may send to. */
-  contracts: {
-    self: TSelf;                      // a VersionedArvoContract, so it knows its own version
-    services: TServices;
-  };
-  /** The event that opened this execution. */
-  initEvent: ArvoInitEvent<TSelf>;
-  /** Which attempt this delivery is, counting from 0. */
-  attempt: number;
-  /** What the record held, or `null` on an execution that has written nothing. */
-  state: ArvoStateOf<TState> | null;
-  /** As resolved for this delivery. */
-  dependencies: TDependencies;
-  /** As the mechanism running this handler exposes them. */
-  hooks: TMechanismHooks;
-};
-
-/** Everything an executor can know, built fresh for one delivery. */
-class ArvoExecutionContext<TSelf, TServices, TState, TDependencies, TMechanismHooks> {
-  constructor(
-    param: ArvoExecutionContextParam<TSelf, TServices, TState, TDependencies, TMechanismHooks>,
-  );
-
+class ArvoExecutionContext<
+  TSelf, TServices, TStateSchema, TArvoEntryKind, TDependencies, TMechanismHooks,
+> {
   /** This version of the contract implemented, and what it may send to. */
   readonly contracts: { readonly self: TSelf; readonly services: Readonly<TServices> };
 
   /** Whether this delivery opened the execution or answers something it awaited. */
-  readonly entry: 'init' | 'followup';
-  /**
-   * What this delivery carries: the event that opens this version, or
-   * anything a declared service may answer with. Narrow on `event.type` to
-   * reach a payload.
-   */
-  readonly event: ArvoInitEvent<TSelf> | ArvoAnyServiceResponse<TServices>;
-
-  /** Which attempt this delivery is, counting from 0. */
-  readonly attempt: number;
+  readonly entry: TArvoEntryKind;
+  /** The event delivered, which follows from how it was classified. */
+  readonly event: ArvoDeliveredEvent<TSelf, TServices, TArvoEntryKind>;
   /** The event that opened this execution. The delivered event, on an init. */
   readonly initEvent: ArvoInitEvent<TSelf>;
-  /** As resolved for this delivery, or empty where none were declared. */
+  /** Which attempt this delivery is, counting from 0. */
+  readonly attempt: number;
+
+  /** What this delivery's executor is given to work with, or empty. */
   readonly dependencies: TDependencies;
-  /** As this mechanism exposes them, or empty where it exposes none. */
+  /** What the mechanism running this handler exposed, or empty. */
   readonly hooks: TMechanismHooks;
 
-  /**
-   * What was last written, or `null` until something is. Typed by the
-   * version's schema where it declared one, and any JSON object where not.
-   */
-  get state(): ArvoStateOf<TState> | null;
-  /**
-   * Replaces the state whole. There is no partial write: carry forward
-   * anything you want to keep. What it is checked against, and when, is
-   * ADR-006's business and happens after the executor returns.
-   */
-  setState(value: ArvoStateInputOf<TState>): void;
+  /** Everything this execution remembers about itself. */
+  get state(): ArvoExecutionState<TStateSchema>;
+  /** Replaces this execution's own data, and nothing else about it. */
+  setState(param: { data: ArvoDataWrite<TStateSchema> }): void;
 }
 ```
 
-**The event is inferred from the contracts, and its own `type` narrows it.** It is a union of
-precisely typed events: the one this version takes in, and everything each declared service may
-answer with. Every member carries a literal `type`, and no two can share one because the
-collision rule refuses that at declaration, so the union is discriminated by construction.
+**The delivered event is inferred from the contracts, and typed by how the delivery was
+classified.** An init carries the event this version takes in. A followup carries whatever a
+declared service answered with, its handler error included. Each member of that union has a
+literal `type` and no two can share one, because the collision rule refuses that at declaration,
+so narrowing on `event.type` reaches the exact payload.
 
 ```ts
 execute: async (ctx) => {
-  if (ctx.event.type === 'com_order_create')   ctx.event.data.items;     // the init payload
-  if (ctx.event.type === 'evt_payment_charged') ctx.event.data.receipt;  // a service's answer
-}
-```
-
-**Which is why the context needs no entry generic.** `entry` stays as ADR-006 requires it, a
-plain `'init' | 'followup'`, saying how the delivery was classified. Narrowing on `event.type`
-is what reaches a payload, and it reaches the exact one in a single step rather than narrowing
-to a group and then within it.
-
-**It holds its own versioned contract, so it knows which version it is.** `contracts.self` is a
-`VersionedArvoContract`, which carries the version, the input, the outputs and the handler error
-type. Nothing has to tell the context which version is running, and change 4 builds events from
-the same value.
-
-**What it does not carry yet, and when each arrives.** `fault` with change 3, `build` with
-change 4, `atMaxDepth` and `timeRemaining` with change 5, and `identity`, `collected` and
-`cancel` with change 6. Each is an addition to a class that already exists rather than a
-reshaping of one that does not.
-
-What that buys an executor author, all of it from the declaration and none of it annotated:
-
-```ts
-execute: async (ctx) => {
-  if (ctx.event.type === 'com_order_create') {
-    ctx.event.data.items;                       // the version's own input schema
-    ctx.setState({ orderId: 'o-1' });           // the version's own state schema
-    return;
-  }
   if (ctx.event.type === 'evt_payment_charged') ctx.event.data.receipt;
-  ctx.entry;                                    // 'init' | 'followup', how it was classified
-  ctx.dependencies.db.find();                   // what `types.dependencies` declared
+  ctx.entry;                    // 'init' | 'followup', how it was classified
+  ctx.dependencies.db.find();   // what `types.dependencies` declared
 }
 ```
 
+**What it does not carry yet.** `build` with change 2, `atMaxDepth` and `timeRemaining` with
+change 3, `cancel` with change 4. Each is an addition to a class that already exists.
+
+## What an execution remembers
+
+`ctx.state` is the execution record itself, not a bare payload. An executor can read everything
+the execution knows about itself, and write only the one field it owns.
+
 ```ts
-// A version that declared no schema still has state, as any JSON object.
-'1.2.0': async (ctx) => {
-  ctx.setState({ seen: 1, at: ['a', null] });   // fine
-  ctx.state?.seen;                              // unknown, because nothing said otherwise
+class ArvoExecutionState<TStateSchema extends z.$ZodObject> {
+  constructor(param: ArvoExecutionStateParam<TStateSchema>);
+
+  /** The schema governing `data`, carried so a write can be checked without asking elsewhere. */
+  readonly dataschema: TStateSchema;
+  /** This executor's own business state. The only field an executor may change. */
+  readonly data: z.output<TStateSchema>;
+
+  /** Identity, and where this execution sits. */
+  readonly subject: string;
+  readonly executionId: string;
+  readonly parentExecutionId: string;
+  readonly depth: number;
+  readonly source: string;
+  readonly version: ArvoSemanticVersion;
+
+  /** Where it rests, and why. */
+  readonly lifecycle: ArvoExecutionLifecycle;
+  readonly lifecycleDescription: string | null;
+
+  /** What it has touched, and what it is waiting on. */
+  readonly eventIds: readonly ArvoTouchedEvent[];
+  readonly initEventId: string;
+  readonly initEventSource: string;
+  readonly inFlightEventMap: ReadonlyMap<string, ArvoEvent | null>;
+
+  /** Bookkeeping a mechanism needs, and a reader years later. */
+  readonly recordFormatVersion: string;
+  readonly casVersion: number;
+  readonly contracts: ArvoRecordContracts;
 }
+```
+
+**Writing mints a new one.** `setState({ data })` produces a fresh `ArvoExecutionState` with the
+new data and every other field carried across unchanged. Three things follow, and each is the
+point rather than a side effect:
+
+- **An executor cannot touch what is not its own.** The lifecycle, the identity, the event log
+  and the collection are carried, not writable, so they cannot be changed even by accident.
+- **What was read stays what was read.** A value held before a write is still that value after
+  one, so nothing an executor captured goes stale under it.
+- **A delivery keeps the last one produced.** There is no merge step and no question of which
+  copy is current.
+
+**`data` takes a value or a function.** The function receives what is there now, so building on
+it is not the caller's bookkeeping. Every write is checked against `dataschema` as it happens,
+and a rejected one raises `ArvoHandlerFault` at the line that wrote it rather than surfacing
+later with nothing to point at.
+
+```ts
+ctx.state.data;                                      // what is remembered
+ctx.state.lifecycle;                                 // 'waiting', and not writable
+ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
+ctx.setState({ data: (current) => ({ ...current, attempts: current.attempts + 1 }) });
 ```
 
 ## How a handler is run
@@ -644,6 +633,10 @@ None. `arvo-contract` is read and not changed — a handler names a contract and
 
 A directory per concept, a file per helper, and no barrel exports.
 
+- `src/ArvoEventHandler/state/` (new) — `index.ts` holding `ArvoExecutionState`, `types.ts`
+  holding what one is built from and the record's own vocabulary
+- `src/ArvoEventHandler/fault/` (new) — `index.ts` holding `ArvoHandlerFault`, `types.ts`
+  holding the `fault_kind` vocabulary and the retry block
 - `src/ArvoEventHandler/context/` (new) — `index.ts` holding `ArvoExecutionContext`,
   `types.ts` holding what one is built from
 - `src/ArvoEventHandler/version/` (new) — `index.ts` holding `ArvoHandlerVersion`, `types.ts`
@@ -683,9 +676,10 @@ None added. `zod/v4/core` for the state schema's type, `ArvoDomain` for the erro
 Everything the plan assigns to changes 2 through 6, and specifically:
 
 - **Running a delivery.** `tryExecute` and `execute` are sketched under **How a handler is run** and built in change 6. Nothing here classifies an event, reads or writes a record, or enters an executor of its own accord. A built handler is inert.
-- **The five context members that need what does not exist.** `fault` with change 3, `build` with change 4, `atMaxDepth` and `timeRemaining` with change 5, and `identity`, `collected` and `cancel` with change 6. The class exists here so each is an addition rather than a reshaping.
-- **The execution record.** A version's state is typed and written through the context, and where it is stored is ADR-007 and change 2.
-- **The state schema's contents.** ADR-007 makes a version's state schema the author's, and the protocol places no rule on how it changes. This change holds the schema and validates nothing against it.
+- **The context members that need what does not exist.** `build` with change 2, `atMaxDepth` and `timeRemaining` with change 3, `cancel` with change 4. The class exists here so each is an addition rather than a reshaping.
+- **Storing the execution record, and reading one back.** The record exists here as a value an executor reads and writes. Hydrating a stored one, validating it against a version, and the compare-and-swap a mechanism commits it with all belong to change 4, which is where a delivery exists to do them.
+- **The state schema's contents.** ADR-007 makes a version's state schema the author's, and the protocol places no rule on how it changes. This change checks a write against whatever schema it was given and has no opinion on the schema itself.
 - **Emission.** A version works out what it may emit because the collision rule needs it. Deriving `to`, `subject` or any other field from a type is ADR-006's *Addressing an emitted event* and belongs to change 4, along with checking that what an executor returned is in that set.
+- **Abandonment.** A fault carries the pair as `null` here. Building the event and the record to go with it needs a delivery that knows it is giving up, which is change 4.
 - **The mechanism's obligations.** ADR-006 places five on whatever runs a handler. This package is not a mechanism and implements none of them.
 - **Anything the ADRs defer.** Timers and deadlines, a bound on fan-out, capability profiles as a format, error kinds beyond handler failure. Each is deferred in an accepted ADR and stays deferred here.

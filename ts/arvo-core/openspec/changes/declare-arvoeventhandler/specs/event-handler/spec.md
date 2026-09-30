@@ -57,6 +57,49 @@ A handler built from a declaration SHALL process no event, read no record and ca
 - **WHEN** a handler is declared naming a service contract at one of its versions
 - **THEN** the handler holds that version of that contract
 
+### Requirement: What An Execution Remembers
+
+The system SHALL represent what an execution remembers as one immutable value carrying the schema governing its own data, that data, the execution's identity and depth, the contract and version it belongs to, where it rests and why, the events it has touched, what it is waiting on, and the bookkeeping whatever stores it requires.
+
+Replacing that data SHALL produce a new such value, carrying every other field across unchanged. The value replaced SHALL NOT be altered.
+
+Data SHALL be replaceable by a value, or by a function given what is remembered now.
+
+Replacing data SHALL check it against the schema carried alongside it, at the moment of the write. Data the schema refuses SHALL be reported as an execution fault naming that, and SHALL leave what is remembered unchanged.
+
+What is remembered SHALL be what the schema produced, so that a value the schema fills in or transforms reads back as the schema left it.
+
+Nothing other than data SHALL be replaceable by an executor.
+
+#### Scenario: Reading what an execution remembers
+- **WHEN** an execution's state is read
+- **THEN** its data is reported
+- **AND** so are its identity, where it rests, and what it is waiting on
+
+#### Scenario: Replacing the data
+- **WHEN** an execution's data is replaced
+- **THEN** what is remembered carries the new data
+- **AND** every other field is what it was
+
+#### Scenario: What was read is not disturbed
+- **WHEN** an execution's data is replaced
+- **THEN** the value read before the replacement is unchanged
+
+#### Scenario: Building on what is remembered
+- **WHEN** data is replaced by a function
+- **THEN** that function receives what is remembered now
+- **AND** what it returns becomes the new data
+
+#### Scenario: Data the schema refuses
+- **WHEN** data is replaced by something the schema refuses
+- **THEN** an execution fault naming a rejected state is reported
+- **AND** it names every rule the value broke
+- **AND** what is remembered is unchanged
+
+#### Scenario: What the schema fills in is what is remembered
+- **WHEN** data is replaced by a value the schema completes or transforms
+- **THEN** what is remembered is what the schema produced
+
 ### Requirement: An Executor For Every Version, And For No Other
 
 The system SHALL require one executor for each version the implemented contract declares, and SHALL refuse a declaration that omits one.
