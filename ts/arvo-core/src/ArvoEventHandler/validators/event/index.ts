@@ -16,7 +16,7 @@ import type { ArvoEventOrigin, ArvoEventValidatorParam } from './types.js';
  * Judges whether an event belongs to the contracts a handler declared, and
  * whether its payload satisfies the schema they select for it.
  *
- * Built once from the declaration and reused for every delivery, so it
+ * Built once from the declaration and reused for every execution, so it
  * reports rather than raising a fault. The version comes from the event's
  * own `dataschema`, never supplied, so this runs before one is known.
  *
@@ -26,7 +26,7 @@ import type { ArvoEventOrigin, ArvoEventValidatorParam } from './types.js';
  *   contracts: { self: orderContract, services: { payments } },
  * });
  *
- * const arriving = validator.validateInput(delivered);
+ * const arriving = validator.validateInput(triggeringEvent);
  * if (arriving.ok) arriving.value; // { source: 'self', version: '1.0.0' }
  * ```
  */

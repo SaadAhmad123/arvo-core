@@ -23,7 +23,7 @@ export type ArvoExecutionLifecycle = (typeof ARVO_EXECUTION_LIFECYCLES)[number];
 
 /**
  * The places an execution rests for good. A record at one of these is
- * finished, and nothing further is delivered to it.
+ * finished, and nothing further reaches it.
  */
 export const ARVO_TERMINAL_LIFECYCLES = Object.freeze([
   'success',
@@ -114,7 +114,7 @@ export type ArvoExecutionStateFields<
 
   /** The event that opened this execution. */
   initEvent: TInitEvent;
-  /** The event that caused the delivery being processed. */
+  /** The event that caused the execution being processed. */
   triggeringEvent: TTriggeringEvent;
 
   /** Every event this execution has handled, in the order it handled them. */

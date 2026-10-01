@@ -39,7 +39,7 @@ describe('ArvoHandlerFault', () => {
     expect(minimal().message).toBe('state does not satisfy the schema');
   });
 
-  describe('what it says about the delivery', () => {
+  describe('what it says about the execution', () => {
     it('names the workflow, the execution and the event', () => {
       const fault = minimal();
       expect(fault.subject).toBe(initEvent.subject);
@@ -111,7 +111,7 @@ describe('ArvoHandlerFault', () => {
   });
 
   describe('the abandonment pair', () => {
-    it('carries neither where the delivery could address nothing', () => {
+    it('carries neither where the execution could address nothing', () => {
       const fault = minimal();
       expect(fault.abandonmentEvent).toBeNull();
       expect(fault.abandonmentState).toBeNull();
@@ -152,7 +152,7 @@ describe('ArvoHandlerFault', () => {
       expect(written.violations).toEqual(['orderId: expected string']);
     });
 
-    it('carries the delivery it happened on', () => {
+    it('carries the execution it happened on', () => {
       const written = minimal().toJSON();
       expect(written.subject).toBe(initEvent.subject);
       expect(written.executionId).toBe(initEvent.executionid);

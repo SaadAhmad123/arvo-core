@@ -26,7 +26,7 @@ import {
   telemetry,
 } from '../fixtures.js';
 
-/** What a delivery records against; these tests only carry it. */
+/** What an execution records against; these tests only carry it. */
 const { telemetry: tracing } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
@@ -174,7 +174,7 @@ describe('opening an execution', async () => {
   });
 
   describe('the context it builds', async () => {
-    it('says the delivery opened the execution', () => {
+    it('says the execution opened the execution', () => {
       expect(opened().entry).toBe('init');
     });
 
@@ -306,8 +306,8 @@ describe('resuming an execution', async () => {
     });
   });
 
-  describe('the event that caused this delivery', async () => {
-    it('is this delivery, not the one the record was stored with', async () => {
+  describe('the event that caused it', async () => {
+    it('is this execution, not the one the record was stored with', async () => {
       expect((await resumed()).state.triggeringEvent).toBe(chargedEvent);
     });
 
@@ -318,7 +318,7 @@ describe('resuming an execution', async () => {
   });
 
   describe('the context it builds', async () => {
-    it('says the delivery answers something awaited', async () => {
+    it('says the execution answers something awaited', async () => {
       expect((await resumed()).entry).toBe('followup');
     });
 

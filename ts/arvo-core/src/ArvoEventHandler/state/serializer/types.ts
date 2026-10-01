@@ -27,7 +27,7 @@ export type ArvoExecutionStateWire = {
 
   /** The event that opened the execution, in the event's own format. */
   initEvent: JSONObject;
-  /** The event that caused the delivery, in the event's own format. */
+  /** The event that caused the execution, in the event's own format. */
   triggeringEvent: JSONObject;
 
   eventIds: ArvoTouchedEvent[];

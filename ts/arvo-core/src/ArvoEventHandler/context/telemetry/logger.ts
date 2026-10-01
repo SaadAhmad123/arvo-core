@@ -7,10 +7,10 @@ import {
 } from './types.js';
 
 /**
- * One delivery's logging, bound to that delivery's span.
+ * One execution's logging, bound to that execution's span.
  *
  * Every record is emitted inside the span's context, so it correlates to
- * the delivery without a caller passing context by hand. Bound at
+ * the execution without a caller passing context by hand. Bound at
  * construction rather than per call, which is what makes it a bound
  * logger rather than a logger and a span.
  *
@@ -64,12 +64,12 @@ export class ArvoExecutionContextLogger {
     this.emit(ARVO_LOG_SEVERITY.info, body, attributes);
   }
 
-  /** Something detailed, for when a delivery is being examined. */
+  /** Something detailed, for when an execution is being examined. */
   debug(body: string, attributes?: Record<string, unknown>): void {
     this.emit(ARVO_LOG_SEVERITY.debug, body, attributes);
   }
 
-  /** Something that did not stop the delivery but ought to be seen. */
+  /** Something that did not stop the execution but ought to be seen. */
   warn(body: string, attributes?: Record<string, unknown>): void {
     this.emit(ARVO_LOG_SEVERITY.warn, body, attributes);
   }

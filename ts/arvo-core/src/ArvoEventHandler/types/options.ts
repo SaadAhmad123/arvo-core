@@ -5,7 +5,7 @@ import type { ArvoExecutionState } from '../state/index.js';
 /**
  * How long to wait before another attempt, worked out per attempt.
  *
- * Given what was delivered, what the execution remembers, which attempt
+ * Given the triggering event, what the execution remembers, which attempt
  * just failed, and how many are allowed. Returns milliseconds, and must
  * not be able to fail: where it throws or returns anything that is not a
  * count of them, the protocol substitutes its own delay.

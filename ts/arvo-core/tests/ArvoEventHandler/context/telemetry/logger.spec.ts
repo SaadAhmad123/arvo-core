@@ -19,12 +19,12 @@ const spy = () => {
   return { logger, emitted };
 };
 
-const span = trace.getTracer('test').startSpan('delivery');
+const span = trace.getTracer('test').startSpan('execution');
 
 const bound = (logger: ArvoLogger | null) =>
   new ArvoExecutionContextLogger({ logger, span });
 
-describe("one delivery's logging", () => {
+describe("one execution's logging", () => {
   it('carries what it emits through, and what it correlates to', () => {
     const { logger } = spy();
     const logging = bound(logger);

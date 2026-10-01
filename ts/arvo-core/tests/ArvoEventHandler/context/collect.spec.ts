@@ -4,8 +4,8 @@ import type { ArvoEvent } from '../../../src/ArvoEvent/index.js';
 import { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/index.js';
 import type {
   ArvoContextState,
-  ArvoDeliveredEvent,
   ArvoExecutionContextParam,
+  ArvoTriggeringEvent,
 } from '../../../src/ArvoEventHandler/context/types.js';
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
@@ -25,7 +25,7 @@ import {
   telemetry,
 } from '../fixtures.js';
 
-/** What a delivery records against; these tests only carry it. */
+/** What an execution records against; these tests only carry it. */
 const { telemetry: tracing } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
@@ -50,7 +50,7 @@ const record = (
     ArvoExecutionStateParam<
       typeof orderData,
       ArvoInitEvent<Self>,
-      ArvoDeliveredEvent<Self, Services>
+      ArvoTriggeringEvent<Self, Services>
     >
   > = {},
 ): ArvoContextState<Self, Services, typeof orderData> =>
@@ -215,7 +215,7 @@ describe('a response nothing was waiting for', () => {
     expect(typeof fault.abandonmentState).toBe('string');
   });
 
-  it('is not worth another attempt, a redelivery changing nothing', async () => {
+  it('is not worth another attempt, a reexecution changing nothing', async () => {
     expect((await refused(stranger)).retry).toBeNull();
   });
 });

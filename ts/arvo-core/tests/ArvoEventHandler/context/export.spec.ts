@@ -11,7 +11,7 @@ import type {
 } from '../../../src/ArvoEventHandler/types/supplied.js';
 import { initEvent, orderVersion, services, telemetry } from '../fixtures.js';
 
-/** What a delivery records against; these tests only carry it. */
+/** What an execution records against; these tests only carry it. */
 const { telemetry: tracing } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
@@ -128,7 +128,7 @@ describe('exporting what an execution finished as', () => {
       expect((await refused()).faultKind).toBe('state_schema_rejected');
     });
 
-    it('names the delivery it happened on', async () => {
+    it('names the execution it happened on', async () => {
       const fault = await refused();
       expect(fault.subject).toBe(initEvent.subject);
       expect(fault.executionId).toBe(EXECUTION_ID);

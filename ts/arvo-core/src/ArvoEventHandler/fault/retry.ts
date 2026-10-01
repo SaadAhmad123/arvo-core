@@ -5,9 +5,9 @@ import type { ArvoRetryDelayFn } from '../types/options.js';
 import type { ArvoFaultKind, ArvoFaultRetry } from './types.js';
 
 /**
- * The kinds a redelivery could plausibly fix.
+ * The kinds a reexecution could plausibly fix.
  *
- * Every other kind is reproduced exactly by a redelivery.
+ * Every other kind is reproduced exactly by a reexecution.
  * `executor_raised` is absent deliberately: it is the one kind whose
  * verdict the vocabulary leaves to the executor.
  */
@@ -20,7 +20,7 @@ export const ARVO_RETRY_SAFE_FAULT_KINDS: ReadonlySet<ArvoFaultKind> =
     ]),
   );
 
-/** Whether a kind is one a redelivery could fix, before exhaustion. */
+/** Whether a kind is one a reexecution could fix, before exhaustion. */
 export const isRetrySafeFaultKind = (
   faultKind: ArvoFaultKind,
   executorChoice: boolean,
@@ -65,11 +65,11 @@ export type ArvoRetryVerdictParam = {
   maxRetryAttempts: number;
   /** How long to wait, fixed or worked out per attempt. */
   retryDelay: number | ArvoRetryDelayFn;
-  /** The event delivered, passed to the function form. */
+  /** The triggering event, passed to the function form. */
   event: ArvoEvent;
   /** What the execution remembers, or `null` where no record was read. */
   state: ArvoExecutionState | null;
-  /** When this delivery was processed, as ms since the Unix epoch. */
+  /** When this execution was processed, as ms since the Unix epoch. */
   timestamp: number;
 };
 

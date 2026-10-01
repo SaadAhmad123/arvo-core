@@ -132,7 +132,7 @@ const checkInFlightEvents = (value: unknown): (ErrorIssue | null)[] => {
  *
  * Shape and domain only. Whether a record agrees with the contract it names,
  * or whether its data satisfies a schema, is asked elsewhere: the first where
- * a delivery is admitted, the second by whoever holds the schema.
+ * an execution is admitted, the second by whoever holds the schema.
  */
 export const checkExecutionState = (input: unknown): ErrorIssue[] => {
   if (!isPlainObject(input)) {

@@ -12,7 +12,7 @@ import type { ArvoEventDepthValidatorParam } from './types.js';
  *
  * One threshold, exclusive, applied both when an event arrives and when
  * one is about to be emitted. Reports rather than raising a fault, holding
- * no delivery to describe one with.
+ * no execution to describe one with.
  *
  * @example
  * ```typescript

@@ -27,7 +27,7 @@ import type {
 } from './types.js';
 
 /**
- * An executor's context for a delivery that opens an execution.
+ * An executor's context for an execution that opens an execution.
  *
  * There is no stored record, so one is built. The workflow, the depth and
  * what is implemented are read off the event and the contracts. The
@@ -123,13 +123,13 @@ export const createInitArvoExecutionContext = <
 };
 
 /**
- * An executor's context for a delivery that answers something an execution
+ * An executor's context for an execution that answers something an execution
  * was waiting for.
  *
  * The record answers everything opening one had to be told, so only the
  * row and the execution it must name are supplied. The event log and what
  * is awaited are left as stored. The one field replaced is the event that
- * caused this delivery; the stored one belongs to the delivery before.
+ * caused this execution; the stored one belongs to the execution before.
  *
  * @example
  * ```typescript
@@ -182,7 +182,7 @@ export const createFollowupArvoExecutionContext = async <
         new ArvoExecutionStateValidationError([
           new ErrorIssue({
             path: 'executionId',
-            message: `does not name the execution this delivery is for, ${param.executionId} — the wrong record was read`,
+            message: `does not name the execution this execution is for, ${param.executionId} — the wrong record was read`,
             received: stored.value.executionId,
           }),
         ]),

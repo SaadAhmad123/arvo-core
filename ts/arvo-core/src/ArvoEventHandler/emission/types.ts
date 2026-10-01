@@ -104,6 +104,6 @@ export type ArvoEmissionContext<
   services: TServices;
   /** The execution the event is emitted from. */
   state: ArvoExecutionState;
-  /** The delivery's tracing, which every emitted event descends from. */
+  /** The execution's tracing, which every emitted event descends from. */
   telemetry: ArvoExecutionContextTelemetry;
 };

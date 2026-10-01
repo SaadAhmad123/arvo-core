@@ -1,5 +1,5 @@
 /**
- * Every way a delivery can fail to be carried through.
+ * Every way an execution can fail to be carried through.
  *
  * Fixed, and the whole of the vocabulary: a mechanism reads this to decide
  * what to do without parsing a message. Which of these may be retried is a
@@ -24,7 +24,7 @@ export type ArvoFaultKind =
   | 'event_schema_rejected'
   | 'response_unawaited'
   | 'dependency_resolution_failed'
-  // a declaration that reached a delivery
+  // a declaration that reached an execution
   | 'service_version_conflict'
   // the executor
   | 'run_timeout'
@@ -56,7 +56,7 @@ export type ArvoFaultRetry = {
 /**
  * What a fault is built from.
  *
- * No field is optional. A fault is raised by code that knows the delivery it
+ * No field is optional. A fault is raised by code that knows the execution it
  * happened on, and an omitted field would mean nobody decided rather than
  * that there was nothing to say. Where there is nothing to say, say `null`.
  */
@@ -70,16 +70,16 @@ export type ArvoHandlerFaultParam = {
   /** Every check that failed, not only the first. Empty where none was collected. */
   violations: readonly string[];
 
-  /** The workflow this delivery belonged to. */
+  /** The workflow this execution belonged to. */
   subject: string;
-  /** The execution this delivery concerned, or `null` where none was resolved. */
+  /** The execution this execution concerned, or `null` where none was resolved. */
   executionId: string | null;
-  /** The delivered event's id. */
+  /** The event that caused it's id. */
   eventId: string;
 
-  /** Which attempt this delivery was, counting from 0. */
+  /** Which attempt this execution was, counting from 0. */
   attempt: number;
-  /** When this delivery was processed, as ms since the Unix epoch. */
+  /** When this execution was processed, as ms since the Unix epoch. */
   timestamp: number;
   /** When another attempt is due, or `null` where none is in prospect. */
   retry: ArvoFaultRetry | null;

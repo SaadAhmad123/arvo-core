@@ -11,7 +11,7 @@ describe('the identifier an init event opens an execution under', () => {
     expect(await deriveArvoExecutionId(initEvent)).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('is the same every time, so a redelivery resolves to the same execution', async () => {
+  it('is the same every time, so a reexecution resolves to the same execution', async () => {
     const once = await deriveArvoExecutionId(initEvent);
     const again = await deriveArvoExecutionId(initEvent);
     expect(again).toBe(once);

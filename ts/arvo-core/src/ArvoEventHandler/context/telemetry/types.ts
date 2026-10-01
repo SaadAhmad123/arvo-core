@@ -39,7 +39,7 @@ export type ArvoLogger = {
   emit(record: ArvoLogRecord): void;
 };
 
-/** What a delivery's metering is built from. */
+/** What an execution's metering is built from. */
 export type ArvoExecutionContextMeterParam = {
   /**
    * The meter instruments are created on, or `null` where nothing is
@@ -49,7 +49,7 @@ export type ArvoExecutionContextMeterParam = {
   meter: Meter | null;
 };
 
-/** What a delivery's logging is built from. */
+/** What an execution's logging is built from. */
 export type ArvoExecutionContextLoggerParam = {
   /**
    * What records are emitted through, or `null` where nothing is
@@ -61,16 +61,16 @@ export type ArvoExecutionContextLoggerParam = {
   span: Span;
 };
 
-/** What a delivery's telemetry is built from. */
+/** What an execution's telemetry is built from. */
 export type ArvoExecutionContextTelemetryParam = {
   /**
-   * This delivery's span, started and ended outside the handler. Carried,
+   * This execution's span, started and ended outside the handler. Carried,
    * never created here: this package uses the OpenTelemetry API and
    * configures no backend.
    */
   span: Span;
   /** The meter this handler's instruments are created on. */
   meter: Meter;
-  /** What this delivery's log records are emitted through. */
+  /** What this execution's log records are emitted through. */
   logger: ArvoLogger;
 };

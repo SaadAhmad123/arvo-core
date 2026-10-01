@@ -22,7 +22,7 @@ const verdict = (overrides: Partial<ArvoRetryVerdictParam> = {}) =>
     ...overrides,
   });
 
-describe('which faults a redelivery could fix', () => {
+describe('which faults a reexecution could fix', () => {
   it.each([
     'state_resolution_failed',
     'dependency_resolution_failed',

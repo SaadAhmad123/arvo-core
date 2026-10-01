@@ -1,6 +1,11 @@
+import type * as z from 'zod/v4/core';
+import type { ArvoEvent } from '../../ArvoEvent/index.js';
+import type { PromiseAble } from '../../types.js';
+import type { ArvoExecutionState } from '../state/index.js';
+
 /**
  * Whatever a handler's executors are given to work with. Supplied per
- * delivery by whatever runs the handler, never stored, and never part of
+ * execution by whatever runs the handler, never stored, and never part of
  * the model.
  *
  * TypeScript gives a `type` alias an implicit index signature and does not
@@ -30,7 +35,7 @@ export type ArvoNone = Record<never, never>;
  *
  * Read by nothing and stored by nothing. It exists because neither
  * dependencies nor hooks are part of a declaration — both arrive per
- * delivery — so there is no value for TypeScript to infer their types
+ * execution — so there is no value for TypeScript to infer their types
  * from. Naming them here is the only way an executor's `ctx.dependencies`
  * and `ctx.hooks` are anything but `any`.
  *
@@ -59,3 +64,25 @@ export type ArvoDeclaredTypes<
   /** What an executor finds on `ctx.hooks`. */
   mechanismHooks: TMechanismHooks;
 }>;
+
+/**
+ * How dependencies reach an executor: a value used as given, or a factory
+ * called exactly once for the execution.
+ *
+ * The factory form is what makes a cancellation signal readable, since it
+ * is handed the event and the record and can consult whatever the
+ * application maintains before the executor runs.
+ */
+export type ArvoDependencyResolver<
+  TDependencies extends ArvoDependencies,
+  TDataSchema extends z.$ZodObject,
+> =
+  | TDependencies
+  | ((param: {
+      /** The event that caused this execution. */
+      event: ArvoEvent;
+      /** What the execution remembers, or `null` where it has no record. */
+      state: ArvoExecutionState<TDataSchema> | null;
+      /** Which attempt this is, counting from 0. */
+      attempt: number;
+    }) => PromiseAble<TDependencies>);

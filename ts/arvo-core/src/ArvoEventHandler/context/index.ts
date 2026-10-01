@@ -30,16 +30,16 @@ import type {
 } from './types.js';
 
 /**
- * Everything an executor can know and do, for one delivery.
+ * Everything an executor can know and do, for one execution.
  *
- * What the execution knows — the delivered event, the event that opened it,
+ * What the execution knows — the event that caused it, the event that opened it,
  * where it rests, what it is waiting on — is read through {@link state}.
  * The context itself carries only what the record does not.
  *
- * Valid for the delivery it was built for. One kept past that describes a
- * delivery already over.
+ * Valid for the execution it was built for. One kept past that describes a
+ * execution already over.
  *
- * Built by the version running the delivery, through
+ * Built by the version running the execution, through
  * {@link createInitArvoExecutionContext} or
  * {@link createFollowupArvoExecutionContext}, and handed to an executor as
  * its only argument. Never constructed by hand.
@@ -48,7 +48,7 @@ import type {
  * ```typescript
  * declare const ctx: ArvoExecutionContext;
  *
- * ctx.state.triggeringEvent.type;  // what caused this delivery
+ * ctx.state.triggeringEvent.type;  // what caused this execution
  * ctx.state.initEvent.data.items;  // what opened the execution
  * ctx.entry;                       // 'init' | 'followup'
  *
@@ -70,10 +70,10 @@ export class ArvoExecutionContext<
     readonly services: Readonly<TServices>;
   };
 
-  /** Whether this delivery opened the execution or answers something it awaited. */
+  /** Whether this execution opened the execution or answers something it awaited. */
   readonly entry: ArvoEntryKind;
 
-  /** Which attempt this delivery is, counting from 0. */
+  /** Which attempt this execution is, counting from 0. */
   readonly attempt: number;
 
   /** The options in force for this version, every one of them settled. */
@@ -82,13 +82,13 @@ export class ArvoExecutionContext<
   /** The schema every write to this execution's data is checked against. */
   readonly dataSchema: TDataSchema;
 
-  /** What this delivery was given to work with, or empty where none was declared. */
+  /** What this execution was given to work with, or empty where none was declared. */
   readonly dependencies: TDependencies;
 
   /** What the mechanism running this handler exposed, or empty where it exposed none. */
   readonly hooks: TMechanismHooks;
 
-  /** This delivery's telemetry object */
+  /** This execution's telemetry object */
   readonly telemetry: ArvoExecutionContextTelemetry;
 
   /**
@@ -402,13 +402,13 @@ export class ArvoExecutionContext<
   }
 
   /**
-   * A fault about this delivery, ready to throw.
+   * A fault about this execution, ready to throw.
    *
-   * Built, not thrown. The delivery is filled in from the record, so say
+   * Built, not thrown. The execution is filled in from the record, so say
    * only what went wrong. The pair a mechanism would abandon this
    * execution with is built with it, and neither half is acted on here.
    *
-   * Recorded on the delivery span as it is built. A fault writes no
+   * Recorded on the execution span as it is built. A fault writes no
    * record, so the trace may be the only place a retried-away failure is
    * ever visible.
    *

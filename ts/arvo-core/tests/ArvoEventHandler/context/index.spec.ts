@@ -4,8 +4,8 @@ import type { ArvoEvent } from '../../../src/ArvoEvent/index.js';
 import { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/index.js';
 import type {
   ArvoContextState,
-  ArvoDeliveredEvent,
   ArvoExecutionContextParam,
+  ArvoTriggeringEvent,
 } from '../../../src/ArvoEventHandler/context/types.js';
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
@@ -26,7 +26,7 @@ import {
 } from '../fixtures.js';
 
 /** What a version declares when it remembers something specific. */
-/** What a delivery records against; these tests only carry it. */
+/** What an execution records against; these tests only carry it. */
 const { telemetry: tracing, span, meter } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
@@ -44,20 +44,20 @@ const withDefault = z.object({
 type Self = typeof orderVersion;
 type Services = typeof services;
 
-/** The record a delivery arrives with, varied per test. */
+/** The record an execution arrives with, varied per test. */
 const record = <TData extends z.core.$ZodObject = typeof orderData>(
   overrides: Partial<
     ArvoExecutionStateParam<
       TData,
       ArvoInitEvent<Self>,
-      ArvoDeliveredEvent<Self, Services>
+      ArvoTriggeringEvent<Self, Services>
     >
   > = {},
 ): ArvoContextState<Self, Services, TData> =>
   new ArvoExecutionState<
     TData,
     ArvoInitEvent<Self>,
-    ArvoDeliveredEvent<Self, Services>
+    ArvoTriggeringEvent<Self, Services>
   >({
     data: null,
     subject: initEvent.subject,
@@ -155,8 +155,8 @@ describe('ArvoExecutionContext', async () => {
     });
   });
 
-  describe('the delivery it describes', () => {
-    it('says how the delivery was classified', () => {
+  describe('the execution it describes', () => {
+    it('says how the execution was classified', () => {
       expect(onInit().entry).toBe('init');
       expect(onFollowup().entry).toBe('followup');
     });
@@ -166,8 +166,8 @@ describe('ArvoExecutionContext', async () => {
     });
   });
 
-  describe('reading the delivery through what is remembered', () => {
-    it('reaches the delivered event there', () => {
+  describe('reading the execution through what is remembered', () => {
+    it('reaches the triggering event there', () => {
       expect(onFollowup().state.triggeringEvent).toBe(chargedEvent);
     });
 
@@ -182,7 +182,7 @@ describe('ArvoExecutionContext', async () => {
       expect(onFollowup().state.initEvent).toBe(initEvent);
     });
 
-    it('finds one event as both on an init delivery', () => {
+    it('finds one event as both on an init execution', () => {
       const ctx = onInit();
       expect(ctx.state.triggeringEvent).toBe(ctx.state.initEvent);
     });
@@ -225,7 +225,7 @@ describe('ArvoExecutionContext', async () => {
   });
 
   describe('what the mechanism supplied', () => {
-    it('carries the dependencies resolved for this delivery', () => {
+    it('carries the dependencies resolved for this execution', () => {
       const db = { find: () => 'x' };
       expect(onInit({ dependencies: { db } }).dependencies.db).toBe(db);
     });
@@ -374,7 +374,7 @@ describe('ArvoExecutionContext', async () => {
       expect((await rejected()).violations.length).toBeGreaterThan(1);
     });
 
-    it('names the delivery it happened on', async () => {
+    it('names the execution it happened on', async () => {
       const fault = await rejected();
       expect(fault.subject).toBe(initEvent.subject);
       expect(fault.eventId).toBe(initEvent.id);
@@ -543,7 +543,7 @@ describe('ArvoExecutionContext', async () => {
       }).toThrow();
     });
 
-    it('exposes nothing beyond what a delivery gives it', () => {
+    it('exposes nothing beyond what an execution gives it', () => {
       expect(Object.keys(onInit()).sort()).toEqual([
         'atMaxDepth',
         'attempt',
@@ -577,7 +577,7 @@ describe('ArvoExecutionContext', async () => {
       expect(fault.message).toBe('the payment gateway refused the charge');
     });
 
-    it('fills in the delivery, so an executor says only what failed', async () => {
+    it('fills in the execution, so an executor says only what failed', async () => {
       const fault = await raised();
       expect(fault.subject).toBe(initEvent.subject);
       expect(fault.executionId).toBe(initEvent.executionid);

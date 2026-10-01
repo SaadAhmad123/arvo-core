@@ -32,7 +32,7 @@ import { checkExecutionState, isPlainObject } from './validator.js';
  * ```typescript
  * const state = ArvoExecutionState.build(row, orderData);
  * state.data;                    // what was last written, or null
- * state.triggeringEvent.type;    // what caused the delivery being processed
+ * state.triggeringEvent.type;    // what caused the execution being processed
  * state.inFlightEventMap.size;   // how many answers are still awaited
  * ```
  */
@@ -75,7 +75,7 @@ export class ArvoExecutionState<
   /** The event that opened this execution. */
   readonly initEvent: TInitEvent;
 
-  /** The event that caused the delivery being processed. */
+  /** The event that caused the execution being processed. */
   readonly triggeringEvent: TTriggeringEvent;
 
   /** Every event this execution has handled, in the order it handled them. */
@@ -126,7 +126,7 @@ export class ArvoExecutionState<
 
   /**
    * Whether this execution is finished, at one of the four lifecycles it
-   * rests at for good. Nothing further is delivered to one that is.
+   * rests at for good. Nothing further reaches one that is.
    */
   get isTerminal(): boolean {
     return ARVO_TERMINAL_LIFECYCLES.includes(

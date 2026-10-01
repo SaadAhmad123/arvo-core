@@ -12,7 +12,7 @@ import { ARVO_DEFAULT_SPAN_ERROR, ARVO_TELEMETRY_PREFIX } from './prefix.js';
 import type { ArvoExecutionContextTelemetryParam } from './types.js';
 
 /**
- * One delivery's telemetry: its span, its metering, and its logging.
+ * One execution's telemetry: its span, its metering, and its logging.
  *
  * The span's own helpers are here; counters and histograms are on
  * {@link metric}, and log records on {@link logger}. Every event the
@@ -32,13 +32,13 @@ import type { ArvoExecutionContextTelemetryParam } from './types.js';
  * ```
  */
 export class ArvoExecutionContextTelemetry {
-  /** This delivery's span. Started and ended outside, so do neither here. */
+  /** This execution's span. Started and ended outside, so do neither here. */
   readonly span: Span;
 
   /** Counters and histograms for this handler. */
   readonly metric: ArvoExecutionContextMeter;
 
-  /** Log records correlated to this delivery. */
+  /** Log records correlated to this execution. */
   readonly logger: ArvoExecutionContextLogger;
 
   /** @param param - The span, the meter, and what to log through. */
@@ -72,7 +72,7 @@ export class ArvoExecutionContextTelemetry {
   }
 
   /**
-   * Attributes on this delivery's span, every name prefixed.
+   * Attributes on this execution's span, every name prefixed.
    *
    * @param attributes - What to record, by name.
    */
@@ -88,7 +88,7 @@ export class ArvoExecutionContextTelemetry {
   }
 
   /**
-   * Something that happened during this delivery, on its span.
+   * Something that happened during this execution, on its span.
    *
    * @param name - What happened, prefixed for you.
    * @param attributes - Whatever else is worth knowing.
@@ -98,9 +98,9 @@ export class ArvoExecutionContextTelemetry {
   }
 
   /**
-   * Marks this delivery's span succeeded.
+   * Marks this execution's span succeeded.
    *
-   * Set it where the delivery is carried through. A span left unset reads
+   * Set it where the execution is carried through. A span left unset reads
    * as neither, which a backend cannot tell from one nobody judged.
    */
   setSpanOk(): void {
@@ -108,7 +108,7 @@ export class ArvoExecutionContextTelemetry {
   }
 
   /**
-   * Marks this delivery's span failed, with a reason.
+   * Marks this execution's span failed, with a reason.
    *
    * @param message - Why it failed. Defaults to something generic, which
    * is worth replacing: the status is often all a reader has.

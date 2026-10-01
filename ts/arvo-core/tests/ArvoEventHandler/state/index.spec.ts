@@ -57,7 +57,7 @@ describe('ArvoExecutionState', () => {
       expect(build().lifecycleDescription).toBeNull();
     });
 
-    it('carries the event that opened it and the one that caused this delivery', () => {
+    it('carries the event that opened it and the one that caused this execution', () => {
       const state = build({ triggeringEvent: chargedEvent });
       expect(state.initEvent).toBe(initEvent);
       expect(state.triggeringEvent).toBe(chargedEvent);

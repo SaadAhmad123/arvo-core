@@ -4,8 +4,8 @@ import type { ArvoEvent } from '../../../src/ArvoEvent/index.js';
 import { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/index.js';
 import type {
   ArvoContextState,
-  ArvoDeliveredEvent,
   ArvoExecutionContextParam,
+  ArvoTriggeringEvent,
 } from '../../../src/ArvoEventHandler/context/types.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
 import { ArvoExecutionState } from '../../../src/ArvoEventHandler/state/index.js';
@@ -34,7 +34,7 @@ const record = (
     ArvoExecutionStateParam<
       typeof orderData,
       ArvoInitEvent<Self>,
-      ArvoDeliveredEvent<Self, Services>
+      ArvoTriggeringEvent<Self, Services>
     >
   > = {},
 ): ArvoContextState<Self, Services, typeof orderData> =>

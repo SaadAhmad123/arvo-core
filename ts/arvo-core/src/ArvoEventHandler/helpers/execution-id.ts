@@ -6,15 +6,15 @@ const EXECUTION_ID_LENGTH = 64;
 /**
  * The identifier of the execution an init event opens.
  *
- * Derived, not minted, so a redelivered init event resolves to the
- * execution the first delivery opened rather than forking a new one.
- * Derive once, when an execution is entered; on every later delivery the
+ * Derived, not minted, so an init event arriving twice resolves to the
+ * execution the first execution opened rather than forking a new one.
+ * Derive once, when an execution is entered; on every later execution the
  * identifier is read off the record.
  *
  * SHA-256 over the UTF-8 bytes of `dataschema`, the byte `0x00`, then the
  * UTF-8 bytes of `id`, as 64 lowercase hex characters. Every part of that
  * is fixed, and two implementations differing on any of it fork an
- * execution on every redelivery.
+ * execution on every reexecution.
  *
  * @param initEvent - The event opening the execution.
  *

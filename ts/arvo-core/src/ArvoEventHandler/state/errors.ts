@@ -8,7 +8,7 @@ import {
  * a field of the wrong type, a lifecycle outside the six, a negative depth,
  * an event that is not an event.
  *
- * Never means a delivery failed — that is an `ArvoHandlerFault`. The
+ * Never means an execution failed — that is an `ArvoHandlerFault`. The
  * message names every rule broken; {@link issues} carries the same
  * individually.
  */

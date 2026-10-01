@@ -6,10 +6,10 @@ import type {
 } from './types.js';
 
 /**
- * Why a delivery could not be carried through.
+ * Why an execution could not be carried through.
  *
  * Not a failure of the work — that reaches a caller as the contract's
- * handler error event. This says the delivery could not be trusted to a
+ * handler error event. This says the execution could not be trusted to a
  * conclusion, so nothing is emitted and no record is written.
  *
  * An `Error`, and every field survives JSON, for whatever stores it.
@@ -17,7 +17,7 @@ import type {
  * @example
  * ```typescript
  * try {
- *   await deliver(event);
+ *   await handler.execute({ event });
  * } catch (raised) {
  *   if (raised instanceof ArvoHandlerFault) {
  *     raised.faultKind;        // what to do, without reading the message
@@ -40,19 +40,19 @@ export class ArvoHandlerFault extends Error {
   /** Every check that failed, not only the first. */
   readonly violations: readonly string[];
 
-  /** The workflow this delivery belonged to. */
+  /** The workflow this execution belonged to. */
   readonly subject: string;
 
-  /** The execution this delivery concerned, or `null` where none was resolved. */
+  /** The execution this execution concerned, or `null` where none was resolved. */
   readonly executionId: string | null;
 
-  /** The delivered event's id. */
+  /** The event that caused it's id. */
   readonly eventId: string;
 
-  /** Which attempt this delivery was, counting from 0. */
+  /** Which attempt this execution was, counting from 0. */
   readonly attempt: number;
 
-  /** When this delivery was processed, as ms since the Unix epoch. */
+  /** When this execution was processed, as ms since the Unix epoch. */
   readonly timestamp: number;
 
   /** When another attempt is due, or `null` where none is in prospect. */
@@ -60,7 +60,7 @@ export class ArvoHandlerFault extends Error {
 
   /**
    * The event to publish if this execution is abandoned, written out, or
-   * `null` where the delivery could address nothing. Not acted on by
+   * `null` where the execution could address nothing. Not acted on by
    * raising the fault.
    */
   readonly abandonmentEvent: string | null;

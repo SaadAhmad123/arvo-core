@@ -14,32 +14,33 @@ import type {
 import type { ArvoExecutionContextTelemetry } from './telemetry/index.js';
 
 /**
- * How a delivery was classified before an executor was entered.
+ * How an execution was classified before an executor was entered.
  *
  * `init` opened the execution; `followup` answers something it was waiting
- * for. Which one it is decides what the delivery can possibly carry, so it
+ * for. Which one it is decides what the execution can possibly carry, so it
  * is a type parameter and not only a value.
  */
 export type ArvoEntryKind = 'init' | 'followup';
 
 /**
- * Anything one delivery can carry: the event this version takes in, or
- * whatever a declared service answered with, its handler error included.
+ * Anything that can trigger an execution of this version: the event it
+ * takes in, or whatever a declared service answered with, its handler
+ * error included.
  *
  * Narrow on `type` to reach the exact payload. No two members share one,
  * the collision rule refusing that at declaration.
  */
-export type ArvoDeliveredEvent<
+export type ArvoTriggeringEvent<
   TSelf extends VersionedArvoContract,
   TServices extends ArvoServiceMap,
 > = ArvoInitEvent<TSelf> | ArvoAnyServiceResponse<TServices>;
 
 /**
- * What an execution remembers, typed by the contracts this delivery is
+ * What an execution remembers, typed by the contracts this execution is
  * bound to.
  *
  * The record's two events are the ones this version can actually hold: the
- * event that opened the execution, and whatever this delivery classified
+ * event that opened the execution, and whatever this execution classified
  * as.
  */
 export type ArvoContextState<
@@ -49,7 +50,7 @@ export type ArvoContextState<
 > = ArvoExecutionState<
   TDataSchema,
   ArvoInitEvent<TSelf>,
-  ArvoDeliveredEvent<TSelf, TServices>
+  ArvoTriggeringEvent<TSelf, TServices>
 >;
 
 /**
@@ -65,10 +66,10 @@ export type ArvoDataWrite<TDataSchema extends z.$ZodObject> =
   | ((current: z.output<TDataSchema> | null) => z.input<TDataSchema>);
 
 /**
- * Everything one delivery hands an executor's context.
+ * Everything one execution hands an executor's context.
  *
- * No field is optional. A context is built once per delivery, and anything
- * it could default is something the delivery already knows, so defaulting
+ * No field is optional. A context is built once per execution, and anything
+ * it could default is something the execution already knows, so defaulting
  * here would only hide a caller that forgot to say.
  */
 export type ArvoExecutionContextParam<
@@ -90,15 +91,15 @@ export type ArvoExecutionContextParam<
     self: TSelf;
     services: TServices;
   };
-  /** What this execution remembers, as it stood when this delivery arrived. */
+  /** What this execution remembers, as it stood when this execution arrived. */
   state: ArvoContextState<TSelf, TServices, TDataSchema>;
   /** The schema this execution's data is checked against, on every write. */
   dataSchema: TDataSchema;
   /** The options in force for this version. */
   options: ArvoEventHandlerOptions;
-  /** How this delivery was classified. */
+  /** How this execution was classified. */
   entry: ArvoEntryKind;
-  /** Which attempt this delivery is, counting from 0. */
+  /** Which attempt this execution is, counting from 0. */
   attempt: number;
   /**
    * This execution's telemetry, built once by whatever runs the handler
@@ -106,13 +107,13 @@ export type ArvoExecutionContextParam<
    * assembled here.
    */
   telemetry: ArvoExecutionContextTelemetry;
-  /** What this delivery's executor is given to work with. */
+  /** What this execution's executor is given to work with. */
   dependencies: TDependencies;
   /** What the mechanism running this handler exposes to an executor. */
   hooks: TMechanismHooks;
 };
 
-/** What both context factories need, whichever way the delivery arrived. */
+/** What both context factories need, whichever way the execution arrived. */
 type ArvoContextFactoryCommon<
   TSelf extends VersionedArvoContract,
   TServices extends ArvoServiceMap,
@@ -124,13 +125,13 @@ type ArvoContextFactoryCommon<
   contracts: { self: TSelf; services: TServices };
   /** The schema governing this version's data. */
   dataSchema: TDataSchema;
-  /** Which attempt this delivery is, counting from 0. */
+  /** Which attempt this execution is, counting from 0. */
   attempt: number;
   /** This execution's telemetry, built once by whatever runs the handler. */
   telemetry: ArvoExecutionContextTelemetry;
   /** The options in force for this version, every one of them settled. */
   options: ArvoEventHandlerOptions;
-  /** What this delivery's executor is given to work with. */
+  /** What this execution's executor is given to work with. */
   dependencies: TDependencies;
   /** What the mechanism running this handler exposes to an executor. */
   hooks: TMechanismHooks;
@@ -193,7 +194,7 @@ export type ArvoFollowupContextParam<
   /** The record as it was stored. */
   state: string;
   /**
-   * The execution this delivery is for, checked against the record read
+   * The execution this execution is for, checked against the record read
    * back. A mismatch means the wrong record was fetched, which is worth
    * catching rather than running against.
    */

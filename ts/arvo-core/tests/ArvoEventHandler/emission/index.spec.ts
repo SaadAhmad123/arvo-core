@@ -12,7 +12,7 @@ import {
   telemetry,
 } from '../fixtures.js';
 
-/** What a delivery records against; these tests only carry it. */
+/** What an execution records against; these tests only carry it. */
 const { telemetry: tracing } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
@@ -123,7 +123,7 @@ describe('building an event to emit', async () => {
       expect((await toCaller()).source).toBe(orderVersion.type);
     });
 
-    it('names the event that caused this delivery as its parent', async () => {
+    it('names the event that caused it as its parent', async () => {
       expect((await toService()).parentid).toBe(initEvent.id);
       expect((await toCaller()).parentid).toBe(initEvent.id);
     });

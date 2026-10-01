@@ -78,7 +78,7 @@ const fault = () =>
     abandonmentState: null,
   });
 
-describe("one delivery's telemetry", () => {
+describe("one execution's telemetry", () => {
   it('carries the span it was given, unchanged', () => {
     const { span } = spy();
     expect(built(span).span).toBe(span);
@@ -123,7 +123,7 @@ describe("one delivery's telemetry", () => {
   describe('a span that records nothing', () => {
     // With no SDK configured the API returns a span whose context is empty.
     const telemetry = () =>
-      built(trace.getTracer('test').startSpan('delivery'));
+      built(trace.getTracer('test').startSpan('execution'));
 
     it('says so', () => {
       expect(telemetry().isRecording).toBe(false);
@@ -159,7 +159,7 @@ describe("one delivery's telemetry", () => {
     });
   });
 
-  describe('something that happened during the delivery', () => {
+  describe('something that happened during the execution', () => {
     it('reaches the span as an event', () => {
       const watched = spy();
       built(watched.span).addEvent('charged', { receipt: 'r-1' });
@@ -176,7 +176,7 @@ describe("one delivery's telemetry", () => {
     });
   });
 
-  describe('marking how the delivery went', () => {
+  describe('marking how the execution went', () => {
     it('says it succeeded', () => {
       const watched = spy();
       built(watched.span).setSpanOk();
@@ -197,7 +197,7 @@ describe("one delivery's telemetry", () => {
       built(watched.span).setSpanError();
       expect(watched.statuses[0]).toEqual({
         code: SpanStatusCode.ERROR,
-        message: 'the delivery did not succeed',
+        message: 'the execution did not succeed',
       });
     });
   });
@@ -270,7 +270,7 @@ describe("one delivery's telemetry", () => {
       );
     });
 
-    it('names the delivery in that log, where cardinality costs nothing', () => {
+    it('names the execution in that log, where cardinality costs nothing', () => {
       const watched = watching(spy().span);
       watched.telemetry.recordFault(fault());
       expect(watched.logged[0]?.attributes).toEqual({

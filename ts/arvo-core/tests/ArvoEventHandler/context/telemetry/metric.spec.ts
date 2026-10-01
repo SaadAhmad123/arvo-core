@@ -25,7 +25,7 @@ const spy = () => {
   return { meter, created, recorded };
 };
 
-describe("one delivery's metering", () => {
+describe("one execution's metering", () => {
   it('carries the meter it was given', () => {
     const { meter } = spy();
     expect(new ArvoExecutionContextMeter({ meter }).meter).toBe(meter);

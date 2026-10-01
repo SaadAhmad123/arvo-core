@@ -10,7 +10,7 @@ const NO_OP_HISTOGRAM: Histogram = { record: () => undefined };
 import type { ArvoExecutionContextMeterParam } from './types.js';
 
 /**
- * One delivery's metering.
+ * One execution's metering.
  *
  * Instruments are created once per name and reused, because creating two
  * with one name is a mistake every metrics backend reports differently.
