@@ -1,6 +1,7 @@
 import { metrics, trace } from '@opentelemetry/api';
 import { z } from 'zod';
 import { ArvoContract } from '../../src/ArvoContract/index.js';
+import { ArvoExecutionContextTelemetry } from '../../src/ArvoEventHandler/context/telemetry/index.js';
 import { createArvoEventFactory } from '../../src/factories/ArvoEventFactory/index.js';
 
 /** What the handler under test implements. */
@@ -55,16 +56,20 @@ export const paymentFailedEvent = createArvoEventFactory(
   error: new Error('card declined'),
 });
 
-/** What a delivery is given to record against, for a test that only carries it. */
+/** What one execution records against, for a test that only carries it. */
 export const telemetry = () => {
   const emitted: { severityNumber: number; body: string }[] = [];
+  const span = trace.getTracer('test').startSpan('execution');
+  const meter = metrics.getMeter('test');
+  const logger = {
+    emit: (record: { severityNumber: number; body: string }) =>
+      emitted.push(record),
+  };
   return {
-    span: trace.getTracer('test').startSpan('delivery'),
-    meter: metrics.getMeter('test'),
-    logger: {
-      emit: (record: { severityNumber: number; body: string }) =>
-        emitted.push(record),
-    },
+    telemetry: new ArvoExecutionContextTelemetry({ span, meter, logger }),
+    span,
+    meter,
+    logger,
     emitted,
   };
 };

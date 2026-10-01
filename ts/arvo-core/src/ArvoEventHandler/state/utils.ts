@@ -60,7 +60,6 @@ export const tryMutateState = <TState extends ArvoExecutionState>(
           inFlightEventMap: current.inFlightEventMap,
           recordFormatVersion: current.recordFormatVersion,
           casVersion: current.casVersion,
-          contracts: current.contracts,
           ...next,
         }) as TState,
       ),

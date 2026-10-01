@@ -62,14 +62,6 @@ describe('ArvoExecutionStateSerializer', () => {
       ]);
     });
 
-    it('gives back the contracts snapshot', async () => {
-      const before = buildState();
-      const after = await serializer.deserialize(
-        await serializer.serialize(before),
-      );
-      expect(after.contracts).toEqual(before.contracts);
-    });
-
     it('gives back a record, not the plain object it was stored as', async () => {
       const after = await serializer.deserialize(
         await serializer.serialize(buildState()),

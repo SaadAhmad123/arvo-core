@@ -6,7 +6,7 @@ import {
   mutateState,
   tryMutateState,
 } from '../../../src/ArvoEventHandler/state/utils.js';
-import { chargedEvent, initEvent, orderContract } from '../fixtures.js';
+import { chargedEvent, initEvent } from '../fixtures.js';
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
@@ -26,10 +26,6 @@ const before = new ArvoExecutionState<typeof orderData>({
   inFlightEventMap: new Map([['emitted-1', chargedEvent]]),
   recordFormatVersion: '1.0.0',
   casVersion: 3,
-  contracts: {
-    self: { uri: orderContract.uri, type: orderContract.type },
-    services: [],
-  },
 });
 
 /** Every field a record holds, for asserting what was carried across. */

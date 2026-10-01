@@ -34,9 +34,14 @@ Both were separate changes until the context needed them. Tests first, as every 
 
 **Deferred, and named so it is not lost:** `retry` on `ctx.fault` is the whole `ArvoFaultRetry` block today, because the version's resolved options are not on the context yet and nothing here can work out when the next attempt is due. Once they are, this becomes a boolean and the context does the arithmetic.
 
-## 1b. What the context still owes ADR-006
+- [x] 1a.8 Add three readers to `ArvoExecutionState`, each logic a version would otherwise repeat at every delivery: `isTerminal` against `ARVO_TERMINAL_LIFECYCLES`, the four places an execution rests for good; `isCollectionComplete`, true where nothing awaited is still unanswered, which is the join decision under the default `collect`; and `identity`, the five fields grouped, which is the shape ADR-006's context table names as one member.
+- [x] 1a.9 Remove the record's `contracts` snapshot. Nothing in the protocol read it, it is derivable from the declaration, and it was the only field no delivery could check, so a wrong one could rot for the whole life of an execution. **Recorded as ADR-007 Addendum 1**, which argues the case and states the exemption from that ADR's no-removal rule: removal reinterprets stored records, and none exists.
 
-Four members ADR-006's context table requires that the first cut left out. They were staged across later changes; they are pulled forward because each is small, each is fully specified already, and a context missing them is not the object the ADR describes.
+## 1b. The rest of the context
+
+Everything ADR-006's context table requires that the first cut left out. These were staged across later changes; they are here because each one deferred would have meant a context built against a placeholder, which is the one thing the inward-out ordering exists to prevent.
+
+**The context is complete after this section.** Every member of that table is on it. What the plan still defers is the handler around it — see `proposal.md` — The plan.
 
 - [x] 1b.1 The event builder. `src/ArvoEventHandler/emission/`, reached as `ctx.build`. From a type and a payload it produces an event with every default in ADR-006's *The complete field defaults* already set, the role decided by whether the type names a declared service's input or one of this version's own outputs. It refuses a type this version may not emit and refuses the handler error type outright. The two safe fields are ordinary arguments; the unsafe set is reachable only through a group named as such, per *What an executor may set*.
 - [x] 1b.2 `ctx.atMaxDepth`, true exactly when `state.depth + 1` would reach the version's maximum, which is the threshold ADR-009, *Checked twice* gives the return check. Reading it is how an executor avoids `max_depth_event_requested` rather than discovering it.
@@ -48,11 +53,11 @@ Four members ADR-006's context table requires that the first cut left out. They 
 - [x] 1b.5 `ctx.collect(event)`, recording a service response against the request it answers, keyed by the response's `initid` as ADR-010 matches them. Refuses all three of ADR-009's *A response is processed only if awaited* cases as `response_unawaited`: no request named, a request never awaited, and one already answered. Asynchronous, a fault being built. Used by the gate later, and by an executor entered on each response in the meantime.
 
 - [x] 1b.7 Add `ctx.markEventReceived(event)` and `ctx.markEventEmitted(event)`, appending to the record's event log with the direction. Named for the log they write rather than for logging, which in this package means telemetry. Idempotent: an event `id` is unique across the ecosystem, so a second appearance is the same event and a log holding it twice would claim the execution handled two. `collect` uses the received one.
-- [x] 1b.8 Add `src/ArvoEventHandler/validators/event/` with `ArvoEventValidator`, built once from `{ contracts: { self, services } }` and reused for every delivery. `self` is the whole `ArvoContract` rather than one version, so the validator resolves the version from the event's own `dataschema` and can run before any version is known. `validateInput` and `validateOutput` each report `Result<{ source, version }, ArvoEventValidatorError>`; the error carries the `fault_kind` so whoever holds a delivery raises the fault without re-deciding which it is. Not on the context: the judgement is a property of the declaration, not of one delivery, and change 4 needs the output half for a whole batch.
+- [x] 1b.8 Add `src/ArvoEventHandler/validators/event/` with `ArvoEventValidator`, built once from `{ contracts: { self, services } }` and reused for every delivery. `self` is the whole `ArvoContract` rather than one version, so the validator resolves the version from the event's own `dataschema` and can run before any version is known. `validateInput` and `validateOutput` each report `Result<{ source, version }, ArvoEventValidatorError>`; the error carries the `fault_kind` so whoever holds a delivery raises the fault without re-deciding which it is. Not on the context: the judgement is a property of the declaration, not of one delivery, and change 2 needs the output half for a whole batch.
 - [x] 1b.9 Add `src/ArvoEventHandler/validators/depth/` with `ArvoEventDepthValidator`, built from the version's resolved `maxDepth`. One threshold, two methods, differing only in which kind they report: `max_depth_event_received` on arrival and `max_depth_event_requested` on emission. Separate from the event validator because depth is a version's resolved option while the event judgement is the contracts', and the two are known at different moments.
 - [x] 1b.10 Add `helpers/execution-id.ts` with `deriveArvoExecutionId`, every part of it pinned by ADR-006, *The derivation of `execution_id`*: SHA-256 over the UTF-8 bytes of `dataschema`, the byte `0x00`, then the UTF-8 bytes of `id`, as 64 lowercase hex characters. Through `crypto.subtle`, which is why it is asynchronous and why it needs no dependency. Pinned by a known-answer test computed with `node:crypto` rather than by this code, because a drift here forks an execution on every redelivery.
 
-**The other half of collection is not here.** Rebuilding the map from the service emissions an executor returned belongs with return validation, in change 4, because it is the handler judging a batch rather than an executor recording one answer.
+**The other half of collection is not here.** Rebuilding the map from the service emissions an executor returned belongs with return validation, in change 2, because it is the handler judging a batch rather than an executor recording one answer.
 
 - [x] 1b.6 Carry the delivery's OpenTelemetry span through both factories, and hold it on the context as `ctx.telemetry`, an `ArvoExecutionContextTelemetry` in `context/telemetry.ts`. A class rather than a plain object because the rest of ADR-006's *Observability* obligations land on it: the logger, the meter, and recording a fault on the span before it is raised. Getters for `traceparent` and `tracestate`, both `null` where the span's context is invalid — with no SDK configured the API returns an all-zero context, and an event carrying no trace context beats one carrying an invalid header.
 - [x] 1b.6a `ctx.build` takes an emitted event's trace context from that span rather than from the delivered event. A correctness fix, not a rename: the old reading continued the trace the delivered event carried but skipped the span the handler opened, so the chain joined around the handler instead of through it.
@@ -65,6 +70,8 @@ Four members ADR-006's context table requires that the first cut left out. They 
 
 - [x] 1b.11 `ctx.fault` records the fault through telemetry before handing it back, across all three signals. On the span for whoever has the trace open; on a `faults` counter keyed by `fault_kind` and the retry verdict, both closed sets, which is the protocol metric ADR-006 names; and as an error log record, that being the only one of the three a sampling decision cannot drop. A fault writes no record, so without the log a retried-away failure leaves nothing behind. Nothing identifying reaches the counter, where cardinality costs; everything identifying reaches the log, where it does not.
 - [x] 1b.12 Add `setSpanOk` and `setSpanError(message?)` to the telemetry, with the default reason held in `prefix.ts` alongside the namespace rather than inline. `recordFault` marks the span through `setSpanError`, so there is one definition of marking a delivery failed.
+
+- [x] 1b.13 The context receives an `ArvoExecutionContextTelemetry` rather than a span, a meter and a logger. Both factories pass it straight through, so `ArvoEventHandler.execute` is the only place one is ever built — which is what guarantees the state read, the version and the context share one span.
 
 ## 2. Types
 
@@ -94,7 +101,7 @@ Four members ADR-006's context table requires that the first cut left out. They 
 - [x] 4.5 Implement the duplicate-service rule on `uri`, reporting the contract named twice and naming the service it was first declared as.
 - [x] 4.6 Implement the type-collision rule per version over the emittable set — service input types, that version's `outputs` keys, that version's handler error type — reporting the version, the shared type and both sides of the clash. No special case for the implemented contract appearing among the services: ADR-005's within-contract disjointness already makes that legal, and a guard here would forbid the recursion ADR-006 permits.
 - [x] 4.7 Implement the timeout relation on each version's **resolved** pair, in §3.4, reporting the version. Both halves covered.
-- [x] 4.8 Add `helpers/emittable-types.ts` returning one `ReadonlySet<string>` for a version, read by §4.6 and by change 4's return validation.
+- [x] 4.8 Add `helpers/emittable-types.ts` returning one `ReadonlySet<string>` for a version, read by §4.6 and by change 2's return validation.
 
 ## 4a. The setup and the chain
 
@@ -106,7 +113,7 @@ Four members ADR-006's context table requires that the first cut left out. They 
 
 ## 5. The class
 
-- [ ] 5.1 Add `src/ArvoEventHandler/version.ts` with `ArvoHandlerVersion`: the version, the state schema, the options in force, the emittable types, and `execute`, which for now calls the declared executor and gains return validation in change 4.
+- [ ] 5.1 Add `src/ArvoEventHandler/version.ts` with `ArvoHandlerVersion`: the version, the state schema, the options in force, the emittable types, and `execute`, which for now calls the declared executor and gains return validation in change 2.
 - [ ] 5.1a Add `types/version-map.ts` with `ArvoVersion` and `ArvoVersionMap`, keyed off `keyof TSelf['versions']` so `.get` is checked and returns a version rather than a version-or-nothing. A real `Map` underneath; this retypes its surface only.
 - [ ] 5.2 Add `src/ArvoEventHandler/index.ts` with the class, holding `contract`, `services` and the version map. Implement the constructor over a completed declaration: resolve handler options, run every rule from §4 including completeness, throw one `ArvoEventHandlerValidationError` carrying every issue, and freeze what it holds. Not exported for use; `tryBuild` is what reaches it.
 - [ ] 5.3 Delete `helpers/derived.ts` and its spec. Resolved values live on the version a consumer reads, not in a store beside the handler.

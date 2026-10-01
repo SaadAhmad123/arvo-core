@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checkExecutionState } from '../../../src/ArvoEventHandler/state/validator.js';
-import { chargedEvent, initEvent, orderContract } from '../fixtures.js';
+import { chargedEvent, initEvent } from '../fixtures.js';
 
 const whole = (overrides: Record<string, unknown> = {}) => ({
   data: null,
@@ -18,10 +18,6 @@ const whole = (overrides: Record<string, unknown> = {}) => ({
   inFlightEventMap: new Map(),
   recordFormatVersion: '1.0.0',
   casVersion: 0,
-  contracts: {
-    self: { uri: orderContract.uri, type: orderContract.type },
-    services: [],
-  },
   ...overrides,
 });
 
@@ -162,26 +158,6 @@ describe('checking what an execution remembers', () => {
       expect(
         pathsFor({ inFlightEventMap: new Map([['e-1', chargedEvent]]) }),
       ).toEqual([]);
-    });
-  });
-
-  describe('the contracts snapshot', () => {
-    it('refuses a snapshot that is not an object', () => {
-      expect(pathsFor({ contracts: 'com_order_create' })).toEqual([
-        'contracts',
-      ]);
-    });
-
-    it('refuses a self contract that is not an object', () => {
-      expect(pathsFor({ contracts: { self: 'x', services: [] } })).toEqual([
-        'contracts.self',
-      ]);
-    });
-
-    it('refuses services that are not a list', () => {
-      expect(pathsFor({ contracts: { self: {}, services: {} } })).toEqual([
-        'contracts.services',
-      ]);
     });
   });
 

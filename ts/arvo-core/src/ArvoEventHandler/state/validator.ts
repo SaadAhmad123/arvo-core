@@ -125,36 +125,6 @@ const checkInFlightEvents = (value: unknown): (ErrorIssue | null)[] => {
   );
 };
 
-/** The contracts snapshot: the implemented one, and those it may send to. */
-const checkContracts = (value: unknown): (ErrorIssue | null)[] => {
-  if (!isPlainObject(value)) {
-    return [
-      new ErrorIssue({
-        path: 'contracts',
-        message:
-          'must be an object holding the contracts this was declared against',
-        received: value,
-      }),
-    ];
-  }
-  return [
-    isPlainObject(value.self)
-      ? null
-      : new ErrorIssue({
-          path: 'contracts.self',
-          message: 'must be an object',
-          received: value.self,
-        }),
-    Array.isArray(value.services)
-      ? null
-      : new ErrorIssue({
-          path: 'contracts.services',
-          message: 'must be an array',
-          received: value.services,
-        }),
-  ];
-};
-
 /**
  * Every rule about the shape of what an execution remembers, all of them
  * evaluated so a caller is told about four wrong fields at once rather than
@@ -181,7 +151,6 @@ export const checkExecutionState = (input: unknown): ErrorIssue[] => {
     ...checkEvents(input),
     ...checkTouchedEvents(input.eventIds),
     ...checkInFlightEvents(input.inFlightEventMap),
-    ...checkContracts(input.contracts),
 
     input.data === null || isPlainObject(input.data)
       ? null

@@ -13,30 +13,38 @@ on its own.
 
 | | Change | Builds | From |
 |---|---|---|---|
-| **1** | **`declare-arvoeventhandler`** — this one | the execution state an execution remembers, the fault a delivery raises, the context an executor receives, the version that runs against it, the handler that holds versions, and every rule that refuses a declaration | ADR-006 *Definition and declaration*, *Options*, *The execution context*; ADR-007; ADR-008's fault object |
-| 2 | `arvo-event-emission` | the event builder, addressing, validation of what an executor returns, and `ctx.build` | ADR-006 *Addressing an emitted event* |
-| 3 | `arvo-execution-bounds` | depth, retry, the two timeouts, collection, and `ctx.atMaxDepth` and `ctx.timeRemaining` | ADR-009 |
-| 4 | `arvo-handler-delivery` | classification, the sixteen-step gate, `tryExecute` / `execute`, hydration, the abandonment pair, and `ctx.cancel` | ADR-010; ADR-008's abandonment |
+| **1** | **`declare-arvoeventhandler`** — this one | the execution state an execution remembers, the fault a delivery raises, the whole context an executor receives, the version that runs against it, the handler that holds versions, and every rule that refuses a declaration | ADR-006 *Definition and declaration*, *Options*, *The execution context*, *Addressing an emitted event*, *Observability*; ADR-007; ADR-008's fault object and retry verdict; ADR-009's depth and clock bounds |
+| 2 | `arvo-handler-delivery` | classification, the sixteen-step gate, hydration, `tryExecute` / `execute`, validation of a whole returned batch, enforcing the two clocks, rebuilding the awaited collection on emission, and the abandonment pair | ADR-010; ADR-008's abandonment; ADR-009's enforcement |
 
 **Built inward out, and that is what moved the boundaries.** The context is the innermost thing
 and everything above it is shaped by what it needs, so it is written first, then the version that
 runs against it, then the handler that holds versions. Writing the shells first means guessing
 the inner interface and bending the inner thing to fit the guess.
 
-**Which pulled two changes forward into this one.** The context holds the execution state, so
-ADR-007's record had to exist rather than be described. Writing state checks it, and a rejected
-write raises the fault ADR-008 names for it, so the fault object had to exist too. Both were
-originally their own changes; keeping them separate would have meant a context built against
-placeholders, which is the thing this ordering exists to avoid. What remains of ADR-008 for
-change 4 is the abandonment pair, which needs a delivery to build one.
+**Which pulled four changes into this one, and that was the ordering working rather than failing.**
+It began as six. The context holds the execution state, so ADR-007's record had to exist rather
+than be described; writing state checks it, and a rejected write raises the fault ADR-008 names,
+so the fault had to exist too. Then the same argument kept applying outward. An executor cannot
+be given a context whose `build` is missing, so emission came in. It cannot read `atMaxDepth` or
+`timeRemaining` from a class that does not have them, so ADR-009's bounds came in. Each time,
+deferring the member would have meant a context built against a placeholder, which is the one
+thing this ordering exists to prevent.
 
-**The context arrives here and grows twice more.** Changes 2 and 3 add `build`, `atMaxDepth` and
-`timeRemaining`; change 4 adds `cancel`. It is a class from the start so those are additions
-rather than a restructuring.
+**What that leaves for change 2.** Everything ADR-009 and ADR-010 define that needs a *delivery*
+rather than a context: enforcing the two clocks rather than reporting what remains of them,
+judging a whole returned batch rather than one candidate event, rebuilding the awaited collection
+from a batch's emissions, and the gate that decides whether an executor is entered at all. The
+split is no longer by ADR but by whether a delivery is in hand, which is the only boundary that
+held.
+
+**The context is complete here.** Every member ADR-006's table requires is on it: the delivered
+event and the init event through `state`, the identity and the collection through it too, `entry`,
+`attempt`, `dependencies`, the mechanism hooks, `build`, `atMaxDepth`, `timeRemaining`, `cancel`,
+`fault`, and telemetry as a span, a meter and a logger. Nothing about it is deferred.
 
 ## What Changes
 
-- **New capability `event-handler`** — the handler primitive. This change gives it the execution context, the version, the handler and every rule that refuses a declaration; changes 2 through 6 accumulate into the same capability, per `project.md` — *Capability conventions*.
+- **New capability `event-handler`** — the handler primitive. This change gives it the execution context, the version, the handler and every rule that refuses a declaration; change 2 accumulates into the same capability, per `project.md` — *Capability conventions*.
 
 - **A declaration is built in three steps.** `setupArvoEventHandler(...)`, or `ArvoEventHandler.setup(...)` for the same thing, holds the contract implemented, the services, the handler-level options and the two type shapes. `.handler(version, ...)` declares one version and is repeated. `.build()` runs every rule and returns the handler.
 
@@ -175,7 +183,7 @@ class ArvoHandlerVersion<TSelf, TVersion, TServices, TDependencies, TMechanismHo
   /** Worked out from the contracts above, not handed in. */
   readonly emittableTypes: ReadonlySet<string>;
 
-  /** Runs this version's business code. Validating what it returns joins this in change 4. */
+  /** Runs this version's business code. Validating what it returns joins this in change 2. */
   execute(
     ctx: ArvoExecutionContext<TSelf, TVersion, TServices, TState, TDependencies, TMechanismHooks>,
   ): PromiseAble<ArvoEvent | ArvoEvent[] | void>;
@@ -366,8 +374,9 @@ execute: async (ctx) => {
 }
 ```
 
-**What it does not carry yet.** `build` with change 2, `atMaxDepth` and `timeRemaining` with
-change 3, `cancel` with change 4. Each is an addition to a class that already exists.
+**It carries every member the protocol defines**, so nothing about the context is deferred. What
+is deferred is the handler *around* it: entering an executor, judging what one returns, and
+enforcing the clocks whose remaining time the context reports.
 
 ## What an execution remembers
 
@@ -862,13 +871,13 @@ None added. `zod/v4/core` for the state schema's type, `ArvoDomain` for the erro
 
 ## Out of Scope
 
-Everything the plan assigns to changes 2 through 6, and specifically:
+Everything that needs a delivery in hand, which is change 2, and specifically:
 
-- **Running a delivery.** `tryExecute` and `execute` are sketched under **How a handler is run** and built in change 6. Nothing here classifies an event, reads or writes a record, or enters an executor of its own accord. A built handler is inert.
-- **The context members that need what does not exist.** `build` with change 2, `atMaxDepth` and `timeRemaining` with change 3, `cancel` with change 4. The class exists here so each is an addition rather than a reshaping.
-- **Committing a record, and deciding when to.** Turning one into a string and back is here. Where the string goes, the compare-and-swap it is committed under, and which record a delivery should read are all a mechanism's, and what the handler asks of a mechanism is change 4.
+- **Running a delivery.** `tryExecute` and `execute` are sketched under **How a handler is run**. Nothing here classifies an event, reads or writes a record, or enters an executor of its own accord. A built handler is inert.
+- **Judging a whole batch.** One candidate event can be checked here, through the event and depth validators. The rules that span a batch cannot: at most one completion, the batch failing whole rather than in part, and rebuilding the awaited collection from its emissions. Each needs the batch an executor returned.
+- **Enforcing the clocks.** The context reports what remains on each. Stopping an attempt when the run clock expires, and refusing a return past the execution clock, both need the delivery that would be stopped.
+- **Committing a record, and deciding when to.** Turning one into a string and back is here. Where the string goes, the compare-and-swap it is committed under, and which record a delivery should read are all a mechanism's.
 - **The state schema's contents.** ADR-007 makes a version's state schema the author's, and the protocol places no rule on how it changes. This change checks a write against whatever schema it was given and has no opinion on the schema itself.
-- **Emission.** A version works out what it may emit because the collision rule needs it. Deriving `to`, `subject` or any other field from a type is ADR-006's *Addressing an emitted event* and belongs to change 4, along with checking that what an executor returned is in that set.
-- **Abandonment.** A fault carries the pair as `null` here. Building the event and the record to go with it needs a delivery that knows it is giving up, which is change 4.
+- **Acting on abandonment.** A fault carries the pair built and written out. Publishing the event and committing the record is a mechanism's decision, and nothing here acts on either.
 - **The mechanism's obligations.** ADR-006 places five on whatever runs a handler. This package is not a mechanism and implements none of them.
 - **Anything the ADRs defer.** Timers and deadlines, a bound on fan-out, capability profiles as a format, error kinds beyond handler failure. Each is deferred in an accepted ADR and stays deferred here.

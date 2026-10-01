@@ -20,7 +20,6 @@ import type {
 import {
   chargedEvent,
   initEvent,
-  orderContract,
   orderVersion,
   paymentFailedEvent,
   services,
@@ -28,24 +27,17 @@ import {
 } from '../fixtures.js';
 
 /** What a delivery records against; these tests only carry it. */
-const { span, meter, logger } = telemetry();
+const { telemetry: tracing } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
 const EXECUTION_ID = 'a'.repeat(64);
 
-const contractsSnapshot = {
-  self: { uri: orderContract.uri, type: orderContract.type },
-  services: [{ uri: 'https://example.com/pay', type: 'com_pay' }],
-};
-
 const common = {
   contracts: { self: orderVersion, services },
   dataSchema: orderData,
   attempt: 0,
-  span,
-  meter,
-  logger,
+  telemetry: tracing,
   options: ARVO_DEFAULT_HANDLER_OPTIONS,
   dependencies: {} as ArvoDependencies,
   hooks: {} as ArvoMechanismHooks,
@@ -72,7 +64,6 @@ const open = <TData extends z.core.$ZodObject = typeof orderData>(
     event: initEvent,
     executionId: EXECUTION_ID,
     parentExecutionId: initEvent.executionid,
-    contractsSnapshot,
     ...overrides,
   });
 
@@ -180,10 +171,6 @@ describe('opening an execution', async () => {
     it('is waiting on nothing', () => {
       expect(opened().state.inFlightEventMap.size).toBe(0);
     });
-
-    it('stores the contracts it was given', () => {
-      expect(opened().state.contracts).toEqual(contractsSnapshot);
-    });
   });
 
   describe('the context it builds', async () => {
@@ -232,7 +219,6 @@ describe('opening an execution', async () => {
         event: initEvent,
         executionId: '',
         parentExecutionId: initEvent.executionid,
-        contractsSnapshot,
       });
       expect(result.ok).toBe(false);
     });
@@ -243,7 +229,6 @@ describe('opening an execution', async () => {
         event: initEvent,
         executionId: '',
         parentExecutionId: initEvent.executionid,
-        contractsSnapshot,
       });
       expect(
         !result.ok && result.error.issues.map((issue) => issue.path),
@@ -265,7 +250,6 @@ describe('opening an execution', async () => {
           event: unreadable as never,
           executionId: EXECUTION_ID,
           parentExecutionId: initEvent.executionid,
-          contractsSnapshot,
         }),
       ).toThrow(RangeError);
     });
@@ -276,7 +260,6 @@ describe('opening an execution', async () => {
         event: initEvent,
         executionId: EXECUTION_ID,
         parentExecutionId: initEvent.executionid,
-        contractsSnapshot,
       });
       expect(result.ok && result.value.state.executionId).toBe(EXECUTION_ID);
     });

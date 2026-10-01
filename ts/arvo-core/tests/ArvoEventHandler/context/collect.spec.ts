@@ -20,14 +20,13 @@ import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
 import {
   chargedEvent,
   initEvent,
-  orderContract,
   orderVersion,
   services,
   telemetry,
 } from '../fixtures.js';
 
 /** What a delivery records against; these tests only carry it. */
-const { span, meter, logger } = telemetry();
+const { telemetry: tracing } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
@@ -71,10 +70,6 @@ const record = (
     inFlightEventMap: new Map<string, ArvoEvent | null>([[REQUEST_ID, null]]),
     recordFormatVersion: '1.0.0',
     casVersion: 1,
-    contracts: {
-      self: { uri: orderContract.uri, type: orderContract.type },
-      services: [],
-    },
     ...overrides,
   });
 
@@ -95,9 +90,7 @@ const waiting = (
     entry: 'followup',
     state: record(),
     attempt: 0,
-    span,
-    meter,
-    logger,
+    telemetry: tracing,
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     dependencies: {},
     hooks: {},

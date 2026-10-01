@@ -6,7 +6,6 @@ import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
 import {
   initEvent,
-  orderContract,
   orderVersion,
   paymentVersion,
   services,
@@ -14,7 +13,7 @@ import {
 } from '../fixtures.js';
 
 /** What a delivery records against; these tests only carry it. */
-const { span, meter, logger } = telemetry();
+const { telemetry: tracing } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
@@ -28,15 +27,9 @@ const ctx = () => {
     event: initEvent,
     executionId: EXECUTION_ID,
     parentExecutionId: PARENT_EXECUTION_ID,
-    contractsSnapshot: {
-      self: { uri: orderContract.uri, type: orderContract.type },
-      services: [],
-    },
     dataSchema: orderData,
     attempt: 0,
-    span,
-    meter,
-    logger,
+    telemetry: tracing,
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     dependencies: {},
     hooks: {},

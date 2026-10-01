@@ -1,5 +1,5 @@
 import type { JSONObject } from '../../../types.js';
-import type { ArvoRecordContracts, ArvoTouchedEvent } from '../types.js';
+import type { ArvoTouchedEvent } from '../types.js';
 
 /**
  * What an execution's memory looks like once written out.
@@ -36,5 +36,4 @@ export type ArvoExecutionStateWire = {
 
   recordFormatVersion: string;
   casVersion: number;
-  contracts: ArvoRecordContracts;
 };

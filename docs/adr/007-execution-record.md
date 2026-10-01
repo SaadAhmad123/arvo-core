@@ -6,7 +6,8 @@
 - **Amends:** AAM 1 membership (ADR-000) — places the execution record's field names inside the model as a durable format
 - **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), which defines the handler this record belongs to, the gate that validates it, and the mechanism obligations that preserve it
 - **Addresses, in part:** ADR-000 Deferred Decisions — "Handler state serialization, persistence, migration, and recovery" (settled here, migration by prohibiting it)
-- **Left deferred:** a bound on fan-out; comparison of the `contracts` snapshot against the live contract. See **Left deferred**
+- **Left deferred:** a bound on fan-out. See **Left deferred**
+- **Amended by:** **Addendum 1 — the `contracts` snapshot is removed**, at the end of this ADR. The field table and **`contracts` is informational only** below describe the record as originally accepted; read them with that addendum.
 
 Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-architectural-principles.md).
 
@@ -62,7 +63,7 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `init_event` | ArvoEvent as JSON; materialized as an ArvoEvent during hydration | The event that began the execution. |
 | `triggering_event` | ArvoEvent as JSON; materialized as an ArvoEvent during hydration | The event that caused the most recent delivery. |
 | `in_flight_event_map` | object: emitted event `id` string → ArvoEvent as JSON \| `null`; each non-null value materialized as an ArvoEvent during hydration | Keyed by the `id` of each event emitted to a service in the current round. The value is the collected response, or `null` while outstanding — the key MUST be present either way, because the key set is what the execution is waiting for. |
-| `contracts` | object: `{ self: canonical contract, services: canonical contract[] }` | The handler's `self` and `services` contracts, in their canonical form (ADR-005). Carried for a reader's benefit only — nothing in execution consults it. |
+| ~~`contracts`~~ | ~~object: `{ self: canonical contract, services: canonical contract[] }`~~ | **Removed by Addendum 1.** As accepted: the handler's `self` and `services` contracts, in their canonical form (ADR-005), carried for a reader's benefit only. |
 | `data` | JSON value \| `null`; validated against this version's declared schema during hydration | The executor's own business state, governed by the schema that executor declared, or `null` where none is declared or nothing has been written. |
 
 `execution_id` identifies a record uniquely and `subject` groups the records of one workflow; a mechanism MAY use them as its record and grouping keys, and both are inside the record so that it is self-describing.
@@ -72,6 +73,8 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 `direction` is `received` or `emitted` rather than `input` or `output`, deliberately. Those two words already name something else in this model — ADR-005's declared shapes, and a version's `outputs` — and a service's reply is `received` here while being that service's output. Two axes sharing a vocabulary is how a reader ends up confidently wrong.
 
 #### `contracts` is informational only
+
+**Withdrawn by Addendum 1, which removes the field.** What follows is the reasoning as accepted, kept because the addendum argues against it.
 
 `contracts` is informational by construction, and an implementation MUST NOT resolve, bind, or validate against it. It exists so that a record found in a store years later can be understood without the code that wrote it, which is the same reason the identifying fields are inside the record rather than only in the keys. A reader should be aware it is a snapshot: a contract that has since changed will not match a live one, and that discrepancy carries no meaning at execution time. Whether it should be compared against the live contract as a drift warning is left deferred (**Left deferred**).
 
@@ -270,5 +273,32 @@ Nothing beyond ADR-006's five obligations, three of which concern this record di
 ### Left deferred
 
 - **A bound on fan-out**, given that hydration is eager and its cost scales with `in_flight_event_map` — a cap, lazy restoration, or something else (**Hydration**).
-- **Whether the `contracts` snapshot should be compared against the live contract** at entry as a drift warning. It is free to do and would surface "this execution began under a contract that has since changed", but nothing may enforce against the snapshot in the meantime (**`contracts` is informational only**).
+- ~~**Whether the `contracts` snapshot should be compared against the live contract**~~ — **withdrawn by Addendum 1**, which removes the snapshot. There is nothing left to compare.
 
+## Addendum 1 — the `contracts` snapshot is removed
+
+- **Status:** Accepted
+- **Date:** 2026-10-01
+- **Amends:** this ADR's **The fields**, **`contracts` is informational only**, and **Left deferred**
+
+### What changes
+
+**The record no longer carries `contracts`.** The field, the subsection permitting it as informational, and the deferred question of comparing it against the live contract are all withdrawn. Nothing replaces it.
+
+`record_format_version` stays at its accepted value. The rule under **How this record may change later** that a field MUST NOT be removed exists because removal reinterprets records already in a store, and no such record exists: nothing is published, no deployment has written one, so there is no data for this to reinterpret. That is the whole of the exemption, and it expires the moment a record is stored anywhere. After that point this field cannot come back out, and nor can any other, without a MAJOR bump by a superseding ADR.
+
+### Why
+
+**Nothing reads it.** The field was informational by construction, and this ADR already forbade resolving, binding or validating against it. A field that no part of the protocol may consult is carried on every write of every execution for a reader who may never arrive.
+
+**It is derivable.** A handler holds its own contracts, and a record names the contract and version it belongs to through `source` and `version`. A reader with the handler has the contracts; a reader without it has an ADR-005 canonical form whose meaning they cannot check against anything.
+
+**It is the one field no delivery can check.** Every other field is judged as a record is built: the identifiers, both counts, the lifecycle, both version fields, the two events. The snapshot could not be, because there was nothing to judge it against — this ADR says outright that a snapshot not matching a live contract "carries no meaning at execution time". So a record carrying a wrong snapshot was indistinguishable from one carrying a right one, which makes it a field that can rot silently for the whole life of an execution.
+
+**The purpose it was given is better served elsewhere.** Understanding a record years later without the code that wrote it is a real need, and `source` and `version` already name what to go and find. A contract's own durable form is ADR-005's business, and a deployment that wants its contracts kept for posterity should keep them once, where they are declared, rather than once per execution.
+
+### What this does not change
+
+The identifying fields stay inside the record rather than only in its keys, for the reason this ADR gives: a record found in a store must be understandable on its own terms. `source` and `version` are what carry that, and neither moves.
+
+Nothing about hydration, the lifecycle values, `cas_version`, or version authority is touched. This addendum removes one informational field and withdraws one deferred question about it.

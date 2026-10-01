@@ -7,11 +7,13 @@ import type { Result } from '../../types.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
 import { ArvoExecutionStateValidationError } from './errors.js';
 import type { ArvoExecutionStateWire } from './serializer/types.js';
-import type {
-  ArvoExecutionLifecycle,
-  ArvoExecutionStateParam,
-  ArvoRecordContracts,
-  ArvoTouchedEvent,
+import {
+  ARVO_TERMINAL_LIFECYCLES,
+  type ArvoExecutionIdentity,
+  type ArvoExecutionLifecycle,
+  type ArvoExecutionStateParam,
+  type ArvoTerminalLifecycle,
+  type ArvoTouchedEvent,
 } from './types.js';
 import { checkExecutionState, isPlainObject } from './validator.js';
 
@@ -91,9 +93,6 @@ export class ArvoExecutionState<
   /** How many times this record has been written, counting from 0. */
   readonly casVersion: number;
 
-  /** What this execution was declared against when it opened. */
-  readonly contracts: ArvoRecordContracts;
-
   /**
    * @param param - Every field the record holds. See
    * {@link ArvoExecutionStateParam}.
@@ -121,12 +120,47 @@ export class ArvoExecutionState<
     this.inFlightEventMap = new Map(param.inFlightEventMap);
     this.recordFormatVersion = param.recordFormatVersion;
     this.casVersion = param.casVersion;
-    this.contracts = Object.freeze({
-      self: param.contracts.self,
-      services: Object.freeze([...param.contracts.services]),
-    });
 
     Object.freeze(this);
+  }
+
+  /**
+   * Whether this execution is finished, at one of the four lifecycles it
+   * rests at for good. Nothing further is delivered to one that is.
+   */
+  get isTerminal(): boolean {
+    return ARVO_TERMINAL_LIFECYCLES.includes(
+      this.lifecycle as ArvoTerminalLifecycle,
+    );
+  }
+
+  /**
+   * Whether every request this execution is awaiting has been answered.
+   *
+   * `true` where it awaits nothing, there being nothing outstanding. Under
+   * the default join this is what decides whether an executor is entered.
+   */
+  get isCollectionComplete(): boolean {
+    for (const answer of this.inFlightEventMap.values()) {
+      if (answer === null) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Who this execution is and where it sits, as one value.
+   *
+   * The same five fields read individually. Grouped for keying a resource
+   * on an execution without naming each one.
+   */
+  get identity(): ArvoExecutionIdentity {
+    return {
+      subject: this.subject,
+      executionId: this.executionId,
+      parentExecutionId: this.parentExecutionId,
+      depth: this.depth,
+      version: this.version,
+    };
   }
 
   /**
@@ -154,7 +188,6 @@ export class ArvoExecutionState<
       inFlightEventMap: [...this.inFlightEventMap],
       recordFormatVersion: this.recordFormatVersion,
       casVersion: this.casVersion,
-      contracts: this.contracts,
     } as unknown as ArvoExecutionStateWire;
   }
 

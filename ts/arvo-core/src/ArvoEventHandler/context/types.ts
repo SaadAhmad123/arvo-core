@@ -1,8 +1,6 @@
-import type { Meter, Span } from '@opentelemetry/api';
 import type * as z from 'zod/v4/core';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
 import type { ArvoExecutionState } from '../state/index.js';
-import type { ArvoRecordContracts } from '../state/types.js';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
 import type {
   ArvoAnyServiceResponse,
@@ -13,7 +11,7 @@ import type {
   ArvoDependencies,
   ArvoMechanismHooks,
 } from '../types/supplied.js';
-import type { ArvoLogger } from './telemetry/types.js';
+import type { ArvoExecutionContextTelemetry } from './telemetry/index.js';
 
 /**
  * How a delivery was classified before an executor was entered.
@@ -103,15 +101,11 @@ export type ArvoExecutionContextParam<
   /** Which attempt this delivery is, counting from 0. */
   attempt: number;
   /**
-   * This delivery's OpenTelemetry span, started and ended outside the
-   * handler. Carried, never created here: this package uses the
-   * OpenTelemetry API and configures no backend.
+   * This execution's telemetry, built once by whatever runs the handler
+   * and shared by everything the execution touches. Received, never
+   * assembled here.
    */
-  span: Span;
-  /** The meter this handler's counters and histograms are created on. */
-  meter: Meter;
-  /** What this delivery's log records are emitted through. */
-  logger: ArvoLogger;
+  telemetry: ArvoExecutionContextTelemetry;
   /** What this delivery's executor is given to work with. */
   dependencies: TDependencies;
   /** What the mechanism running this handler exposes to an executor. */
@@ -132,12 +126,8 @@ type ArvoContextFactoryCommon<
   dataSchema: TDataSchema;
   /** Which attempt this delivery is, counting from 0. */
   attempt: number;
-  /** This delivery's OpenTelemetry span, started and ended outside. */
-  span: Span;
-  /** The meter this handler's counters and histograms are created on. */
-  meter: Meter;
-  /** What this delivery's log records are emitted through. */
-  logger: ArvoLogger;
+  /** This execution's telemetry, built once by whatever runs the handler. */
+  telemetry: ArvoExecutionContextTelemetry;
   /** The options in force for this version, every one of them settled. */
   options: ArvoEventHandlerOptions;
   /** What this delivery's executor is given to work with. */
@@ -177,8 +167,6 @@ export type ArvoInitContextParam<
   executionId: string;
   /** The execution that caused this one. */
   parentExecutionId: string;
-  /** The contracts as they are to be stored, for a reader years later. */
-  contractsSnapshot: ArvoRecordContracts;
 };
 
 /**

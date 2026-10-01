@@ -2,14 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ArvoExecutionStateValidationError } from '../../../src/ArvoEventHandler/state/errors.js';
 import { ArvoExecutionState } from '../../../src/ArvoEventHandler/state/index.js';
-import { chargedEvent, initEvent, orderContract } from '../fixtures.js';
+import { chargedEvent, initEvent } from '../fixtures.js';
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
-
-const contracts = {
-  self: { uri: orderContract.uri, type: orderContract.type },
-  services: [],
-};
 
 const whole = (overrides: Record<string, unknown> = {}) => ({
   data: null,
@@ -27,7 +22,6 @@ const whole = (overrides: Record<string, unknown> = {}) => ({
   inFlightEventMap: new Map<string, unknown>(),
   recordFormatVersion: '1.0.0',
   casVersion: 0,
-  contracts,
   ...overrides,
 });
 
@@ -93,10 +87,6 @@ describe('ArvoExecutionState', () => {
       const state = build({ casVersion: 3 });
       expect(state.recordFormatVersion).toBe('1.0.0');
       expect(state.casVersion).toBe(3);
-    });
-
-    it('carries the contracts as a snapshot for a reader', () => {
-      expect(build().contracts).toEqual(contracts);
     });
   });
 

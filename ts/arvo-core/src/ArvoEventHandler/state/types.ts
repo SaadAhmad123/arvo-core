@@ -1,7 +1,6 @@
 import type * as z from 'zod/v4/core';
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { ArvoSemanticVersion } from '../../semver/index.js';
-import type { JSONObject } from '../../types.js';
 
 /**
  * Every place an execution can rest, and the whole of the vocabulary.
@@ -21,6 +20,34 @@ export const ARVO_EXECUTION_LIFECYCLES = Object.freeze([
 
 /** Where an execution rests. See {@link ARVO_EXECUTION_LIFECYCLES}. */
 export type ArvoExecutionLifecycle = (typeof ARVO_EXECUTION_LIFECYCLES)[number];
+
+/**
+ * The places an execution rests for good. A record at one of these is
+ * finished, and nothing further is delivered to it.
+ */
+export const ARVO_TERMINAL_LIFECYCLES = Object.freeze([
+  'success',
+  'error',
+  'cancelled',
+  'failure',
+] as const);
+
+/** See {@link ARVO_TERMINAL_LIFECYCLES}. */
+export type ArvoTerminalLifecycle = (typeof ARVO_TERMINAL_LIFECYCLES)[number];
+
+/** Who an execution is, and where it sits. */
+export type ArvoExecutionIdentity = {
+  /** The workflow it belongs to. */
+  readonly subject: string;
+  /** This execution. */
+  readonly executionId: string;
+  /** The execution that caused this one. */
+  readonly parentExecutionId: string;
+  /** How far from the workflow's first event it sits. */
+  readonly depth: number;
+  /** Which version of the implemented contract is running. */
+  readonly version: ArvoSemanticVersion;
+};
 
 /** Which way an event passed through an execution. */
 export const ARVO_TOUCHED_EVENT_DIRECTIONS = Object.freeze([
@@ -44,19 +71,6 @@ export type ArvoTouchedEvent = {
   readonly id: string;
   /** Whether the execution received it or emitted it. */
   readonly direction: ArvoTouchedEventDirection;
-};
-
-/**
- * What an execution was declared against, as it stood when it opened.
- *
- * An informational snapshot for a reader years later, not something routed
- * against. The live contracts are what a delivery works from.
- */
-export type ArvoRecordContracts = {
-  /** The contract this execution implements. */
-  readonly self: JSONObject;
-  /** Every contract it may send to. */
-  readonly services: readonly JSONObject[];
 };
 
 /**
@@ -115,8 +129,6 @@ export type ArvoExecutionStateFields<
   recordFormatVersion: string;
   /** How many times this record has been written, counting from 0. */
   casVersion: number;
-  /** What this execution was declared against when it opened. */
-  contracts: ArvoRecordContracts;
 };
 
 /**

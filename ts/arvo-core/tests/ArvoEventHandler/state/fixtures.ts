@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ArvoExecutionState } from '../../../src/ArvoEventHandler/state/index.js';
 import type { ArvoExecutionStateParam } from '../../../src/ArvoEventHandler/state/types.js';
-import { chargedEvent, initEvent, orderContract } from '../fixtures.js';
+import { chargedEvent, initEvent } from '../fixtures.js';
 
 /** What one version declares it remembers. */
 export const orderData = z.object({
@@ -35,9 +35,5 @@ export const buildState = (
     ]),
     recordFormatVersion: '1.0.0',
     casVersion: 7,
-    contracts: {
-      self: { uri: orderContract.uri, type: orderContract.type },
-      services: [{ uri: 'https://example.com/payment', type: 'com_pay' }],
-    },
     ...overrides,
   });

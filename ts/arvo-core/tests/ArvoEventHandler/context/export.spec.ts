@@ -9,16 +9,10 @@ import type {
   ArvoDependencies,
   ArvoMechanismHooks,
 } from '../../../src/ArvoEventHandler/types/supplied.js';
-import {
-  initEvent,
-  orderContract,
-  orderVersion,
-  services,
-  telemetry,
-} from '../fixtures.js';
+import { initEvent, orderVersion, services, telemetry } from '../fixtures.js';
 
 /** What a delivery records against; these tests only carry it. */
-const { span, meter, logger } = telemetry();
+const { telemetry: tracing } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
@@ -44,15 +38,9 @@ const opened = <TData extends z.core.$ZodObject = typeof orderData>(
     event: initEvent,
     executionId: EXECUTION_ID,
     parentExecutionId: initEvent.executionid,
-    contractsSnapshot: {
-      self: { uri: orderContract.uri, type: orderContract.type },
-      services: [],
-    },
     dataSchema: orderData as unknown as TData,
     attempt: 0,
-    span,
-    meter,
-    logger,
+    telemetry: tracing,
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     dependencies: {},
     hooks: {},

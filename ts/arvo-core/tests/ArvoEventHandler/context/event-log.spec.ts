@@ -18,14 +18,13 @@ import type {
 import {
   chargedEvent,
   initEvent,
-  orderContract,
   orderVersion,
   services,
   telemetry,
 } from '../fixtures.js';
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
-const { span, meter, logger } = telemetry();
+const { telemetry: tracing } = telemetry();
 
 type Self = typeof orderVersion;
 type Services = typeof services;
@@ -55,10 +54,6 @@ const record = (
     inFlightEventMap: new Map<string, ArvoEvent | null>(),
     recordFormatVersion: '1.0.0',
     casVersion: 1,
-    contracts: {
-      self: { uri: orderContract.uri, type: orderContract.type },
-      services: [],
-    },
     ...overrides,
   });
 
@@ -79,9 +74,7 @@ const context = (
     entry: 'init',
     state: record(),
     attempt: 0,
-    span,
-    meter,
-    logger,
+    telemetry: tracing,
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     dependencies: {},
     hooks: {},

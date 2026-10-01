@@ -21,7 +21,7 @@ import type {
   ArvoDependencies,
   ArvoMechanismHooks,
 } from '../types/supplied.js';
-import { ArvoExecutionContextTelemetry } from './telemetry/index.js';
+import type { ArvoExecutionContextTelemetry } from './telemetry/index.js';
 import type {
   ArvoContextState,
   ArvoDataWrite,
@@ -39,18 +39,22 @@ import type {
  * Valid for the delivery it was built for. One kept past that describes a
  * delivery already over.
  *
- * @example
- * One arrives already built, as an executor's only argument:
- * ```typescript
- * execute: async (ctx: ArvoExecutionContext) => {
- *   ctx.state.triggeringEvent.type;  // what caused this delivery
- *   ctx.state.initEvent.data.items;  // what opened the execution
- *   ctx.entry;                       // 'init' | 'followup'
+ * Built by the version running the delivery, through
+ * {@link createInitArvoExecutionContext} or
+ * {@link createFollowupArvoExecutionContext}, and handed to an executor as
+ * its only argument. Never constructed by hand.
  *
- *   await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
- *   await ctx.setState({ data: (now) => ({ ...now, attempts: now.attempts + 1 }) });
- *   ctx.state.data.attempts;         // 2
- * }
+ * @example
+ * ```typescript
+ * declare const ctx: ArvoExecutionContext;
+ *
+ * ctx.state.triggeringEvent.type;  // what caused this delivery
+ * ctx.state.initEvent.data.items;  // what opened the execution
+ * ctx.entry;                       // 'init' | 'followup'
+ *
+ * await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
+ * await ctx.setState({ data: (now) => ({ ...now, attempts: now.attempts + 1 }) });
+ * ctx.state.data.attempts;         // 2
  * ```
  */
 export class ArvoExecutionContext<
@@ -124,11 +128,7 @@ export class ArvoExecutionContext<
     this.dataSchema = param.dataSchema;
     this.dependencies = param.dependencies;
     this.hooks = param.hooks;
-    this.telemetry = new ArvoExecutionContextTelemetry({
-      span: param.span,
-      meter: param.meter,
-      logger: param.logger,
-    });
+    this.telemetry = param.telemetry;
     this.#state = param.state;
     this.atMaxDepth = param.state.depth + 1 >= param.options.maxDepth;
     this.enteredAt = Date.now();

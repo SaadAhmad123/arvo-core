@@ -19,7 +19,6 @@ import type {
 import {
   chargedEvent,
   initEvent,
-  orderContract,
   orderVersion,
   paymentFailedEvent,
   services,
@@ -28,7 +27,7 @@ import {
 
 /** What a version declares when it remembers something specific. */
 /** What a delivery records against; these tests only carry it. */
-const { span, meter, logger } = telemetry();
+const { telemetry: tracing, span, meter } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
@@ -75,10 +74,6 @@ const record = <TData extends z.core.$ZodObject = typeof orderData>(
     inFlightEventMap: new Map<string, ArvoEvent | null>(),
     recordFormatVersion: '1.0.0',
     casVersion: 0,
-    contracts: {
-      self: { uri: orderContract.uri, type: orderContract.type },
-      services: [],
-    },
     ...overrides,
   });
 
@@ -86,9 +81,7 @@ const base = {
   contracts: { self: orderVersion, services },
   dataSchema: orderData,
   attempt: 0,
-  span,
-  meter,
-  logger,
+  telemetry: tracing,
   options: ARVO_DEFAULT_HANDLER_OPTIONS,
   dependencies: {},
   hooks: {},
@@ -209,23 +202,23 @@ describe('ArvoExecutionContext', async () => {
   });
 
   describe('the telemetry it carries', () => {
-    it('records against the span the delivery was given', () => {
+    it('is the one it was handed, not one it assembled', () => {
+      expect(onInit().telemetry).toBe(tracing);
+    });
+
+    it('records against that span', () => {
       expect(onInit().telemetry.span).toBe(span);
     });
 
-    it('metres on the meter the delivery was given', () => {
+    it('metres on that meter', () => {
       expect(onInit().telemetry.metric.meter).toBe(meter);
     });
 
-    it('logs through what the delivery was given', () => {
-      const delivery = telemetry();
-      const ctx = onInit({
-        span: delivery.span,
-        meter: delivery.meter,
-        logger: delivery.logger,
-      });
+    it('logs through what that telemetry logs through', () => {
+      const given = telemetry();
+      const ctx = onInit({ telemetry: given.telemetry });
       ctx.telemetry.logger.info('charging', { amount: 10 });
-      expect(delivery.emitted).toEqual([
+      expect(given.emitted).toEqual([
         { severityNumber: 9, body: 'charging', attributes: { amount: 10 } },
       ]);
     });
