@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createInitArvoExecutionContext } from '../../../src/ArvoEventHandler/context/factory.js';
-import type { ArvoInitContextParam } from '../../../src/ArvoEventHandler/context/types.js';
+import { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/index.js';
+import type { ArvoExecutionContextParam } from '../../../src/ArvoEventHandler/context/types.js';
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
+import { createInitArvoExecutionState } from '../../../src/ArvoEventHandler/state/factory.js';
 import { ArvoExecutionStateSerializer } from '../../../src/ArvoEventHandler/state/serializer/index.js';
 import type {
   ArvoDependencies,
@@ -21,7 +22,7 @@ const EXECUTION_ID = 'a'.repeat(64);
 /** What a fixture may vary about opening an execution. */
 type InitOverrides<TData extends z.core.$ZodObject = typeof orderData> =
   Partial<
-    ArvoInitContextParam<
+    ArvoExecutionContextParam<
       typeof orderVersion,
       typeof services,
       TData,
@@ -33,11 +34,21 @@ type InitOverrides<TData extends z.core.$ZodObject = typeof orderData> =
 const opened = <TData extends z.core.$ZodObject = typeof orderData>(
   overrides: InitOverrides<TData> = {},
 ) => {
-  const result = createInitArvoExecutionContext({
-    contracts: { self: orderVersion, services },
+  const state = createInitArvoExecutionState<
+    typeof orderVersion,
+    typeof services,
+    TData
+  >({
+    self: orderVersion,
     event: initEvent,
     executionId: EXECUTION_ID,
     parentExecutionId: initEvent.executionid,
+  });
+  if (!state.ok) throw state.error;
+  return new ArvoExecutionContext({
+    contracts: { self: orderVersion, services },
+    state: state.value,
+    entry: 'init',
     dataSchema: orderData as unknown as TData,
     attempt: 0,
     telemetry: tracing,
@@ -46,8 +57,6 @@ const opened = <TData extends z.core.$ZodObject = typeof orderData>(
     hooks: {},
     ...overrides,
   });
-  if (!result.ok) throw result.error;
-  return result.value;
 };
 
 /** A context that has done everything an execution is expected to do. */

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createInitArvoExecutionContext } from '../../../src/ArvoEventHandler/context/factory.js';
-import type { ArvoInitContextParam } from '../../../src/ArvoEventHandler/context/types.js';
+import { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/index.js';
+import type { ArvoExecutionContextParam } from '../../../src/ArvoEventHandler/context/types.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
+import { createInitArvoExecutionState } from '../../../src/ArvoEventHandler/state/factory.js';
 import type { ArvoEventHandlerOptions } from '../../../src/ArvoEventHandler/types/options.js';
 import type {
   ArvoDependencies,
@@ -18,7 +19,7 @@ const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 const EXECUTION_ID = 'a'.repeat(64);
 
 type InitOverrides = Partial<
-  ArvoInitContextParam<
+  ArvoExecutionContextParam<
     typeof orderVersion,
     typeof services,
     typeof orderData,
@@ -28,11 +29,21 @@ type InitOverrides = Partial<
 >;
 
 const opened = (overrides: InitOverrides = {}) => {
-  const result = createInitArvoExecutionContext({
-    contracts: { self: orderVersion, services },
+  const state = createInitArvoExecutionState<
+    typeof orderVersion,
+    typeof services,
+    typeof orderData
+  >({
+    self: orderVersion,
     event: initEvent,
     executionId: EXECUTION_ID,
     parentExecutionId: initEvent.executionid,
+  });
+  if (!state.ok) throw state.error;
+  return new ArvoExecutionContext({
+    contracts: { self: orderVersion, services },
+    state: state.value,
+    entry: 'init',
     dataSchema: orderData,
     attempt: 0,
     telemetry: tracing,
@@ -41,8 +52,6 @@ const opened = (overrides: InitOverrides = {}) => {
     hooks: {},
     ...overrides,
   });
-  if (!result.ok) throw result.error;
-  return result.value;
 };
 
 /** The resolved options, with the bounds a test cares about replaced. */

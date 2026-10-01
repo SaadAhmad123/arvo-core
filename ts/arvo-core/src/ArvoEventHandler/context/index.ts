@@ -37,10 +37,9 @@ import type {
  * Valid for the execution it was built for. One kept past that describes a
  * execution already over.
  *
- * Built by the version running the execution, through
- * {@link createInitArvoExecutionContext} or
- * {@link createFollowupArvoExecutionContext}, and handed to an executor as
- * its only argument. Never constructed by hand.
+ * Built by the version running the execution, from a record that has
+ * already passed every check, and handed to an executor as its only
+ * argument. Never constructed by hand.
  *
  * @example
  * ```typescript

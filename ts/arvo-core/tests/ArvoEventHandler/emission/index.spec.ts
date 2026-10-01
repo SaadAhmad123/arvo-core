@@ -1,9 +1,10 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
 import { ArvoEvent } from '../../../src/ArvoEvent/index.js';
-import { createInitArvoExecutionContext } from '../../../src/ArvoEventHandler/context/factory.js';
+import { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/index.js';
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
+import { createInitArvoExecutionState } from '../../../src/ArvoEventHandler/state/factory.js';
 import {
   initEvent,
   orderVersion,
@@ -22,11 +23,21 @@ const PARENT_EXECUTION_ID = initEvent.executionid;
 
 /** The factory reports rather than throws; a fixture wants the value. */
 const ctx = () => {
-  const opened = createInitArvoExecutionContext({
-    contracts: { self: orderVersion, services },
+  const state = createInitArvoExecutionState<
+    typeof orderVersion,
+    typeof services,
+    typeof orderData
+  >({
+    self: orderVersion,
     event: initEvent,
     executionId: EXECUTION_ID,
     parentExecutionId: PARENT_EXECUTION_ID,
+  });
+  if (!state.ok) throw state.error;
+  return new ArvoExecutionContext({
+    contracts: { self: orderVersion, services },
+    state: state.value,
+    entry: 'init',
     dataSchema: orderData,
     attempt: 0,
     telemetry: tracing,
@@ -34,8 +45,6 @@ const ctx = () => {
     dependencies: {},
     hooks: {},
   });
-  if (!opened.ok) throw opened.error;
-  return opened.value;
 };
 
 /** An event asking the declared payment service to do something. */

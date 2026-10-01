@@ -1,6 +1,13 @@
 import type * as z from 'zod/v4/core';
+import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { ArvoSemanticVersion } from '../../semver/index.js';
+import type { JSONObject } from '../../types.js';
+import type {
+  ArvoAnyServiceResponse,
+  ArvoInitEvent,
+  ArvoServiceMap,
+} from '../types/services.js';
 
 /**
  * Every place an execution can rest, and the whole of the vocabulary.
@@ -148,3 +155,39 @@ export type ArvoExecutionStateParam<
   TInitEvent,
   TTriggeringEvent
 >;
+
+/**
+ * What opening an execution's record needs.
+ *
+ * Everything a record holds that cannot be read off the event or the
+ * contract, because there is no record yet to read it from.
+ */
+export type ArvoInitStateParam<TSelf extends VersionedArvoContract> = {
+  /** The version of the contract the execution implements. */
+  self: TSelf;
+  /** The event opening the execution. */
+  event: ArvoInitEvent<TSelf>;
+  /**
+   * The execution, derived before the store was consulted. Never derived
+   * here: whatever looked for a record already had to know which execution
+   * it was looking for.
+   */
+  executionId: string;
+  /** The execution that caused this one. */
+  parentExecutionId: string;
+};
+
+/** What restoring a stored record needs. */
+export type ArvoFollowupStateParam<
+  TServices extends ArvoServiceMap,
+  TDataSchema extends z.$ZodObject,
+> = {
+  /** The schema the version declares for what it remembers. */
+  dataSchema: TDataSchema;
+  /** What a declared service answered with. */
+  event: ArvoAnyServiceResponse<TServices>;
+  /** The row as the store held it, already parsed. */
+  state: JSONObject;
+  /** The execution the row must name. */
+  executionId: string;
+};
