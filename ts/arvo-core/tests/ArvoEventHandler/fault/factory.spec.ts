@@ -147,3 +147,53 @@ describe('what building one records', () => {
     expect(recorded.emitted[0].body).toContain('the payment gateway refused');
   });
 });
+
+describe('a fault raised before any record could be read', () => {
+  const unread = async (param: Record<string, unknown> = {}) =>
+    createArvoHandlerFault({
+      contracts: { self: orderVersion },
+      state: null,
+      event: initEvent,
+      initEvent,
+      executionId: 'a'.repeat(64),
+      options: ARVO_DEFAULT_HANDLER_OPTIONS,
+      attempt: 0,
+      telemetry: telemetry().telemetry,
+      faultKind: 'record_invalid',
+      message: 'the stored record does not read as one',
+      ...param,
+    });
+
+  it('names the workflow and the event off the event itself', async () => {
+    const fault = await unread();
+    expect(fault.subject).toBe(initEvent.subject);
+    expect(fault.eventId).toBe(initEvent.id);
+  });
+
+  it('names the execution it was looking for', async () => {
+    expect((await unread()).executionId).toBe('a'.repeat(64));
+  });
+
+  it('names no execution where none was resolved', async () => {
+    expect((await unread({ executionId: null })).executionId).toBeNull();
+  });
+
+  it('commits no record, there being none to carry forward', async () => {
+    expect((await unread()).abandonmentState).toBeNull();
+  });
+
+  it('still addresses the caller, the event that opened it being known', async () => {
+    const written = JSON.parse((await unread()).abandonmentEvent as string);
+    expect(written.to).toBe(initEvent.source);
+    expect(written.initid).toBe(initEvent.id);
+  });
+
+  it('addresses nobody where even that event is unknown', async () => {
+    expect((await unread({ initEvent: null })).abandonmentEvent).toBeNull();
+  });
+
+  it('still says whether another attempt is due', async () => {
+    const fault = await unread({ faultKind: 'state_resolution_failed' });
+    expect(fault.retry).not.toBeNull();
+  });
+});

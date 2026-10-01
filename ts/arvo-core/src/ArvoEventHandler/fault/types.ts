@@ -1,4 +1,5 @@
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
+import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { ArvoExecutionContextTelemetry } from '../context/telemetry/index.js';
 import type { ArvoExecutionState } from '../state/index.js';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
@@ -102,8 +103,6 @@ export type ArvoHandlerFaultParam = {
 export type ArvoHandlerFaultFactoryParam = {
   /** The version of the contract the failing execution implements. */
   contracts: { self: VersionedArvoContract };
-  /** What the execution remembers, read for everything the fault names. */
-  state: ArvoExecutionState;
   /** The options in force, which decide the retry verdict and the domain. */
   options: ArvoEventHandlerOptions;
   /** Which attempt failed, counting from 0. */
@@ -124,4 +123,29 @@ export type ArvoHandlerFaultFactoryParam = {
    * otherwise; every other kind carries the verdict its vocabulary fixes.
    */
   retryable?: boolean;
-};
+} & (
+  | {
+      /**
+       * What the execution remembers, which answers everything else the
+       * fault names.
+       */
+      state: ArvoExecutionState;
+    }
+  | {
+      /**
+       * No record, the failure having happened before one could be read.
+       * What a record would have answered is then asked for directly.
+       */
+      state: null;
+      /** The event that caused this execution. */
+      event: ArvoEvent;
+      /**
+       * The event that opened the execution, where that is known. `null`
+       * on a response, whose own source is the service rather than the
+       * caller, leaving nobody to address.
+       */
+      initEvent: ArvoEvent | null;
+      /** The execution being looked for, or `null` where none was resolved. */
+      executionId: string | null;
+    }
+);
