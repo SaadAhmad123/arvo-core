@@ -1,16 +1,14 @@
 import * as z from 'zod/v4/core';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
-import { createArvoEventFactory } from '../../factories/ArvoEventFactory/index.js';
-import { ArvoEventSerializer } from '../../serializers/ArvoEventSerializer/index.js';
 import { tryBuildEmittedEvent } from '../emission/index.js';
 import type {
   ArvoEmissionParam,
   ArvoEmittedEvent,
   ArvoUnsafeEmissionFields,
 } from '../emission/types.js';
-import { ArvoHandlerFault } from '../fault/index.js';
-import { isRetrySafeFaultKind, resolveRetry } from '../fault/retry.js';
+import { createArvoHandlerFault } from '../fault/factory.js';
+import type { ArvoHandlerFault } from '../fault/index.js';
 import type { ArvoFaultKind } from '../fault/types.js';
 import { ArvoExecutionStateSerializer } from '../state/serializer/index.js';
 import type { ArvoTouchedEventDirection } from '../state/types.js';
@@ -443,86 +441,13 @@ export class ArvoExecutionContext<
     violations?: readonly string[];
     retryable?: boolean;
   }): Promise<ArvoHandlerFault> {
-    const timestamp = Date.now();
-    const abandonment = await this.#abandonment(param.message);
-    const fault = new ArvoHandlerFault({
-      faultKind: param.faultKind,
-      message: param.message,
-      violations: param.violations ?? [],
-      cause: param.cause ?? null,
-      subject: this.#state.subject,
-      executionId: this.#state.executionId,
-      eventId: this.#state.triggeringEvent.id,
+    return createArvoHandlerFault({
+      contracts: { self: this.contracts.self },
+      state: this.#state,
+      options: this.options,
       attempt: this.attempt,
-      timestamp,
-      retry: resolveRetry({
-        retrySafe: isRetrySafeFaultKind(
-          param.faultKind,
-          param.retryable ?? true,
-        ),
-        attempt: this.attempt,
-        maxRetryAttempts: this.options.maxRetryAttempts,
-        retryDelay: this.options.retryDelay,
-        event: this.#state.triggeringEvent,
-        state: this.#state,
-        timestamp,
-      }),
-      abandonmentEvent: abandonment.event,
-      abandonmentState: abandonment.state,
+      telemetry: this.telemetry,
+      ...param,
     });
-
-    this.telemetry.recordFault(fault);
-    return fault;
-  }
-
-  /**
-   * What a mechanism would publish and commit if it gave up on this
-   * execution, both already written out. Built here, never acted on here.
-   *
-   * Addressed to the caller. `#`-private because an executor may not
-   * construct the handler error event, and `private` erases at runtime.
-   */
-  // Either half is null rather than thrown on: a fault that must be raised
-  // must not be lost to a second failure while raising it.
-  async #abandonment(
-    message: string,
-  ): Promise<{ event: string | null; state: string | null }> {
-    const built = createArvoEventFactory(this.contracts.self).tryCreateError({
-      error: new Error(message),
-      domain: this.options.handlerErrorDomain ?? undefined,
-      source: this.#state.source,
-      subject: this.#state.subject,
-      to: this.#state.initEvent.source,
-      executionid: this.#state.parentExecutionId,
-      parentid: this.#state.triggeringEvent.id,
-      initid: this.#state.initEvent.id,
-      depth: this.#state.depth,
-    });
-
-    const event = built.ok ? built.value : null;
-    const written =
-      event === null
-        ? null
-        : await new ArvoEventSerializer({ type: 'arvoevent' }).trySerialize(
-            event,
-          );
-
-    const record = mutateState(this.#state, {
-      lifecycle: 'failure',
-      lifecycleDescription: message,
-      eventIds:
-        event === null
-          ? this.#state.eventIds
-          : [...this.#state.eventIds, { id: event.id, direction: 'emitted' }],
-      casVersion: this.#state.casVersion + 1,
-    });
-    const storedRecord = await new ArvoExecutionStateSerializer().trySerialize(
-      record,
-    );
-
-    return {
-      event: written?.ok ? written.value : null,
-      state: storedRecord.ok ? storedRecord.value : null,
-    };
   }
 }

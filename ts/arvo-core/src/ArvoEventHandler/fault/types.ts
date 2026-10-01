@@ -1,3 +1,8 @@
+import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
+import type { ArvoExecutionContextTelemetry } from '../context/telemetry/index.js';
+import type { ArvoExecutionState } from '../state/index.js';
+import type { ArvoEventHandlerOptions } from '../types/options.js';
+
 /**
  * Every way an execution can fail to be carried through.
  *
@@ -91,4 +96,32 @@ export type ArvoHandlerFaultParam = {
   abandonmentEvent: string | null;
   /** The record to commit alongside it, written out, or `null`. */
   abandonmentState: string | null;
+};
+
+/** What describing one execution's failure takes. */
+export type ArvoHandlerFaultFactoryParam = {
+  /** The version of the contract the failing execution implements. */
+  contracts: { self: VersionedArvoContract };
+  /** What the execution remembers, read for everything the fault names. */
+  state: ArvoExecutionState;
+  /** The options in force, which decide the retry verdict and the domain. */
+  options: ArvoEventHandlerOptions;
+  /** Which attempt failed, counting from 0. */
+  attempt: number;
+  /** Where the fault is written as it is built. */
+  telemetry: ArvoExecutionContextTelemetry;
+  /** Which fault this is, from the fixed vocabulary. */
+  faultKind: ArvoFaultKind;
+  /** What failed, readable without the source at hand. */
+  message: string;
+  /** The underlying failure as a string. Omit where nothing underlies it. */
+  cause?: string;
+  /** Every check that failed. Omit where none was collected. */
+  violations?: readonly string[];
+  /**
+   * Whether another attempt could fix this. Consulted for
+   * `executor_raised` alone, where the answer is yes unless stated
+   * otherwise; every other kind carries the verdict its vocabulary fixes.
+   */
+  retryable?: boolean;
 };
