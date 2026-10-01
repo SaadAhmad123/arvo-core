@@ -24,3 +24,38 @@ export type ArvoMechanismHooks = Record<string, any>;
  * never declared is the error, at the line that reached.
  */
 export type ArvoNone = Record<never, never>;
+
+/**
+ * Where a declaration states the types of what a mechanism will supply.
+ *
+ * Read by nothing and stored by nothing. It exists because neither
+ * dependencies nor hooks are part of a declaration — both arrive per
+ * delivery — so there is no value for TypeScript to infer their types
+ * from. Naming them here is the only way an executor's `ctx.dependencies`
+ * and `ctx.hooks` are anything but `any`.
+ *
+ * Both are optional, and an omitted one declares nothing rather than
+ * everything: reaching for what was never declared is then an error at the
+ * line that reached.
+ *
+ * Must be written as a type alias. TypeScript gives an alias an implicit
+ * index signature and an `interface` none, so an interface will not
+ * satisfy the constraint an identical alias satisfies.
+ *
+ * @example
+ * ```typescript
+ * types: {} as {
+ *   dependencies: { db: Db };
+ *   mechanismHooks: { scheduler: Scheduler };
+ * },
+ * ```
+ */
+export type ArvoDeclaredTypes<
+  TDependencies extends ArvoDependencies = ArvoNone,
+  TMechanismHooks extends ArvoMechanismHooks = ArvoNone,
+> = Partial<{
+  /** What an executor finds on `ctx.dependencies`. */
+  dependencies: TDependencies;
+  /** What an executor finds on `ctx.hooks`. */
+  mechanismHooks: TMechanismHooks;
+}>;
