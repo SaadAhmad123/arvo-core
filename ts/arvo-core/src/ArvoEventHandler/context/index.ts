@@ -408,6 +408,10 @@ export class ArvoExecutionContext<
    * only what went wrong. The pair a mechanism would abandon this
    * execution with is built with it, and neither half is acted on here.
    *
+   * Recorded on the delivery span as it is built. A fault writes no
+   * record, so the trace may be the only place a retried-away failure is
+   * ever visible.
+   *
    * @param param.faultKind - Which fault this is. Read by a mechanism to
    * decide what to do, so it comes from the fixed vocabulary.
    * @param param.message - What failed, the value involved, and the rule
@@ -441,7 +445,7 @@ export class ArvoExecutionContext<
   }): Promise<ArvoHandlerFault> {
     const timestamp = Date.now();
     const abandonment = await this.#abandonment(param.message);
-    return new ArvoHandlerFault({
+    const fault = new ArvoHandlerFault({
       faultKind: param.faultKind,
       message: param.message,
       violations: param.violations ?? [],
@@ -466,6 +470,9 @@ export class ArvoExecutionContext<
       abandonmentEvent: abandonment.event,
       abandonmentState: abandonment.state,
     });
+
+    this.telemetry.recordFault(fault);
+    return fault;
   }
 
   /**

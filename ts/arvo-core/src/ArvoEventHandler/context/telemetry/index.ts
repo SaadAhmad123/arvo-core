@@ -8,7 +8,7 @@ import { traceContextFromSpan } from '../../../ArvoEvent/opentelemetry.js';
 import type { ArvoHandlerFault } from '../../fault/index.js';
 import { ArvoExecutionContextLogger } from './logger.js';
 import { ArvoExecutionContextMeter } from './metric.js';
-import { ARVO_TELEMETRY_PREFIX } from './prefix.js';
+import { ARVO_DEFAULT_SPAN_ERROR, ARVO_TELEMETRY_PREFIX } from './prefix.js';
 import type { ArvoExecutionContextTelemetryParam } from './types.js';
 
 /**
@@ -98,23 +98,61 @@ export class ArvoExecutionContextTelemetry {
   }
 
   /**
-   * A fault on this delivery's span, with its kind and whether another
-   * attempt is due.
+   * Marks this delivery's span succeeded.
    *
-   * A fault writes no record, so the trace may be the only place a
-   * retried-away failure is ever visible.
+   * Set it where the delivery is carried through. A span left unset reads
+   * as neither, which a backend cannot tell from one nobody judged.
+   */
+  setSpanOk(): void {
+    this.span.setStatus({ code: SpanStatusCode.OK });
+  }
+
+  /**
+   * Marks this delivery's span failed, with a reason.
+   *
+   * @param message - Why it failed. Defaults to something generic, which
+   * is worth replacing: the status is often all a reader has.
+   */
+  setSpanError(message: string = ARVO_DEFAULT_SPAN_ERROR): void {
+    this.span.setStatus({ code: SpanStatusCode.ERROR, message });
+  }
+
+  /**
+   * A fault across all three signals, each for a different reader.
+   *
+   * On the span, for whoever has the trace open. On a counter, so faults
+   * by kind can be charted and alerted on. And as a log record, which is
+   * the only one of the three that survives a sampling decision — a fault
+   * retried away leaves nothing else behind.
+   *
+   * Only the kind and the retry verdict reach the counter, both being
+   * closed sets. Everything identifying goes to the log, where cardinality
+   * costs nothing.
    *
    * @param fault - The fault about to be raised.
    */
   recordFault(fault: ArvoHandlerFault): void {
+    const retryable = fault.retry !== null;
+
     this.span.recordException(fault);
     this.setAttributes({
       'fault.kind': fault.faultKind,
-      'fault.retryable': fault.retry !== null,
+      'fault.retryable': retryable,
     });
-    this.span.setStatus({
-      code: SpanStatusCode.ERROR,
-      message: fault.message,
+    this.setSpanError(fault.message);
+
+    this.metric.count('faults', {
+      'fault.kind': fault.faultKind,
+      'fault.retryable': retryable,
+    });
+
+    this.logger.error(fault.message, {
+      'fault.kind': fault.faultKind,
+      'fault.retryable': retryable,
+      subject: fault.subject,
+      'execution.id': fault.executionId,
+      'event.id': fault.eventId,
+      attempt: fault.attempt,
     });
   }
 }

@@ -1,5 +1,6 @@
 import {
   type Attributes,
+  type Meter,
   metrics,
   type Span,
   type SpanContext,
@@ -9,6 +10,7 @@ import {
 } from '@opentelemetry/api';
 import { describe, expect, it } from 'vitest';
 import { ArvoExecutionContextTelemetry } from '../../../../src/ArvoEventHandler/context/telemetry/index.js';
+import type { ArvoLogRecord } from '../../../../src/ArvoEventHandler/context/telemetry/types.js';
 import { ArvoHandlerFault } from '../../../../src/ArvoEventHandler/fault/index.js';
 import { initEvent } from '../../fixtures.js';
 
@@ -33,6 +35,24 @@ const spy = (overrides: Partial<SpanContext> = {}) => {
       statuses.push(given),
   } as unknown as Span;
   return { span, attributes, events, exceptions, statuses };
+};
+
+/** Everything a meter and a logger were asked to record. */
+const watching = (span: Span) => {
+  const counted: { name: string; attributes?: unknown }[] = [];
+  const logged: ArvoLogRecord[] = [];
+  const telemetry = new ArvoExecutionContextTelemetry({
+    span,
+    meter: {
+      createCounter: (name: string) => ({
+        add: (_value: number, attributes?: unknown) =>
+          counted.push({ name, attributes }),
+      }),
+      createHistogram: () => ({ record: () => undefined }),
+    } as unknown as Meter,
+    logger: { emit: (record) => logged.push(record) },
+  });
+  return { telemetry, counted, logged };
 };
 
 const built = (span: Span) =>
@@ -156,6 +176,32 @@ describe("one delivery's telemetry", () => {
     });
   });
 
+  describe('marking how the delivery went', () => {
+    it('says it succeeded', () => {
+      const watched = spy();
+      built(watched.span).setSpanOk();
+      expect(watched.statuses[0]).toEqual({ code: SpanStatusCode.OK });
+    });
+
+    it('says it failed, with the reason given', () => {
+      const watched = spy();
+      built(watched.span).setSpanError('the gateway refused');
+      expect(watched.statuses[0]).toEqual({
+        code: SpanStatusCode.ERROR,
+        message: 'the gateway refused',
+      });
+    });
+
+    it('says it failed with something generic where nothing said why', () => {
+      const watched = spy();
+      built(watched.span).setSpanError();
+      expect(watched.statuses[0]).toEqual({
+        code: SpanStatusCode.ERROR,
+        message: 'the delivery did not succeed',
+      });
+    });
+  });
+
   describe('a fault recorded before it is raised', () => {
     it('reaches the span as an exception', () => {
       const watched = spy();
@@ -193,6 +239,47 @@ describe("one delivery's telemetry", () => {
       expect(watched.statuses[0]).toEqual({
         code: SpanStatusCode.ERROR,
         message: 'the executor did not return in time',
+      });
+    });
+
+    it('counts it by kind, so faults can be charted and alerted on', () => {
+      const watched = watching(spy().span);
+      watched.telemetry.recordFault(fault());
+      expect(watched.counted).toEqual([
+        {
+          name: 'arvo.faults',
+          attributes: { 'fault.kind': 'run_timeout', 'fault.retryable': true },
+        },
+      ]);
+    });
+
+    it('puts nothing identifying on the counter, cardinality costing there', () => {
+      const watched = watching(spy().span);
+      watched.telemetry.recordFault(fault());
+      expect(
+        Object.keys(watched.counted[0]?.attributes as object).sort(),
+      ).toEqual(['fault.kind', 'fault.retryable']);
+    });
+
+    it('logs it, that being the one signal sampling cannot drop', () => {
+      const watched = watching(spy().span);
+      watched.telemetry.recordFault(fault());
+      expect(watched.logged[0]?.severityNumber).toBe(17);
+      expect(watched.logged[0]?.body).toBe(
+        'the executor did not return in time',
+      );
+    });
+
+    it('names the delivery in that log, where cardinality costs nothing', () => {
+      const watched = watching(spy().span);
+      watched.telemetry.recordFault(fault());
+      expect(watched.logged[0]?.attributes).toEqual({
+        'fault.kind': 'run_timeout',
+        'fault.retryable': true,
+        subject: initEvent.subject,
+        'execution.id': initEvent.executionid,
+        'event.id': initEvent.id,
+        attempt: 0,
       });
     });
   });

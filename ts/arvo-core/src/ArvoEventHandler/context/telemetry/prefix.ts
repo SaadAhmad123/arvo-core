@@ -6,3 +6,6 @@
  * else it collects.
  */
 export const ARVO_TELEMETRY_PREFIX = 'arvo.';
+
+/** What a span is marked failed with where nothing said why. */
+export const ARVO_DEFAULT_SPAN_ERROR = 'the delivery did not succeed';
