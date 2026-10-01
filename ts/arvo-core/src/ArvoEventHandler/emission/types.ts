@@ -4,6 +4,7 @@ import type { ArvoDomainInput } from '../../ArvoDomain/types.js';
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { ArvoEventParam } from '../../ArvoEvent/types.js';
 import type { TraceContextParam } from '../../factories/ArvoEventFactory/types.js';
+import type { ArvoExecutionContextTelemetry } from '../context/telemetry/index.js';
 import type { ArvoExecutionState } from '../state/index.js';
 import type { PayloadOf } from '../types/schema.js';
 import type { ArvoServiceMap } from '../types/services.js';
@@ -34,9 +35,9 @@ export type ArvoEmittableType<
  * Fields already set correctly, whose wrong value spoils a reply path, a
  * correlation, a trace, or the whole workflow rather than only this event.
  *
- * Setting one is permitted, not blessed: an override breaking a rule
- * ADR-001 states emits a non-conformant event, and the consequences are
- * yours. ADR-006, *What an executor may set* names each and who bears it.
+ * Setting one is permitted, not blessed. An override that breaks a rule
+ * of the event model emits a non-conformant event, and the consequences
+ * are yours and whoever downstream never chose them.
  */
 export type ArvoUnsafeEmissionFields = Pick<
   ArvoEventParam,
@@ -103,4 +104,6 @@ export type ArvoEmissionContext<
   services: TServices;
   /** The execution the event is emitted from. */
   state: ArvoExecutionState;
+  /** The delivery's tracing, which every emitted event descends from. */
+  telemetry: ArvoExecutionContextTelemetry;
 };

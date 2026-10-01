@@ -41,7 +41,7 @@ const addressingFor = <TSelf extends VersionedArvoContract>(
 
 /**
  * A fully addressed event from a type and a payload, or why it could not
- * be built. Sets every field of ADR-006, *The complete field defaults*.
+ * be built. Every field the protocol fixes is set here.
  */
 export const tryBuildEmittedEvent = <
   TSelf extends VersionedArvoContract,
@@ -77,8 +77,8 @@ export const tryBuildEmittedEvent = <
     parentid: state.triggeringEvent.id,
     baggage: state.triggeringEvent.baggage,
     executionunits: param.executionunits ?? 0,
-    traceparent: state.triggeringEvent.traceparent,
-    tracestate: state.triggeringEvent.tracestate,
+    traceparent: context.telemetry.traceparent ?? undefined,
+    tracestate: context.telemetry.tracestate ?? undefined,
     ...param.unsafe,
   };
 

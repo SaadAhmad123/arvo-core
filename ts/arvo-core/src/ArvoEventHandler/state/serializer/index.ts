@@ -109,12 +109,10 @@ export class ArvoExecutionStateSerializer<
    * Every event comes back as an event. Data is checked against the schema
    * but never rewritten by it, so what comes back is what was stored.
    *
-   * A string that is not JSON is a serializer failure; a record that reads
-   * but is wrong is a validation failure naming every field at fault.
-   * Nothing half restored is given back.
-   *
-   * Reports a serializer failure where this was built without a schema,
-   * there being nothing to check the data against.
+   * A string that is not JSON, or a serializer built without a schema, is
+   * a serializer failure. A record that reads but is wrong is a validation
+   * failure naming every field at fault. Nothing half restored is given
+   * back.
    */
   async tryDeserialize(
     wire: string,

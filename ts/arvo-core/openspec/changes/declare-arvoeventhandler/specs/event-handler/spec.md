@@ -226,6 +226,114 @@ A clock already overrun SHALL report a figure below zero rather than none.
 - **WHEN** an executor reads a clock it has already passed
 - **THEN** it is told by how much
 
+### Requirement: What A Delivery Records Against
+
+The system SHALL carry the delivery's tracing span to an executor, so that what an executor does is recorded against the same delivery everything else is.
+
+That span SHALL be supplied from outside and carried unchanged. The system SHALL neither start nor end it. The tracing headers of that span SHALL be readable alongside it, and SHALL be absent where the span records nothing.
+
+Every event the system builds SHALL descend from that span rather than from the event which caused the delivery, so that the causal chain joins through the handler rather than around it.
+
+#### Scenario: An executor records what it did
+- **WHEN** an executor reaches the delivery's span
+- **THEN** it is the span the delivery was given
+
+#### Scenario: An event built during the delivery
+- **WHEN** an event is built
+- **THEN** its tracing names the delivery's span
+
+#### Scenario: Nothing is collecting traces
+- **WHEN** the span records nothing
+- **THEN** no tracing headers are offered
+- **AND** an event built carries none rather than carrying meaningless ones
+
+### Requirement: Taking In A Response An Execution Was Waiting For
+
+The system SHALL record a service's response against the request it answers, so that what an execution is still waiting for is always what it says.
+
+The request answered SHALL be the one the response names. Recording it SHALL leave everything else about the execution as it was, and SHALL add the response to the events the execution has handled.
+
+A response nothing is waiting for SHALL be refused as an execution fault naming exactly that, and SHALL leave what is remembered unchanged. Three cases SHALL be refused alike: a response naming no request, a response naming one this execution never awaited, and a response naming one already answered.
+
+#### Scenario: A response that was awaited
+- **WHEN** a response naming an outstanding request is taken in
+- **THEN** that request holds the response rather than nothing
+- **AND** the response is among the events the execution has handled
+
+#### Scenario: Everything else is left alone
+- **WHEN** a response is taken in
+- **THEN** the data, the identity and where the execution rests are what they were
+
+#### Scenario: A response naming no request
+- **WHEN** a response naming no request at all is taken in
+- **THEN** an execution fault naming an unawaited response is reported
+
+#### Scenario: A response nothing awaited
+- **WHEN** a response naming a request this execution never made is taken in
+- **THEN** an execution fault naming an unawaited response is reported
+- **AND** what is remembered is unchanged
+
+#### Scenario: A request already answered
+- **WHEN** a response naming a request that already holds an answer is taken in
+- **THEN** an execution fault naming an unawaited response is reported
+- **AND** the answer already held is unchanged
+
+### Requirement: Noting An Event The Execution Handled
+
+The system SHALL let an event be added to those an execution has handled, saying which way it went, so that the trail an execution leaves is complete.
+
+An event already among them SHALL be left as it was noted, and SHALL NOT appear twice. Nothing else about the execution SHALL move.
+
+#### Scenario: An event the execution received
+- **WHEN** an event is noted as received
+- **THEN** it is last among the events the execution has handled, marked as received
+
+#### Scenario: An event the execution emitted
+- **WHEN** an event is noted as emitted
+- **THEN** it is last among them, marked as emitted
+
+#### Scenario: An event noted twice
+- **WHEN** an event already among them is noted again
+- **THEN** it appears once, as it was first noted
+
+#### Scenario: Nothing else moves
+- **WHEN** an event is noted
+- **THEN** the data, the identity and where the execution rests are what they were
+
+### Requirement: Checking An Event Against The Contract Governing It
+
+The system SHALL check that the event which caused this delivery satisfies the schema the contract governing it selects, and SHALL report an execution fault naming a rejected payload where it does not.
+
+The contract governing it SHALL follow from how the delivery was classified: the implemented contract's own input where the delivery opened the execution, and the answering service's contract where it did not.
+
+The system SHALL check that an event an executor means to emit may be emitted and satisfies the schema its type selects. A type this version may not emit SHALL be reported as an impermissible emission, a payload the schema refuses as a rejected payload, and an event that would sit at or beyond the depth this version allows as a depth breach.
+
+#### Scenario: A delivered event that satisfies its contract
+- **WHEN** the event that caused this delivery is checked
+- **AND** its payload satisfies the schema its contract selects
+- **THEN** nothing is reported
+
+#### Scenario: A delivered event that does not
+- **WHEN** its payload does not satisfy that schema
+- **THEN** an execution fault naming a rejected payload is reported
+- **AND** it names every rule the payload broke
+
+#### Scenario: An event an executor means to emit
+- **WHEN** an event of a type this version may emit, with a payload its schema accepts, is checked
+- **THEN** nothing is reported
+
+#### Scenario: An event of a type this version may not emit
+- **WHEN** such an event is checked
+- **THEN** an execution fault naming an impermissible emission is reported
+
+#### Scenario: An event whose payload the schema refuses
+- **WHEN** such an event is checked
+- **THEN** an execution fault naming a rejected payload is reported
+
+#### Scenario: An event that would breach the depth allowed
+- **WHEN** an event to a service that would sit at or beyond the maximum is checked
+- **THEN** an execution fault naming a depth breach is reported
+
 ### Requirement: Ending An Execution Deliberately
 
 The system SHALL let an executor end its own execution with a reason, leaving it at rest and unable to continue.

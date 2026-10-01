@@ -23,6 +23,14 @@ export type {
 export { ArvoEventValidationError } from './ArvoEvent/errors.js';
 export { ArvoEvent } from './ArvoEvent/index.js';
 export type {
+  ArvoEventTraceContext,
+  ArvoEventTraceContinuation,
+} from './ArvoEvent/opentelemetry.js';
+export {
+  continueTraceFromEvent,
+  traceContextFromSpan,
+} from './ArvoEvent/opentelemetry.js';
+export type {
   ArvoEventFields,
   ArvoEventParam,
   ArvoEventValidationOptions,

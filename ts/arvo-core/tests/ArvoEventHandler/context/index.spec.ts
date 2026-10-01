@@ -23,9 +23,13 @@ import {
   orderVersion,
   paymentFailedEvent,
   services,
+  telemetry,
 } from '../fixtures.js';
 
 /** What a version declares when it remembers something specific. */
+/** What a delivery records against; these tests only carry it. */
+const { span, meter, logger } = telemetry();
+
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
 /** What a version that declares nothing of its own is given instead. */
@@ -82,6 +86,9 @@ const base = {
   contracts: { self: orderVersion, services },
   dataSchema: orderData,
   attempt: 0,
+  span,
+  meter,
+  logger,
   options: ARVO_DEFAULT_HANDLER_OPTIONS,
   dependencies: {},
   hooks: {},
@@ -198,6 +205,29 @@ describe('ArvoExecutionContext', async () => {
       expect(ctx.state.lifecycle).toBe('waiting');
       expect(ctx.state.depth).toBe(0);
       expect(ctx.state.casVersion).toBe(0);
+    });
+  });
+
+  describe('the telemetry it carries', () => {
+    it('records against the span the delivery was given', () => {
+      expect(onInit().telemetry.span).toBe(span);
+    });
+
+    it('metres on the meter the delivery was given', () => {
+      expect(onInit().telemetry.metric.meter).toBe(meter);
+    });
+
+    it('logs through what the delivery was given', () => {
+      const delivery = telemetry();
+      const ctx = onInit({
+        span: delivery.span,
+        meter: delivery.meter,
+        logger: delivery.logger,
+      });
+      ctx.telemetry.logger.info('charging', { amount: 10 });
+      expect(delivery.emitted).toEqual([
+        { severityNumber: 9, body: 'charging', attributes: { amount: 10 } },
+      ]);
     });
   });
 
@@ -531,6 +561,7 @@ describe('ArvoExecutionContext', async () => {
         'entry',
         'hooks',
         'options',
+        'telemetry',
       ]);
     });
   });

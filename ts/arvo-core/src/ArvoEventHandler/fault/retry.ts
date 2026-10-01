@@ -5,8 +5,7 @@ import type { ArvoRetryDelayFn } from '../types/options.js';
 import type { ArvoFaultKind, ArvoFaultRetry } from './types.js';
 
 /**
- * The kinds a redelivery could plausibly fix, per ADR-008's `fault_kind`
- * table.
+ * The kinds a redelivery could plausibly fix.
  *
  * Every other kind is reproduced exactly by a redelivery.
  * `executor_raised` is absent deliberately: it is the one kind whose

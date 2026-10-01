@@ -10,8 +10,7 @@ export const ARVO_OPENING_LIFECYCLE = 'idle';
 export const ARVO_OPENING_CAS_VERSION = 0;
 
 /**
- * What every option is where an author wrote nothing, per ADR-006,
- * *Options*.
+ * What every option is where an author wrote nothing.
  *
  * The handler level is complete, so these are what a handler holds before
  * any version narrows them. The only place in this package that spells a
@@ -30,11 +29,11 @@ export const ARVO_DEFAULT_HANDLER_OPTIONS: ArvoEventHandlerOptions =
 
 /**
  * The delay used where a `retryDelay` function fails at the moment it is
- * needed, per ADR-009, *`retry delay` must not be able to fail*.
+ * needed, that function not being allowed to fail.
  */
 export const ARVO_RETRY_DELAY_FALLBACK_MS = 300;
 
-/** What an event opening an execution declares itself to be, per ADR-001. */
+/** What an event opening an execution declares itself to be. */
 export const ARVO_CATEGORY_INIT = 'io.arvo.init';
 
 /** What an event completing an execution declares itself to be. */

@@ -1,5 +1,6 @@
 import * as z from 'zod/v4/core';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
+import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import { createArvoEventFactory } from '../../factories/ArvoEventFactory/index.js';
 import { ArvoEventSerializer } from '../../serializers/ArvoEventSerializer/index.js';
 import { tryBuildEmittedEvent } from '../emission/index.js';
@@ -12,6 +13,7 @@ import { ArvoHandlerFault } from '../fault/index.js';
 import { isRetrySafeFaultKind, resolveRetry } from '../fault/retry.js';
 import type { ArvoFaultKind } from '../fault/types.js';
 import { ArvoExecutionStateSerializer } from '../state/serializer/index.js';
+import type { ArvoTouchedEventDirection } from '../state/types.js';
 import { mutateState } from '../state/utils.js';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
 import type { ArvoServiceMap } from '../types/services.js';
@@ -19,6 +21,7 @@ import type {
   ArvoDependencies,
   ArvoMechanismHooks,
 } from '../types/supplied.js';
+import { ArvoExecutionContextTelemetry } from './telemetry/index.js';
 import type {
   ArvoContextState,
   ArvoDataWrite,
@@ -37,14 +40,17 @@ import type {
  * delivery already over.
  *
  * @example
+ * One arrives already built, as an executor's only argument:
  * ```typescript
- * ctx.state.triggeringEvent.type;  // what caused this delivery
- * ctx.state.initEvent.data.items;  // what opened the execution
- * ctx.entry;                       // 'init' | 'followup'
+ * execute: async (ctx: ArvoExecutionContext) => {
+ *   ctx.state.triggeringEvent.type;  // what caused this delivery
+ *   ctx.state.initEvent.data.items;  // what opened the execution
+ *   ctx.entry;                       // 'init' | 'followup'
  *
- * await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
- * await ctx.setState({ data: (now) => ({ ...now, attempts: now.attempts + 1 }) });
- * ctx.state.data.attempts;         // 2
+ *   await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
+ *   await ctx.setState({ data: (now) => ({ ...now, attempts: now.attempts + 1 }) });
+ *   ctx.state.data.attempts;         // 2
+ * }
  * ```
  */
 export class ArvoExecutionContext<
@@ -78,11 +84,14 @@ export class ArvoExecutionContext<
   /** What the mechanism running this handler exposed, or empty where it exposed none. */
   readonly hooks: TMechanismHooks;
 
+  /** This delivery's telemetry object */
+  readonly telemetry: ArvoExecutionContextTelemetry;
+
   /**
    * Whether one more step would reach the depth this version allows.
    *
    * Emitting to a service once it is true is refused, so read it before
-   * deciding what to return. See ADR-009, *Depth*.
+   * deciding what to return.
    */
   readonly atMaxDepth: boolean;
 
@@ -115,6 +124,11 @@ export class ArvoExecutionContext<
     this.dataSchema = param.dataSchema;
     this.dependencies = param.dependencies;
     this.hooks = param.hooks;
+    this.telemetry = new ArvoExecutionContextTelemetry({
+      span: param.span,
+      meter: param.meter,
+      logger: param.logger,
+    });
     this.#state = param.state;
     this.atMaxDepth = param.state.depth + 1 >= param.options.maxDepth;
     this.enteredAt = Date.now();
@@ -242,6 +256,82 @@ export class ArvoExecutionContext<
   }
 
   /**
+   * Records a service's response against the request it answers.
+   *
+   * The request is the one the response names, which is the `id` of the
+   * event this execution emitted. Nothing else about the execution moves,
+   * and the response joins the events it has handled.
+   *
+   * @param event - The response to take in.
+   * @throws {ArvoHandlerFault} `response_unawaited` where the response
+   * names no request, names one this execution never awaited, or names one
+   * already answered. What is remembered is left as it was.
+   *
+   * @example
+   * ```typescript
+   * await ctx.collect(response);
+   * ctx.state.inFlightEventMap.get(request.id); // the response
+   * ```
+   */
+  async collect(event: ArvoEvent): Promise<void> {
+    const awaited = event.initid;
+    const held =
+      awaited === null ? undefined : this.#state.inFlightEventMap.get(awaited);
+
+    if (awaited === null || held === undefined || held !== null) {
+      throw await this.fault({
+        faultKind: 'response_unawaited',
+        message: `this execution is not waiting for ${
+          awaited === null
+            ? 'a response naming no request'
+            : held === undefined
+              ? `a response to ${awaited}, which it never awaited`
+              : `a second response to ${awaited}, which is already answered`
+        }`,
+      });
+    }
+
+    const awaiting = new Map(this.#state.inFlightEventMap);
+    awaiting.set(awaited, event);
+    this.#state = mutateState(this.#state, { inFlightEventMap: awaiting });
+    this.markEventReceived(event);
+  }
+
+  /**
+   * Adds an event to those this execution has handled, as received.
+   *
+   * The trail an execution leaves, not telemetry. Nothing else moves.
+   *
+   * @param event - The event the execution took in.
+   */
+  markEventReceived(event: ArvoEvent): void {
+    this.#markEvent(event, 'received');
+  }
+
+  /**
+   * Adds an event to those this execution has handled, as emitted.
+   *
+   * @param event - The event the execution sent.
+   */
+  markEventEmitted(event: ArvoEvent): void {
+    this.#markEvent(event, 'emitted');
+  }
+
+  /**
+   * One event appended to the log, whichever way it went, and only once.
+   *
+   * An event already logged is left alone. An event `id` is unique across
+   * the ecosystem, so a second appearance is the same event, and a log
+   * holding it twice would claim the execution handled two.
+   */
+  #markEvent(event: ArvoEvent, direction: ArvoTouchedEventDirection): void {
+    if (this.#state.eventIds.some((logged) => logged.id === event.id)) return;
+    this.#state = mutateState(this.#state, {
+      eventIds: [...this.#state.eventIds, { id: event.id, direction }],
+    });
+  }
+
+  /**
    * Ends this execution deliberately, at rest and with a reason.
    *
    * Nothing else about the execution moves. The reason is what a caller
@@ -266,7 +356,7 @@ export class ArvoExecutionContext<
    *
    * The type decides where it goes: one of this version's outputs completes
    * the execution, a declared service's input opens one there. Every other
-   * field is set for you, per ADR-006, *The complete field defaults*.
+   * field the protocol fixes is set for you.
    *
    * @param param.type - A declared service's input type, or one of this
    * version's outputs. The handler error type is refused: producing one is
@@ -299,6 +389,7 @@ export class ArvoExecutionContext<
         self: this.contracts.self,
         services: this.contracts.services,
         state: this.#state,
+        telemetry: this.telemetry,
       },
       param,
     );
@@ -328,7 +419,7 @@ export class ArvoExecutionContext<
    * @param param.retryable - Whether another attempt could fix this.
    * Consulted for `executor_raised` alone, where the vocabulary leaves the
    * verdict to you and the answer is yes unless you say otherwise. Every
-   * other kind carries the verdict ADR-008 fixes for it.
+   * other kind carries the verdict its own vocabulary fixes.
    *
    * @example
    * ```typescript
@@ -381,8 +472,8 @@ export class ArvoExecutionContext<
    * What a mechanism would publish and commit if it gave up on this
    * execution, both already written out. Built here, never acted on here.
    *
-   * Addressed to the caller per ADR-006, *Addressing*. `#`-private because
-   * that ADR forbids an executor constructing the handler error event.
+   * Addressed to the caller. `#`-private because an executor may not
+   * construct the handler error event, and `private` erases at runtime.
    */
   // Either half is null rather than thrown on: a fault that must be raised
   // must not be lost to a second failure while raising it.

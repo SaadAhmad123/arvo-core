@@ -17,9 +17,13 @@ import type {
  * @example
  * ```typescript
  * try {
- *   await ctx.setState({ data: { orderId: 42 } });
+ *   await deliver(event);
  * } catch (raised) {
- *   if (raised instanceof ArvoHandlerFault) raised.faultKind;
+ *   if (raised instanceof ArvoHandlerFault) {
+ *     raised.faultKind;        // what to do, without reading the message
+ *     raised.retry;            // when another attempt is due, or null
+ *     raised.abandonmentEvent; // what to publish on giving up
+ *   }
  * }
  * ```
  */

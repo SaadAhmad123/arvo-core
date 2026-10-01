@@ -14,7 +14,11 @@ import {
   orderContract,
   orderVersion,
   services,
+  telemetry,
 } from '../fixtures.js';
+
+/** What a delivery records against; these tests only carry it. */
+const { span, meter, logger } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
@@ -46,6 +50,9 @@ const opened = <TData extends z.core.$ZodObject = typeof orderData>(
     },
     dataSchema: orderData as unknown as TData,
     attempt: 0,
+    span,
+    meter,
+    logger,
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     dependencies: {},
     hooks: {},

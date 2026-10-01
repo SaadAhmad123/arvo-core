@@ -1,3 +1,4 @@
+import type { Meter, Span } from '@opentelemetry/api';
 import type * as z from 'zod/v4/core';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
 import type { ArvoExecutionState } from '../state/index.js';
@@ -12,6 +13,7 @@ import type {
   ArvoDependencies,
   ArvoMechanismHooks,
 } from '../types/supplied.js';
+import type { ArvoLogger } from './telemetry/types.js';
 
 /**
  * How a delivery was classified before an executor was entered.
@@ -100,6 +102,16 @@ export type ArvoExecutionContextParam<
   entry: ArvoEntryKind;
   /** Which attempt this delivery is, counting from 0. */
   attempt: number;
+  /**
+   * This delivery's OpenTelemetry span, started and ended outside the
+   * handler. Carried, never created here: this package uses the
+   * OpenTelemetry API and configures no backend.
+   */
+  span: Span;
+  /** The meter this handler's counters and histograms are created on. */
+  meter: Meter;
+  /** What this delivery's log records are emitted through. */
+  logger: ArvoLogger;
   /** What this delivery's executor is given to work with. */
   dependencies: TDependencies;
   /** What the mechanism running this handler exposes to an executor. */
@@ -120,6 +132,12 @@ type ArvoContextFactoryCommon<
   dataSchema: TDataSchema;
   /** Which attempt this delivery is, counting from 0. */
   attempt: number;
+  /** This delivery's OpenTelemetry span, started and ended outside. */
+  span: Span;
+  /** The meter this handler's counters and histograms are created on. */
+  meter: Meter;
+  /** What this delivery's log records are emitted through. */
+  logger: ArvoLogger;
   /** The options in force for this version, every one of them settled. */
   options: ArvoEventHandlerOptions;
   /** What this delivery's executor is given to work with. */

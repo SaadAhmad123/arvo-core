@@ -24,7 +24,11 @@ import {
   orderVersion,
   paymentFailedEvent,
   services,
+  telemetry,
 } from '../fixtures.js';
+
+/** What a delivery records against; these tests only carry it. */
+const { span, meter, logger } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
@@ -39,6 +43,9 @@ const common = {
   contracts: { self: orderVersion, services },
   dataSchema: orderData,
   attempt: 0,
+  span,
+  meter,
+  logger,
   options: ARVO_DEFAULT_HANDLER_OPTIONS,
   dependencies: {} as ArvoDependencies,
   hooks: {} as ArvoMechanismHooks,

@@ -20,9 +20,7 @@ export type ArvoMechanismHooks = Record<string, any>;
 /**
  * Declared neither dependencies nor hooks, so there is nothing to reach for.
  *
- * An empty object with no index signature, deliberately: `Record<string,
- * never>` would let `ctx.dependencies.db` compile and hand back `never`,
- * failing only once something used it. This makes reaching for what was
- * never declared the error, at the place the mistake was made.
+ * An empty object with no index signature, so reaching for something
+ * never declared is the error, at the line that reached.
  */
 export type ArvoNone = Record<never, never>;

@@ -10,7 +10,11 @@ import {
   orderVersion,
   paymentVersion,
   services,
+  telemetry,
 } from '../fixtures.js';
+
+/** What a delivery records against; these tests only carry it. */
+const { span, meter, logger } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
@@ -30,6 +34,9 @@ const ctx = () => {
     },
     dataSchema: orderData,
     attempt: 0,
+    span,
+    meter,
+    logger,
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     dependencies: {},
     hooks: {},
