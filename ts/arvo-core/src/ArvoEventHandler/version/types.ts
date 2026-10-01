@@ -93,6 +93,8 @@ export type ArvoGateRefusal = {
   readonly faultKind: ArvoFaultKind;
   /** What was wrong, readable without this source at hand. */
   readonly message: string;
+  /** The underlying failure, where something underlies it. */
+  readonly cause?: string;
   /** Every check that failed, where more than one was evaluated. */
   readonly violations: readonly string[];
 };

@@ -1,6 +1,5 @@
 import * as z from 'zod/v4/core';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
-import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import { tryBuildEmittedEvent } from '../emission/index.js';
 import type {
   ArvoEmissionParam,
@@ -10,8 +9,6 @@ import type {
 import { createArvoHandlerFault } from '../fault/factory.js';
 import type { ArvoHandlerFault } from '../fault/index.js';
 import type { ArvoFaultKind } from '../fault/types.js';
-import { ArvoExecutionStateSerializer } from '../state/serializer/index.js';
-import type { ArvoTouchedEventDirection } from '../state/types.js';
 import { mutateState } from '../state/utils.js';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
 import type { ArvoServiceMap } from '../types/services.js';
@@ -181,48 +178,6 @@ export class ArvoExecutionContext<
   }
 
   /**
-   * What this execution finished as, written out for whatever stores it.
-   *
-   * The revision is advanced here and nowhere else. Data must not be
-   * empty: an execution remembering nothing in particular writes `{}`.
-   * Reads the context rather than changing it.
-   *
-   * @throws {ArvoHandlerFault} `state_schema_rejected` where data is empty,
-   * `state_not_serializable` where the record holds something that cannot
-   * be turned into JSON. Both carry the pair a mechanism would abandon
-   * this execution with.
-   *
-   * @example
-   * ```typescript
-   * await ctx.setState({ data: { orderId: 'o-1' } });
-   * await store.put(ctx.state.subject, await ctx.exportFinalState());
-   * ```
-   */
-  async exportFinalState(): Promise<string> {
-    if (this.#state.data === null) {
-      throw await this.fault({
-        faultKind: 'state_schema_rejected',
-        message:
-          'this execution finished having remembered nothing, and a record is only written for one that did something',
-      });
-    }
-
-    const written = await new ArvoExecutionStateSerializer(
-      this.dataSchema,
-    ).trySerialize(
-      mutateState(this.#state, { casVersion: this.#state.casVersion + 1 }),
-    );
-    if (written.ok) return written.value;
-
-    throw await this.fault({
-      faultKind: 'state_not_serializable',
-      message:
-        'this execution finished holding something that cannot be written out',
-      cause: written.error.message,
-    });
-  }
-
-  /**
    * Milliseconds left on each of the version's two clocks: `run` for this
    * attempt, `execution` from the event that opened it. `null` for a clock
    * left unbounded, negative once one is overrun. Worked out per read.
@@ -250,82 +205,6 @@ export class ArvoExecutionContext<
           : this.options.executionTimeout -
             (now - Date.parse(this.#state.initEvent.time)),
     };
-  }
-
-  /**
-   * Records a service's response against the request it answers.
-   *
-   * The request is the one the response names, which is the `id` of the
-   * event this execution emitted. Nothing else about the execution moves,
-   * and the response joins the events it has handled.
-   *
-   * @param event - The response to take in.
-   * @throws {ArvoHandlerFault} `response_unawaited` where the response
-   * names no request, names one this execution never awaited, or names one
-   * already answered. What is remembered is left as it was.
-   *
-   * @example
-   * ```typescript
-   * await ctx.collect(response);
-   * ctx.state.inFlightEventMap.get(request.id); // the response
-   * ```
-   */
-  async collect(event: ArvoEvent): Promise<void> {
-    const awaited = event.initid;
-    const held =
-      awaited === null ? undefined : this.#state.inFlightEventMap.get(awaited);
-
-    if (awaited === null || held === undefined || held !== null) {
-      throw await this.fault({
-        faultKind: 'response_unawaited',
-        message: `this execution is not waiting for ${
-          awaited === null
-            ? 'a response naming no request'
-            : held === undefined
-              ? `a response to ${awaited}, which it never awaited`
-              : `a second response to ${awaited}, which is already answered`
-        }`,
-      });
-    }
-
-    const awaiting = new Map(this.#state.inFlightEventMap);
-    awaiting.set(awaited, event);
-    this.#state = mutateState(this.#state, { inFlightEventMap: awaiting });
-    this.markEventReceived(event);
-  }
-
-  /**
-   * Adds an event to those this execution has handled, as received.
-   *
-   * The trail an execution leaves, not telemetry. Nothing else moves.
-   *
-   * @param event - The event the execution took in.
-   */
-  markEventReceived(event: ArvoEvent): void {
-    this.#markEvent(event, 'received');
-  }
-
-  /**
-   * Adds an event to those this execution has handled, as emitted.
-   *
-   * @param event - The event the execution sent.
-   */
-  markEventEmitted(event: ArvoEvent): void {
-    this.#markEvent(event, 'emitted');
-  }
-
-  /**
-   * One event appended to the log, whichever way it went, and only once.
-   *
-   * An event already logged is left alone. An event `id` is unique across
-   * the ecosystem, so a second appearance is the same event, and a log
-   * holding it twice would claim the execution handled two.
-   */
-  #markEvent(event: ArvoEvent, direction: ArvoTouchedEventDirection): void {
-    if (this.#state.eventIds.some((logged) => logged.id === event.id)) return;
-    this.#state = mutateState(this.#state, {
-      eventIds: [...this.#state.eventIds, { id: event.id, direction }],
-    });
   }
 
   /**

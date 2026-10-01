@@ -37,3 +37,12 @@ export const buildState = (
     casVersion: 7,
     ...overrides,
   });
+
+/** The same record, for a version whose schema is anything at all. */
+export const buildLooseState = (data: Record<string, unknown> | null) =>
+  new ArvoExecutionState<z.core.$ZodObject>({
+    ...buildState(),
+    data,
+    eventIds: [...buildState().eventIds],
+    inFlightEventMap: new Map(buildState().inFlightEventMap),
+  });

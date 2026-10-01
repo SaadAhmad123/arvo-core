@@ -8,7 +8,7 @@ import {
   orderVersion,
   telemetry,
 } from '../fixtures.js';
-import { buildState } from '../state/fixtures.js';
+import { buildLooseState, buildState } from '../state/fixtures.js';
 
 const raise = async (
   param: Record<string, unknown> = {},
@@ -129,6 +129,14 @@ describe('what the execution would be abandoned with', () => {
     );
     expect(fault.abandonmentEvent).toBeNull();
     expect(typeof fault.abandonmentState).toBe('string');
+  });
+
+  it('commits no record where the one it holds cannot be written out', async () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const fault = await raise({}, buildLooseState({ circular }));
+    expect(fault.abandonmentState).toBeNull();
+    expect(typeof fault.abandonmentEvent).toBe('string');
   });
 
   it('leaves the record it was given exactly as it was', async () => {
