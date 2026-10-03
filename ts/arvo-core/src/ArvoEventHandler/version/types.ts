@@ -148,4 +148,10 @@ export type ArvoGateRefusal = {
   readonly cause?: string;
   /** Every check that failed, where more than one was evaluated. */
   readonly violations: readonly string[];
+  /**
+   * Whether another attempt could fix this, where the kind leaves that
+   * open. Only `executor_raised` does; every other kind carries the
+   * verdict its own vocabulary fixes.
+   */
+  readonly retryable?: boolean;
 };

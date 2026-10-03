@@ -274,7 +274,17 @@ export class ArvoEventHandlerVersion<
       throw await this.#faultFor(param, ctx.state, this.#refuseForTime(ctx));
     }
     if (entered.kind === 'raised') {
-      if (entered.raised instanceof ArvoHandlerFault) throw entered.raised;
+      if (entered.raised instanceof ArvoHandlerFault) {
+        throw this.#ownFault(entered.raised, ctx)
+          ? entered.raised
+          : await this.#faultFor(param, ctx.state, {
+              faultKind: 'executor_raised',
+              message: `your executor for ${this.#contractAtVersion} raised a fault belonging to another execution (${entered.raised.subject}), which nothing sound can do — a fault describes the execution it was built in, and acting on this one would end that execution for an event that is not its own`,
+              violations: [],
+              cause: entered.raised.message,
+              retryable: false,
+            });
+      }
       return this.#reportFailedWork(param, ctx.state, entered.raised);
     }
 
@@ -595,6 +605,30 @@ export class ArvoEventHandlerVersion<
     };
   }
 
+  /**
+   * Whether a fault an executor raised is this execution's own.
+   *
+   * One built through this context describes this execution: the same
+   * execution, answering the same event. Anything else came from
+   * somewhere it could not have come from, and a mechanism acting on it
+   * would end an execution that has nothing to do with this event.
+   */
+  #ownFault(
+    raised: ArvoHandlerFault,
+    ctx: ArvoExecutionContext<
+      TSelf,
+      TServices,
+      TDataSchema,
+      TDependencies,
+      TMechanismHooks
+    >,
+  ): boolean {
+    return (
+      raised.executionId === ctx.state.executionId &&
+      raised.eventId === ctx.state.triggeringEvent.id
+    );
+  }
+
   /** Whether every answer this execution is waiting for is in. */
   #isJoined(record: ArvoExecutionState): boolean {
     return this.options.collect === 'each' || record.isCollectionComplete;
@@ -845,6 +879,7 @@ export class ArvoEventHandlerVersion<
       message: refusal.message,
       violations: refusal.violations,
       cause: refusal.cause,
+      retryable: refusal.retryable,
     });
   }
 
