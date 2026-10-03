@@ -284,3 +284,51 @@ describe("one execution's telemetry", () => {
     });
   });
 });
+
+describe('an execution nothing is collecting from', () => {
+  const unwatched = () =>
+    new ArvoExecutionContextTelemetry({
+      span: trace.getTracer('test').startSpan('execution'),
+      meter: null,
+      logger: null,
+    });
+
+  it('is built, rather than refusing for want of a backend', () => {
+    expect(unwatched()).toBeInstanceOf(ArvoExecutionContextTelemetry);
+  });
+
+  it('counts and measures to nothing, without an executor asking first', () => {
+    const telemetry = unwatched();
+    expect(() => telemetry.metric.count('charges')).not.toThrow();
+    expect(() => telemetry.metric.record('latency', 12)).not.toThrow();
+    expect(telemetry.metric.meter).toBeNull();
+  });
+
+  it('logs to nothing, without an executor asking first', () => {
+    const telemetry = unwatched();
+    expect(() => telemetry.logger.info('charging')).not.toThrow();
+    expect(telemetry.logger.logger).toBeNull();
+  });
+
+  it('still records a fault, there being a span whatever else is absent', () => {
+    const telemetry = unwatched();
+    expect(() =>
+      telemetry.recordFault(
+        new ArvoHandlerFault({
+          faultKind: 'executor_raised',
+          message: 'the gateway refused',
+          violations: [],
+          cause: null,
+          subject: 'order-42',
+          executionId: null,
+          eventId: 'e-1',
+          attempt: 0,
+          timestamp: 0,
+          retry: null,
+          abandonmentEvent: null,
+          abandonmentState: null,
+        }),
+      ),
+    ).not.toThrow();
+  });
+});

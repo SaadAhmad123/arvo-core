@@ -69,8 +69,14 @@ export type ArvoExecutionContextTelemetryParam = {
    * configures no backend.
    */
   span: Span;
-  /** The meter this handler's instruments are created on. */
-  meter: Meter;
-  /** What this execution's log records are emitted through. */
-  logger: ArvoLogger;
+  /**
+   * The meter this handler's instruments are created on, or `null` where
+   * nothing is metering. Every instrument is then a no-op.
+   */
+  meter: Meter | null;
+  /**
+   * What this execution's log records are emitted through, or `null`
+   * where nothing is collecting them. Emitting is then a no-op.
+   */
+  logger: ArvoLogger | null;
 };

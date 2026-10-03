@@ -1,4 +1,4 @@
-import { metrics, trace } from '@opentelemetry/api';
+import { trace } from '@opentelemetry/api';
 import type { ArvoEvent } from '../../../../src/ArvoEvent/index.js';
 import { ArvoExecutionContextTelemetry } from '../../../../src/ArvoEventHandler/context/telemetry/index.js';
 import type { ArvoHandlerFault } from '../../../../src/ArvoEventHandler/fault/index.js';
@@ -361,8 +361,8 @@ export class ArvoLattice {
   #telemetry(): ArvoExecutionContextTelemetry {
     return new ArvoExecutionContextTelemetry({
       span: trace.getTracer('lattice').startSpan('execution'),
-      meter: metrics.getMeter('lattice'),
-      logger: { emit: () => undefined },
+      meter: null,
+      logger: null,
     });
   }
 
