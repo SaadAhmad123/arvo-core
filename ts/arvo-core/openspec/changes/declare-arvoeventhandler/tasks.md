@@ -150,3 +150,11 @@ coverage of what it added. §3 and §4 are done and their specs are in place.
 - [ ] 8.1 Add a section to `ts/sandbox/src/playground.ts` declaring a three-version handler with a service, one version using the executor-only shorthand, and one refused declaration.
 - [ ] 8.2 `npx tsc --noEmit` clean, `pnpm lint` clean, `pnpm test:coverage` at 100% across statements, branches, functions and lines for the new modules.
 - [ ] 8.3 `node_modules/.bin/openspec validate declare-arvoeventhandler --strict` clean.
+
+## 9. Proving the version holds
+
+The specs beside each reader prove it in isolation. What a user depends on
+is the whole of it holding when a transport repeats itself, a store loses a
+race, a service answers twice and a human never answers at all.
+
+- [ ] 9.1 Work through [`version_testing_tasks.md`](./version_testing_tasks.md): a lattice that can be made to misbehave, invariants checked after every run, the fault vocabulary covered exhaustively, thirteen scenarios, and seeded chance between them.
