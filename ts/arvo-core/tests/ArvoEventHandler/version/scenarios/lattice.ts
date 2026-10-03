@@ -65,6 +65,17 @@ export type ArvoLatticeParam = {
   clock?: { now: () => number };
   /** What decides every random choice, so a failure can be run again. */
   seed?: number;
+  /**
+   * Whether this lattice gives up on an execution it will not retry.
+   *
+   * Policy rather than protocol: a fault carries what giving up would
+   * take, and what a mechanism does with one it will not retry is its
+   * own. A lattice that always gives up ends an execution that was merely
+   * sent a stray event; one that never does leaves it waiting for the
+   * answer it is owed. Both are conformant, and they are different
+   * deployments.
+   */
+  abandons?: boolean;
 };
 
 /** A deterministic source of chance, so a failing run can be repeated. */
@@ -129,6 +140,7 @@ export class ArvoLattice {
   readonly #chaos: ArvoChaos;
   readonly #clock: { now: () => number };
   readonly #chance: () => number;
+  readonly #abandons: boolean;
   readonly #events = new ArvoEventSerializer({ type: 'arvoevent' });
   readonly #behaviours = new Map<string, ArvoBehaviour<never>>();
   readonly #attempts = new Map<string, number>();
@@ -141,6 +153,7 @@ export class ArvoLattice {
     this.#chaos = { ...NO_CHAOS, ...param.chaos };
     this.#clock = param.clock ?? { now: () => Date.now() };
     this.#chance = chanceFrom(param.seed ?? 1);
+    this.#abandons = param.abandons ?? true;
   }
 
   /**
@@ -349,6 +362,8 @@ export class ArvoLattice {
       this.#queue.push(event);
       return;
     }
+
+    if (!this.#abandons) return;
 
     this.transcript.abandoned.push({ executionId, fault });
     if (fault.abandonmentState !== null) {
