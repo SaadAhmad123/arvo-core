@@ -37,6 +37,13 @@ const NO_CHAOS: ArvoChaos = {
 export type ArvoTranscript = {
   /** Every event that reached the lattice, routed or parked. */
   readonly published: ArvoEvent[];
+  /**
+   * Which of those an execution produced, rather than something outside.
+   *
+   * A test injecting an answer is the world misbehaving, not a handler
+   * answering, and what is asked of a handler must not be judged on it.
+   */
+  readonly fromExecutions: Set<string>;
   /** Every event a handler was actually given. */
   readonly delivered: {
     event: ArvoEvent;
@@ -128,6 +135,7 @@ export class ArvoLattice {
     faults: [],
     conflicts: [],
     abandoned: [],
+    fromExecutions: new Set(),
   };
 
   /** What each execution's record is now, as the store holds it. */
@@ -225,7 +233,7 @@ export class ArvoLattice {
   }
 
   /** Runs every event the lattice holds, and everything they cause. */
-  async settle(budget = 200_000): Promise<this> {
+  async settle(budget = 50_000): Promise<this> {
     let steps = 0;
     while (this.#queue.length > 0) {
       steps += 1;
@@ -327,6 +335,13 @@ export class ArvoLattice {
     this.store.set(executionId, row);
     this.transcript.committed.push({ executionId, row });
 
+    // Noted as this execution's as it is committed, not as it is
+    // published: an event held back by a crash is still one an execution
+    // produced, and recovery sends the very bytes that were committed.
+    for (const leaving of emitted) {
+      this.transcript.fromExecutions.add(leaving.id);
+    }
+
     const crashed =
       this.#chaos.crashBeforePublish > 0 &&
       this.#chance() < this.#chaos.crashBeforePublish;
@@ -377,7 +392,10 @@ export class ArvoLattice {
       const restored = await this.#events.tryDeserialize(
         fault.abandonmentEvent,
       );
-      if (restored.ok) this.publish(restored.value);
+      if (restored.ok) {
+        this.transcript.fromExecutions.add(restored.value.id);
+        this.publish(restored.value);
+      }
     }
   }
 

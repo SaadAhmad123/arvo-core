@@ -354,6 +354,19 @@ export class ArvoEventHandlerVersion<
       throw await this.#refuseStoredRow(param, restored.error);
     }
 
+    // A record belongs to one version for its whole life. Which executor
+    // runs is settled before this, so reaching here under another is a
+    // mistake one layer up — and one worth refusing rather than running,
+    // because running it would remember this execution under a schema
+    // that was never its own.
+    if (restored.value.version !== this.contracts.self.version) {
+      throw await this.#faultFor(param, restored.value, {
+        faultKind: 'version_not_declared',
+        message: `this execution belongs to ${this.contracts.self.type}@${restored.value.version} and was handed to the executor for ${this.#contractAtVersion}, which is not its own and will not resume it`,
+        violations: [],
+      });
+    }
+
     // The record's own copies of what the init event says are checked
     // before anything compares the record with the event that arrived: a
     // record that contradicts itself is corrupt, and reads as corrupt.

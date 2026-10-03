@@ -16,9 +16,19 @@ import type { ArvoLattice } from './lattice.js';
 /** Where an event sits in the trail of the execution that handled it. */
 type Logged = { id: string; direction: 'received' | 'emitted' };
 
-/** Every event that completes an execution, which answers exactly one request. */
+/**
+ * Every event an execution produced to complete something, which answers
+ * exactly one request.
+ *
+ * What something outside the lattice injected is not counted: a second
+ * answer somebody types in by hand is the world misbehaving, and what is
+ * asked of a handler is what the handler did with it.
+ */
 const completions = (lattice: ArvoLattice): ArvoEvent[] =>
-  lattice.transcript.published.filter((event) => event.initid !== null);
+  lattice.transcript.published.filter(
+    (event) =>
+      event.initid !== null && lattice.transcript.fromExecutions.has(event.id),
+  );
 
 /** Every event asking something to be done, which awaits exactly one answer. */
 const requests = (lattice: ArvoLattice): ArvoEvent[] =>

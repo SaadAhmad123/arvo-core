@@ -29,14 +29,21 @@ import {
  * file rather than quietly ceasing to exist.
  */
 
-/** The nine a handler raises before a version is reached. */
+/**
+ * The eight a handler raises before a version is reached.
+ *
+ * `version_not_declared` is not among them: the handler raises it where
+ * no executor exists for a record's version, and a version raises it
+ * again where it is handed a record belonging to another — the same
+ * mistake, caught twice, because running it would corrupt rather than
+ * report.
+ */
 const BEFORE_A_VERSION_IS_KNOWN: ArvoFaultKind[] = [
   'event_unclassifiable',
   'category_mismatch',
   'state_resolution_failed',
   'record_unexpected',
   'record_expected',
-  'version_not_declared',
   'type_not_receivable',
   'event_schema_rejected',
   'service_version_conflict',
@@ -193,6 +200,17 @@ describe('what refuses an execution on the way in', () => {
     expect(fault.retry).toBeNull();
     expect(typeof fault.abandonmentEvent).toBe('string');
     expect(fault.abandonmentState).toBeNull();
+  });
+
+  it('a record belonging to another version of this contract', async () => {
+    const built = await waiting();
+    const fault = await followup(built, {
+      state: { ...built.row, version: '1.1.0' },
+    });
+    expect(fault.faultKind).toBe('version_not_declared');
+    expect(fault.retry).toBeNull();
+    expect(typeof fault.abandonmentEvent).toBe('string');
+    expect(typeof fault.abandonmentState).toBe('string');
   });
 
   it('an event reaching an execution that has already ended', async () => {
