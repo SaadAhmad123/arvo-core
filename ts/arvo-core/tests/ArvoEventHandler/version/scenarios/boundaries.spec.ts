@@ -71,6 +71,16 @@ const run = async (param: {
 const kindOf = (outcome: ArvoEventHandlerExecuteResponse | ArvoHandlerFault) =>
   'faultKind' in outcome ? outcome.faultKind : null;
 
+/** What an execution produced, for a test that expects it to have. */
+const produced = (
+  outcome: ArvoEventHandlerExecuteResponse | ArvoHandlerFault,
+) => {
+  if ('faultKind' in outcome || outcome.kind !== 'produced') {
+    throw new Error('expected this execution to produce');
+  }
+  return outcome;
+};
+
 /** An executor that remembers something and asks one service. */
 const asking = async (ctx: OrderContext) => {
   await ctx.setState({ data: { stage: 'asking', answers: 0 } });
@@ -228,9 +238,9 @@ describe('exactly as many attempts as a version allows', () => {
 describe('a collection of exactly one, and of none', () => {
   it('waits on one, and finishes on its answer', async () => {
     const outcome = await run({ behave: asking });
-    if ('faultKind' in outcome) throw new Error('expected it to produce');
-    expect(outcome.state.lifecycle).toBe('waiting');
-    expect((outcome.state.inFlightEventMap as unknown[]).length).toBe(1);
+    const made = produced(outcome);
+    expect(made.state.lifecycle).toBe('waiting');
+    expect((made.state.inFlightEventMap as unknown[]).length).toBe(1);
   });
 
   it('rests idle on none, having asked for nothing and answered nobody', async () => {
@@ -239,8 +249,7 @@ describe('a collection of exactly one, and of none', () => {
         await ctx.setState({ data: { stage: 'quiet', answers: 0 } });
       },
     });
-    if ('faultKind' in outcome) throw new Error('expected it to produce');
-    expect(outcome.state.lifecycle).toBe('idle');
+    expect(produced(outcome).state.lifecycle).toBe('idle');
   });
 });
 
@@ -276,17 +285,16 @@ describe('payloads nobody writes on purpose', () => {
 
   it('keeps a key that names something every object already has', async () => {
     const outcome = await remembering({ constructor: 'not a function' });
-    if ('faultKind' in outcome) throw new Error('expected it to produce');
-    expect((outcome.state.data as Record<string, unknown>).constructor).toBe(
-      'not a function',
-    );
+    expect(
+      (produced(outcome).state.data as Record<string, unknown>).constructor,
+    ).toBe('not a function');
   });
 
   it('does not let a stored key reach anything a prototype answers for', async () => {
     const outcome = await remembering(
       JSON.parse('{"__proto__": {"polluted": true}}'),
     );
-    if ('faultKind' in outcome) throw new Error('expected it to produce');
+    produced(outcome);
     expect(
       ({} as Record<string, unknown>).polluted,
       'a stored record reached every object in the process',
@@ -295,10 +303,9 @@ describe('payloads nobody writes on purpose', () => {
 
   it('remembers a megabyte, where that is what a version remembers', async () => {
     const outcome = await remembering({ blob: 'x'.repeat(1_000_000) });
-    if ('faultKind' in outcome) throw new Error('expected it to produce');
-    expect(
-      ((outcome.state.data as { blob: string }).blob as string).length,
-    ).toBe(1_000_000);
+    expect((produced(outcome).state.data as { blob: string }).blob.length).toBe(
+      1_000_000,
+    );
   });
 
   it('remembers two hundred levels of nesting', async () => {
@@ -311,8 +318,9 @@ describe('payloads nobody writes on purpose', () => {
   it('remembers text nobody can type, and writes it out unchanged', async () => {
     const written = '🙈 مرحبا \\u{1F600} \\uD83D\\uDE00 line\\nbreak';
     const outcome = await remembering({ written });
-    if ('faultKind' in outcome) throw new Error('expected it to produce');
-    expect((outcome.state.data as { written: string }).written).toBe(written);
+    expect((produced(outcome).state.data as { written: string }).written).toBe(
+      written,
+    );
   });
 
   it('remembers numbers at the edge of what JSON carries', async () => {
@@ -322,28 +330,25 @@ describe('payloads nobody writes on purpose', () => {
       negativeZero: -0,
       exponent: 1e308,
     });
-    if ('faultKind' in outcome) throw new Error('expected it to produce');
-    const held = outcome.state.data as Record<string, number>;
+    const held = produced(outcome).state.data as Record<string, number>;
     expect(held.big).toBe(Number.MAX_SAFE_INTEGER);
     expect(held.exponent).toBe(1e308);
   });
 
   it('stores a number JSON cannot carry as the nothing JSON makes of it', async () => {
     const outcome = await remembering({ notANumber: Number.NaN });
-    if ('faultKind' in outcome) throw new Error('expected it to produce');
+    const made = produced(outcome);
 
     // JSON has no such number, so what reaches a store is null. The
     // execution is not refused for it: a version that declared it
     // remembers anything said it would take whatever came.
-    expect(
-      (outcome.state.data as Record<string, unknown>).notANumber,
-    ).toBeNull();
+    expect((made.state.data as Record<string, unknown>).notANumber).toBeNull();
   });
 
   it('drops what JSON drops, rather than pretending it was stored', async () => {
     const outcome = await remembering({ here: 1, gone: undefined });
-    if ('faultKind' in outcome) throw new Error('expected it to produce');
-    expect('gone' in (outcome.state as Record<string, unknown>)).toBe(false);
-    expect(JSON.stringify(outcome.state)).not.toContain('gone');
+    const made = produced(outcome);
+    expect('gone' in (made.state as Record<string, unknown>)).toBe(false);
+    expect(JSON.stringify(made.state)).not.toContain('gone');
   });
 });
