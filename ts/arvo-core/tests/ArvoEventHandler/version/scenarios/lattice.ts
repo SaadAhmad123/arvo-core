@@ -132,6 +132,7 @@ export class ArvoLattice {
   readonly #events = new ArvoEventSerializer({ type: 'arvoevent' });
   readonly #behaviours = new Map<string, ArvoBehaviour<never>>();
   readonly #attempts = new Map<string, number>();
+  readonly #conflicts = new Map<string, number>();
   #queue: ArvoEvent[] = [];
   #held: ArvoEvent[] = [];
 
@@ -298,7 +299,15 @@ export class ArvoLattice {
       this.#chaos.loseRace > 0 && this.#chance() < this.#chaos.loseRace;
 
     if (lost || Number(row.casVersion) !== expected) {
+      // What a mechanism does with the delivery that lost: it ran against
+      // a record that has since moved, so it runs again against the one
+      // that is there now. Nothing it produced is published.
       this.transcript.conflicts.push({ executionId, event });
+      const tried = this.#conflicts.get(event.id) ?? 0;
+      if (tried < 20) {
+        this.#conflicts.set(event.id, tried + 1);
+        this.#queue.push(event);
+      }
       return;
     }
 
