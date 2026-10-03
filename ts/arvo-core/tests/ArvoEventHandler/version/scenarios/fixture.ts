@@ -22,6 +22,9 @@ export const orderState = z.object({
   answers: z.number(),
 });
 
+/** What a version remembers where it declares nothing in particular. */
+export const looseState = z.looseObject({});
+
 /** What it remembers at its second, which the first cannot satisfy. */
 export const rushOrderState = z.object({
   stage: z.string(),
@@ -137,7 +140,7 @@ export type WalkContext = ArvoExecutionContext<
 export type AuditContext = ArvoExecutionContext<
   typeof auditV1,
   Record<string, never>,
-  typeof orderState
+  typeof looseState
 >;
 
 /**
@@ -322,7 +325,7 @@ export const declareVersions = (
       '1.0.0': new ArvoEventHandlerVersion({
         contracts: { self: auditV1, services: {} },
         options: per(auditContract.type),
-        state: orderState,
+        state: looseState,
         execute: (ctx) => behaving(ctx, audit),
       }),
     },
