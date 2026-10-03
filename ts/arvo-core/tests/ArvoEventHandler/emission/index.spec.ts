@@ -1,10 +1,14 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
+import { ArvoContract } from '../../../src/ArvoContract/index.js';
+import { ArvoDomain } from '../../../src/ArvoDomain/index.js';
+import type { ArvoDomainInput } from '../../../src/ArvoDomain/types.js';
 import { ArvoEvent } from '../../../src/ArvoEvent/index.js';
 import { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/index.js';
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
 import { createInitArvoExecutionState } from '../../../src/ArvoEventHandler/state/factory.js';
+import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
 import {
   initEvent,
   orderVersion,
@@ -268,5 +272,109 @@ describe('building an event to emit', async () => {
       expectTypeOf(done.data).toEqualTypeOf<{ order_id: string }>();
       expect(done.data.order_id).toBe('o-1');
     });
+  });
+});
+
+describe('which processing path an emitted event takes', () => {
+  /** A handler whose own contract declares where its traffic belongs. */
+  const reviewedOrder = new ArvoContract({
+    type: 'com_order_create',
+    domain: 'orders',
+    versions: {
+      '1.0.0': {
+        input: z.object({ items: z.array(z.string()) }),
+        outputs: { com_order_created: z.object({ order_id: z.string() }) },
+      },
+    },
+  }).versions['1.0.0'];
+
+  /** A service that can only be fulfilled off the lattice. */
+  const manualReview = new ArvoContract({
+    type: 'com_manual_review',
+    domain: 'human',
+    versions: {
+      '1.0.0': {
+        input: z.object({ order_id: z.string() }),
+        outputs: { evt_review_done: z.object({ approved: z.boolean() }) },
+      },
+    },
+  }).versions['1.0.0'];
+
+  /** An execution of the domained contract, triggered by a domained event. */
+  const reviewing = () => {
+    const triggered = cloneArvoEvent(initEvent, {
+      dataschema: reviewedOrder.dataschema,
+      domain: 'inherited',
+    });
+    const state = createInitArvoExecutionState<
+      typeof reviewedOrder,
+      { review: typeof manualReview },
+      typeof orderData
+    >({
+      self: reviewedOrder,
+      event: triggered,
+      executionId: EXECUTION_ID,
+      parentExecutionId: PARENT_EXECUTION_ID,
+    });
+    if (!state.ok) throw state.error;
+    return new ArvoExecutionContext({
+      contracts: { self: reviewedOrder, services: { review: manualReview } },
+      state: state.value,
+      entry: 'init',
+      dataSchema: orderData,
+      attempt: 0,
+      telemetry: tracing,
+      options: ARVO_DEFAULT_HANDLER_OPTIONS,
+      dependencies: {},
+      hooks: {},
+    });
+  };
+
+  const asking = async (domain?: ArvoDomainInput) =>
+    reviewing().build({
+      type: 'com_manual_review',
+      data: { order_id: 'o-1' },
+      ...(domain === undefined ? {} : { domain }),
+    });
+
+  it('stays on the lattice where nothing asked otherwise', async () => {
+    expect((await asking()).domain).toBeNull();
+  });
+
+  it('takes the path named outright', async () => {
+    expect((await asking('escalations')).domain).toBe('escalations');
+  });
+
+  it('takes the path the contract it is built from declares', async () => {
+    expect((await asking(ArvoDomain.FROM_EVENT_CONTRACT)).domain).toBe('human');
+  });
+
+  it('takes the path this handler own contract declares', async () => {
+    expect((await asking(ArvoDomain.FROM_SELF_CONTRACT)).domain).toBe('orders');
+  });
+
+  it('takes the path the event that caused this execution came on', async () => {
+    expect((await asking(ArvoDomain.FROM_TRIGGERING_EVENT)).domain).toBe(
+      'inherited',
+    );
+  });
+
+  it('stays on the lattice where that is asked for outright', async () => {
+    expect((await asking(ArvoDomain.LOCAL)).domain).toBeNull();
+  });
+
+  it('carries a value, never the symbol that named it', async () => {
+    const asked = await asking(ArvoDomain.FROM_SELF_CONTRACT);
+    expect(typeof asked.domain).toBe('string');
+    expect(JSON.parse(JSON.stringify({ ...asked })).domain).toBe('orders');
+  });
+
+  it('answers the caller on the same path, where the completion asks for it', async () => {
+    const answered = await reviewing().build({
+      type: 'com_order_created',
+      data: { order_id: 'o-1' },
+      domain: ArvoDomain.FROM_SELF_CONTRACT,
+    });
+    expect(answered.domain).toBe('orders');
   });
 });

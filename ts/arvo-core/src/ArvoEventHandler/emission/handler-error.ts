@@ -14,7 +14,9 @@ import type { ArvoHandlerErrorAddressing } from './types.js';
  * either way.
  *
  * `null` rather than thrown on, because every caller of this is already
- * reporting a failure and must not lose it to a second one.
+ * reporting a failure and must not lose it to a second one — and `null`
+ * where the event that opened the execution is unknown, since there is
+ * then nobody to address.
  *
  * @param self - The version of the contract the execution implements.
  * @param addressing - Where the execution sits and what it answers to.
@@ -28,15 +30,22 @@ export const buildHandlerErrorEvent = (
   message: string,
   domain: ArvoDomainInput | null,
 ): ArvoEvent | null => {
-  const built = createArvoEventFactory(self).tryCreateError({
+  // Addressed to whoever opened the execution, so one whose opening event
+  // is unknown has nobody to tell.
+  const caller = addressing.initEvent;
+  if (caller === null) return null;
+
+  const built = createArvoEventFactory(self, {
+    domainCtx: { selfContract: self, triggeringEvent: addressing.event },
+  }).tryCreateError({
     error: new Error(message),
     domain: domain ?? undefined,
     source: addressing.source,
     subject: addressing.subject,
-    to: addressing.initEvent.source,
+    to: caller.source,
     executionid: addressing.parentExecutionId,
     parentid: addressing.event.id,
-    initid: addressing.initEvent.id,
+    initid: caller.id,
     depth: addressing.depth,
   });
 

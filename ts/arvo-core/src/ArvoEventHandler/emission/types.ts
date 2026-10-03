@@ -124,8 +124,11 @@ export type ArvoHandlerErrorAddressing = {
   depth: number;
   /** The execution this one answers to. */
   parentExecutionId: string;
-  /** The event that opened the execution, whose source is the caller. */
-  initEvent: ArvoEvent;
+  /**
+   * The event that opened the execution, whose source is the caller, or
+   * `null` where it is unknown and there is therefore nobody to address.
+   */
+  initEvent: ArvoEvent | null;
   /** The event that caused this execution, which the error answers. */
   event: ArvoEvent;
 };

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { ArvoContract } from '../../../src/ArvoContract/index.js';
+import { ArvoDomain } from '../../../src/ArvoDomain/index.js';
 import { createArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/factory.js';
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
+import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
 import {
   chargedEvent,
   initEvent,
@@ -161,6 +165,54 @@ describe('what the execution would be abandoned with', () => {
     });
     const written = JSON.parse(fault.abandonmentEvent as string);
     expect(written.domain).toBe('analytics');
+  });
+
+  it('sends the event down a path read from this handler own contract', async () => {
+    const domained = new ArvoContract({
+      type: 'com_order_create',
+      domain: 'order_failures',
+      versions: {
+        '1.0.0': {
+          input: z.object({ items: z.array(z.string()) }),
+          outputs: { com_order_created: z.object({ order_id: z.string() }) },
+        },
+      },
+    }).versions['1.0.0'];
+
+    const fault = await raise({
+      contracts: { self: domained },
+      options: {
+        ...ARVO_DEFAULT_HANDLER_OPTIONS,
+        handlerErrorDomain: ArvoDomain.FROM_SELF_CONTRACT,
+      },
+    });
+    expect(JSON.parse(fault.abandonmentEvent as string).domain).toBe(
+      'order_failures',
+    );
+  });
+
+  it('sends it down the path the event that caused the execution came on', async () => {
+    const lifted = cloneArvoEvent(chargedEvent, { domain: 'human' });
+    const fault = await raise(
+      {
+        options: {
+          ...ARVO_DEFAULT_HANDLER_OPTIONS,
+          handlerErrorDomain: ArvoDomain.FROM_TRIGGERING_EVENT,
+        },
+      },
+      buildState({ triggeringEvent: lifted }),
+    );
+    expect(JSON.parse(fault.abandonmentEvent as string).domain).toBe('human');
+  });
+
+  it('keeps it on the lattice where the version asked for that outright', async () => {
+    const fault = await raise({
+      options: {
+        ...ARVO_DEFAULT_HANDLER_OPTIONS,
+        handlerErrorDomain: ArvoDomain.LOCAL,
+      },
+    });
+    expect(JSON.parse(fault.abandonmentEvent as string).domain).toBeNull();
   });
 
   it('leaves the record it was given exactly as it was', async () => {

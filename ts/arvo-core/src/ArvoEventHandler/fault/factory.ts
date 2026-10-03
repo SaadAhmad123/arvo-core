@@ -1,9 +1,9 @@
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
-import type { ArvoDomainInput } from '../../ArvoDomain/types.js';
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
-import { createArvoEventFactory } from '../../factories/ArvoEventFactory/index.js';
 import { ArvoEventSerializer } from '../../serializers/ArvoEventSerializer/index.js';
 import type { ArvoEntryKind } from '../context/types.js';
+import { buildHandlerErrorEvent } from '../emission/handler-error.js';
+import type { ArvoHandlerErrorAddressing } from '../emission/types.js';
 import type { ArvoExecutionState } from '../state/index.js';
 import { atNextRevision } from '../state/revision.js';
 import { ArvoExecutionStateSerializer } from '../state/serializer/index.js';
@@ -12,22 +12,16 @@ import { ArvoHandlerFault } from './index.js';
 import { isRetrySafeFaultKind, resolveRetry } from './retry.js';
 import type { ArvoHandlerFaultFactoryParam } from './types.js';
 
-/** What an execution's own fields are, or what stands in where it has no record. */
-type ArvoFaultOrigin = {
-  /** The workflow the failing execution belongs to. */
-  subject: string;
+/**
+ * What an execution's own fields are, or what stands in where it has no
+ * record.
+ *
+ * Everything addressing the handler error event takes, and the execution
+ * the fault names, which no record may be at hand to answer for.
+ */
+type ArvoFaultOrigin = ArvoHandlerErrorAddressing & {
   /** The execution, or `null` where none was resolved. */
   executionId: string | null;
-  /** The event that caused the execution. */
-  event: ArvoEvent;
-  /** The event that opened it, or `null` where that is unknown. */
-  initEvent: ArvoEvent | null;
-  /** What the handler error event is sent as, which the record also names. */
-  source: string;
-  /** Where the execution sits, which an event it sends must carry. */
-  depth: number;
-  /** The execution the handler error event answers to. */
-  parentExecutionId: string;
 };
 
 /** Everything a fault names, read off the record or off the event instead. */
@@ -54,37 +48,6 @@ const originOf = (
         depth: param.state.depth,
         parentExecutionId: param.state.parentExecutionId,
       };
-
-/**
- * The event a mechanism would publish if it gave up, written out, or `null`
- * where the execution could address nobody.
- *
- * Addressed to whoever opened the execution, so an execution whose opening
- * event is unknown has nobody to tell. Never thrown on: a fault that must
- * be raised must not be lost to a second failure while raising it.
- */
-const abandonmentEventFor = async (
-  self: VersionedArvoContract,
-  origin: ArvoFaultOrigin,
-  message: string,
-  handlerErrorDomain: ArvoDomainInput | null,
-): Promise<ArvoEvent | null> => {
-  if (origin.initEvent === null) return null;
-
-  const built = createArvoEventFactory(self).tryCreateError({
-    error: new Error(message),
-    domain: handlerErrorDomain ?? undefined,
-    source: origin.source,
-    subject: origin.subject,
-    to: origin.initEvent.source,
-    executionid: origin.parentExecutionId,
-    parentid: origin.event.id,
-    initid: origin.initEvent.id,
-    depth: origin.depth,
-  });
-
-  return built.ok ? built.value : null;
-};
 
 /**
  * The record a mechanism would commit alongside the abandonment event,
@@ -161,8 +124,10 @@ export const createArvoHandlerFault = async (
   // overwriting its lifecycle would erase how it actually ended.
   const carriesAbandonment = param.faultKind !== 'lifecycle_terminal';
 
+  // The same event an execution that failed outright sends its caller, so
+  // a caller reads one shape whether the work failed or was given up on.
   const published = carriesAbandonment
-    ? await abandonmentEventFor(
+    ? buildHandlerErrorEvent(
         self,
         origin,
         param.message,

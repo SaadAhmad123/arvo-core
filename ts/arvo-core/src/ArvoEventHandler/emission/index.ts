@@ -82,7 +82,16 @@ export const tryBuildEmittedEvent = <
     ...param.unsafe,
   };
 
-  const factory = createArvoEventFactory(target.contract);
+  // The two sources only this execution can answer for: the contract it
+  // implements, and the event that caused it. Without them a version asking
+  // for either would be told there is no domain, and its event would stay
+  // on a path it asked to leave.
+  const factory = createArvoEventFactory(target.contract, {
+    domainCtx: {
+      selfContract: context.self,
+      triggeringEvent: state.triggeringEvent,
+    },
+  });
   const built =
     target.role === 'service'
       ? factory.tryCreateInput({
