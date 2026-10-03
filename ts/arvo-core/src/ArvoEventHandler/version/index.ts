@@ -275,15 +275,15 @@ export class ArvoEventHandlerVersion<
     }
     if (entered.kind === 'raised') {
       if (entered.raised instanceof ArvoHandlerFault) {
-        throw this.#ownFault(entered.raised, ctx)
-          ? entered.raised
-          : await this.#faultFor(param, ctx.state, {
-              faultKind: 'executor_raised',
-              message: `your executor for ${this.#contractAtVersion} raised a fault belonging to another execution (${entered.raised.subject}), which nothing sound can do — a fault describes the execution it was built in, and acting on this one would end that execution for an event that is not its own`,
-              violations: [],
-              cause: entered.raised.message,
-              retryable: false,
-            });
+        if (this.#ownFault(entered.raised, ctx)) throw entered.raised;
+
+        throw await this.#faultFor(param, ctx.state, {
+          faultKind: 'executor_raised',
+          message: `your executor for ${this.#contractAtVersion} raised a fault belonging to another execution (${entered.raised.subject}), which nothing sound can do — a fault describes the execution it was built in, and acting on this one would end that execution for an event that is not its own`,
+          violations: [],
+          cause: entered.raised.message,
+          retryable: false,
+        });
       }
       return this.#reportFailedWork(param, ctx.state, entered.raised);
     }
