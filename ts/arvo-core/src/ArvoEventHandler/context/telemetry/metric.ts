@@ -1,5 +1,6 @@
 import type { Attributes, Counter, Histogram, Meter } from '@opentelemetry/api';
 import { ARVO_TELEMETRY_PREFIX } from './prefix.js';
+import { reading, recording } from './recording.js';
 
 /** What a counter is where nothing is metering. */
 const NO_OP_COUNTER: Counter = { add: () => undefined };
@@ -18,6 +19,8 @@ import type { ArvoExecutionContextMeterParam } from './types.js';
  *
  * Every instrument is a no-op where no meter was given, so an executor
  * recording a measurement never has to ask whether anything is metering.
+ * A meter that refuses one is the same: the measurement is lost and the
+ * execution is not.
  *
  * @example
  * ```typescript
@@ -54,7 +57,10 @@ export class ArvoExecutionContextMeter {
     const made =
       this.meter === null
         ? NO_OP_COUNTER
-        : this.meter.createCounter(key, { unit });
+        : reading(
+            () => (this.meter as Meter).createCounter(key, { unit }),
+            NO_OP_COUNTER,
+          );
     this.#counters.set(key, made);
     return made;
   }
@@ -72,18 +78,21 @@ export class ArvoExecutionContextMeter {
     const made =
       this.meter === null
         ? NO_OP_HISTOGRAM
-        : this.meter.createHistogram(key, { unit });
+        : reading(
+            () => (this.meter as Meter).createHistogram(key, { unit }),
+            NO_OP_HISTOGRAM,
+          );
     this.#histograms.set(key, made);
     return made;
   }
 
   /** One measurement recorded on a named histogram. */
   record(name: string, value: number, attributes?: Attributes): void {
-    this.histogram(name).record(value, attributes);
+    recording(() => this.histogram(name).record(value, attributes));
   }
 
   /** One occurrence counted on a named counter. */
   count(name: string, attributes?: Attributes): void {
-    this.counter(name).add(1, attributes);
+    recording(() => this.counter(name).add(1, attributes));
   }
 }

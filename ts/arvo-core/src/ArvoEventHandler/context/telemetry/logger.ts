@@ -1,4 +1,5 @@
 import { context as otelContext, type Span, trace } from '@opentelemetry/api';
+import { recording } from './recording.js';
 import {
   ARVO_LOG_SEVERITY,
   type ArvoExecutionContextLoggerParam,
@@ -15,7 +16,8 @@ import {
  * logger rather than a logger and a span.
  *
  * Emitting does nothing where no logger was given, so an executor logging
- * never has to ask whether anything is collecting.
+ * never has to ask whether anything is collecting. A pipeline that is
+ * down is the same: the record is lost and the execution is not.
  *
  * @example
  * ```typescript
@@ -53,9 +55,11 @@ export class ArvoExecutionContextLogger {
     const logger = this.logger;
     if (logger === null) return;
 
-    const bound = trace.setSpan(otelContext.active(), this.span);
-    otelContext.with(bound, () => {
-      logger.emit({ severityNumber: severity, body, attributes });
+    recording(() => {
+      const bound = trace.setSpan(otelContext.active(), this.span);
+      otelContext.with(bound, () => {
+        logger.emit({ severityNumber: severity, body, attributes });
+      });
     });
   }
 

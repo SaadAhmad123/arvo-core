@@ -6,10 +6,13 @@ import {
 } from '@opentelemetry/api';
 import { traceContextFromSpan } from '../../../ArvoEvent/opentelemetry.js';
 import type { ArvoHandlerFault } from '../../fault/index.js';
+import { ArvoExecutionContextTelemetryValidationError } from './errors.js';
 import { ArvoExecutionContextLogger } from './logger.js';
 import { ArvoExecutionContextMeter } from './metric.js';
 import { ARVO_DEFAULT_SPAN_ERROR, ARVO_TELEMETRY_PREFIX } from './prefix.js';
+import { reading, recording } from './recording.js';
 import type { ArvoExecutionContextTelemetryParam } from './types.js';
+import { checkTelemetry } from './validator.js';
 
 /**
  * One execution's telemetry: its span, its metering, and its logging.
@@ -17,6 +20,11 @@ import type { ArvoExecutionContextTelemetryParam } from './types.js';
  * The span's own helpers are here; counters and histograms are on
  * {@link metric}, and log records on {@link logger}. Every event the
  * context builds descends from this span.
+ *
+ * A collector that refuses a call costs the recording and nothing else:
+ * the failure is written to `console.warn` and the execution carries on.
+ * One that cannot be recorded against at all is refused when this is
+ * built, before any execution depends on it.
  *
  * @example
  * ```typescript
@@ -41,8 +49,18 @@ export class ArvoExecutionContextTelemetry {
   /** Log records correlated to this execution. */
   readonly logger: ArvoExecutionContextLogger;
 
-  /** @param param - The span, the meter, and what to log through. */
+  /**
+   * @param param - The span, the meter, and what to log through.
+   * @throws {ArvoExecutionContextTelemetryValidationError} Where the span
+   * is absent or none of the three is what it claims to be. A `null`
+   * meter or logger is not that: it collects nothing, which is allowed.
+   */
   constructor(param: ArvoExecutionContextTelemetryParam) {
+    const issues = checkTelemetry(param);
+    if (issues.length > 0) {
+      throw new ArvoExecutionContextTelemetryValidationError(issues);
+    }
+
     this.span = param.span;
     this.metric = new ArvoExecutionContextMeter({ meter: param.meter });
     this.logger = new ArvoExecutionContextLogger({
@@ -56,19 +74,19 @@ export class ArvoExecutionContextTelemetry {
    * with no OpenTelemetry SDK configured, the API returning an empty one.
    */
   get isRecording(): boolean {
-    return isSpanContextValid(this.span.spanContext());
+    return reading(() => isSpanContextValid(this.span.spanContext()), false);
   }
 
   /** The span's W3C `traceparent`, or `null` where it records nothing. */
   get traceparent(): string | null {
-    return this.isRecording
-      ? traceContextFromSpan(this.span).traceparent
-      : null;
+    if (!this.isRecording) return null;
+    return reading(() => traceContextFromSpan(this.span).traceparent, null);
   }
 
   /** The span's W3C `tracestate`, or `null` where it has none. */
   get tracestate(): string | null {
-    return this.isRecording ? traceContextFromSpan(this.span).tracestate : null;
+    if (!this.isRecording) return null;
+    return reading(() => traceContextFromSpan(this.span).tracestate, null);
   }
 
   /**
@@ -77,12 +95,14 @@ export class ArvoExecutionContextTelemetry {
    * @param attributes - What to record, by name.
    */
   setAttributes(attributes: Attributes): void {
-    this.span.setAttributes(
-      Object.fromEntries(
-        Object.entries(attributes).map(([name, value]) => [
-          `${ARVO_TELEMETRY_PREFIX}${name}`,
-          value,
-        ]),
+    recording(() =>
+      this.span.setAttributes(
+        Object.fromEntries(
+          Object.entries(attributes).map(([name, value]) => [
+            `${ARVO_TELEMETRY_PREFIX}${name}`,
+            value,
+          ]),
+        ),
       ),
     );
   }
@@ -94,7 +114,9 @@ export class ArvoExecutionContextTelemetry {
    * @param attributes - Whatever else is worth knowing.
    */
   addEvent(name: string, attributes?: Attributes): void {
-    this.span.addEvent(`${ARVO_TELEMETRY_PREFIX}${name}`, attributes);
+    recording(() =>
+      this.span.addEvent(`${ARVO_TELEMETRY_PREFIX}${name}`, attributes),
+    );
   }
 
   /**
@@ -104,7 +126,7 @@ export class ArvoExecutionContextTelemetry {
    * as neither, which a backend cannot tell from one nobody judged.
    */
   setSpanOk(): void {
-    this.span.setStatus({ code: SpanStatusCode.OK });
+    recording(() => this.span.setStatus({ code: SpanStatusCode.OK }));
   }
 
   /**
@@ -114,7 +136,9 @@ export class ArvoExecutionContextTelemetry {
    * is worth replacing: the status is often all a reader has.
    */
   setSpanError(message: string = ARVO_DEFAULT_SPAN_ERROR): void {
-    this.span.setStatus({ code: SpanStatusCode.ERROR, message });
+    recording(() =>
+      this.span.setStatus({ code: SpanStatusCode.ERROR, message }),
+    );
   }
 
   /**
@@ -134,7 +158,7 @@ export class ArvoExecutionContextTelemetry {
   recordFault(fault: ArvoHandlerFault): void {
     const retryable = fault.retry !== null;
 
-    this.span.recordException(fault);
+    recording(() => this.span.recordException(fault));
     this.setAttributes({
       'fault.kind': fault.faultKind,
       'fault.retryable': retryable,
