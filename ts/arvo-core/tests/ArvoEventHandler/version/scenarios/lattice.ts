@@ -366,6 +366,11 @@ export class ArvoLattice {
     });
   }
 
+  /** How many events were committed but never published. */
+  get holding(): number {
+    return this.#held.length;
+  }
+
   /** What the lattice calls the time. */
   get now(): number {
     return this.#clock.now();

@@ -6,6 +6,7 @@ import {
   orderV1,
   reviewV1,
 } from './fixture.js';
+import { checkInvariants } from './invariants.js';
 import { createArvoLattice } from './lattice.js';
 
 /** What opens an order, as whatever mints a root event would. */
@@ -19,6 +20,28 @@ const anOrder = (subject = 'order-1') =>
 
 const latticeWith = (chaos = {}) =>
   createArvoLattice({ versions: declareVersions(), chaos, seed: 7 });
+
+describe('what holds however a run went', () => {
+  it('holds on a run where nothing went wrong', async () => {
+    const lattice = latticeWith();
+    await lattice.publish(anOrder()).settle();
+    await checkInvariants(lattice);
+  });
+
+  it('holds where everything arrived twice, in no order', async () => {
+    const lattice = latticeWith({ duplicate: 2, shuffle: true });
+    await lattice.publish(anOrder('order-a')).publish(anOrder('order-b'));
+    await lattice.settle();
+    await checkInvariants(lattice);
+  });
+
+  it('holds where commits landed and their events sometimes never left', async () => {
+    const lattice = latticeWith({ crashBeforePublish: 0.5 });
+    await lattice.publish(anOrder()).settle();
+    while (lattice.holding > 0) await lattice.recover().settle();
+    await checkInvariants(lattice);
+  });
+});
 
 describe('a lattice running one workflow through', () => {
   it('carries an order from its first event to its last', async () => {
@@ -153,8 +176,9 @@ describe('a lattice told to misbehave', () => {
     const lattice = latticeWith({ crashBeforePublish: 1 });
     await lattice.publish(anOrder()).settle();
     expect(lattice.store.size).toBe(1);
+    expect(lattice.holding).toBe(2);
 
     await lattice.recover().settle();
-    expect(lattice.store.size).toBeGreaterThan(1);
+    expect(lattice.store.size).toBe(3);
   });
 });
