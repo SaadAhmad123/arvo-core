@@ -265,11 +265,11 @@ export type ArvoScenarioOptions = Partial<
  * Built per scenario rather than shared, so one scenario's options and one
  * scenario's executors never reach another.
  */
-// biome-ignore lint/suspicious/noExplicitAny: a lattice holds versions of
-// six different shapes and routes by type; the shapes are proven where
-// each executor is written, not where they are collected.
 export type ArvoVersionsUnderTest = Record<
   string,
+  // A lattice holds versions of six shapes and routes between them by
+  // type; each shape is proven where its executor is written, not here
+  // where they are collected.
   Record<string, ArvoEventHandlerVersion<any, any, any, any, any>>
 >;
 

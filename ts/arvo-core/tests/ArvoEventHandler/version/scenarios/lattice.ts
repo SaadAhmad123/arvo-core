@@ -142,9 +142,18 @@ export class ArvoLattice {
     this.#chance = chanceFrom(param.seed ?? 1);
   }
 
-  /** What every execution of this contract should do, rather than its default. */
-  behave(contractType: string, behaviour: ArvoBehaviour<never>): this {
-    this.#behaviours.set(contractType, behaviour);
+  /**
+   * What every execution of this contract should do, rather than its
+   * default.
+   *
+   * The context is annotated by whoever writes the behaviour, because a
+   * lattice routes between six shapes and cannot know which one this is.
+   */
+  behave<TContext>(
+    contractType: string,
+    behaviour: ArvoBehaviour<TContext>,
+  ): this {
+    this.#behaviours.set(contractType, behaviour as ArvoBehaviour<never>);
     return this;
   }
 
@@ -205,7 +214,8 @@ export class ArvoLattice {
   async settle(budget = 200_000): Promise<this> {
     let steps = 0;
     while (this.#queue.length > 0) {
-      if ((steps += 1) > budget) {
+      steps += 1;
+      if (steps > budget) {
         throw new Error(`this lattice did not settle within ${budget} steps`);
       }
       const event = this.#next();

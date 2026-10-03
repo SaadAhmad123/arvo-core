@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
-import { declareVersions, orderV1, reviewV1 } from './fixture.js';
+import {
+  declareVersions,
+  type OrderContext,
+  orderV1,
+  reviewV1,
+} from './fixture.js';
 import { createArvoLattice } from './lattice.js';
 
 /** What opens an order, as whatever mints a root event would. */
@@ -60,7 +65,7 @@ describe('a lattice running one workflow through', () => {
 describe('what a lattice does with work it cannot do itself', () => {
   it('parks an event that names a path, rather than delivering it', async () => {
     const lattice = latticeWith();
-    lattice.behave(orderV1.type, async (ctx) => {
+    lattice.behave(orderV1.type, async (ctx: OrderContext) => {
       await ctx.setState({ data: { stage: 'asking', answers: 0 } });
       return ctx.build({
         type: 'com_manual_review',
@@ -80,7 +85,7 @@ describe('what a lattice does with work it cannot do itself', () => {
 
   it('resumes the execution waiting on it once something answers', async () => {
     const lattice = latticeWith();
-    lattice.behave(orderV1.type, async (ctx) => {
+    lattice.behave(orderV1.type, async (ctx: OrderContext) => {
       if (ctx.entry === 'followup') {
         await ctx.setState({ data: { stage: 'answering', answers: 1 } });
         return ctx.build({
