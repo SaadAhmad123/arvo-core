@@ -107,3 +107,25 @@ export type ArvoEmissionContext<
   /** The execution's tracing, which every emitted event descends from. */
   telemetry: ArvoExecutionContextTelemetry;
 };
+
+/**
+ * What addressing a handler error event takes: where the execution sits,
+ * and who it answers to.
+ *
+ * Read off the record where there is one, and off the event that caused
+ * the execution where there is not.
+ */
+export type ArvoHandlerErrorAddressing = {
+  /** The contract the execution implements, by its addressable name. */
+  source: string;
+  /** The workflow the execution belongs to. */
+  subject: string;
+  /** How far from the workflow's first event the execution sits. */
+  depth: number;
+  /** The execution this one answers to. */
+  parentExecutionId: string;
+  /** The event that opened the execution, whose source is the caller. */
+  initEvent: ArvoEvent;
+  /** The event that caused this execution, which the error answers. */
+  event: ArvoEvent;
+};

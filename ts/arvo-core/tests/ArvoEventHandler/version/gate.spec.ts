@@ -39,6 +39,12 @@ describe('whether a finished execution accepts anything further', () => {
     },
   );
 
+  it('names the version it finished as, and what commonly causes it', () => {
+    const refusal = refuseTerminal(buildState({ lifecycle: 'success' }));
+    expect(refusal?.message).toContain('com_order_create@1.0.0');
+    expect(refusal?.message).toContain('arrived too late');
+  });
+
   it.each(['idle', 'waiting'] as const)(
     'admits an execution to one at %s',
     (lifecycle) => {
@@ -50,29 +56,38 @@ describe('whether a finished execution accepts anything further', () => {
 describe('whether an execution has outlived its time', () => {
   const opened = Date.parse(initEvent.time);
 
+  /** What a refusal names this version by. */
+  const VERSION = 'com_order_create@1.0.0';
+
   it('admits one where the version sets no bound', () => {
-    expect(refuseOutlived(initEvent, null, opened + 1_000_000)).toBeNull();
+    expect(
+      refuseOutlived(VERSION, initEvent, null, opened + 1_000_000),
+    ).toBeNull();
   });
 
   it('admits one still inside the bound', () => {
-    expect(refuseOutlived(initEvent, 10_000, opened + 9_999)).toBeNull();
+    expect(
+      refuseOutlived(VERSION, initEvent, 10_000, opened + 9_999),
+    ).toBeNull();
   });
 
   it('refuses one at the bound, which is exclusive', () => {
-    expect(refuseOutlived(initEvent, 10_000, opened + 10_000)?.faultKind).toBe(
-      'execution_timeout',
-    );
+    expect(
+      refuseOutlived(VERSION, initEvent, 10_000, opened + 10_000)?.faultKind,
+    ).toBe('execution_timeout');
   });
 
   it('refuses one past it', () => {
-    expect(refuseOutlived(initEvent, 1_000, opened + 60_000)?.faultKind).toBe(
-      'execution_timeout',
-    );
+    expect(
+      refuseOutlived(VERSION, initEvent, 1_000, opened + 60_000)?.faultKind,
+    ).toBe('execution_timeout');
   });
 
-  it('says the limit, when it began, and how long it has run', () => {
-    const refusal = refuseOutlived(initEvent, 1_000, opened + 60_000);
+  it('says the limit, the option it comes from, when it began, and how old it is', () => {
+    const refusal = refuseOutlived(VERSION, initEvent, 1_000, opened + 60_000);
     expect(refusal?.message).toContain('1000ms');
+    expect(refusal?.message).toContain('executionTimeout');
+    expect(refusal?.message).toContain(VERSION);
     expect(refusal?.message).toContain(initEvent.time);
     expect(refusal?.message).toContain('60000ms');
   });
@@ -83,6 +98,31 @@ describe('whether the event, the handler and the record agree', () => {
 
   it('admits an event addressed here, with no record to check', () => {
     expect(refuseMisaddressed(orderVersion, addressed, null)).toBeNull();
+  });
+
+  it('says what to set where an event names no destination', () => {
+    const unaddressed = createArvoEvent({
+      source: initEvent.source,
+      subject: initEvent.subject,
+      type: initEvent.type,
+      dataschema: initEvent.dataschema,
+      data: initEvent.data,
+    });
+    const refusal = refuseMisaddressed(orderVersion, unaddressed, null);
+    expect(refusal?.message).toContain('to = its own type');
+    expect(refusal?.message).toContain(orderVersion.type);
+  });
+
+  it('says how many fields disagree, where the record and the event do', () => {
+    const state = buildState({ source: 'com_something_else' });
+    const stray = cloneArvoEvent(chargedEvent, {
+      to: 'com.somewhere.else',
+      parentid: initEvent.id,
+      executionid: 'somewhere-else',
+      subject: 'another-workflow',
+    });
+    const refusal = refuseMisaddressed(orderVersion, stray, state);
+    expect(refusal?.message).toContain('4 of its identifying fields');
   });
 
   it('refuses one naming no destination at all', () => {
@@ -187,15 +227,25 @@ describe('whether a response was awaited', () => {
     );
   });
 
+  it('says a reply must name what it answers, where it names nothing', () => {
+    const unaddressed = cloneArvoEvent(chargedEvent, {
+      initid: null as never,
+    });
+    const refusal = refuseUnawaited(awaiting(null), unaddressed);
+    expect(refusal?.message).toContain('initid');
+    expect(refusal?.message).toContain('the id of the event it is answering');
+  });
+
   it('refuses one naming a request never made', () => {
     const stranger = cloneArvoEvent(chargedEvent, { initid: 'never-asked' });
     const refusal = refuseUnawaited(awaiting(null), stranger);
     expect(refusal?.message).toContain('never-asked');
+    expect(refusal?.message).toContain('never sent');
   });
 
   it('refuses a second answer to one already answered', () => {
     const answer = cloneArvoEvent(chargedEvent, { initid: 'charge-request' });
     const refusal = refuseUnawaited(awaiting(answer), answer);
-    expect(refusal?.message).toContain('already answered');
+    expect(refusal?.message).toContain('already has an answer');
   });
 });

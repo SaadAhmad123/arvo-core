@@ -10,7 +10,11 @@ import { initEvent } from '../fixtures.js';
 const atDepth = (depth: number) =>
   cloneArvoEvent(initEvent, { depth, parentid: 'the-event-that-caused-it' });
 
-const bounded = (maxDepth: number) => new ArvoEventDepthValidator({ maxDepth });
+const bounded = (maxDepth: number) =>
+  new ArvoEventDepthValidator({
+    maxDepth,
+    contractAtVersion: 'com_order_create@1.0.0',
+  });
 
 describe('an event arriving', () => {
   it('is accepted where it sits below the maximum', () => {
@@ -67,6 +71,16 @@ describe('what it says when it refuses', () => {
 
   it('says which event', () => {
     expect(refusal().message).toContain(initEvent.type);
+  });
+
+  it('names the version that refused it, and the option that bounds it', () => {
+    const message = refusal().message;
+    expect(message).toContain('com_order_create@1.0.0');
+    expect(message).toContain('maxDepth');
+  });
+
+  it('says the depth the event carried, so a reader need not look it up', () => {
+    expect(refusal().message).toContain('at depth 7');
   });
 
   it('says the limit in force', () => {

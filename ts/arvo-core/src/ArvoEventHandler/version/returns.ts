@@ -93,9 +93,11 @@ export const refuseBatch = <TSelf extends VersionedArvoContract>(
   }
 
   if (violations.length === 0) return null;
+  const at = violations.length === 1 ? 'one' : `${violations.length}`;
+  const of = batch.length === 1 ? 'the event' : `the ${batch.length} events`;
   return {
     faultKind,
-    message: `this batch may not leave the handler: ${violations.length} of its ${batch.length} events is at fault`,
+    message: `${at} of ${of} your executor for ${self.type}@${self.version} returned cannot be emitted, so none of them were. Each one at fault is listed`,
     violations,
   };
 };
@@ -109,10 +111,15 @@ export const refuseBatch = <TSelf extends VersionedArvoContract>(
  * nothing was. A version with no output and no service to call has
  * nothing it could have returned, so nothing finishes it.
  *
- * An executor that ended the execution deliberately is honoured whatever
- * the batch holds. What the execution is waiting for is rebuilt from the
- * batch rather than merged into, so it always describes exactly this
- * round. The record given is not changed.
+ * An execution the executor ended deliberately rests there whatever else
+ * the batch carries — an explicit reason outranks what would be inferred
+ * from the events. Whether ending it without answering the caller is
+ * allowed at all is judged before this, and is not this reader's
+ * question.
+ *
+ * What the execution is waiting for is rebuilt from the batch rather than
+ * merged into, so it always describes exactly this round. The record given
+ * is not changed.
  */
 export const settleRecord = <
   TState extends ArvoExecutionState,
@@ -165,13 +172,43 @@ export const settleRecord = <
 };
 
 /**
- * The record to commit, written out, or why this execution has none.
+ * The record as it stands, written out, or why it cannot be.
  *
- * The revision is advanced here and nowhere else. Data must not be empty:
- * an execution remembering nothing in particular writes `{}`, and one that
- * remembered nothing at all did not do the work. Data that will not
- * survive a JSON round trip is the executor's own doing, which a declared
- * schema cannot prevent.
+ * Written at whatever revision it carries, which is the caller's to settle
+ * ({@link atNextRevision}). Whatever the record remembers is written, so
+ * this is also how a failed execution leaves one behind. Data that will
+ * not survive a JSON round trip is the executor's own doing, which a
+ * declared schema cannot prevent.
+ */
+export const writeRecord = async <TDataSchema extends z.$ZodObject>(
+  dataSchema: TDataSchema,
+  state: ArvoExecutionState<TDataSchema>,
+): AsyncResult<JSONObject, ArvoGateRefusal> => {
+  const written = await new ArvoExecutionStateSerializer(
+    dataSchema,
+  ).trySerialize(state);
+
+  if (!written.ok) {
+    return fromNeverthrow(
+      err({
+        faultKind: 'state_not_serializable',
+        message: `what your executor wrote through ctx.setState() cannot be turned into JSON, so this execution cannot be stored: ${written.error.message}. A Date, a class instance, or something that refers back to itself does this`,
+        violations: [],
+        cause: written.error.message,
+      } as const),
+    );
+  }
+
+  return fromNeverthrow(ok(JSON.parse(written.value) as JSONObject));
+};
+
+/**
+ * The record to commit for an execution that concluded its work, or why
+ * it has none.
+ *
+ * Data must not be empty: an execution remembering nothing in particular
+ * writes `{}`, and one that returned having remembered nothing at all did
+ * not do the work it was entered for.
  */
 export const recordToCommit = async <TDataSchema extends z.$ZodObject>(
   dataSchema: TDataSchema,
@@ -182,27 +219,11 @@ export const recordToCommit = async <TDataSchema extends z.$ZodObject>(
       err({
         faultKind: 'state_schema_rejected',
         message:
-          'this execution finished having remembered nothing, and a record is only written for one that did something',
+          'your executor returned without ever calling ctx.setState(), so there is nothing to store for this execution. Write {} where this version genuinely remembers nothing',
         violations: [],
       } as const),
     );
   }
 
-  const written = await new ArvoExecutionStateSerializer(
-    dataSchema,
-  ).trySerialize(mutateState(state, { casVersion: state.casVersion + 1 }));
-
-  if (!written.ok) {
-    return fromNeverthrow(
-      err({
-        faultKind: 'state_not_serializable',
-        message:
-          'this execution finished holding something that cannot be written out',
-        violations: [],
-        cause: written.error.message,
-      } as const),
-    );
-  }
-
-  return fromNeverthrow(ok(JSON.parse(written.value) as JSONObject));
+  return writeRecord(dataSchema, state);
 };

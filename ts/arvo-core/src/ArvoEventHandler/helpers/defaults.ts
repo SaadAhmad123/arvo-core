@@ -1,3 +1,4 @@
+import * as z from 'zod';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
 
 /** Which shape of record this package writes. */
@@ -38,3 +39,12 @@ export const ARVO_CATEGORY_INIT = 'io.arvo.init';
 
 /** What an event completing an execution declares itself to be. */
 export const ARVO_CATEGORY_COMPLETE = 'io.arvo.complete';
+
+/**
+ * The schema used to read a record whose own schema has already refused
+ * its data.
+ *
+ * Accepts anything an object can hold, so that a record refused for its
+ * data can still be read for the fields that address its caller.
+ */
+export const ARVO_ANY_STATE_SCHEMA = z.looseObject({});

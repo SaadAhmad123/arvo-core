@@ -31,8 +31,14 @@ import type {
  * where it rests, what it is waiting on — is read through {@link state}.
  * The context itself carries only what the record does not.
  *
- * Valid for the execution it was built for. One kept past that describes a
- * execution already over.
+ * What an executor may change is narrow and deliberate: it writes its own
+ * data, ends the execution, builds an event to emit, and builds a fault to
+ * raise. Everything else about the execution — what it has handled, what
+ * it awaits, where it rests, what revision it is at — is the protocol's,
+ * settled before the executor is entered and after it returns.
+ *
+ * Valid for the execution it was built for. One kept past that describes
+ * an execution already over.
  *
  * Built by the version running the execution, from a record that has
  * already passed every check, and handed to an executor as its only
@@ -165,12 +171,12 @@ export class ArvoExecutionContext<
       const violations = checked.error.issues.map(
         (issue) => `${at(issue)}: ${issue.message}`,
       );
-      const reason = `state does not satisfy the schema this version declared for it: ${checked.error.issues
+      const refused = checked.error.issues
         .map((issue) => `${at(issue)} ${issue.message}`)
-        .join('; ')}`;
+        .join('; ');
       throw await this.fault({
         faultKind: 'state_schema_rejected',
-        message: reason,
+        message: `what you passed to ctx.setState() does not satisfy the state schema ${this.contracts.self.type}@${this.contracts.self.version} declares: ${refused}. What this execution remembered is unchanged`,
         violations,
       });
     }
@@ -322,6 +328,7 @@ export class ArvoExecutionContext<
     return createArvoHandlerFault({
       contracts: { self: this.contracts.self },
       state: this.#state,
+      entry: this.entry,
       options: this.options,
       attempt: this.attempt,
       telemetry: this.telemetry,

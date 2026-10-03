@@ -5,4 +5,9 @@ export type ArvoEventDepthValidatorParam = {
    * `depth` must be below it, not equal to it.
    */
   maxDepth: number;
+  /**
+   * What a message names the version by, as `type@version`, so a reader
+   * knows which of their versions refused the event.
+   */
+  contractAtVersion: string;
 };

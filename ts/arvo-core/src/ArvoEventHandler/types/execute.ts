@@ -10,15 +10,22 @@ import type { ArvoDependencies, ArvoMechanismHooks } from './supplied.js';
  * What one call to `execute` produced.
  *
  * Discriminated because committing nothing has two meanings. `produced`
- * says these events and this record go together, under the outbox
- * guarantee. `discarded` says this event had already been processed and
- * there is nothing to commit. A caller that cannot tell them apart cannot
- * tell a duplicate from a lost execution.
+ * says these events and this record go together, to be committed as one or
+ * not at all. `discarded` says this event had already been processed and
+ * there is nothing to do. A caller that cannot tell them apart cannot tell
+ * a repeat from a lost execution.
+ *
+ * An execution whose work failed is `produced` like any other: what it
+ * produced is the handler error event for its caller, and a record that
+ * rests at `error`.
  */
 export type ArvoEventHandlerExecuteResponse =
   | {
       readonly kind: 'produced';
-      /** Every event to publish, as the executor returned them. */
+      /**
+       * Every event to publish: what the executor returned, or the handler
+       * error event where its work failed.
+       */
       readonly events: readonly ArvoEvent[];
       /** The record to commit alongside them. */
       readonly state: JSONObject;

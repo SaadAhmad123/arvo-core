@@ -16,7 +16,10 @@ import type { ArvoEventDepthValidatorParam } from './types.js';
  *
  * @example
  * ```typescript
- * const depth = new ArvoEventDepthValidator({ maxDepth: 10 });
+ * const depth = new ArvoEventDepthValidator({
+ *   maxDepth: 10,
+ *   contractAtVersion: 'com_order_create@1.0.0',
+ * });
  * if (!depth.validateOutput(candidate).ok) return completeInstead();
  * ```
  */
@@ -24,9 +27,13 @@ export class ArvoEventDepthValidator {
   /** How deep an execution of this version may sit, or reach. */
   readonly maxDepth: number;
 
-  /** @param param - The bound to judge against. */
+  /** What a refusal names the version by, as `type@version`. */
+  readonly contractAtVersion: string;
+
+  /** @param param - The bound to judge against, and whose bound it is. */
   constructor(param: ArvoEventDepthValidatorParam) {
     this.maxDepth = param.maxDepth;
+    this.contractAtVersion = param.contractAtVersion;
   }
 
   /**
@@ -41,7 +48,8 @@ export class ArvoEventDepthValidator {
     return this.#judge(
       event,
       'max_depth_event_received',
-      'arrived from deeper than this version accepts',
+      'arrived at depth',
+      'Runaway recursion does this',
     );
   }
 
@@ -61,7 +69,8 @@ export class ArvoEventDepthValidator {
     return this.#judge(
       event,
       'max_depth_event_requested',
-      'would sit deeper than this version allows',
+      'would be emitted at depth',
+      'Raise maxDepth or stop recursing',
     );
   }
 
@@ -70,17 +79,22 @@ export class ArvoEventDepthValidator {
     event: ArvoEvent,
     faultKind: ArvoFaultKind,
     what: string,
+    remedy: string,
   ): Result<boolean, ArvoEventDepthValidatorError> {
     if (event.depth < this.maxDepth) return fromNeverthrow(ok(true));
     return fromNeverthrow(
       err(
-        new ArvoEventDepthValidatorError(faultKind, `${event.type} ${what}.`, [
-          new ErrorIssue({
-            path: 'depth',
-            message: `must be below the ${this.maxDepth} this version allows`,
-            received: event.depth,
-          }),
-        ]),
+        new ArvoEventDepthValidatorError(
+          faultKind,
+          `${event.type} ${what} ${event.depth}, and ${this.contractAtVersion} allows below ${this.maxDepth} (maxDepth). ${remedy}.`,
+          [
+            new ErrorIssue({
+              path: 'depth',
+              message: `must be below the ${this.maxDepth} ${this.contractAtVersion} allows`,
+              received: event.depth,
+            }),
+          ],
+        ),
       ),
     );
   }

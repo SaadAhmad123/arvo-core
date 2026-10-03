@@ -32,7 +32,7 @@ export const traceContextFromSpan = (
 
 /** The two ends of a trace joined at an arriving event. */
 export type ArvoEventTraceContinuation = {
-  /** The span this delivery is recorded against. */
+  /** The span whatever handles this event records against. */
   span: Span;
   /**
    * The producer's span, rebuilt from the event's headers. Non-recording —

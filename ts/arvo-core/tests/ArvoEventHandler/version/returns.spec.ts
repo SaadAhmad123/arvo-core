@@ -146,6 +146,24 @@ describe('what a batch must be to leave the handler', () => {
     expect(refuse([deep], 10)?.faultKind).toBe('max_depth_event_requested');
   });
 
+  it('counts the events at fault against the batch, and says none were emitted', () => {
+    const wrong = cloneArvoEvent(completion(), {
+      data: { order_id: 42 } as never,
+    });
+    const refusal = refuse([wrong, request()]);
+    expect(refusal?.message).toContain('one of the 2 events');
+    expect(refusal?.message).toContain('com_order_create@1.0.0');
+    expect(refusal?.message).toContain('none of them were');
+  });
+
+  it('counts more than one in the plural, so the sentence reads', () => {
+    const wrong = cloneArvoEvent(completion(), {
+      data: { order_id: 42 } as never,
+    });
+    const stray = cloneArvoEvent(request(), { type: 'com_nothing' as never });
+    expect(refuse([wrong, stray])?.message).toContain('2 of the 2 events');
+  });
+
   it('reports every event at fault, not merely the first', () => {
     const wrong = cloneArvoEvent(completion(), {
       data: { order_id: 42 } as never,
@@ -262,10 +280,10 @@ describe('the record an execution leaves behind', () => {
     expect(restored.initEvent.id).toBe(initEvent.id);
   });
 
-  it('is written one revision past the one the execution held', async () => {
+  it('is written at the revision it carries, which its caller settled', async () => {
     const written = await commit();
     expect(written.ok && written.value.casVersion).toBe(
-      buildState().casVersion + 1,
+      buildState().casVersion,
     );
   });
 
@@ -279,6 +297,25 @@ describe('the record an execution leaves behind', () => {
     const written = await commit(buildState({ data: null }));
     expect(!written.ok && written.error.faultKind).toBe(
       'state_schema_rejected',
+    );
+  });
+
+  it('names the call that was never made, and what to write instead', async () => {
+    const written = await commit(buildState({ data: null }));
+    expect(!written.ok && written.error.message).toContain('ctx.setState()');
+    expect(!written.ok && written.error.message).toContain('Write {}');
+  });
+
+  it('says why what was written cannot be stored, and what commonly causes it', async () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const written = await recordToCommit(
+      z.looseObject({}),
+      buildLooseState({ circular }),
+    );
+    expect(!written.ok && written.error.message).toContain('ctx.setState()');
+    expect(!written.ok && written.error.message).toContain(
+      'refers back to itself',
     );
   });
 

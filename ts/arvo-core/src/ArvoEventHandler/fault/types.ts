@@ -1,6 +1,7 @@
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { ArvoExecutionContextTelemetry } from '../context/telemetry/index.js';
+import type { ArvoEntryKind } from '../context/types.js';
 import type { ArvoExecutionState } from '../state/index.js';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
 
@@ -130,6 +131,11 @@ export type ArvoHandlerFaultFactoryParam = {
        * fault names.
        */
       state: ArvoExecutionState;
+      /**
+       * How the execution arrived, which decides the revision the record
+       * it leaves behind is written at.
+       */
+      entry: ArvoEntryKind;
     }
   | {
       /**

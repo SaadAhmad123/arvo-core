@@ -455,9 +455,9 @@ describe('ArvoExecutionContext', async () => {
       });
     });
 
-    it('advances that record revision, it being a write like any other', async () => {
+    it('keeps the revision an opening execution was built at, no record having been read', async () => {
       const record = JSON.parse((await rejected()).abandonmentState as string);
-      expect(record.casVersion).toBe(1);
+      expect(record.casVersion).toBe(0);
     });
 
     it('leaves the rest of that record as the execution stood', async () => {

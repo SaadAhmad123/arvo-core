@@ -6,10 +6,11 @@ import type { ArvoGateRefusal } from './types.js';
 /**
  * Whether this exact event has already been processed.
  *
- * Recognised by its `id` already appearing in the event log as received.
- * A duplicate is the transport doing its job under at-least-once
- * execution, so it is discarded quietly rather than faulted: the handler
- * has demonstrably processed it, and there is nothing to report.
+ * Recognised by its `id` already appearing in the trail the execution
+ * leaves, as received. A repeat is a transport that promises to deliver
+ * at least once doing exactly that, so it is discarded quietly rather
+ * than faulted: this event has demonstrably been processed already, and
+ * there is nothing to report and nothing to do.
  */
 export const alreadySeen = (
   state: ArvoExecutionState,
@@ -33,7 +34,7 @@ export const refuseTerminal = (
   state.isTerminal
     ? {
         faultKind: 'lifecycle_terminal',
-        message: `this execution rests at ${state.lifecycle} and accepts nothing further`,
+        message: `this execution of ${state.source}@${state.version} already finished at ${state.lifecycle}, so this event arrived too late to be processed. A service answering an execution that has completed does this`,
         violations: [],
       }
     : null;
@@ -42,10 +43,12 @@ export const refuseTerminal = (
  * Why an execution has outlived the time its version allows, or `null`
  * where it has not.
  *
- * Measured from the event that opened it to now. A version setting no
- * execution timeout passes always.
+ * Measured from the event that opened it to now, which is why it is read
+ * both on the way in and again on return. A version setting no execution
+ * timeout passes always.
  */
 export const refuseOutlived = (
+  contractAtVersion: string,
   initEvent: ArvoEvent,
   executionTimeout: number | null,
   now: number,
@@ -57,7 +60,7 @@ export const refuseOutlived = (
 
   return {
     faultKind: 'execution_timeout',
-    message: `this execution began at ${initEvent.time} and has run ${elapsed}ms, past the ${executionTimeout}ms its version allows`,
+    message: `this execution of ${contractAtVersion} started at ${initEvent.time} and is ${elapsed}ms old, past the ${executionTimeout}ms it is allowed (executionTimeout). No further attempt can give that time back`,
     violations: [],
   };
 };
@@ -77,8 +80,7 @@ export const refuseMisaddressed = (
   if (event.to === null) {
     return {
       faultKind: 'event_unaddressed',
-      message:
-        'this event names no destination, and `to` is what Arvo routes on',
+      message: `this event carries no "to", so no handler can accept it — every event must name the contract type it is for, and a root event must set to = its own type (${self.type} here)`,
       violations: [],
     };
   }
@@ -110,7 +112,7 @@ export const refuseMisaddressed = (
   if (disagreements.length === 0) return null;
   return {
     faultKind: 'addressing_mismatch',
-    message: 'the event, this handler and the record do not agree',
+    message: `this event does not belong to the execution it arrived with: ${disagreements.length} of its identifying fields disagree, and they are listed`,
     violations: disagreements,
   };
 };
@@ -133,22 +135,21 @@ export const refuseUnawaited = (
   if (awaited === null) {
     return {
       faultKind: 'response_unawaited',
-      message:
-        'this response names no request, so nothing could be awaiting it',
+      message: `this event carries no "initid", so nothing can say which request it answers — a reply must carry the id of the event it is answering`,
       violations: [],
     };
   }
   if (held === undefined) {
     return {
       faultKind: 'response_unawaited',
-      message: `this execution never awaited ${awaited}`,
+      message: `this event answers request ${awaited}, which this execution never sent, so nothing was processed`,
       violations: [],
     };
   }
   if (held !== null) {
     return {
       faultKind: 'response_unawaited',
-      message: `${awaited} is already answered, and an execution awaits one response per request`,
+      message: `request ${awaited} already has an answer, and one request takes exactly one — a second reply from the same service does this`,
       violations: [],
     };
   }

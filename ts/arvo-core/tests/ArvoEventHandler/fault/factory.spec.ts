@@ -17,6 +17,7 @@ const raise = async (
   createArvoHandlerFault({
     contracts: { self: orderVersion },
     state,
+    entry: 'followup',
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     attempt: 0,
     telemetry: telemetry().telemetry,
@@ -112,6 +113,18 @@ describe('what the execution would be abandoned with', () => {
     expect(record.casVersion).toBe(buildState().casVersion + 1);
   });
 
+  it('keeps the revision an opening execution was built at, no record having been read', async () => {
+    const opened = await raise({ entry: 'init' });
+    const record = JSON.parse(opened.abandonmentState as string);
+    expect(record.casVersion).toBe(buildState().casVersion);
+  });
+
+  it('carries neither half where the execution already rests terminal', async () => {
+    const fault = await raise({ faultKind: 'lifecycle_terminal' });
+    expect(fault.abandonmentEvent).toBeNull();
+    expect(fault.abandonmentState).toBeNull();
+  });
+
   it('logs the event it would publish against the execution', async () => {
     const fault = await raise();
     const published = JSON.parse(fault.abandonmentEvent as string);
@@ -137,6 +150,17 @@ describe('what the execution would be abandoned with', () => {
     const fault = await raise({}, buildLooseState({ circular }));
     expect(fault.abandonmentState).toBeNull();
     expect(typeof fault.abandonmentEvent).toBe('string');
+  });
+
+  it('sends the event down the path the version declared for it', async () => {
+    const fault = await raise({
+      options: {
+        ...ARVO_DEFAULT_HANDLER_OPTIONS,
+        handlerErrorDomain: 'analytics',
+      },
+    });
+    const written = JSON.parse(fault.abandonmentEvent as string);
+    expect(written.domain).toBe('analytics');
   });
 
   it('leaves the record it was given exactly as it was', async () => {
