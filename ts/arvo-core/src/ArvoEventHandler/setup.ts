@@ -1,7 +1,12 @@
+import { err, ok } from 'neverthrow';
 import type * as z from 'zod/v4/core';
 import type { ArvoContract } from '../ArvoContract/index.js';
+import { fromNeverthrow } from '../result.js';
 import type { ArvoSemanticVersion } from '../semver/index.js';
+import type { Result } from '../types.js';
+import { ArvoEventHandlerValidationError } from './errors.js';
 import { ARVO_NO_STATE_SCHEMA } from './helpers/defaults.js';
+import { ArvoEventHandler } from './index.js';
 import type {
   ArvoAccumulatedVersion,
   ArvoAccumulatedVersions,
@@ -142,5 +147,62 @@ export class ArvoEventHandlerSetup<
         },
       ],
     );
+  }
+
+  /**
+   * Judges this declaration and builds the handler, reporting a refusal
+   * rather than throwing.
+   *
+   * The error names every rule the declaration broke rather than the
+   * first, so one attempt tells you everything to fix.
+   *
+   * @returns The handler, or every rule the declaration broke.
+   *
+   * @example
+   * ```typescript
+   * declare const setup: ArvoEventHandlerSetup<typeof orderContract>;
+   *
+   * const declared = setup.handler('1.0.0', runOrder).tryBuild();
+   * if (declared.ok) declared.value.versions.get('1.0.0');
+   * else declared.error.issues;
+   * ```
+   */
+  tryBuild(): Result<
+    ArvoEventHandler<TSelf, TServices, TDependencies, TMechanismHooks>,
+    ArvoEventHandlerValidationError
+  > {
+    try {
+      return fromNeverthrow(ok(new ArvoEventHandler(this)));
+    } catch (raised) {
+      if (raised instanceof ArvoEventHandlerValidationError) {
+        return fromNeverthrow(err(raised));
+      }
+      // anything else is not a refused declaration, so reporting it here
+      // would make the error type say something untrue
+      throw raised;
+    }
+  }
+
+  /**
+   * Judges this declaration and builds the handler, throwing a refusal.
+   *
+   * For a declaration you wrote yourself and expect to be valid.
+   * `tryBuild` says the same thing without throwing.
+   *
+   * @returns The handler.
+   * @throws {ArvoEventHandlerValidationError} Where the declaration
+   * breaks any rule, naming every rule it broke.
+   *
+   * @example
+   * ```typescript
+   * declare const setup: ArvoEventHandlerSetup<typeof orderContract>;
+   *
+   * const handler = setup.handler('1.0.0', runOrder).build();
+   * ```
+   */
+  build(): ArvoEventHandler<TSelf, TServices, TDependencies, TMechanismHooks> {
+    const declared = this.tryBuild();
+    if (declared.ok) return declared.value;
+    throw declared.error;
   }
 }

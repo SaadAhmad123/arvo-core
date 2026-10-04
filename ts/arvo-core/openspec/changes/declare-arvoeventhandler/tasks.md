@@ -107,25 +107,25 @@ Everything ADR-006's context table requires that the first cut left out. These w
 
 ## 4a. The setup and the chain
 
-- [ ] 4a.1 Add `src/ArvoEventHandler/types/setup.ts`: `ArvoEventHandlerSetupParam` holding contract, services, options and `types`, and `ArvoDeclaredVersions` recording what a chain has accumulated.
-- [ ] 4a.2 Add `src/ArvoEventHandler/setup.ts` with `ArvoEventHandlerSetup`. `handler(version, declaration)` returns a new setup carrying that version and mutates nothing, so a chain in progress cannot be shared by accident.
-- [ ] 4a.3 Accept both forms at `handler`: a declaration object, and the executor alone. Normalize the shorthand once here so nothing downstream handles two shapes.
+- [x] 4a.1 Added `types/setup.ts` with `ArvoEventHandlerSetupParam`, and `types/declaration.ts` with `ArvoVersionDeclaration`, `ArvoVersionInput` and the accumulated shape — named `ArvoAccumulatedVersion`/`ArvoAccumulatedVersions`, which says what it is where `Declared` would have read as the input rather than the result. `contracts: { self, services }` nested, per **design.md**.
+- [x] 4a.2 Added `setup.ts` with `ArvoEventHandlerSetup`, each `handler` call returning a new frozen setup.
+- [x] 4a.3 Both forms accepted and settled into one shape at `handler`. A version declaring no state is given `ARVO_NO_STATE_SCHEMA`, which admits none — ADR-007 step 7 requires `data` to be `null` where a version declared no schema, and the loose schema would have let it store anything.
 - [ ] 4a.4 Add `src/factories/createArvoEventHandlerVersion.ts`, taking the setup, the version, and what `handler` takes inline. It validates nothing and has no `tryCreate` twin. Probe that a version created this way types `ctx` exactly as the inline form does, since that is the whole reason it exists.
 - [ ] 4a.5 Give `handler` its second overload, taking a created version alone and reading the version off it.
 
 ## 5. The class
 
-- [ ] 5.1 Add `src/ArvoEventHandler/version.ts` with `ArvoHandlerVersion`: the version, the state schema, the options in force, the emittable types, and `execute`, which for now calls the declared executor and gains return validation in change 2.
-- [ ] 5.1a Add `types/version-map.ts` with `ArvoVersion` and `ArvoVersionMap`, keyed off `keyof TSelf['versions']` so `.get` is checked and returns a version rather than a version-or-nothing. A real `Map` underneath; this retypes its surface only.
-- [ ] 5.2 Add `src/ArvoEventHandler/index.ts` with the class, holding `contract`, `services` and the version map. Implement the constructor over a completed declaration: resolve handler options, run every rule from §4 including completeness, throw one `ArvoEventHandlerValidationError` carrying every issue, and freeze what it holds. Not exported for use; `tryBuild` is what reaches it.
-- [ ] 5.3 Delete `helpers/derived.ts` and its spec. Resolved values live on the version a consumer reads, not in a store beside the handler.
-- [ ] 5.4 TSDoc the class and its members to one line each, with an `@example` declaring a handler. State that a handler processes no event yet — a consumer who installs this and expects to run one should learn it from the hover, not from trying.
+- [x] 5.1 Added as `src/ArvoEventHandler/version/index.ts` with `ArvoEventHandlerVersion`, and it went considerably further than this task described: it carries the whole of its own execution, including the return validation this task deferred to change 2. Proven in [`version_testing_tasks.md`](./version_testing_tasks.md).
+- [x] 5.1a Added `types/version-map.ts` with `ArvoHandlerVersionOf` and `ArvoVersionMap`, keyed off `keyof TSelf['versions']`. A real `Map` underneath, retyped at its surface only.
+- [x] 5.2 Added `src/ArvoEventHandler/index.ts`, holding `contracts`, the resolved handler options and the version map. The constructor runs the contract guard first and alone, since every other rule reads it, then collects across the rest and throws once.
+- [x] 5.3 Nothing to delete: `helpers/derived.ts` went with the restart and was never rebuilt. Resolved values live on the version a consumer reads.
+- [x] 5.4 TSDoc on the class and its members, with an example exercising the class itself rather than the factory that returns it.
 
 ## 6. Reaching it, and the public surface
 
-- [ ] 6.1 Implement `tryBuild` on the setup, wrapping the constructor, converting only `ArvoEventHandlerValidationError` into `Err` and rethrowing anything else, matching `createArvoContract.ts`. Build the `Result` through `src/result.ts` and never as a literal.
-- [ ] 6.2 Implement `build` as the thin unwrap over `tryBuild`, carrying no logic of its own, and `setupArvoEventHandler` in `src/factories/` as the one entry point, which begins a declaration rather than finishing one. No static beside it on `ArvoEventHandler`.
-- [ ] 6.3 Export from `src/index.ts`: the class, the pair, the error, and the types a consumer writes against — `ArvoEventHandlerParam`, `ArvoVersionDeclarations`, `ArvoEventHandlerOptions`, `ArvoEventHandlerExecutor`, `ArvoRetryDelayFn`, `ArvoServiceMap`, `ArvoMechanismHooks`. Export neither the resolver nor the emittable-set builder.
+- [x] 6.1 `tryBuild` on the setup, converting only `ArvoEventHandlerValidationError` and rethrowing anything else, with the `Result` built through `src/result.ts`.
+- [x] 6.2 `build` is the thin unwrap over `tryBuild`, and `setupArvoEventHandler` in `src/factories/` is the one entry point. No static beside it on `ArvoEventHandler`.
+- [x] 6.3 Exported from `src/index.ts`: the class, the setup, `setupArvoEventHandler`, the error, and the types a consumer writes against. Neither the declaration rules nor the emittable-set builder are exported.
 
 ## 7. Tests
 
@@ -133,15 +133,15 @@ Tests are written before the code they describe, and each step ends at 100%
 coverage of what it added. §3 and §4 are done and their specs are in place.
 
 
-- [ ] 7.1 Add `tests/ArvoEventHandler/declaration.spec.ts`: a one-version handler built, a handler with no services built, a version with and without a state schema, a version declared as its executor alone, services held at the version named, and a declaration carrying `types` built with nothing of it stored on the handler.
+- [x] 7.1 Added `tests/ArvoEventHandler/declaration.spec.ts`, with all of these and the options each version ends up running under.
 - [x] 7.2 Added as `tests/ArvoEventHandler/helpers/check-versions.spec.ts`, with completeness: two versions each with an executor built, a missing executor refused naming the version, and an executor for an undeclared version refused naming it.
 - [x] 7.3 Added as `tests/ArvoEventHandler/helpers/check-collisions.spec.ts` and `check-services.spec.ts`:: two services sharing a type, a service colliding with an output, a service colliding with a handler error type, a collision in one version of two reported against that version, and — the legal cases, which a rejection-only suite would miss — two versions declaring the same output type built, and two different contracts at one version each built.
 - [x] 7.4 Covered in `check-collisions.spec.ts` and `check-services.spec.ts`:: the implemented contract declared as a service is built, and is still built when that version declares outputs. ADR-006 permits this and §4.6 has no guard, so this is the test that stops one being added.
 - [x] 7.5 Added as `tests/ArvoEventHandler/helpers/resolve-options.spec.ts` and `check-options.spec.ts`:: every default present where nothing is declared, each of the seven asserted against ADR-006's stated value, a handler-level value kept, a version's value winning, an undeclared option inheriting, an option declared nowhere falling to its default, and per-version independence across two versions.
 - [x] 7.6 Covered in `resolve-options.spec.ts`: the unset-versus-null pair, which is the requirement most easily lost to a refactor: a version omitting `runTimeout` inherits, a version writing `runTimeout: null` is unbounded, and a version writing `runTimeout: undefined` behaves as omission.
 - [x] 7.7 Added as `tests/ArvoEventHandler/helpers/check-timeouts.spec.ts`:: an execution timeout below a run timeout refused, the two halves declared at different levels refused, a null run timeout with a bounded execution timeout refused, and the legal cases — both null, execution above run, and the two equal.
-- [ ] 7.8 Add `tests/ArvoEventHandler/errors.spec.ts`: two unrelated rules reported together, a non-contract reported alone and marked blocking, every issue carrying a position naming the version and option where one applies, and each option domain rejected individually rather than by a representative sample, per `project.md` — *Testing*.
-- [ ] 7.9 Add `tests/ArvoEventHandler/build.spec.ts`: `build` and `tryBuild` agreeing on a valid declaration, `tryBuild` reporting a failure as `Err` with the same issues `build` throws, an unrelated error propagating out of `tryBuild` unconverted, both entry points producing the same handler, and a chain in progress left unchanged by a further `handler` call.
+- [x] 7.8 Added `tests/ArvoEventHandler/errors.spec.ts`. Each option domain is rejected individually in `helpers/check-options.spec.ts`, where the rule lives.
+- [x] 7.9 Added `tests/ArvoEventHandler/build.spec.ts`, with all of these.
 - [ ] 7.9a Add `tests/ArvoEventHandler/standalone.spec.ts`: a version created through `createArvoEventHandlerVersion` with a state schema and one without, each assembled through the single-argument `handler` overload, each behaving exactly as the inline form does, and a created version for an undeclared version refused at `build` like any other.
 - [x] 7.10 Added as `tests/ArvoEventHandler/helpers/emittable-types.spec.ts`:: the set for a version, two versions differing while sharing every service type, and a version declaring no outputs.
 
@@ -157,4 +157,4 @@ The specs beside each reader prove it in isolation. What a user depends on
 is the whole of it holding when a transport repeats itself, a store loses a
 race, a service answers twice and a human never answers at all.
 
-- [ ] 9.1 Work through [`version_testing_tasks.md`](./version_testing_tasks.md): a lattice that can be made to misbehave, invariants checked after every run, the fault vocabulary covered exhaustively, thirteen scenarios, and seeded chance between them.
+- [x] 9.1 Worked through [`version_testing_tasks.md`](./version_testing_tasks.md): a lattice that can be made to misbehave, invariants checked after every run, the fault vocabulary covered exhaustively, thirteen scenarios, and seeded chance between them.

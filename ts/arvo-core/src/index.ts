@@ -35,6 +35,33 @@ export type {
   ArvoEventParam,
   ArvoEventValidationOptions,
 } from './ArvoEvent/types.js';
+export { ArvoEventHandlerValidationError } from './ArvoEventHandler/errors.js';
+export { ArvoEventHandler } from './ArvoEventHandler/index.js';
+export { ArvoEventHandlerSetup } from './ArvoEventHandler/setup.js';
+export type {
+  ArvoVersionDeclaration,
+  ArvoVersionInput,
+} from './ArvoEventHandler/types/declaration.js';
+export type {
+  ArvoEventHandlerExecuteResponse,
+  ArvoEventHandlerExecutor,
+  ArvoExecutorEmission,
+} from './ArvoEventHandler/types/execute.js';
+export type {
+  ArvoCollectMode,
+  ArvoEventHandlerOptions,
+  ArvoRetryDelayFn,
+} from './ArvoEventHandler/types/options.js';
+export type { ArvoServiceMap } from './ArvoEventHandler/types/services.js';
+export type { ArvoEventHandlerSetupParam } from './ArvoEventHandler/types/setup.js';
+export type {
+  ArvoDeclaredTypes,
+  ArvoDependencies,
+  ArvoDependencyResolver,
+  ArvoMechanismHooks,
+  ArvoNone,
+} from './ArvoEventHandler/types/supplied.js';
+export type { ArvoVersionMap } from './ArvoEventHandler/types/version-map.js';
 export {
   ArvoEventFactory,
   createArvoEventFactory,
@@ -57,6 +84,7 @@ export {
   createArvoEvent,
   tryCreateArvoEvent,
 } from './factories/createArvoEvent.js';
+export { setupArvoEventHandler } from './factories/setupArvoEventHandler.js';
 export { ArvoSemanticVersionCheckError } from './semver/errors.js';
 export { ArvoSemanticVersion } from './semver/index.js';
 export { ArvoContractSerializerError } from './serializers/ArvoContractSerializer/errors.js';

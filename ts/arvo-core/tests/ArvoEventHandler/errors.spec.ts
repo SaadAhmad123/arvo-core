@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { ArvoContract } from '../../src/ArvoContract/index.js';
 import { ArvoEventHandlerValidationError } from '../../src/ArvoEventHandler/errors.js';
+import { setupArvoEventHandler } from '../../src/factories/setupArvoEventHandler.js';
 import { ErrorIssue } from '../../src/utils/error-issue.js';
 
 const issue = (path: string, message: string, blockingReason?: string) =>
@@ -67,6 +70,65 @@ describe('what it never means', () => {
   it('says in its own message that it is about a declaration', () => {
     expect(new ArvoEventHandlerValidationError([]).message).toContain(
       'ArvoEventHandler',
+    );
+  });
+});
+
+describe('what a refused declaration reports from a real one', () => {
+  const twoVersions = new ArvoContract({
+    type: 'com_report_build',
+    versions: {
+      '1.0.0': { input: z.object({ of: z.string() }), outputs: {} },
+      '1.1.0': { input: z.object({ of: z.string() }), outputs: {} },
+    },
+  });
+  const executor = async () => {};
+
+  it('reports two unrelated rules together', () => {
+    const reported = setupArvoEventHandler({
+      contracts: { self: twoVersions },
+      options: { maxDepth: -1 },
+    })
+      .handler('1.0.0', executor)
+      .tryBuild();
+    expect(
+      !reported.ok && reported.error.issues.map((one) => one.path),
+    ).toEqual(['options.maxDepth', 'versions["1.1.0"]']);
+  });
+
+  it('reports a non-contract alone, every other rule reading it', () => {
+    const reported = setupArvoEventHandler({
+      // what a JavaScript caller could pass where the types refuse it
+      contracts: { self: 'com_order_create' as unknown as ArvoContract },
+      options: { maxDepth: -1 },
+    }).tryBuild();
+    expect(!reported.ok && reported.error.issues).toHaveLength(1);
+    expect(!reported.ok && reported.error.issues[0]?.isBlocking).toBe(true);
+  });
+
+  it('names the version and the option an issue is about', () => {
+    const reported = setupArvoEventHandler({ contracts: { self: twoVersions } })
+      .handler('1.0.0', {
+        options: { collect: 'some' as 'all' },
+        execute: executor,
+      })
+      .handler('1.1.0', executor)
+      .tryBuild();
+    expect(!reported.ok && reported.error.issues[0]?.path).toBe(
+      'versions["1.0.0"].options.collect',
+    );
+  });
+
+  it('names the version a timeout relation is in force for', () => {
+    const reported = setupArvoEventHandler({ contracts: { self: twoVersions } })
+      .handler('1.0.0', {
+        options: { runTimeout: 30_000, executionTimeout: 1_000 },
+        execute: executor,
+      })
+      .handler('1.1.0', executor)
+      .tryBuild();
+    expect(!reported.ok && reported.error.issues[0]?.path).toBe(
+      'versions["1.0.0"].options.executionTimeout',
     );
   });
 });
