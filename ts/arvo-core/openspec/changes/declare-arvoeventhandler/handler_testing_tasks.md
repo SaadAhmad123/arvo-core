@@ -93,5 +93,14 @@ One harness defect with it: a single `recover()` is not recovery, because the cr
 
 ## 9. Finishing
 
-- [ ] 9.1 `pnpm lint`, `pnpm typecheck` and `pnpm test` clean.
-- [ ] 9.2 Coverage held at 100% across statements, branches, functions and lines for the handler, with every uncovered line named and justified.
+- [x] 9.1 `pnpm lint`, `pnpm typecheck` and `pnpm test` clean.
+- [x] 9.2 Coverage held: every function, and every statement and branch but the six below. Each is a guard against a defect in this package rather than against anything an input can do, and each was reached for and found unreachable rather than assumed so.
+
+| Where | The guard | Why nothing can reach it |
+|---|---|---|
+| `index.ts` `tryExecute` | rethrowing what is not a fault | Everything that can fail inside is already turned into one; the guard exists so that a future path which is not would not be reported as a fault it never was. |
+| `index.ts` hydration | the branch for a record that could not be read at all, as against one that failed its rules | A record is only ever read under a schema this handler supplies, and the other failure needs none supplied. |
+| `version/index.ts` | the record that failed only on its data proving unaddressable | Its envelope passed, so it holds what addressing a caller needs. |
+| `version/index.ts` | a cancellation with no reason to report | Cancelling takes a reason, so there is always one. |
+| `version/index.ts` | the handler error event that could not be built | Reached only where an execution has no caller, which a validated record cannot be in. |
+| `version/index.ts` | the record at `error` that could not be written out | What it writes has already survived a round trip at return. |

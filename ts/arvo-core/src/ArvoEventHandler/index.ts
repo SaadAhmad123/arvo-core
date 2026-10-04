@@ -593,12 +593,12 @@ export class ArvoEventHandler<
     refusal: ArvoGateRefusal,
     owning?: VersionedArvoContract,
   ): Promise<ArvoHandlerFault> {
+    // An event opening an execution was resolved against a contract, so
+    // that contract is the one to answer for it. Anything else is
+    // refused before the record has said which version owns it.
     const self =
       owning ??
-      (resolved.entry === 'init'
-        ? (readOwnProperty(this.contracts.self.versions, resolved.version) ??
-          this.#anyVersion())
-        : this.#anyVersion());
+      (resolved.entry === 'init' ? resolved.contract : this.#anyVersion());
 
     // An event opening an execution names its own version, so that
     // version's options are in force. Anything else is refused before the

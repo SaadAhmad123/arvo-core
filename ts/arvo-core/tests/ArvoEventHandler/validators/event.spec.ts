@@ -411,3 +411,60 @@ describe('a service answering at a version this handler did not declare', () => 
     expect(!resolved.ok && resolved.error.message).toContain('1.0.0');
   });
 });
+
+describe('a payload refused as a whole rather than at a field', () => {
+  const strict = new ArvoContract({
+    type: 'com_strict_input',
+    versions: {
+      '1.0.0': {
+        input: z.strictObject({ only: z.string() }),
+        outputs: { evt_strict_done: z.strictObject({ only: z.string() }) },
+      },
+    },
+  });
+  const strictV1 = strict.versions['1.0.0'];
+  const validator = new ArvoEventValidator({
+    contracts: { self: strict, services: { other: paymentVersion } },
+  });
+
+  const opening = createArvoEventFactory(strictV1).createInput({
+    source: 'com.web.checkout',
+    subject: 'order-1',
+    to: strict.type,
+    data: { only: 'this' },
+  });
+
+  it('reports the payload itself where nothing names a field', () => {
+    const refused = validator.validateInput(
+      cloneArvoEvent(opening, {
+        data: { only: 'this', extra: 'unwanted' } as unknown as {
+          only: string;
+        },
+      }),
+    );
+    expect(!refused.ok && refused.error.faultKind).toBe(
+      'event_schema_rejected',
+    );
+    expect(!refused.ok && refused.error.issues[0]?.path).toBe('data.(root)');
+  });
+
+  it('does the same for one on its way out', () => {
+    const answering = createArvoEventFactory(strictV1).createOutput({
+      type: 'evt_strict_done',
+      source: strict.type,
+      subject: 'order-1',
+      to: 'com.web.checkout',
+      initid: opening.id,
+      parentid: opening.id,
+      data: { only: 'this' },
+    });
+    const refused = validator.validateOutput(
+      cloneArvoEvent(answering, {
+        data: { only: 'this', extra: 'unwanted' } as unknown as {
+          only: string;
+        },
+      }),
+    );
+    expect(!refused.ok && refused.error.issues[0]?.path).toBe('data.(root)');
+  });
+});

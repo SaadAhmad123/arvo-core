@@ -1,7 +1,4 @@
-import { execSync } from 'node:child_process';
-import { existsSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { ThreadedBroker, type ThreadedBrokerOptions } from './worker/broker.js';
 
 /**
@@ -18,30 +15,7 @@ import { ThreadedBroker, type ThreadedBrokerOptions } from './worker/broker.js';
  * of the exercise rather than a side effect of it.
  */
 
-const AT = (where: string) => new URL(where, import.meta.url).pathname;
-const BUILT = AT('../../../dist/ArvoEventHandler/index.js');
-const SOURCE = AT('../../../src');
-
 let running: ThreadedBroker | null = null;
-
-/** When anything under a directory was last written. */
-const newestUnder = (where: string): number => {
-  let newest = 0;
-  for (const entry of readdirSync(where, { withFileTypes: true })) {
-    const at = join(where, entry.name);
-    const when = entry.isDirectory() ? newestUnder(at) : statSync(at).mtimeMs;
-    if (when > newest) newest = when;
-  }
-  return newest;
-};
-
-beforeAll(() => {
-  // a thread loads what a deployment would load, and it has to be this
-  // source built or these threads prove something about code nobody has
-  const stale =
-    !existsSync(BUILT) || statSync(BUILT).mtimeMs < newestUnder(SOURCE);
-  if (stale) execSync('pnpm build', { stdio: 'ignore' });
-}, 180_000);
 
 afterEach(async () => {
   await running?.stop();

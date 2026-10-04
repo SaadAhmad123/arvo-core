@@ -481,6 +481,17 @@ describe('what the handler passes through from the version unaltered', () => {
     expect(fault.retry).not.toBeNull();
   });
 
+  it('a dependency factory that failed with something that is not an error', async () => {
+    const { fault } = await refusing({
+      event: anOrder(),
+      dependencies: () => {
+        throw 'the pool said only this';
+      },
+    });
+    expect(fault.faultKind).toBe('dependency_resolution_failed');
+    expect(fault.cause).toBe('the pool said only this');
+  });
+
   it('an executor that raised one deliberately', async () => {
     const { fault } = await refusing({
       event: anOrder(),

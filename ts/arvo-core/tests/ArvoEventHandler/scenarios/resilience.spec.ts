@@ -8,6 +8,7 @@ import {
   declareHandler,
   fulfilContract,
   fulfilV1,
+  fulfilV2,
   inventoryV1,
   paymentV1,
   type ScenarioDependencies,
@@ -407,5 +408,49 @@ describe('a state schema changed under records already written', () => {
       String(refused.error.abandonmentState),
     ) as JSONObject;
     expect(resting.lifecycle).toBe('failure');
+  });
+});
+
+describe('a version that remembers nothing, handed a record that does', () => {
+  it('refuses even an empty object, its record carrying none at all', async () => {
+    // the schema such a version is judged against admits {}, so this is
+    // the one shape that reaches the rule rather than the schema
+    const store = new ScenarioStore();
+    const handler = declareHandler();
+
+    const shipped = await handler.execute({
+      event: createArvoEventFactory(fulfilV2).createInput({
+        source: 'com.web.checkout',
+        subject: 'order-1',
+        to: fulfilContract.type,
+        data: { items: ['book'] },
+      }),
+      state: store.resolver,
+      attempt: 0,
+    });
+    if (shipped.kind !== 'produced') throw new Error('nothing was opened');
+    expect(shipped.state.data).toBeNull();
+
+    const answered = createArvoEventFactory(inventoryV1).createOutput({
+      type: 'evt_inventory_reserved',
+      source: inventoryV1.type,
+      subject: 'order-1',
+      to: fulfilContract.type,
+      executionid: String(shipped.state.executionId),
+      initid: 'a-request-it-never-sent',
+      parentid: 'a-request-it-never-sent',
+      data: { held: 1 },
+    });
+
+    const refused = await handler.tryExecute({
+      event: answered,
+      state: () => ({ ...shipped.state, data: {} }),
+      attempt: 0,
+    });
+
+    expect(!refused.ok && refused.error.faultKind).toBe('record_invalid');
+    expect(!refused.ok && refused.error.violations.join(' ')).toContain(
+      'must be null',
+    );
   });
 });

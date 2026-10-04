@@ -384,10 +384,10 @@ export class ArvoEventValidator<
 
     const fieldOf = (issue: { path: PropertyKey[] }) =>
       issue.path.join('.') || '(root)';
+    // Only what is leaving reaches here: what arrives is judged by
+    // `checkInput`, which reports an arriving payload as its own kind.
     return this.#refuse(
-      origin.source === 'self' && event.type === this.contracts.self.type
-        ? 'event_schema_rejected'
-        : 'emission_schema_rejected',
+      'emission_schema_rejected',
       `the payload of ${event.type} does not satisfy ${event.dataschema}.`,
       result.error.issues.map(
         (issue) =>
