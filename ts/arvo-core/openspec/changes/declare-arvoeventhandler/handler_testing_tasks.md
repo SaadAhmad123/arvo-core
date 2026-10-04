@@ -75,7 +75,7 @@ Each runs clean, under chaos, and with a fault injected at a step the driver pic
 - [x] 6.1 In `scenarios/scale.spec.ts`. Scale: ten thousand executions through one handler, three versions, one store. The cost of placing an event must not grow with how many executions exist, and a wall-clock budget is asserted so a regression fails the suite rather than merely slowing it.
 - [x] 6.2 Boundaries: a contract with one version and with many; a handler with no services; an event at the exact depth bound; the first and last attempt; a store returning an empty object against one returning nothing.
 - [x] 6.3 Payload cruelty at the boundary: `__proto__` as an event type, a `dataschema` with no separator, one with several, an empty `to`, an enormous payload, and `undefined` inside data.
-- [ ] 6.4 Chance: two hundred seeded runs, invariants after each, the seed printed on failure and pinned as a named regression.
+- [x] 6.4 In `scenarios/chaos.spec.ts`. Chance: two hundred seeded runs, invariants after each, the seed printed on failure and pinned as a named regression.
 - [x] 6.5 Statelessness: two executions of different versions interleaved through one handler instance, proving the handler holds nothing between them — the claim the whole protocol rests on.
 
 ## 7. Real threads
@@ -84,6 +84,10 @@ Each runs clean, under chaos, and with a fault injected at a step the driver pic
 - [ ] 7.2 The same cruelty as before: duplicates, disorder, threads killed mid-work, attempts running out. Plus the one this layer adds: two threads opening the same execution from the same init event at the same moment, where both derive the same identifier and exactly one may create the record.
 
 ## 8. What this broke
+
+- [x] 8.2 **A lattice that repeats itself answered its own repeats.** Not a defect in the handler, and worth recording because the ADR predicted it exactly. In version mode the lattice dropped a duplicate opening event before any gate saw it; driving the handler, that duplicate correctly becomes `record_unexpected`, and the lattice's blanket policy of abandoning every non-retryable fault then published a handler error event to a caller whose work had already succeeded. ADR-008 names this case when it declines to mandate abandonment: a `record_unexpected` on an init may be the mechanism's own redelivery. The lattice now treats it as one.
+
+One harness defect with it: a single `recover()` is not recovery, because the crash it recovers from can fire again on the commit recovery produces. The version's suite already looped; this one did not.
 
 - [x] 8.1 **A crafted `dataschema` or `type` crashed the handler rather than being refused.** Resolution looked a version up by indexing a plain object, so `__proto__` found `Object.prototype` — truthy, so the refusal never fired — and the handler then threw a raw `TypeError` out of `execute`. A `TypeError` is not a fault: a mechanism receives an unhandled crash with no kind, no retry verdict and nothing to give up with. The same hazard sat on three more lookups reached from an event's own `type`, where `'constructor' in outputs` is true of every object and the schema fetched would have been `Object`. Every lookup keyed by a value from outside now asks whether the key was declared rather than whether something came back.
 

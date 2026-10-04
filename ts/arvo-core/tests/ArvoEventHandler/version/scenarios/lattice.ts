@@ -616,6 +616,15 @@ export class ArvoLattice {
 
     if (!this.#abandons) return;
 
+    // A lattice that repeats itself must not treat its own repeat as a
+    // failure. An opening event arriving at an execution that already
+    // exists says this delivery has been seen, not that the work went
+    // wrong — and telling the caller it failed while it is still running
+    // is the one outcome worse than silence. Policy rather than
+    // protocol: the fault carries the answer either way, and whether to
+    // send it is a deployment's own.
+    if (fault.faultKind === 'record_unexpected') return;
+
     this.transcript.abandoned.push({ executionId, fault });
     if (fault.abandonmentState !== null) {
       this.store.set(executionId, JSON.parse(fault.abandonmentState));
