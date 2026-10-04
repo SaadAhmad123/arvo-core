@@ -373,6 +373,20 @@ export class ArvoEventHandlerVersion<
       throw await this.#refuseStoredRow(param, restored.error);
     }
 
+    // A version that declared nothing to remember has a record carrying
+    // none. Anything stored under it was written by something that is
+    // not this version, and reading it would be reading state under a
+    // schema that was never its own.
+    if (!this.declaresState && restored.value.data !== null) {
+      throw await this.#faultFor(param, restored.value, {
+        faultKind: 'record_invalid',
+        message: `this execution of ${this.#contractAtVersion} remembers nothing, so its record carries no state — and this one does. Declare a state schema for this version, or find what wrote it`,
+        violations: [
+          `data: must be null for a version declaring no state schema`,
+        ],
+      });
+    }
+
     // A record belongs to one version for its whole life. Which executor
     // runs is settled before this, so reaching here under another is a
     // mistake one layer up — and one worth refusing rather than running,

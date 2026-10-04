@@ -342,6 +342,7 @@ export class ArvoEventHandler<
       entry: resolved.entry,
       executionId,
       attempt: param.attempt,
+      contractType: this.contracts.self.type,
     });
 
     const stored = await this.#fetch(param, telemetry, resolved, executionId);

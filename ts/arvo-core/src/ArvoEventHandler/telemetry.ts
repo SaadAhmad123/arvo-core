@@ -41,10 +41,12 @@ export const describeEntry = (
     entry: ArvoEntryKind;
     executionId: string;
     attempt: number;
+    contractType: string;
   },
 ): void => {
   telemetry.setAttributes({
     subject: param.event.subject,
+    'contract.type': param.contractType,
     'execution.id': param.executionId,
     entry: param.entry,
     attempt: param.attempt,

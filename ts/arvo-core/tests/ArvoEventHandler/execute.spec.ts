@@ -682,3 +682,52 @@ describe('a record holding an event that will not restore', () => {
     expect(fault.faultKind).toBe('record_event_unrestorable');
   });
 });
+
+describe('a record carrying state its version never declared', () => {
+  it('is refused rather than read under a schema that was never its own', async () => {
+    const stateless = setupArvoEventHandler({
+      contracts: {
+        self: orderContract,
+        services: { payments: paymentVersion },
+      },
+    })
+      .handler('1.0.0', async (ctx) =>
+        ctx.build({ type: 'com_payment_charge', data: { amount: 10 } }),
+      )
+      .build();
+
+    const store = storing();
+    const order = anOrder();
+    const asked = await stateless.execute({
+      event: order,
+      state: store.read(),
+      attempt: 0,
+    });
+    if (asked.kind !== 'produced') throw new Error('nothing was asked');
+    expect(asked.state.data).toBeNull();
+
+    const charged = createArvoEventFactory(paymentVersion).createOutput({
+      type: 'evt_payment_charged',
+      source: paymentVersion.type,
+      subject: order.subject,
+      to: orderVersion.type,
+      executionid: asked.state.executionId as string,
+      initid: asked.events[0]?.id,
+      parentid: asked.events[0]?.id,
+      data: { receipt: 'r-1' },
+    });
+
+    const fault = await faultFrom(
+      stateless.execute({
+        event: charged,
+        state: () =>
+          ({
+            ...asked.state,
+            data: { written: 'by something else' },
+          }) as JSONObject,
+        attempt: 0,
+      }),
+    );
+    expect(fault.faultKind).toBe('record_invalid');
+  });
+});

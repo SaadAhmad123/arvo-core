@@ -158,3 +158,5 @@ is the whole of it holding when a transport repeats itself, a store loses a
 race, a service answers twice and a human never answers at all.
 
 - [x] 9.1 Worked through [`version_testing_tasks.md`](./version_testing_tasks.md): a lattice that can be made to misbehave, invariants checked after every run, the fault vocabulary covered exhaustively, thirteen scenarios, and seeded chance between them.
+
+- [ ] 9.2 Work through [`handler_testing_tasks.md`](./handler_testing_tasks.md): the same rigour for the layer above, where the inputs are an event and a way to reach a store rather than an event already placed. Three versions in flight at once, a store that lies, a rolling upgrade from the outside, and the whole of the version's suite re-run with the handler as the thing driven.
