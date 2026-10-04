@@ -334,3 +334,51 @@ export const declareWalker = () =>
         }),
     })
     .build();
+
+/**
+ * The services, each declared as a handler of its own.
+ *
+ * So that every event in a scenario passes through a gate rather than
+ * around one: a lattice driving handlers has no path that skips
+ * classification, which is the point of driving them.
+ */
+export const declareInventoryWorker = () =>
+  setupArvoEventHandler({
+    contracts: { self: inventoryContract },
+    types: {} as { dependencies: ScenarioDependencies },
+  })
+    .handler('1.0.0', {
+      execute: (ctx) =>
+        behaving(ctx, async (working) =>
+          working.build({
+            type: 'evt_inventory_reserved',
+            data: { held: 1 },
+          }),
+        ),
+    })
+    .handler('1.1.0', {
+      execute: (ctx) =>
+        behaving(ctx, async (working) =>
+          working.build({
+            type: 'evt_inventory_reserved',
+            data: { held: 2 },
+          }),
+        ),
+    })
+    .build();
+
+export const declarePaymentWorker = () =>
+  setupArvoEventHandler({
+    contracts: { self: paymentContract },
+    types: {} as { dependencies: ScenarioDependencies },
+  })
+    .handler('1.0.0', {
+      execute: (ctx) =>
+        behaving(ctx, async (working) =>
+          working.build({
+            type: 'evt_payment_charged',
+            data: { receipt: `r-${working.state.subject}` },
+          }),
+        ),
+    })
+    .build();

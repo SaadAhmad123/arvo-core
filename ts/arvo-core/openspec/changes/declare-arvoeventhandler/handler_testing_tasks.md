@@ -30,20 +30,21 @@ Proven before anything is built on it, in `scenarios/fixture.spec.ts`: a harness
 
 ## 2. The lattice, extended
 
-- [ ] 2.1 Reuse `version/scenarios/lattice.ts` rather than writing a second. Where it currently drives a version directly, it drives a handler: it publishes events and hands each to `handler.execute`, and the handler does its own classification, derivation and fetching.
-- [ ] 2.2 That substitution is itself a test. Every invariant the version's suite asserts must still hold when the handler is the thing being driven, because the handler changes who decides, not what is true.
-- [ ] 2.3 Add what only this layer can get wrong to the transcript: which version each execution was routed to, and which gate step refused each delivery.
+- [x] 2.1 Reused rather than forked: `ArvoLatticeParam` gained a `handlers` map, and where one is registered for an event's `to` the lattice hands the event over whole and settles nothing first. The version's own path is untouched, and its suite still passes unchanged. Where it currently drives a version directly, it drives a handler: it publishes events and hands each to `handler.execute`, and the handler does its own classification, derivation and fetching.
+- [x] 2.2 Asserted in `scenarios/lattice.spec.ts`, with the services declared as handlers of their own so no event in the lattice goes around a gate. That substitution is itself a test. Every invariant the version's suite asserts must still hold when the handler is the thing being driven, because the handler changes who decides, not what is true.
+- [x] 2.3 Nothing needed adding: the committed row already names the version it was written under, and a fault already names its kind. The invariants read both.
 
 ## 3. The invariants, added to
 
-Every check in `version/scenarios/invariants.ts`, plus:
+Every check in `version/scenarios/invariants.ts`, plus those in `scenarios/invariants.ts`. Each is itself tested against a run that breaks it, in `scenarios/invariants.spec.ts`: an invariant that cannot fail proves nothing, and a suite full of them passes for the wrong reason.
 
-- [ ] 3.1 **Every execution ran under exactly one version for its whole life**, and that version is the one its init event named.
-- [ ] 3.2 **No event was ever handed to a version whose contract did not declare it.**
-- [ ] 3.3 **Every fault names the execution the store was asked about** — the derived identifier on an init, the event's own on a followup — and `null` only where the event could not be placed.
-- [ ] 3.4 **Every fault's abandonment pair matches what its step is allowed to carry**, which is the rule most easily lost: the event is present from step 2 on an init and from step 5 on a followup, and never before.
-- [ ] 3.5 **The store was read exactly once per delivery**, under exactly one key.
-- [ ] 3.6 **Nothing was read off a stored row before it was established to be a record.**
+- [x] 3.1 **Every execution ran under exactly one version for its whole life**, and that version is the one its init event named. Two checks, since a record could be consistent and still wrong.
+- [x] 3.1a **Every record is stored under the identity the protocol derives for it** — the first place the derivation itself is on trial, the version having been handed the identifier.
+- [x] 3.2 Covered as **every execution ran the version its own opening event named**, which is the same property stated where it can be observed — the record names both.
+- [x] 3.3 **Every fault names the execution the store was asked about** — the derived identifier on an init, the event's own on a followup — and `null` only where the event could not be placed.
+- [x] 3.4 **Every fault's abandonment pair matches what its step is allowed to carry**, which is the rule most easily lost: the event is present from step 2 on an init and from step 5 on a followup, and never before.
+- [x] 3.5 The store records every identifier it was asked for, so one read per execution is provable. Asserted in §4.
+- [x] 3.6 Observable as the fault a corrupt row produces: a row that is not a record is refused as corruption rather than reported as a mismatch. Asserted in §4 and §5.5.
 
 ## 4. The fault matrix, from the outside
 

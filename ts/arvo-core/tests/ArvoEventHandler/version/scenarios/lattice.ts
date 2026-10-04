@@ -1,7 +1,7 @@
 import { trace } from '@opentelemetry/api';
 import type { ArvoEvent } from '../../../../src/ArvoEvent/index.js';
 import { ArvoExecutionContextTelemetry } from '../../../../src/ArvoEventHandler/context/telemetry/index.js';
-import type { ArvoHandlerFault } from '../../../../src/ArvoEventHandler/fault/index.js';
+import { ArvoHandlerFault } from '../../../../src/ArvoEventHandler/fault/index.js';
 import { deriveArvoExecutionId } from '../../../../src/ArvoEventHandler/helpers/execution-id.js';
 import type { ArvoEventHandlerExecuteResponse } from '../../../../src/ArvoEventHandler/types/execute.js';
 import { ArvoEventSerializer } from '../../../../src/serializers/ArvoEventSerializer/index.js';
@@ -73,10 +73,40 @@ export type ArvoTranscript = {
   readonly died: { event: ArvoEvent; executionId: string }[];
 };
 
+/**
+ * A handler this lattice may hand an event to whole.
+ *
+ * Typed by what the lattice uses rather than by the class, so a lattice
+ * driving a handler is not coupled to how one is declared.
+ */
+export type ArvoHandlerUnderTest = {
+  execute(param: {
+    event: ArvoEvent;
+    state: (param: {
+      executionId: string;
+      telemetry: ArvoExecutionContextTelemetry;
+      attempt: number;
+    }) => JSONObject | null;
+    attempt: number;
+    dependencies?: unknown;
+    hooks?: unknown;
+  }): Promise<ArvoEventHandlerExecuteResponse>;
+};
+
 /** What a scenario builds a lattice from. */
 export type ArvoLatticeParam = {
   /** Every version this lattice can run. */
   versions: ArvoVersionsUnderTest;
+  /**
+   * Every handler this lattice can run, keyed by what an event addresses.
+   *
+   * Where one is registered for an event's `to`, the lattice hands it the
+   * event whole and settles nothing first: classifying it, deriving the
+   * execution and reading the record are the handler's own. The lattice
+   * is then only what a mechanism is — a queue, a store, and a way to
+   * lose things.
+   */
+  handlers?: Record<string, ArvoHandlerUnderTest>;
   /** How it should misbehave. */
   chaos?: Partial<ArvoChaos>;
   /** What the lattice calls the time, so days may pass in microseconds. */
@@ -157,6 +187,7 @@ export class ArvoLattice {
   readonly parked = new Map<string, ArvoEvent[]>();
 
   readonly #versions: ArvoVersionsUnderTest;
+  readonly #handlers: Record<string, ArvoHandlerUnderTest>;
   readonly #chaos: ArvoChaos;
   readonly #clock: { now: () => number };
   readonly #chance: () => number;
@@ -171,6 +202,7 @@ export class ArvoLattice {
 
   constructor(param: ArvoLatticeParam) {
     this.#versions = param.versions;
+    this.#handlers = param.handlers ?? {};
     this.#chaos = { ...NO_CHAOS, ...param.chaos };
     this.#clock = param.clock ?? { now: () => Date.now() };
     this.#chance = chanceFrom(param.seed ?? 1);
@@ -330,6 +362,12 @@ export class ArvoLattice {
 
   /** One event, through everything a mechanism owns, to a version and back. */
   async #deliver(event: ArvoEvent): Promise<void> {
+    const handler = event.to === null ? undefined : this.#handlers[event.to];
+    if (handler !== undefined) {
+      if (this.#lost.has(event.to as string)) return;
+      return this.#deliverWhole(handler, event);
+    }
+
     const route = await this.#routeFor(event);
     if (route === null) return;
 
@@ -360,6 +398,61 @@ export class ArvoLattice {
       this.#commit(executionId, event, response.state, response.events);
     } catch (raised) {
       await this.#onFault(event, executionId, key, attempt, raised);
+    }
+  }
+
+  /**
+   * One event handed to a handler whole.
+   *
+   * Nothing is settled first. Which execution the event concerns, and
+   * whether there is one, are answers only the handler has — so the
+   * execution it turns out to be about is read off what comes back.
+   */
+  async #deliverWhole(
+    handler: ArvoHandlerUnderTest,
+    event: ArvoEvent,
+  ): Promise<void> {
+    const key = event.id;
+    const attempt = this.#attempts.get(key) ?? 0;
+
+    const died =
+      this.#chaos.crashMidExecution > 0 &&
+      this.#chance() < this.#chaos.crashMidExecution;
+    if (died) {
+      this.transcript.died.push({ event, executionId: 'unknown' });
+      this.#queue.push(event);
+      return;
+    }
+
+    try {
+      const response = await handler.execute({
+        event,
+        state: ({ executionId }) => this.stored(executionId),
+        attempt,
+        dependencies: { behave: this.#behaviours.get(event.to as string) },
+        hooks: {},
+      });
+
+      if (response.kind === 'discarded') {
+        this.transcript.discarded.push({ event, reason: response.reason });
+        return;
+      }
+
+      const executionId = String(response.state.executionId);
+      this.transcript.delivered.push({ event, executionId, attempt });
+      this.#commit(executionId, event, response.state, response.events);
+    } catch (raised) {
+      const named =
+        raised instanceof ArvoHandlerFault && raised.executionId !== null
+          ? raised.executionId
+          : 'unplaced';
+      await this.#onFault(
+        event,
+        named,
+        `${named}:${event.id}`,
+        attempt,
+        raised,
+      );
     }
   }
 
