@@ -48,8 +48,10 @@ Every check in `version/scenarios/invariants.ts`, plus those in `scenarios/invar
 
 ## 4. The fault matrix, from the outside
 
-- [ ] 4.1 Add `tests/ArvoEventHandler/scenarios/faults.spec.ts`: one row per fault the handler itself raises — `event_unclassifiable`, `category_mismatch`, `state_resolution_failed`, `record_unexpected`, `record_expected`, `record_invalid`, `record_event_unrestorable`, `version_not_declared`, `type_not_receivable`, `event_schema_rejected` — each caused through `execute` rather than by calling a helper, and each asserted whole: the kind, the retry verdict, the violations, both abandonment halves, that nothing was emitted, that nothing was committed, and what the span recorded.
-- [ ] 4.2 And one row per fault the handler must pass through **unaltered** from the version, so a refactor that reinterprets one is caught: `max_depth_event_received`, `lifecycle_terminal`, `execution_timeout`, `response_unawaited`, `addressing_mismatch`, `event_unaddressed`, `dependency_resolution_failed`, `run_timeout`, `executor_raised`, and every return-time kind.
+- [x] 4.1 Added `tests/ArvoEventHandler/scenarios/faults.spec.ts`: one row per fault the handler itself raises — `event_unclassifiable`, `category_mismatch`, `state_resolution_failed`, `record_unexpected`, `record_expected`, `record_invalid`, `record_event_unrestorable`, `version_not_declared`, `type_not_receivable`, `event_schema_rejected` — each caused through `execute` rather than by calling a helper, and each asserted whole: the kind, the retry verdict, the violations, both abandonment halves, that nothing was emitted, that nothing was committed, and what the span recorded.
+- [x] 4.2 And one row per fault the handler must pass through **unaltered** from the version, so a refactor that reinterprets one is caught: `response_unawaited`, `addressing_mismatch`, `dependency_resolution_failed` and `executor_raised` here; the rest reached in §5, where a scenario can put an execution in the state that raises them.
+
+One expectation of mine was wrong and the implementation was right: an event naming this contract but addressed elsewhere is `addressing_mismatch`, not `event_unclassifiable`. `to` does not place an event — `dataschema` does — so it is placed first and then refused for disagreeing about where it was going.
 
 ## 5. The scenarios
 
