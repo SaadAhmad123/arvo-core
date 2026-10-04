@@ -17,6 +17,7 @@ export { VersionedArvoContract } from './ArvoContract/versioned/index.js';
 export type { VersionedArvoContractParam } from './ArvoContract/versioned/types.js';
 export { ArvoDomain } from './ArvoDomain/index.js';
 export type {
+  ArvoDomainContext,
   ArvoDomainInput,
   ArvoDomainSymbol,
 } from './ArvoDomain/types.js';
@@ -35,17 +36,41 @@ export type {
   ArvoEventParam,
   ArvoEventValidationOptions,
 } from './ArvoEvent/types.js';
+export { ArvoExecutionContext } from './ArvoEventHandler/context/index.js';
+export { ArvoExecutionContextTelemetry } from './ArvoEventHandler/context/telemetry/index.js';
+export type { ArvoLogger } from './ArvoEventHandler/context/telemetry/types.js';
+export type {
+  ArvoContextState,
+  ArvoDataWrite,
+  ArvoEntryKind,
+  ArvoTriggeringEvent,
+} from './ArvoEventHandler/context/types.js';
 export { ArvoEventHandlerValidationError } from './ArvoEventHandler/errors.js';
+export { ArvoHandlerFault } from './ArvoEventHandler/fault/index.js';
+export type {
+  ArvoFaultKind,
+  ArvoFaultRetry,
+} from './ArvoEventHandler/fault/types.js';
 export { ArvoEventHandler } from './ArvoEventHandler/index.js';
 export { ArvoEventHandlerSetup } from './ArvoEventHandler/setup.js';
+export { ArvoExecutionState } from './ArvoEventHandler/state/index.js';
+export type {
+  ArvoExecutionIdentity,
+  ArvoExecutionLifecycle,
+  ArvoTerminalLifecycle,
+  ArvoTouchedEvent,
+  ArvoTouchedEventDirection,
+} from './ArvoEventHandler/state/types.js';
 export type {
   ArvoCreatedVersion,
   ArvoVersionDeclaration,
   ArvoVersionInput,
 } from './ArvoEventHandler/types/declaration.js';
 export type {
+  ArvoEventHandlerExecuteParam,
   ArvoEventHandlerExecuteResponse,
   ArvoEventHandlerExecutor,
+  ArvoExecutionStateResolver,
   ArvoExecutorEmission,
 } from './ArvoEventHandler/types/execute.js';
 export type {
@@ -62,7 +87,11 @@ export type {
   ArvoMechanismHooks,
   ArvoNone,
 } from './ArvoEventHandler/types/supplied.js';
-export type { ArvoVersionMap } from './ArvoEventHandler/types/version-map.js';
+export type {
+  ArvoHandlerVersionOf,
+  ArvoVersionMap,
+} from './ArvoEventHandler/types/version-map.js';
+export { ArvoEventHandlerVersion } from './ArvoEventHandler/version/index.js';
 export {
   ArvoEventFactory,
   createArvoEventFactory,

@@ -125,7 +125,9 @@ Everything ADR-006's context table requires that the first cut left out. These w
 
 - [x] 6.1 `tryBuild` on the setup, converting only `ArvoEventHandlerValidationError` and rethrowing anything else, with the `Result` built through `src/result.ts`.
 - [x] 6.2 `build` is the thin unwrap over `tryBuild`, and `setupArvoEventHandler` in `src/factories/` is the one entry point. No static beside it on `ArvoEventHandler`.
-- [x] 6.3 Exported from `src/index.ts`: the class, the setup, `setupArvoEventHandler`, the error, and the types a consumer writes against. Neither the declaration rules nor the emittable-set builder are exported.
+- [x] 6.3 Exported from `src/index.ts`: the class, the setup, both factories, the error, and the types a consumer writes against. Neither the declaration rules nor the emittable-set builder are exported.
+
+  The list this task named was narrower than the API turned out to need, and the sandbox is what found it: `tryExecute` reports an `ArvoHandlerFault`, which a consumer could not name, annotate, or write a guard against. Eleven more went with it — the fault's kind and its retry block, what a mechanism must supply to reach a store, the argument to `execute`, the record it commits and the lifecycle to read it by, the context an executor is handed, and the telemetry whoever runs it constructs.
 
 ## 7. Tests
 
@@ -147,9 +149,9 @@ coverage of what it added. §3 and §4 are done and their specs are in place.
 
 ## 8. Finishing
 
-- [ ] 8.1 Add a section to `ts/sandbox/src/playground.ts` declaring a three-version handler with a service, one version using the executor-only shorthand, and one refused declaration.
-- [ ] 8.2 `npx tsc --noEmit` clean, `pnpm lint` clean, `pnpm test:coverage` at 100% across statements, branches, functions and lines for the new modules.
-- [ ] 8.3 `node_modules/.bin/openspec validate declare-arvoeventhandler --strict` clean.
+- [x] 8.1 Added as two chapters of the tour the playground runs rather than a section of the playground itself, which only sequences chapters. `13-declaring-a-handler.ts` declares the three-version handler with a service, one version by its executor alone, shows what each version settles its options to, and refuses a declaration two ways. `14-running-an-event.ts` goes further than the task asked and runs one: a whole workflow opened and answered, the same event twice, and an event nothing can place.
+- [x] 8.2 `npx tsc --noEmit`, `pnpm lint` and `pnpm test` clean, in the package and in the sandbox. Coverage is every function and every statement and branch but six guards, each named and justified under [`handler_testing_tasks.md`](./handler_testing_tasks.md) §9.2.
+- [x] 8.3 `node_modules/.bin/openspec validate declare-arvoeventhandler --strict` clean.
 
 ## 9. Proving the version holds
 
@@ -159,4 +161,6 @@ race, a service answers twice and a human never answers at all.
 
 - [x] 9.1 Worked through [`version_testing_tasks.md`](./version_testing_tasks.md): a lattice that can be made to misbehave, invariants checked after every run, the fault vocabulary covered exhaustively, thirteen scenarios, and seeded chance between them.
 
-- [ ] 9.2 Work through [`handler_testing_tasks.md`](./handler_testing_tasks.md): the same rigour for the layer above, where the inputs are an event and a way to reach a store rather than an event already placed. Three versions in flight at once, a store that lies, a rolling upgrade from the outside, and the whole of the version's suite re-run with the handler as the thing driven.
+- [x] 9.2 Worked through [`handler_testing_tasks.md`](./handler_testing_tasks.md): the same rigour for the layer above, where the inputs are an event and a way to reach a store rather than an event already placed. Three versions in flight at once, a store that lies, a rolling upgrade from the outside, the version's own lattice driven through the handler with its own invariants asserted, three hundred seeded runs, and four real threads against one store with a broker that decides nothing.
+
+It found one defect in the code — a crafted `dataschema` or `type` crashed the handler rather than being refused — and three in the harness.
