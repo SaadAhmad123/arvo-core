@@ -22,6 +22,14 @@ export type ArvoChaos = {
   loseRace: number;
   /** How often an event is dropped outright. */
   drop: number;
+  /**
+   * How often the process dies part way through an execution.
+   *
+   * Before anything is committed and before anything is published, which
+   * is the ordinary way a process dies: the work is half done and
+   * nothing anywhere records that it was ever started.
+   */
+  crashMidExecution: number;
 };
 
 const NO_CHAOS: ArvoChaos = {
@@ -31,6 +39,7 @@ const NO_CHAOS: ArvoChaos = {
   crashBeforePublish: 0,
   loseRace: 0,
   drop: 0,
+  crashMidExecution: 0,
 };
 
 /** Everything that happened, in the order it happened. */
@@ -60,6 +69,8 @@ export type ArvoTranscript = {
   readonly conflicts: { executionId: string; event: ArvoEvent }[];
   /** Every execution the lattice gave up on, with what it committed. */
   readonly abandoned: { executionId: string; fault: ArvoHandlerFault }[];
+  /** Every execution the process died part way through. */
+  readonly died: { event: ArvoEvent; executionId: string }[];
 };
 
 /** What a scenario builds a lattice from. */
@@ -135,6 +146,7 @@ export class ArvoLattice {
     faults: [],
     conflicts: [],
     abandoned: [],
+    died: [],
     fromExecutions: new Set(),
   };
 
@@ -153,6 +165,7 @@ export class ArvoLattice {
   readonly #behaviours = new Map<string, ArvoBehaviour<never>>();
   readonly #attempts = new Map<string, number>();
   readonly #conflicts = new Map<string, number>();
+  readonly #lost = new Set<string>();
   #queue: ArvoEvent[] = [];
   #held: ArvoEvent[] = [];
 
@@ -232,6 +245,30 @@ export class ArvoLattice {
     return this.store.get(executionId) ?? null;
   }
 
+  /**
+   * Nothing addressed to this contract is ever delivered.
+   *
+   * A broker that loses one queue, which is how an execution comes to
+   * wait on something that was never asked.
+   */
+  lose(contractType: string): this {
+    this.#lost.add(contractType);
+    return this;
+  }
+
+  /** Whatever was lost to this contract is delivered again. */
+  deliverAgain(contractType: string): this {
+    this.#lost.delete(contractType);
+    return this;
+  }
+
+  /** One event delivered, and nothing of what it causes. */
+  async step(): Promise<this> {
+    const event = this.#next();
+    if (event !== undefined) await this.#deliver(event);
+    return this;
+  }
+
   /** Runs every event the lattice holds, and everything they cause. */
   async settle(budget = 50_000): Promise<this> {
     let steps = 0;
@@ -256,6 +293,8 @@ export class ArvoLattice {
 
   /** One event, through everything a mechanism owns, to a version and back. */
   async #deliver(event: ArvoEvent): Promise<void> {
+    if (event.to !== null && this.#lost.has(event.to)) return;
+
     const versions = event.to === null ? undefined : this.#versions[event.to];
     if (versions === undefined) return;
 
@@ -282,6 +321,19 @@ export class ArvoLattice {
     const key = `${executionId}:${event.id}`;
     const attempt = this.#attempts.get(key) ?? 0;
     this.transcript.delivered.push({ event, executionId, attempt });
+
+    // The process dies with the work half done: nothing committed,
+    // nothing published, and nothing anywhere recording that it ran. A
+    // mechanism notices only that the event was never acknowledged, and
+    // delivers it again.
+    const died =
+      this.#chaos.crashMidExecution > 0 &&
+      this.#chance() < this.#chaos.crashMidExecution;
+    if (died) {
+      this.transcript.died.push({ event, executionId });
+      this.#queue.push(event);
+      return;
+    }
 
     try {
       const response = (await version.execute({
