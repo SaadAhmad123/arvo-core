@@ -166,13 +166,13 @@ export class ArvoExecutionContext<
 
     const checked = z.safeParse(this.dataSchema, next);
     if (!checked.success) {
-      const at = (issue: { path: PropertyKey[]; message: string }) =>
+      const fieldOf = (issue: { path: PropertyKey[]; message: string }) =>
         `${issue.path.join('.') || '(root)'}`;
       const violations = checked.error.issues.map(
-        (issue) => `${at(issue)}: ${issue.message}`,
+        (issue) => `${fieldOf(issue)}: ${issue.message}`,
       );
       const refused = checked.error.issues
-        .map((issue) => `${at(issue)} ${issue.message}`)
+        .map((issue) => `${fieldOf(issue)} ${issue.message}`)
         .join('; ');
       throw await this.fault({
         faultKind: 'state_schema_rejected',

@@ -233,7 +233,7 @@ export class ArvoEventValidator<
     const result = z.safeParse(schema as z.$ZodType, event.data);
     if (result.success) return fromNeverthrow(ok(origin));
 
-    const at = (issue: { path: PropertyKey[] }) =>
+    const fieldOf = (issue: { path: PropertyKey[] }) =>
       issue.path.join('.') || '(root)';
     return this.#refuse(
       origin.source === 'self' && event.type === this.contracts.self.type
@@ -242,7 +242,10 @@ export class ArvoEventValidator<
       `the payload of ${event.type} does not satisfy ${event.dataschema}.`,
       result.error.issues.map(
         (issue) =>
-          new ErrorIssue({ path: `data.${at(issue)}`, message: issue.message }),
+          new ErrorIssue({
+            path: `data.${fieldOf(issue)}`,
+            message: issue.message,
+          }),
       ),
     );
   }

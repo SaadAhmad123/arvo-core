@@ -1,6 +1,7 @@
 import { ArvoSemanticVersion } from '../semver/index.js';
 import type { JSONObject } from '../types.js';
 import { ErrorIssue } from '../utils/error-issue.js';
+import { pathSegmentForKey } from '../utils/issue-path.js';
 import { isUriReference } from '../utils/uri.js';
 import { handlerErrorType } from './handler-error.js';
 import type { ArvoContractParam, ArvoContractVersionParam } from './types.js';
@@ -8,15 +9,6 @@ import type { VersionedArvoContractParam } from './versioned/types.js';
 
 /** Lowercase alphanumeric segments joined by single underscores. */
 const IDENTIFIER_GRAMMAR = /^[a-z0-9]+(_[a-z0-9]+)*$/;
-
-/**
- * A map key rendered for an issue path.
- *
- * Bracketed and quoted because version keys contain dots and a rejected
- * emit key may too: `versions["1.0.0"]` cannot be misread the way
- * `versions.1.0.0` can.
- */
-const at = (key: string): string => `[${JSON.stringify(key)}]`;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -148,7 +140,7 @@ const checkVersionInterface = (
 
   const errorType = handlerErrorType(params.type);
   for (const [key, schema] of Object.entries(outputs)) {
-    const path = `${prefix}outputs${at(key)}`;
+    const path = `${prefix}outputs${pathSegmentForKey(key)}`;
     checkIdentifier(key, path, issues);
     checkObjectSchema(schema, path, issues);
     if (key === params.type) {
@@ -261,7 +253,7 @@ export const validateArvoContract = (
   }
 
   for (const key of keys) {
-    const path = `versions${at(key)}`;
+    const path = `versions${pathSegmentForKey(key)}`;
     checkVersionKey(key, path, issues);
 
     const definition = value.versions[key];

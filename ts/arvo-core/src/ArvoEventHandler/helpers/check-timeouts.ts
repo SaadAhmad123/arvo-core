@@ -15,7 +15,7 @@ import type { ArvoEventHandlerOptions } from '../types/options.js';
  * values that an execution runs under.
  *
  * @param inForce - Every option as it settled for this version.
- * @param at - Which version these are in force for.
+ * @param declaredAt - Which version these are in force for.
  * @returns The one issue where the pair cannot work, else nothing.
  *
  * @example
@@ -26,12 +26,12 @@ import type { ArvoEventHandlerOptions } from '../types/options.js';
  */
 export const checkTimeouts = (
   inForce: ArvoEventHandlerOptions,
-  at: string,
+  declaredAt: string,
 ): ErrorIssue[] => {
   const { runTimeout, executionTimeout } = inForce;
   if (executionTimeout === null) return [];
 
-  const path = `${at}.options.executionTimeout`;
+  const path = `${declaredAt}.options.executionTimeout`;
   if (runTimeout === null) {
     return [
       new ErrorIssue({

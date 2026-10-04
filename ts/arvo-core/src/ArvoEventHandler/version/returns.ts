@@ -93,11 +93,11 @@ export const refuseBatch = <TSelf extends VersionedArvoContract>(
   }
 
   if (violations.length === 0) return null;
-  const at = violations.length === 1 ? 'one' : `${violations.length}`;
-  const of = batch.length === 1 ? 'the event' : `the ${batch.length} events`;
+  const howMany = violations.length === 1 ? 'one' : `${violations.length}`;
+  const outOf = batch.length === 1 ? 'the event' : `the ${batch.length} events`;
   return {
     faultKind,
-    message: `${at} of ${of} your executor for ${self.type}@${self.version} returned cannot be emitted, so none of them were. Each one at fault is listed`,
+    message: `${howMany} of ${outOf} your executor for ${self.type}@${self.version} returned cannot be emitted, so none of them were. Each one at fault is listed`,
     violations,
   };
 };

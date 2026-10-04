@@ -15,7 +15,7 @@ import type { ArvoEventHandlerOptions } from '../types/options.js';
  *
  * @param declared - What this level wrote, or `null` where it wrote nothing.
  * @param fallback - What every option is where this level left it alone.
- * @returns A new set, holding a value for all seven.
+ * @returns A new set, holding a value for every option.
  *
  * @example
  * ```typescript
@@ -35,8 +35,8 @@ export const resolveOptions = (
   ) as (keyof ArvoEventHandlerOptions)[]) {
     const written = declared[key];
     if (written === undefined) continue;
-    // one assignment for seven differently typed options; the key is the
-    // same on both sides, which is what the loop exists to say
+    // one assignment for differently typed options; the key is the same
+    // on both sides, which is what the loop exists to say
     (settled as Record<string, unknown>)[key] = written;
   }
   return settled;
