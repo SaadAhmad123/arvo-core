@@ -22,9 +22,11 @@ The same reason the version was. A handler is a function of an event, a way to r
 
 ## 1. The fixture
 
-- [ ] 1.1 Add `tests/ArvoEventHandler/scenarios/fixture.ts`: one contract at **three versions** with genuinely different shapes — `1.0.0` with a state schema, `1.1.0` with a different one and its own options, `2.0.0` with none at all — plus a service, a second service sharing nothing, a contract declared as its own service for recursion, and a contract whose version set differs from what the handler declares.
-- [ ] 1.2 Behaviour injected per version, so one scenario can make `1.0.0` answer and `1.1.0` fail without two handlers.
-- [ ] 1.3 A store that can be told to misbehave: fail, hang, return another execution's record, return a row that is not a record, return one whose fields disagree with its own init event, and change what it returns between one read and the next.
+- [x] 1.1 Added `tests/ArvoEventHandler/scenarios/fixture.ts`: one contract at **three versions** with genuinely different shapes — `1.0.0` with a state schema, `1.1.0` with a different one and its own options, `2.0.0` with none at all — plus a service, a second service sharing nothing, a contract declared as its own service for recursion, and a contract whose version set differs from what the handler declares.
+- [x] 1.2 Behaviour injected per version, so one scenario can make `1.0.0` answer and `1.1.0` fail without two handlers.
+- [x] 1.3 Added `scenarios/store.ts`. A store that can be told to misbehave: fail, hang, return another execution's record, return a row that is not a record, return one whose fields disagree with its own init event, and change what it returns between one read and the next.
+
+Proven before anything is built on it, in `scenarios/fixture.spec.ts`: a harness that quietly does not do what it claims produces a suite that passes for the wrong reason, which the version's own suite found five times over.
 
 ## 2. The lattice, extended
 
