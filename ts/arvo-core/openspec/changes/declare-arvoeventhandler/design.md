@@ -50,11 +50,13 @@ It is the fiddliest type in the design and it buys the least: a missing version 
 
 *Left open rather than closed.* Adding the gate later is additive, since it only narrows what already compiles.
 
-### Two entry points, one implementation
+### One entry point, and the chain reads as one sentence
 
-`ArvoEventHandler.setup(...)` and `setupArvoEventHandler(...)` do the same thing, matching `new ArvoContract(...)` and `createArvoContract(...)`. The static holds it; the free function delegates and carries no logic, so the two cannot drift.
+**`setupArvoEventHandler(...).handler(...).build()`** is the whole of how a handler is declared, and it is the only way in.
 
-*And the constructor is not among them.* `new ArvoEventHandler(...)` is not public. With a terminal `build` it would be a second way to declare, and it could not validate anything, because a constructor taking only the setup has no versions to check. It holds the validation and is called by `tryBuild`, which is the direction `project.md` — *Result types* requires for a class.
+An earlier draft paired it with a static `ArvoEventHandler.setup(...)`, matching `new ArvoContract(...)` beside `createArvoContract(...)`. That pairing was dropped. It is the right shape where both forms *finish* the thing — a contract is complete the moment it is constructed, so a caller may reasonably reach for either. A handler is not: the entry point begins a declaration that something else terminates, so a static named `setup` would sit on the class that is the chain's *output*, inviting a reader to think the class is what they are configuring. One function that begins it, one method that ends it, and the class only ever appears as the result.
+
+*And neither constructor is public.* `new ArvoEventHandlerSetup(...)` is how `setupArvoEventHandler` and `handler` build their links, and `new ArvoEventHandler(...)` is where the validation lives, called by `tryBuild` — the direction `project.md` — *Result types* requires for a class. Exposing either would be a second way to declare: the setup's would skip the entry point, and the handler's could validate nothing, since a constructor taking only the setup has no versions to check.
 
 ### Writing a version away from the chain is a function, not a type
 

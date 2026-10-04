@@ -48,3 +48,12 @@ export const ARVO_CATEGORY_COMPLETE = 'io.arvo.complete';
  * data can still be read for the fields that address its caller.
  */
 export const ARVO_ANY_STATE_SCHEMA = z.looseObject({});
+
+/**
+ * The schema a version that declared none is judged against.
+ *
+ * A version declaring no state has nothing of its own to remember, so its
+ * record carries none: `data` rests at `null`, and the only object such a
+ * version could write is the empty one.
+ */
+export const ARVO_NO_STATE_SCHEMA = z.strictObject({});

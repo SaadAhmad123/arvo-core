@@ -15,7 +15,7 @@ import { ErrorIssue } from '../../utils/error-issue.js';
  *
  * @example
  * ```typescript
- * const issues = checkContract(declared.contract);
+ * const issues = checkContract(declared.contracts.self);
  * if (issues.length > 0) throw new ArvoEventHandlerValidationError(issues);
  * ```
  */
@@ -24,7 +24,7 @@ export const checkContract = (contract: unknown): ErrorIssue[] => {
 
   return [
     new ErrorIssue({
-      path: 'contract',
+      path: 'contracts.self',
       message:
         'must be an ArvoContract — a handler implements a whole contract, declaring one executor for each version it holds, so a single version of one is not enough',
       received: contract,

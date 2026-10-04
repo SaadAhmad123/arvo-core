@@ -46,7 +46,7 @@ event and the init event through `state`, the identity and the collection throug
 
 - **New capability `event-handler`** — the handler primitive. This change gives it the execution context, the version, the handler and every rule that refuses a declaration; change 2 accumulates into the same capability, per `project.md` — *Capability conventions*.
 
-- **A declaration is built in three steps.** `setupArvoEventHandler(...)`, or `ArvoEventHandler.setup(...)` for the same thing, holds the contract implemented, the services, the handler-level options and the two type shapes. `.handler(version, ...)` declares one version and is repeated. `.build()` runs every rule and returns the handler.
+- **A declaration is built in three steps.** `setupArvoEventHandler(...)` holds the contract implemented, the services, the handler-level options and the two type shapes. `.handler(version, ...)` declares one version and is repeated. `.build()` runs every rule and returns the handler.
 
 - **`ArvoEventHandler`'s constructor is not public.** With a terminal `build` there is one way to declare a handler, and the constructor could not validate anything anyway: it never sees the versions. It holds the validation and `tryBuild` is derived from it, per `project.md` — *Result types*.
 
@@ -234,8 +234,9 @@ class ArvoEventHandlerSetup<TSelf, TServices, TDependencies, TMechanismHooks> {
 }
 ```
 
-`ArvoEventHandler.setup(...)` is the same thing under a static name. One implementation, two ways
-to reach it.
+`setupArvoEventHandler(...)` is the only way in. There is no static beside it: the entry point
+begins a declaration that `build` terminates, so putting one on the class the chain produces would
+read as configuring that class rather than producing it.
 
 **Why a chain rather than a map of versions.** A version's `execute` has to be typed by that
 version's own `state` schema, and TypeScript will not read one key of an object literal to type
@@ -784,7 +785,7 @@ setupArvoEventHandler({ contracts: { self }, options: { runTimeout: 10_000 } })
 
 ```ts
 // Declaring what the mechanism will hand every executor. Types only -- no value is stored.
-ArvoEventHandler.setup({
+setupArvoEventHandler({
   contracts: { self: orderContract },
   types: { dependencies: {} as { db: Db }, mechanismHooks: {} as { scheduler: Scheduler } },
 }).handler('1.0.0', async (ctx) => { ctx.dependencies.db.find(); ctx.hooks.scheduler });
@@ -850,7 +851,7 @@ A directory per concept, a file per helper, and no barrel exports.
   `defaults.ts`, `resolve-options.ts`, `check-options.ts`, `check-timeouts.ts`,
   `check-contract.ts`, `check-versions.ts`, `check-services.ts`, `check-collisions.ts`,
   `emittable-types.ts`, `normalize-version.ts`, `at.ts`
-- `src/factories/setupArvoEventHandler.ts` (new) — the free function delegating to `ArvoEventHandler.setup`
+- `src/factories/setupArvoEventHandler.ts` (new) — the one entry point, beginning a declaration
 - `src/factories/createArvoEventHandlerVersion.ts` (new) — a version declared away from the chain
 - `src/index.ts` — new public exports
 - `tests/ArvoEventHandler/` (new) — mirroring the above, one spec per module

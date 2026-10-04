@@ -22,7 +22,7 @@ describe('what a refusal tells the reader', () => {
   const [issue] = checkContract('com_order_create');
 
   it('names the field it is about', () => {
-    expect(issue?.path).toBe('contract');
+    expect(issue?.path).toBe('contracts.self');
   });
 
   it('shows what was given instead', () => {

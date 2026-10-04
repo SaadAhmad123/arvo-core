@@ -124,7 +124,7 @@ Everything ADR-006's context table requires that the first cut left out. These w
 ## 6. Reaching it, and the public surface
 
 - [ ] 6.1 Implement `tryBuild` on the setup, wrapping the constructor, converting only `ArvoEventHandlerValidationError` into `Err` and rethrowing anything else, matching `createArvoContract.ts`. Build the `Result` through `src/result.ts` and never as a literal.
-- [ ] 6.2 Implement `build` as the thin unwrap over `tryBuild`, carrying no logic of its own, and `setupArvoEventHandler` in `src/factories/` as the thin delegate to `ArvoEventHandler.setup`.
+- [ ] 6.2 Implement `build` as the thin unwrap over `tryBuild`, carrying no logic of its own, and `setupArvoEventHandler` in `src/factories/` as the one entry point, which begins a declaration rather than finishing one. No static beside it on `ArvoEventHandler`.
 - [ ] 6.3 Export from `src/index.ts`: the class, the pair, the error, and the types a consumer writes against — `ArvoEventHandlerParam`, `ArvoVersionDeclarations`, `ArvoEventHandlerOptions`, `ArvoEventHandlerExecutor`, `ArvoRetryDelayFn`, `ArvoServiceMap`, `ArvoMechanismHooks`. Export neither the resolver nor the emittable-set builder.
 
 ## 7. Tests

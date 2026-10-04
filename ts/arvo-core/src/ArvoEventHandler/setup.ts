@@ -1,0 +1,146 @@
+import type * as z from 'zod/v4/core';
+import type { ArvoContract } from '../ArvoContract/index.js';
+import type { ArvoSemanticVersion } from '../semver/index.js';
+import { ARVO_NO_STATE_SCHEMA } from './helpers/defaults.js';
+import type {
+  ArvoAccumulatedVersion,
+  ArvoAccumulatedVersions,
+  ArvoVersionInput,
+} from './types/declaration.js';
+import type { ArvoEventHandlerOptions } from './types/options.js';
+import type { ArvoServiceMap } from './types/services.js';
+import type { ArvoEventHandlerSetupParam } from './types/setup.js';
+import type {
+  ArvoDependencies,
+  ArvoMechanismHooks,
+  ArvoNone,
+} from './types/supplied.js';
+
+/**
+ * A handler declaration part way through being written.
+ *
+ * Reached through `setupArvoEventHandler`, which is the one way to begin
+ * one. It gains one version at a time and is finished by `build`. Each `handler` call returns a new
+ * declaration rather than changing this one, so a partly written
+ * declaration can be shared, reused, or branched without one use
+ * affecting another.
+ *
+ * Nothing is judged here. A declaration that cannot work — a version
+ * without an executor, two capabilities sharing a type, an option outside
+ * its domain — is refused when the handler is built from it.
+ *
+ * @example
+ * ```typescript
+ * declare const setup: ArvoEventHandlerSetup<typeof orderContract>;
+ *
+ * const handler = setup
+ *   .handler('1.0.0', {
+ *     state: z.object({ orderId: z.string() }),
+ *     execute: async (ctx) =>
+ *       ctx.build({ type: 'com_order_created', data: { order_id: '1' } }),
+ *   })
+ *   .build();
+ * ```
+ */
+export class ArvoEventHandlerSetup<
+  TSelf extends ArvoContract = ArvoContract,
+  TServices extends ArvoServiceMap = ArvoServiceMap,
+  TDependencies extends ArvoDependencies = ArvoNone,
+  TMechanismHooks extends ArvoMechanismHooks = ArvoNone,
+> {
+  /** What this handler is bound to: what it implements, and what it may send to. */
+  readonly contracts: {
+    readonly self: TSelf;
+    readonly services: Readonly<TServices>;
+  };
+
+  /** What the handler declared, or `null` where it declared nothing. */
+  readonly options: Partial<ArvoEventHandlerOptions> | null;
+
+  /** Every version declared so far, in the order they were declared. */
+  readonly versions: ArvoAccumulatedVersions;
+
+  /**
+   * @param param - The contract, what it may send to, and how its
+   * versions behave unless one says otherwise.
+   * @param versions - Every version declared so far. Supplied by
+   * `handler` when it carries a chain forward; a caller starting a
+   * declaration passes none.
+   */
+  constructor(
+    param: ArvoEventHandlerSetupParam<
+      TSelf,
+      TServices,
+      TDependencies,
+      TMechanismHooks
+    >,
+    versions: ArvoAccumulatedVersions = [],
+  ) {
+    this.contracts = Object.freeze({
+      self: param.contracts.self,
+      services: Object.freeze({ ...param.contracts.services } as TServices),
+    });
+    this.options = param.options ?? null;
+    this.versions = Object.freeze([...versions]);
+    Object.freeze(this);
+  }
+
+  /**
+   * Declares the executor for one version of the contract.
+   *
+   * Takes the version in full, or its executor alone where it remembers
+   * nothing and inherits every option.
+   *
+   * @param version - Which version of the contract this runs. Only a
+   * version the contract declares will type.
+   * @param declaration - What this version is, or its executor alone.
+   * @returns A new declaration carrying this version, leaving this one
+   * as it was.
+   *
+   * @example
+   * ```typescript
+   * setup
+   *   .handler('1.0.0', { state: orderState, execute: runOrder })
+   *   .handler('1.1.0', runOrderNext);
+   * ```
+   */
+  handler<
+    TVersion extends keyof TSelf['versions'] & ArvoSemanticVersion,
+    TDataSchema extends z.$ZodObject = typeof ARVO_NO_STATE_SCHEMA,
+  >(
+    version: TVersion,
+    declaration: ArvoVersionInput<
+      TSelf['versions'][TVersion],
+      TServices,
+      TDataSchema,
+      TDependencies,
+      TMechanismHooks
+    >,
+  ): ArvoEventHandlerSetup<TSelf, TServices, TDependencies, TMechanismHooks> {
+    const written =
+      typeof declaration === 'function'
+        ? { execute: declaration }
+        : declaration;
+
+    return new ArvoEventHandlerSetup(
+      {
+        contracts: {
+          self: this.contracts.self,
+          services: this.contracts.services as TServices,
+        },
+        ...(this.options === null ? {} : { options: this.options }),
+      },
+      [
+        ...this.versions,
+        {
+          version,
+          state: written.state ?? ARVO_NO_STATE_SCHEMA,
+          options: written.options ?? null,
+          // the list holds versions under differing schemas, so it cannot
+          // name this one's; it was checked where it was declared
+          execute: written.execute as ArvoAccumulatedVersion['execute'],
+        },
+      ],
+    );
+  }
+}
