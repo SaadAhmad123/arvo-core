@@ -72,11 +72,11 @@ Each runs clean, under chaos, and with a fault injected at a step the driver pic
 
 ## 6. Scale, boundaries and chance
 
-- [ ] 6.1 Scale: ten thousand executions through one handler, three versions, one store. The cost of placing an event must not grow with how many executions exist, and a wall-clock budget is asserted so a regression fails the suite rather than merely slowing it.
-- [ ] 6.2 Boundaries: a contract with one version and with many; a handler with no services; an event at the exact depth bound; the first and last attempt; a store returning an empty object against one returning nothing.
-- [ ] 6.3 Payload cruelty at the boundary: `__proto__` as an event type, a `dataschema` with no separator, one with several, an empty `to`, an enormous payload, and `undefined` inside data.
+- [x] 6.1 In `scenarios/scale.spec.ts`. Scale: ten thousand executions through one handler, three versions, one store. The cost of placing an event must not grow with how many executions exist, and a wall-clock budget is asserted so a regression fails the suite rather than merely slowing it.
+- [x] 6.2 Boundaries: a contract with one version and with many; a handler with no services; an event at the exact depth bound; the first and last attempt; a store returning an empty object against one returning nothing.
+- [x] 6.3 Payload cruelty at the boundary: `__proto__` as an event type, a `dataschema` with no separator, one with several, an empty `to`, an enormous payload, and `undefined` inside data.
 - [ ] 6.4 Chance: two hundred seeded runs, invariants after each, the seed printed on failure and pinned as a named regression.
-- [ ] 6.5 Statelessness: two executions of different versions interleaved through one handler instance, proving the handler holds nothing between them — the claim the whole protocol rests on.
+- [x] 6.5 Statelessness: two executions of different versions interleaved through one handler instance, proving the handler holds nothing between them — the claim the whole protocol rests on.
 
 ## 7. Real threads
 
@@ -85,7 +85,7 @@ Each runs clean, under chaos, and with a fault injected at a step the driver pic
 
 ## 8. What this broke
 
-To be filled in as it is. Each finding becomes its own fix rather than a softened test.
+- [x] 8.1 **A crafted `dataschema` or `type` crashed the handler rather than being refused.** Resolution looked a version up by indexing a plain object, so `__proto__` found `Object.prototype` — truthy, so the refusal never fired — and the handler then threw a raw `TypeError` out of `execute`. A `TypeError` is not a fault: a mechanism receives an unhandled crash with no kind, no retry verdict and nothing to give up with. The same hazard sat on three more lookups reached from an event's own `type`, where `'constructor' in outputs` is true of every object and the schema fetched would have been `Object`. Every lookup keyed by a value from outside now asks whether the key was declared rather than whether something came back.
 
 ## 9. Finishing
 

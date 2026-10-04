@@ -9,6 +9,7 @@ import type { ArvoSemanticVersion } from '../semver/index.js';
 import type { AsyncResult, JSONObject } from '../types.js';
 import type { ErrorIssue } from '../utils/error-issue.js';
 import { pathSegmentForKey } from '../utils/issue-path.js';
+import { readOwnProperty } from '../utils/own-property.js';
 import { ArvoExecutionContextTelemetry } from './context/telemetry/index.js';
 import type { ArvoLogger } from './context/telemetry/types.js';
 import { ArvoEventHandlerValidationError } from './errors.js';
@@ -381,9 +382,11 @@ export class ArvoEventHandler<
         resolved,
         record,
         withdrawn,
-        this.contracts.self.versions[
-          record.version as keyof TSelf['versions'] & ArvoSemanticVersion
-        ],
+        // the record names a version nothing declares, so there may be
+        // no contract at it either — a crafted one would otherwise
+        // resolve to something inherited rather than declared
+        readOwnProperty(this.contracts.self.versions, record.version) ??
+          this.#anyVersion(),
       );
     }
     markEntryStage(telemetry, 'version_resolved');
@@ -593,9 +596,8 @@ export class ArvoEventHandler<
     const self =
       owning ??
       (resolved.entry === 'init'
-        ? this.contracts.self.versions[
-            resolved.version as keyof TSelf['versions'] & ArvoSemanticVersion
-          ]
+        ? (readOwnProperty(this.contracts.self.versions, resolved.version) ??
+          this.#anyVersion())
         : this.#anyVersion());
 
     // An event opening an execution names its own version, so that

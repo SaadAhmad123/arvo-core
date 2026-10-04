@@ -8,6 +8,7 @@ import { fromNeverthrow } from '../../../result.js';
 import type { ArvoSemanticVersion } from '../../../semver/index.js';
 import type { Result } from '../../../types.js';
 import { ErrorIssue } from '../../../utils/error-issue.js';
+import { readOwnProperty } from '../../../utils/own-property.js';
 import type { ArvoFaultKind } from '../../fault/types.js';
 import type { ArvoServiceMap } from '../../types/services.js';
 import { ArvoEventValidatorError } from './errors.js';
@@ -120,9 +121,8 @@ export class ArvoEventValidator<
     event: ArvoEvent,
     version: string,
   ): Result<ArvoEventOrigin, ArvoEventValidatorError> {
-    const declared =
-      this.contracts.self.versions[version as ArvoSemanticVersion];
-    if (declared === undefined) {
+    const declared = readOwnProperty(this.contracts.self.versions, version);
+    if (declared === null) {
       return this.#refuse(
         'event_unclassifiable',
         `${this.contracts.self.uri} declares no version ${version}, so nothing would run this`,
@@ -237,7 +237,7 @@ export class ArvoEventValidator<
   /** The schema for what a contract answers with, where this type is one. */
   #answeredWith(contract: VersionedArvoContract, type: string): unknown {
     if (type === contract.error.type) return contract.error.schema;
-    return contract.outputs[type] ?? null;
+    return readOwnProperty(contract.outputs, type);
   }
 
   /**
@@ -294,8 +294,8 @@ export class ArvoEventValidator<
       );
     }
 
-    const schema = version.outputs[event.type];
-    if (schema === undefined) {
+    const schema = readOwnProperty(version.outputs, event.type);
+    if (schema === null) {
       return this.#refuse(
         'emission_not_permitted',
         `${event.type} is not something ${this.contracts.self.uri} declares at ${ownVersion}`,
@@ -337,7 +337,10 @@ export class ArvoEventValidator<
 
   /** Whether a type is one this service answers with. */
   #answers(service: VersionedArvoContract, type: string): boolean {
-    return type === service.error.type || type in service.outputs;
+    return (
+      type === service.error.type ||
+      readOwnProperty(service.outputs, type) !== null
+    );
   }
 
   /** The service declared for a contract, whichever version it was declared at. */
