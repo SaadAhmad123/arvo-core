@@ -88,7 +88,37 @@ answer and the executor is entered only when the join completes; and a
 mechanism must run the delivery that lost a race again, against the
 record now there.
 
-## 8. Finishing
+## 8. Real threads
 
-- [x] 8.1 `pnpm lint`, `pnpm typecheck` and `pnpm test` clean. The whole suite runs in under four seconds; the scale spec is the only one over a second, at two.
-- [x] 8.2 Coverage held. The one line not covered is the guard for a handler error event that cannot be built, which no legitimate record reaches — kept as a guard rather than cast away.
+Everything above schedules its own interleavings, which proves the rules
+and not the race. This runs the same questions with the threads real:
+four handlers in four worker threads against one store on the main
+thread, loading the built package rather than the source, because a
+thread cannot share memory and so nothing can be quietly arranged. A
+record crosses as bytes, an event crosses as bytes, and which thread
+reads before which writes is the operating system's to decide.
+
+- [x] 8.1 Add `scenarios/worker/` — the contracts both sides agree on, a runner that is one handler and holds no store, and a broker that owns what a mechanism owns and nothing else: the store, the compare-and-swap, the queue and the outbox.
+- [x] 8.2 Sixty workflows through four threads, each answered once, every record opening at zero and advancing one revision at a time, every execution resting finished.
+- [x] 8.3 The same event handed to four threads at one moment, each held inside its executor so all four are genuinely in there together: one commits, the rest conflict or find it already done, and no revision is ever written twice. Repeated runs reach an identical store however the threads interleaved.
+- [x] 8.4 A thread killed outright mid-work, twice over: whatever it held is run again elsewhere, nothing is lost, and no half-written record is left behind.
+- [x] 8.5 A service that concludes it cannot do the work in every thread — an answer, not a failure — telling each order once with no fault raised anywhere.
+- [x] 8.6 Attempts that run out in whichever thread spends the last one: a retryable fault raised every time is retried the three attempts the options allow and then abandoned exactly once per execution, the abandoned record resting at failure while the order it was for rests at success, having been told.
+- [x] 8.7 A service that fails twice and then does not, keyed on the attempt so every thread agrees: attempts are spent across threads and every workflow finishes.
+- [x] 8.8 All of it at once — every event carried twice, the queue taken out of order, machines dying mid-flight — with each order still answered exactly once, every record opening at zero, no revision written twice, and the same end reached run after run.
+
+Two more harness defects, both of which would have been a false pass:
+the broker marked a thread busy only after reading the record, so a
+broker mid-handover looked like one with nothing left and settled before
+any work began; and threads were identified by where they sat rather
+than by identity, so losing one renamed the rest and a thread's answer
+landed in another thread's slot. Nothing in the handler itself was found
+wanting under real threads.
+
+The suite rebuilds `dist/` whenever the source is newer, because threads
+loading a stale build would prove something about code nobody has.
+
+## 9. Finishing
+
+- [x] 9.1 `pnpm lint`, `pnpm typecheck` and `pnpm test` clean — 2295 tests. The simulated suite runs in under four seconds; the real-thread spec adds five.
+- [x] 9.2 Coverage held. The one line not covered is the guard for a handler error event that cannot be built, which no legitimate record reaches — kept as a guard rather than cast away.
