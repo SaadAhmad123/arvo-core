@@ -291,12 +291,19 @@ export class ArvoLattice {
     return taken;
   }
 
-  /** One event, through everything a mechanism owns, to a version and back. */
-  async #deliver(event: ArvoEvent): Promise<void> {
-    if (event.to !== null && this.#lost.has(event.to)) return;
+  /**
+   * Who would run this event, against what, or nothing where no handler
+   * of this lattice would be given it at all.
+   *
+   * Everything a mechanism settles before a version is reached:
+   * classification, the execution the event names, the record under it,
+   * and which version owns that record.
+   */
+  async #routeFor(event: ArvoEvent) {
+    if (event.to !== null && this.#lost.has(event.to)) return null;
 
     const versions = event.to === null ? undefined : this.#versions[event.to];
-    if (versions === undefined) return;
+    if (versions === undefined) return null;
 
     const naming = named(event);
     const self = Object.values(versions)[0]?.contracts.self;
@@ -309,15 +316,24 @@ export class ArvoLattice {
       entry === 'init' ? await deriveArvoExecutionId(event) : event.executionid;
 
     const read = this.stored(executionId);
-    if (entry === 'init' && read !== null) return;
-    if (entry === 'followup' && read === null) return;
+    if (entry === 'init' && read !== null) return null;
+    if (entry === 'followup' && read === null) return null;
 
     const version =
       entry === 'init'
         ? versions[naming.version]
         : versions[String(read?.version)];
-    if (version === undefined) return;
+    if (version === undefined) return null;
 
+    return { version, entry, executionId, read };
+  }
+
+  /** One event, through everything a mechanism owns, to a version and back. */
+  async #deliver(event: ArvoEvent): Promise<void> {
+    const route = await this.#routeFor(event);
+    if (route === null) return;
+
+    const { executionId } = route;
     const key = `${executionId}:${event.id}`;
     const attempt = this.#attempts.get(key) ?? 0;
     this.transcript.delivered.push({ event, executionId, attempt });
@@ -336,27 +352,99 @@ export class ArvoLattice {
     }
 
     try {
-      const response = (await version.execute({
-        entry,
-        event,
-        state: read,
-        executionId,
-        attempt,
-        dependencies: {
-          behave: this.#behaviours.get(event.to as string),
-        },
-        hooks: {},
-        telemetry: this.#telemetry(),
-      } as never)) as ArvoEventHandlerExecuteResponse;
-
+      const response = await this.#run(route, event, attempt);
       if (response.kind === 'discarded') {
         this.transcript.discarded.push({ event, reason: response.reason });
         return;
       }
-      this.#commit(executionId, event, response.state, response.events, read);
+      this.#commit(executionId, event, response.state, response.events);
     } catch (raised) {
       await this.#onFault(event, executionId, key, attempt, raised);
     }
+  }
+
+  /** One execution, against the record whoever routed it read. */
+  async #run(
+    route: NonNullable<Awaited<ReturnType<ArvoLattice['routeOf']>>>,
+    event: ArvoEvent,
+    attempt: number,
+  ): Promise<ArvoEventHandlerExecuteResponse> {
+    return (await route.version.execute({
+      entry: route.entry,
+      event,
+      state: route.read,
+      executionId: route.executionId,
+      attempt,
+      dependencies: { behave: this.#behaviours.get(event.to as string) },
+      hooks: {},
+      telemetry: this.#telemetry(),
+    } as never)) as ArvoEventHandlerExecuteResponse;
+  }
+
+  /** What `#routeFor` answers, so a test may hold one. */
+  async routeOf(event: ArvoEvent) {
+    return this.#routeFor(event);
+  }
+
+  /**
+   * One event given to two handlers at the same moment.
+   *
+   * Both read the record before either writes one, so neither can see
+   * the other's work, and both run their executor through to the end.
+   * Only then do they try to commit, in the order they finished.
+   *
+   * This is two consumers on one queue, which is the ordinary shape of a
+   * deployment rather than an exotic failure.
+   */
+  async deliverTogether(event: ArvoEvent): Promise<this> {
+    const route = await this.#routeFor(event);
+    if (route === null) return this;
+
+    const key = `${route.executionId}:${event.id}`;
+    const attempt = this.#attempts.get(key) ?? 0;
+    for (const _ of [0, 1]) {
+      this.transcript.delivered.push({
+        event,
+        executionId: route.executionId,
+        attempt,
+      });
+    }
+
+    // both against the same record, neither having written anything, and
+    // each raising whatever it raises on its own account
+    const outcomes = await Promise.all(
+      [0, 1].map(async () => {
+        try {
+          return { ran: await this.#run(route, event, attempt) };
+        } catch (raised) {
+          return { raised };
+        }
+      }),
+    );
+
+    for (const outcome of outcomes) {
+      if ('raised' in outcome) {
+        await this.#onFault(
+          event,
+          route.executionId,
+          key,
+          attempt,
+          outcome.raised,
+        );
+        continue;
+      }
+      if (outcome.ran.kind === 'discarded') {
+        this.transcript.discarded.push({ event, reason: outcome.ran.reason });
+        continue;
+      }
+      this.#commit(
+        route.executionId,
+        event,
+        outcome.ran.state,
+        outcome.ran.events,
+      );
+    }
+    return this;
   }
 
   /** The record and its events, together or not at all. */
@@ -365,9 +453,12 @@ export class ArvoLattice {
     event: ArvoEvent,
     row: JSONObject,
     emitted: readonly ArvoEvent[],
-    read: JSONObject | null,
   ): void {
-    const expected = read === null ? 0 : Number(read.casVersion) + 1;
+    // Against what the store holds now, not against what this delivery
+    // read: another may have written in between, which is the whole of
+    // what comparing and swapping is for.
+    const held = this.stored(executionId);
+    const expected = held === null ? 0 : Number(held.casVersion) + 1;
     const lost =
       this.#chaos.loseRace > 0 && this.#chance() < this.#chaos.loseRace;
 
