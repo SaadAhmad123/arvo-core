@@ -58,6 +58,7 @@ export const declareThreadedVersions = (
       contracts: { self: orderV1, services: { charge: chargeV1 } },
       options: ARVO_DEFAULT_HANDLER_OPTIONS,
       state: workState,
+      declaresState: true,
       // the built package is loaded at runtime, so the context's own type
       // is not available to annotate this with
       execute: async (ctx: any) => {
@@ -81,6 +82,7 @@ export const declareThreadedVersions = (
       contracts: { self: chargeV1, services: {} },
       options: ARVO_DEFAULT_HANDLER_OPTIONS,
       state: workState,
+      declaresState: true,
       // as above
       execute: async (ctx: any) => {
         if (charges === 'errors') throw new Error('the gateway is down');

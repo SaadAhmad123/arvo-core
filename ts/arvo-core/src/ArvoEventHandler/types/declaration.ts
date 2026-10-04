@@ -1,6 +1,8 @@
 import type * as z from 'zod/v4/core';
+import type { ArvoContract } from '../../ArvoContract/index.js';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
 import type { ArvoSemanticVersion } from '../../semver/index.js';
+import type { ArvoEventHandlerSetup } from '../setup.js';
 import type { ArvoEventHandlerExecutor } from './execute.js';
 import type { ArvoEventHandlerOptions } from './options.js';
 import type { ArvoServiceMap } from './services.js';
@@ -81,6 +83,21 @@ export type ArvoVersionInput<
     >;
 
 /**
+ * A version written against whatever contracts and schema, as a chain
+ * holds one before it knows which.
+ *
+ * What the chain settles both input forms through. A caller writes the
+ * precise form instead.
+ */
+export type ArvoAnyVersionInput = ArvoVersionInput<
+  VersionedArvoContract,
+  ArvoServiceMap,
+  z.$ZodObject,
+  ArvoDependencies,
+  ArvoMechanismHooks
+>;
+
+/**
  * One version as a chain has accumulated it, both input forms settled into
  * one shape.
  *
@@ -92,6 +109,8 @@ export type ArvoAccumulatedVersion = {
   readonly version: ArvoSemanticVersion;
   /** The schema governing what it remembers. */
   readonly state: z.$ZodObject;
+  /** Whether that schema is one its author wrote. */
+  readonly declaresState: boolean;
   /** What it wanted to differ, or `null` where it wanted nothing to. */
   readonly options: Partial<ArvoEventHandlerOptions> | null;
   /**
@@ -107,3 +126,33 @@ export type ArvoAccumulatedVersion = {
 
 /** Every version a chain has accumulated, in the order they were declared. */
 export type ArvoAccumulatedVersions = readonly ArvoAccumulatedVersion[];
+
+/**
+ * A version written away from the chain, carrying the version it is for.
+ *
+ * Bound to the declaration it was written against, so one written for a
+ * different handler will not assemble into this one: its executor was
+ * typed by that handler's contracts, and nothing about it would be right
+ * here.
+ */
+export type ArvoCreatedVersion<
+  TSelf extends ArvoContract,
+  TServices extends ArvoServiceMap,
+  TDependencies extends ArvoDependencies,
+  TMechanismHooks extends ArvoMechanismHooks,
+> = ArvoAccumulatedVersion & {
+  /**
+   * Which declaration this was written against.
+   *
+   * Never present at runtime, and never read. It exists so the binding is
+   * one the compiler can check, which a shape alone could not be.
+   */
+  readonly writtenFor: (
+    declaration: ArvoEventHandlerSetup<
+      TSelf,
+      TServices,
+      TDependencies,
+      TMechanismHooks
+    >,
+  ) => void;
+};

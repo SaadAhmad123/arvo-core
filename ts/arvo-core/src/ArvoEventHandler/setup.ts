@@ -10,6 +10,8 @@ import { ArvoEventHandler } from './index.js';
 import type {
   ArvoAccumulatedVersion,
   ArvoAccumulatedVersions,
+  ArvoAnyVersionInput,
+  ArvoCreatedVersion,
   ArvoVersionInput,
 } from './types/declaration.js';
 import type { ArvoEventHandlerOptions } from './types/options.js';
@@ -20,6 +22,27 @@ import type {
   ArvoMechanismHooks,
   ArvoNone,
 } from './types/supplied.js';
+
+/**
+ * Both ways of writing a version, settled into the one shape a chain
+ * holds, so nothing downstream handles two.
+ */
+const accumulate = (
+  version: ArvoSemanticVersion,
+  declaration: ArvoAnyVersionInput,
+): ArvoAccumulatedVersion => {
+  const written =
+    typeof declaration === 'function' ? { execute: declaration } : declaration;
+  return {
+    version,
+    state: written.state ?? ARVO_NO_STATE_SCHEMA,
+    declaresState: written.state !== undefined,
+    options: written.options ?? null,
+    // a chain holds versions under differing schemas, so it cannot name
+    // this one's; it was checked where it was written
+    execute: written.execute as ArvoAccumulatedVersion['execute'],
+  };
+};
 
 /**
  * A handler declaration part way through being written.
@@ -62,6 +85,17 @@ export class ArvoEventHandlerSetup<
   /** What the handler declared, or `null` where it declared nothing. */
   readonly options: Partial<ArvoEventHandlerOptions> | null;
 
+  /**
+   * Where this handler's executions will record, or `null` where nothing
+   * was declared and every signal is a no-op.
+   */
+  readonly telemetry: ArvoEventHandlerSetupParam<
+    ArvoContract,
+    ArvoServiceMap,
+    ArvoDependencies,
+    ArvoMechanismHooks
+  >['telemetry'];
+
   /** Every version declared so far, in the order they were declared. */
   readonly versions: ArvoAccumulatedVersions;
 
@@ -86,6 +120,7 @@ export class ArvoEventHandlerSetup<
       services: Object.freeze({ ...param.contracts.services } as TServices),
     });
     this.options = param.options ?? null;
+    this.telemetry = param.telemetry;
     this.versions = Object.freeze([...versions]);
     Object.freeze(this);
   }
@@ -95,6 +130,10 @@ export class ArvoEventHandlerSetup<
    *
    * Takes the version in full, or its executor alone where it remembers
    * nothing and inherits every option.
+   *
+   * A version written away from the chain is passed on its own: it
+   * already carries the version it was written for, so nothing names it
+   * twice.
    *
    * @param version - Which version of the contract this runs. Only a
    * version the contract declares will type.
@@ -106,7 +145,8 @@ export class ArvoEventHandlerSetup<
    * ```typescript
    * setup
    *   .handler('1.0.0', { state: orderState, execute: runOrder })
-   *   .handler('1.1.0', runOrderNext);
+   *   .handler('1.1.0', runOrderNext)
+   *   .handler(writtenElsewhere);
    * ```
    */
   handler<
@@ -121,11 +161,27 @@ export class ArvoEventHandlerSetup<
       TDependencies,
       TMechanismHooks
     >,
+  ): ArvoEventHandlerSetup<TSelf, TServices, TDependencies, TMechanismHooks>;
+  handler(
+    created: ArvoCreatedVersion<
+      TSelf,
+      TServices,
+      TDependencies,
+      TMechanismHooks
+    >,
+  ): ArvoEventHandlerSetup<TSelf, TServices, TDependencies, TMechanismHooks>;
+  handler(
+    versionOrCreated:
+      | (keyof TSelf['versions'] & ArvoSemanticVersion)
+      | ArvoCreatedVersion<TSelf, TServices, TDependencies, TMechanismHooks>,
+    // the overloads above are what a caller is held to; this signature
+    // only has to admit both of them
+    declaration?: unknown,
   ): ArvoEventHandlerSetup<TSelf, TServices, TDependencies, TMechanismHooks> {
-    const written =
-      typeof declaration === 'function'
-        ? { execute: declaration }
-        : declaration;
+    const accumulated =
+      typeof versionOrCreated === 'string'
+        ? accumulate(versionOrCreated, declaration as ArvoAnyVersionInput)
+        : versionOrCreated;
 
     return new ArvoEventHandlerSetup(
       {
@@ -134,18 +190,9 @@ export class ArvoEventHandlerSetup<
           services: this.contracts.services as TServices,
         },
         ...(this.options === null ? {} : { options: this.options }),
+        ...(this.telemetry === undefined ? {} : { telemetry: this.telemetry }),
       },
-      [
-        ...this.versions,
-        {
-          version,
-          state: written.state ?? ARVO_NO_STATE_SCHEMA,
-          options: written.options ?? null,
-          // the list holds versions under differing schemas, so it cannot
-          // name this one's; it was checked where it was declared
-          execute: written.execute as ArvoAccumulatedVersion['execute'],
-        },
-      ],
+      [...this.versions, accumulated],
     );
   }
 

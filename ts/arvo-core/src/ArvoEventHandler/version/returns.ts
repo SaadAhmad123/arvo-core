@@ -206,15 +206,18 @@ export const writeRecord = async <TDataSchema extends z.$ZodObject>(
  * The record to commit for an execution that concluded its work, or why
  * it has none.
  *
- * Data must not be empty: an execution remembering nothing in particular
- * writes `{}`, and one that returned having remembered nothing at all did
- * not do the work it was entered for.
+ * Where the version declared a schema, data must not be empty: an
+ * execution remembering nothing in particular writes `{}`, and one that
+ * returned having written nothing at all did not do the work it was
+ * entered for. A version that declared no schema has nothing to write
+ * and rests with none.
  */
 export const recordToCommit = async <TDataSchema extends z.$ZodObject>(
+  declaresState: boolean,
   dataSchema: TDataSchema,
   state: ArvoExecutionState<TDataSchema>,
 ): AsyncResult<JSONObject, ArvoGateRefusal> => {
-  if (state.data === null) {
+  if (state.data === null && declaresState) {
     return fromNeverthrow(
       err({
         faultKind: 'state_schema_rejected',

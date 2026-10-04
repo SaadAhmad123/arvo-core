@@ -38,7 +38,7 @@ const across = new ArvoEventValidator({
 describe('where an event arriving came from', () => {
   it('is the contract implemented, for one it takes in', () => {
     const origin = validator.validateInput(initEvent);
-    expect(origin.ok && origin.value).toEqual({
+    expect(origin.ok && origin.value).toMatchObject({
       source: 'self',
       version: '1.0.0',
     });
@@ -46,7 +46,7 @@ describe('where an event arriving came from', () => {
 
   it('is the service, for an event one answers with', () => {
     const origin = validator.validateInput(chargedEvent);
-    expect(origin.ok && origin.value).toEqual({
+    expect(origin.ok && origin.value).toMatchObject({
       source: 'service',
       version: '1.0.0',
     });
@@ -139,7 +139,7 @@ describe('where an event being emitted is going', () => {
       data: { amount: 10 },
     });
     const origin = validator.validateOutput(charge);
-    expect(origin.ok && origin.value).toEqual({
+    expect(origin.ok && origin.value).toMatchObject({
       source: 'service',
       version: '1.0.0',
     });
@@ -155,7 +155,7 @@ describe('where an event being emitted is going', () => {
       data: { order_id: 'o-1' },
     });
     const origin = validator.validateOutput(done);
-    expect(origin.ok && origin.value).toEqual({
+    expect(origin.ok && origin.value).toMatchObject({
       source: 'self',
       version: '1.0.0',
     });
@@ -289,5 +289,125 @@ describe('what a validator holds', () => {
     });
     delete (mutable as Record<string, unknown>).payments;
     expect(bound.contracts.services).toEqual({ payments: paymentVersion });
+  });
+});
+
+describe('a handler that declared its own contract as a service', () => {
+  const recursive = new ArvoContract({
+    type: 'com_tree_walk',
+    versions: {
+      '1.0.0': {
+        input: z.object({ node: z.string() }),
+        outputs: { evt_tree_walked: z.object({ count: z.number() }) },
+      },
+      '1.1.0': {
+        input: z.object({ node: z.string() }),
+        outputs: { evt_tree_walked: z.object({ count: z.number() }) },
+      },
+    },
+  });
+  const recursiveV1 = recursive.versions['1.0.0'];
+  const validator = new ArvoEventValidator({
+    contracts: { self: recursive, services: { self: recursiveV1 } },
+  });
+
+  const request = createArvoEventFactory(recursiveV1).createInput({
+    source: 'com.web.walk',
+    subject: 'walk-1',
+    data: { node: 'root' },
+  });
+  const reply = createArvoEventFactory(recursiveV1).createOutput({
+    type: 'evt_tree_walked',
+    source: 'com_tree_walk',
+    subject: 'walk-1',
+    data: { count: 3 },
+  });
+  const failed = createArvoEventFactory(recursiveV1).createError({
+    source: 'com_tree_walk',
+    subject: 'walk-1',
+    error: new Error('the branch was unreadable'),
+  });
+
+  it('reads a request to itself as one opening an execution', () => {
+    const resolved = validator.validateInput(request);
+    expect(resolved.ok && resolved.value.source).toBe('self');
+  });
+
+  it('reads its own answer as one answering an execution', () => {
+    const resolved = validator.validateInput(reply);
+    expect(resolved.ok && resolved.value.source).toBe('service');
+  });
+
+  it('reads its own handler error the same way', () => {
+    const resolved = validator.validateInput(failed);
+    expect(resolved.ok && resolved.value.source).toBe('service');
+  });
+
+  it('refuses a type that is neither what it takes in nor what it answers with', () => {
+    const stray = cloneArvoEvent(reply, { type: 'evt_nothing_declared' });
+    const resolved = validator.validateInput(stray);
+    expect(!resolved.ok && resolved.error.faultKind).toBe(
+      'event_unclassifiable',
+    );
+  });
+
+  it('refuses its own answer at a version it did not open the child at', () => {
+    const skewed = cloneArvoEvent(reply, {
+      dataschema: recursive.versions['1.1.0'].dataschema,
+    });
+    const resolved = validator.validateInput(skewed);
+    expect(!resolved.ok && resolved.error.faultKind).toBe(
+      'event_unclassifiable',
+    );
+  });
+
+  it('still reads a request at its other version as one opening an execution', () => {
+    const other = createArvoEventFactory(
+      recursive.versions['1.1.0'],
+    ).createInput({
+      source: 'com.web.walk',
+      subject: 'walk-1',
+      data: { node: 'root' },
+    });
+    const resolved = validator.validateInput(other);
+    expect(resolved.ok && resolved.value.source).toBe('self');
+  });
+});
+
+describe('a service answering at a version this handler did not declare', () => {
+  it('is refused as unclassifiable, which is where version skew surfaces', () => {
+    const payments = new ArvoContract({
+      type: 'com_payment_charge',
+      versions: {
+        '1.0.0': {
+          input: z.object({ amount: z.number() }),
+          outputs: { evt_payment_charged: z.object({ receipt: z.string() }) },
+        },
+        '1.1.0': {
+          input: z.object({ amount: z.number() }),
+          outputs: { evt_payment_charged: z.object({ receipt: z.string() }) },
+        },
+      },
+    });
+    const validator = new ArvoEventValidator({
+      contracts: {
+        self: orderContract,
+        services: { payments: payments.versions['1.0.0'] },
+      },
+    });
+    const answered = createArvoEventFactory(
+      payments.versions['1.1.0'],
+    ).createOutput({
+      type: 'evt_payment_charged',
+      source: 'com_payment_charge',
+      subject: 'order-1',
+      data: { receipt: 'r-1' },
+    });
+
+    const resolved = validator.validateInput(answered);
+    expect(!resolved.ok && resolved.error.faultKind).toBe(
+      'event_unclassifiable',
+    );
+    expect(!resolved.ok && resolved.error.message).toContain('1.0.0');
   });
 });

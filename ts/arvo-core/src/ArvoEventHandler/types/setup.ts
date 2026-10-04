@@ -1,4 +1,6 @@
+import type { Meter, Tracer } from '@opentelemetry/api';
 import type { ArvoContract } from '../../ArvoContract/index.js';
+import type { ArvoLogger } from '../context/telemetry/types.js';
 import type { ArvoEventHandlerOptions } from './options.js';
 import type { ArvoServiceMap } from './services.js';
 import type {
@@ -60,6 +62,24 @@ export type ArvoEventHandlerSetupParam<
    * from these.
    */
   options?: Partial<ArvoEventHandlerOptions>;
+
+  /**
+   * Where this handler's executions record: the tracer their spans are
+   * started on, the meter their instruments are created on, and what
+   * their log records are emitted through.
+   *
+   * Each is optional and each is a no-op where it is absent, so a
+   * deployment with no OpenTelemetry SDK configured costs nothing and
+   * changes no code.
+   */
+  telemetry?: {
+    /** What each execution's span is started on. */
+    tracer?: Tracer;
+    /** What this handler's instruments are created on. */
+    meter?: Meter | null;
+    /** What log records are emitted through. */
+    logger?: ArvoLogger | null;
+  };
 
   /**
    * The types a mechanism will supply per execution: what an executor

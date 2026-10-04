@@ -42,6 +42,7 @@ const declared = (overrides: Declared = {}) =>
     contracts: { self: orderVersion, services },
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     state: orderData,
+    declaresState: true,
     execute: async (ctx) => {
       await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
       return ctx.entry === 'init'

@@ -125,6 +125,14 @@ export class ArvoEventHandlerVersion<
    */
   readonly dataSchema: TDataSchema;
 
+  /**
+   * Whether {@link dataSchema} is one this version's author wrote.
+   *
+   * `false` for a version that declared none, which rests with no state
+   * of its own rather than being expected to write an empty one.
+   */
+  readonly declaresState: boolean;
+
   readonly #executor: ArvoEventHandlerExecutor<
     TSelf,
     TServices,
@@ -155,6 +163,7 @@ export class ArvoEventHandlerVersion<
     });
     this.options = param.options;
     this.dataSchema = param.state;
+    this.declaresState = param.declaresState;
     this.#executor = param.execute;
     this.#contractAtVersion = `${param.contracts.self.type}@${param.contracts.self.version}`;
     this.#depth = new ArvoEventDepthValidator({
@@ -535,6 +544,11 @@ export class ArvoEventHandlerVersion<
     );
     if (misaddressed !== null) return misaddressed;
 
+    // After the record has had its say and before the collection is read,
+    // which is where the event's own type and payload belong.
+    const unreceivable = param.checkEvent?.() ?? null;
+    if (unreceivable !== null) return unreceivable;
+
     return onFollowup ? refuseUnawaited(record, param.event) : null;
   }
 
@@ -840,6 +854,7 @@ export class ArvoEventHandlerVersion<
     );
 
     const written = await recordToCommit(
+      this.declaresState,
       this.dataSchema,
       atNextRevision(settled, param.entry),
     );

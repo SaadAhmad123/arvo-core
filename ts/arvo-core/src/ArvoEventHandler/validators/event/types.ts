@@ -1,4 +1,5 @@
 import type { ArvoContract } from '../../../ArvoContract/index.js';
+import type { VersionedArvoContract } from '../../../ArvoContract/versioned/index.js';
 import type { ArvoSemanticVersion } from '../../../semver/index.js';
 import type { ArvoServiceMap } from '../../types/services.js';
 
@@ -14,6 +15,8 @@ export type ArvoEventOrigin = {
   readonly source: 'self' | 'service';
   /** The version of that contract the event names. */
   readonly version: ArvoSemanticVersion;
+  /** That contract at that version, which says what the event may be. */
+  readonly contract: VersionedArvoContract;
 };
 
 /** What an event validator is built from: the contracts a handler declared. */

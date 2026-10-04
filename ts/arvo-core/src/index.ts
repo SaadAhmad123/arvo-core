@@ -39,6 +39,7 @@ export { ArvoEventHandlerValidationError } from './ArvoEventHandler/errors.js';
 export { ArvoEventHandler } from './ArvoEventHandler/index.js';
 export { ArvoEventHandlerSetup } from './ArvoEventHandler/setup.js';
 export type {
+  ArvoCreatedVersion,
   ArvoVersionDeclaration,
   ArvoVersionInput,
 } from './ArvoEventHandler/types/declaration.js';
@@ -84,6 +85,7 @@ export {
   createArvoEvent,
   tryCreateArvoEvent,
 } from './factories/createArvoEvent.js';
+export { createArvoEventHandlerVersion } from './factories/createArvoEventHandlerVersion.js';
 export { setupArvoEventHandler } from './factories/setupArvoEventHandler.js';
 export { ArvoSemanticVersionCheckError } from './semver/errors.js';
 export { ArvoSemanticVersion } from './semver/index.js';

@@ -262,7 +262,8 @@ describe('what the record says it is waiting for', () => {
 });
 
 describe('the record an execution leaves behind', () => {
-  const commit = (state = buildState()) => recordToCommit(orderData, state);
+  const commit = (state = buildState()) =>
+    recordToCommit(true, orderData, state);
 
   it('is a JSON object, ready for whatever stores it', async () => {
     const written = await commit();
@@ -310,6 +311,7 @@ describe('the record an execution leaves behind', () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
     const written = await recordToCommit(
+      true,
       z.looseObject({}),
       buildLooseState({ circular }),
     );
@@ -321,7 +323,7 @@ describe('the record an execution leaves behind', () => {
 
   it('accepts a version that remembers nothing in particular saying so', async () => {
     const loose = z.looseObject({});
-    const written = await recordToCommit(loose, buildLooseState({}));
+    const written = await recordToCommit(true, loose, buildLooseState({}));
     expect(written.ok).toBe(true);
   });
 
@@ -329,6 +331,7 @@ describe('the record an execution leaves behind', () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
     const written = await recordToCommit(
+      true,
       z.looseObject({}),
       buildLooseState({ circular }),
     );
@@ -336,5 +339,29 @@ describe('the record an execution leaves behind', () => {
       'state_not_serializable',
     );
     expect(!written.ok && written.error.cause).toContain('circular');
+  });
+});
+
+describe('a version whose author declared no state', () => {
+  it('is not expected to write one, and rests with none', async () => {
+    const written = await recordToCommit(
+      false,
+      z.strictObject({}),
+      buildLooseState(null),
+    );
+    expect(written.ok && written.value.data).toBeNull();
+  });
+
+  it('is still refused where what it did write cannot be written out', async () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const written = await recordToCommit(
+      false,
+      z.looseObject({}),
+      buildLooseState({ circular }),
+    );
+    expect(!written.ok && written.error.faultKind).toBe(
+      'state_not_serializable',
+    );
   });
 });

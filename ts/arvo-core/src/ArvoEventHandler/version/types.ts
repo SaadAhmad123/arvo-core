@@ -48,6 +48,16 @@ export type ArvoEventHandlerVersionParam<
    */
   state: TDataSchema;
 
+  /**
+   * Whether that schema is one this version's author wrote.
+   *
+   * A version that declared none is given one that admits none, and is
+   * not expected to write anything: its record rests with no state of
+   * its own. One that declared a schema has something to remember, and
+   * returning without writing it is a defect rather than a decision.
+   */
+  declaresState: boolean;
+
   /** This version's business code. */
   execute: ArvoEventHandlerExecutor<
     TSelf,
@@ -80,6 +90,21 @@ type ArvoVersionExecuteCommon<
   hooks: TMechanismHooks;
   /** This execution's telemetry, built by whatever runs the handler. */
   telemetry: ArvoExecutionContextTelemetry;
+
+  /**
+   * Whether the event itself is one this execution may act on, judged by
+   * whoever resolved it.
+   *
+   * A version is handed an event already resolved to a contract, and
+   * judging it against that contract is not a version's to do. What a
+   * version owns is *when* it is judged: after the record has had its say
+   * about depth, lifecycle, time and addressing, and before anything
+   * reads the collection — so a late event reaching a finished execution
+   * is refused for being late rather than for what it carries.
+   *
+   * Omitted, the event is taken as already judged.
+   */
+  checkEvent?: () => ArvoGateRefusal | null;
 };
 
 /**

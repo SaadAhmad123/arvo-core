@@ -110,8 +110,8 @@ Everything ADR-006's context table requires that the first cut left out. These w
 - [x] 4a.1 Added `types/setup.ts` with `ArvoEventHandlerSetupParam`, and `types/declaration.ts` with `ArvoVersionDeclaration`, `ArvoVersionInput` and the accumulated shape — named `ArvoAccumulatedVersion`/`ArvoAccumulatedVersions`, which says what it is where `Declared` would have read as the input rather than the result. `contracts: { self, services }` nested, per **design.md**.
 - [x] 4a.2 Added `setup.ts` with `ArvoEventHandlerSetup`, each `handler` call returning a new frozen setup.
 - [x] 4a.3 Both forms accepted and settled into one shape at `handler`. A version declaring no state is given `ARVO_NO_STATE_SCHEMA`, which admits none — ADR-007 step 7 requires `data` to be `null` where a version declared no schema, and the loose schema would have let it store anything.
-- [ ] 4a.4 Add `src/factories/createArvoEventHandlerVersion.ts`, taking the setup, the version, and what `handler` takes inline. It validates nothing and has no `tryCreate` twin. Probe that a version created this way types `ctx` exactly as the inline form does, since that is the whole reason it exists.
-- [ ] 4a.5 Give `handler` its second overload, taking a created version alone and reading the version off it.
+- [x] 4a.4 Added `src/factories/createArvoEventHandlerVersion.ts`. It validates nothing and has no `tryCreate` twin. The setup is read for its types alone, which the leading underscore on the parameter marks. Probed: `ctx` types exactly as inline, and an emission of an undeclared type is refused there too.
+- [x] 4a.5 Added. A created version is bound to the declaration it was written against, by a member that exists for the compiler alone and is never present at runtime — so one written for another handler, whose executor was typed by that handler's contracts, will not assemble into this one.
 
 ## 5. The class
 
@@ -142,7 +142,7 @@ coverage of what it added. §3 and §4 are done and their specs are in place.
 - [x] 7.7 Added as `tests/ArvoEventHandler/helpers/check-timeouts.spec.ts`:: an execution timeout below a run timeout refused, the two halves declared at different levels refused, a null run timeout with a bounded execution timeout refused, and the legal cases — both null, execution above run, and the two equal.
 - [x] 7.8 Added `tests/ArvoEventHandler/errors.spec.ts`. Each option domain is rejected individually in `helpers/check-options.spec.ts`, where the rule lives.
 - [x] 7.9 Added `tests/ArvoEventHandler/build.spec.ts`, with all of these.
-- [ ] 7.9a Add `tests/ArvoEventHandler/standalone.spec.ts`: a version created through `createArvoEventHandlerVersion` with a state schema and one without, each assembled through the single-argument `handler` overload, each behaving exactly as the inline form does, and a created version for an undeclared version refused at `build` like any other.
+- [x] 7.9a Added `tests/ArvoEventHandler/standalone.spec.ts`, with all of these, mixing created and inline versions in one chain, and the type probes above.
 - [x] 7.10 Added as `tests/ArvoEventHandler/helpers/emittable-types.spec.ts`:: the set for a version, two versions differing while sharing every service type, and a version declaring no outputs.
 
 ## 8. Finishing
