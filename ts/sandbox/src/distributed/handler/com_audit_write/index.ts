@@ -1,5 +1,6 @@
 import { setupArvoEventHandler } from 'arvo-core';
 import type { DistributedDependencies } from '../dependencies.js';
+import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { auditWriteContract } from './contract.js';
 
 /**
@@ -18,6 +19,7 @@ import { auditWriteContract } from './contract.js';
 export const auditWriteHandler = setupArvoEventHandler({
   contracts: { self: auditWriteContract },
   types: {} as { dependencies: DistributedDependencies },
+  telemetry: HANDLER_TELEMETRY,
   options: { runTimeout: 5_000 },
 })
   .handler('1.0.0', async (ctx) => {

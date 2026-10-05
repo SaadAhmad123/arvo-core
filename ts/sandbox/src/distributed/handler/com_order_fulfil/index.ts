@@ -8,6 +8,7 @@ import { inventoryCheckV1 } from '../com_inventory_check/contract.js';
 import { manualReviewV1 } from '../com_manual_review/contract.js';
 import { paymentChargeV1 } from '../com_payment_charge/contract.js';
 import type { DistributedDependencies } from '../dependencies.js';
+import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { orderFulfilContract } from './contract.js';
 
 /**
@@ -151,6 +152,7 @@ export const orderFulfilHandler = setupArvoEventHandler({
     },
   },
   types: {} as { dependencies: DistributedDependencies },
+  telemetry: HANDLER_TELEMETRY,
   options: {
     // A wide execution rebuilds its whole collection on every answer,
     // so one entry is not where the time goes — but five hundred of

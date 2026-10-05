@@ -1,6 +1,7 @@
 import { setupArvoEventHandler } from 'arvo-core';
 import { z } from 'zod';
 import type { DistributedDependencies } from '../dependencies.js';
+import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { categoryWalkContract, categoryWalkV1 } from './contract.js';
 
 /**
@@ -34,6 +35,7 @@ export const categoryWalkHandler = setupArvoEventHandler({
     services: { deeper: categoryWalkV1 },
   },
   types: {} as { dependencies: DistributedDependencies },
+  telemetry: HANDLER_TELEMETRY,
   options: {
     runTimeout: 15_000,
     maxRetryAttempts: 3,

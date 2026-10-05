@@ -1,5 +1,4 @@
 import { type Meter, metrics, type Tracer, trace } from '@opentelemetry/api';
-import { logs } from '@opentelemetry/api-logs';
 import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-grpc';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-grpc';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
@@ -13,6 +12,7 @@ import {
   ATTR_SERVICE_VERSION,
 } from '@opentelemetry/semantic-conventions';
 import type { ArvoLogger } from 'arvo-core';
+import { loggerFor } from '../handler/telemetry.js';
 import type { DistributedConfig } from './config.js';
 
 /**
@@ -44,29 +44,6 @@ export type Telemetry = {
    * and the last thing a worker does is usually the interesting part.
    */
   readonly shutdown: () => Promise<void>;
-};
-
-/**
- * The package's own logger shape, over the OpenTelemetry logs API.
- *
- * `arvo-core` takes a logger structurally rather than importing one, so
- * that it depends on no logging API. This is the one adapter that
- * costs.
- */
-const loggerFor = (name: string, version: string): ArvoLogger => {
-  const emitting = logs.getLogger(name, version);
-  return {
-    emit: (record) => {
-      emitting.emit({
-        severityNumber: record.severityNumber,
-        body: record.body,
-        attributes: record.attributes as Record<
-          string,
-          string | number | boolean
-        >,
-      });
-    },
-  };
 };
 
 /**

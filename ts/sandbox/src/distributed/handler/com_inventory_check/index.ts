@@ -1,6 +1,7 @@
 import { setupArvoEventHandler } from 'arvo-core';
 import { z } from 'zod';
 import type { DistributedDependencies } from '../dependencies.js';
+import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { inventoryCheckContract } from './contract.js';
 
 /**
@@ -13,6 +14,7 @@ import { inventoryCheckContract } from './contract.js';
 export const inventoryCheckHandler = setupArvoEventHandler({
   contracts: { self: inventoryCheckContract },
   types: {} as { dependencies: DistributedDependencies },
+  telemetry: HANDLER_TELEMETRY,
   options: {
     // one query against a catalogue; longer than this and something is wrong
     runTimeout: 5_000,
