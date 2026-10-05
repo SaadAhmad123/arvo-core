@@ -119,7 +119,12 @@ execute(handler, event, deps):
         outcome = handler.execute(event, deps.state, attempt, deps)
 
         case PRODUCED(record, events):
-            commit(record, events)          # together, or neither
+            # stored as one revision, { state, events }, or not at all
+            written = commit(record.executionId, event.id, record, events)
+            if written is REFUSED:
+                # someone else wrote this revision; what the world is told
+                # is what they committed for this same event
+                return committedFor(record.executionId, event.id)
             return events
 
         case DISCARDED:
@@ -136,7 +141,8 @@ execute(handler, event, deps):
             # and add nothing of your own.
 
             if fault.abandonmentState is not null:
-                commit(fault.abandonmentState, [fault.abandonmentEvent])
+                commit(fault.abandonmentState.executionId, event.id,
+                       fault.abandonmentState, [fault.abandonmentEvent])
                 return [fault.abandonmentEvent]
 
             if fault.abandonmentEvent is not null:
@@ -160,30 +166,65 @@ succeeded.
 
 ## Commit
 
+A revision is not a record. It is `{ state, events }` — the record the
+handler wrote and every event it produced, stored as one thing. That is
+what makes publishing recoverable: whatever happens after the write, the
+events are still there to be sent, exactly as they were committed.
+
 ```
-commit(record, events):
+commit(executionId, triggeringEventId, record, events):
 
     atomically:
         if record.casVersion == 0:
-            create the record, failing if one already exists
+            create revision 0, failing if the execution already has one
         else:
-            write the record, failing unless the stored revision is
+            append the revision, failing unless the stored one is
                 record.casVersion - 1
-        hold the events alongside it
 
-    # after the write succeeded, and what is published is what was held —
-    # never something produced a second time
-    publish(events)
+        the revision is { state:    record,
+                          events:   events,
+                          publishedAt: none,
+                          triggeredBy: triggeringEventId }
+
+    # a separate step, after the write succeeded
+    publish(executionId, record.casVersion)
+
+
+publish(executionId, casVersion):
+    revision = read(executionId, casVersion)
+    for event in revision.events:
+        send(event)                 # the bytes that were committed
+    mark revision published
 ```
 
-Where the write is refused, the events of this delivery are not published.
-What is published instead is whatever the winning writer committed for
-this triggering event, read back rather than produced again — which is why
-nothing here requires a handler to be deterministic.
+`publish` reads the events back out rather than taking them from the
+caller, so the same function recovers a revision whose events never went
+anywhere. Nothing asks an executor to produce them a second time, which
+is why no handler here has to be deterministic.
 
-`publish` is the only at-least-once edge. `commit` is atomic; publishing
-after it is not. So an event can arrive twice, and a receiver discarding a
-repeat is what makes that safe rather than wrong.
+```
+recover():
+    for revision in revisions where publishedAt is none, oldest first:
+        publish(revision.executionId, revision.casVersion)
+```
+
+Two readers need a revision's events after the fact, and both read the
+same stored thing:
+
+- **the recovery pass above**, for a revision committed by something that
+  stopped existing before it published
+- **a repeat delivery**, which finds the work already done and must hand
+  back what was committed for its triggering event rather than nothing —
+  `triggeredBy` is what makes that a keyed read
+
+Where a write is refused, this delivery's events are not published at all.
+What is published is whatever the winning writer committed for the same
+triggering event.
+
+`publish` is the only at-least-once edge. The write is atomic; sending
+after it is not, and a send that half-succeeded is retried from the
+store. So an event can arrive twice, and a receiver discarding a repeat
+is what makes that safe rather than wrong.
 
 ## Answering from outside
 
@@ -221,8 +262,10 @@ a review answered hours later still hangs off the run that asked for it.
 | `work` | a task queue, a channel, an array |
 | the loop itself | a workflow, a process, a function |
 | `execute`'s retries | the framework's retry policy, declared to agree with the fault |
+| a revision, `{ state, events }` | a row and its outbox rows, a workflow's state |
 | `commit`'s atomicity | a transaction, or a single durable decision |
 | `publish` | starting the next delivery |
+| `recover` | a sweep over unpublished revisions |
 | `deps.state` | a read keyed on the identifier the handler supplied |
 
 Everything else is the same.
