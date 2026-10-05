@@ -19,6 +19,60 @@ pnpm run play contract     # only chapters whose title matches
 pnpm run play 10           # only chapter 10
 ```
 
+## The distributed sandbox
+
+A second, much larger thing living under `src/distributed/`: the same handlers run under real distributed frameworks, against a real Temporal cluster, a real Postgres and a real telemetry stack. Nothing is mocked and nothing is skipped — a conformance test that silently skips proves nothing.
+
+Everything that asserts lives under `tests/`, mirroring `src/`, and runs with vitest.
+
+### Bring it up
+
+Docker must be running.
+
+```bash
+pnpm run distributed:up        # nine containers, waits for every health check
+pnpm run distributed:migrate   # the record store, the outbox, and what the handlers read
+```
+
+`:up` is idempotent. `pnpm run distributed:down` stops it and keeps the volumes; `pnpm run distributed:reset` throws the volumes away too, after which `:migrate` has to run again.
+
+### Check it before trusting it
+
+```bash
+pnpm run distributed:probe     # sends one of each signal and reads each back out
+pnpm run distributed:purity    # asserts no handler knows about any framework
+```
+
+The probe is worth running first. It proves traces reach Tempo, metrics reach Prometheus and logs reach Loki — without it, a missing signal later looks like a missing feature rather than a missing exporter.
+
+### Run a whole run under Temporal
+
+```bash
+pnpm run distributed:temporal  # starts the workers in-process, runs one run end to end
+```
+
+That spec starts the same workers `worker.ts` deploys, opens one order, answers the review that leaves the lattice from outside, and asserts what landed in the database.
+
+To watch one instead, run the workers yourself and leave them up:
+
+```bash
+pnpm run distributed:temporal:worker
+```
+
+It listens on both task queues, answers `/live` and `/ready` on `localhost:9464`, and stops cleanly on Ctrl-C — finishing what is in flight, flushing telemetry and closing its pool.
+
+### Where to look
+
+| what | where |
+|---|---|
+| workflows, histories, and what each execution is waiting on | Temporal UI, `localhost:8080` |
+| traces, metrics, logs, and the run's own dashboard | Grafana, `localhost:3000` |
+| records, the outbox, and what needs a person | Postgres, `localhost:5433`, database `arvo_records` |
+
+Grafana comes up already provisioned — the datasources and the dashboard are files under `infra/grafana/`, not something clicked together.
+
+Every setting has a default that matches the stack above, so nothing needs configuring to run locally. Each one can be overridden from the environment, and a process that cannot be configured refuses to start rather than running half-configured.
+
 ## Conventions
 
 The tour is what a reader copies from, so it is written the way a consumer of the package should write it.
