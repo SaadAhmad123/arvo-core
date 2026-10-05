@@ -38,6 +38,10 @@ An Arvo handler is already two things. Across one delivery it is a pure function
 
 **Shape B is written as a cost, not as a candidate, and nothing is conceded to it.** It trades the one property that makes the model portable for pleasanter-looking code, and buys a hard dependency on one vendor's replay. It also requires a deterministic executor, which ADR-000 deliberately does not. The protocol cannot express it in any case — `ctx.build` returns an event rather than sending one, and a mechanism hook may not alter what is returned — and that is correct rather than a gap. §15 builds it only so the loss is demonstrated in code rather than argued about.
 
+## The algorithm every mechanism implements
+
+`mechanism_algorithm.md`, beside this file, is the canonical statement of what a mechanism does: the loop, the three collections, one delivery, the commit, and what an outside sender owes. Every mechanism here implements that and differs only in how it holds the work queue and the record store. **Where an implementation disagrees with it, the implementation is wrong.**
+
 ## Layout
 
 ```

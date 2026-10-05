@@ -10,7 +10,7 @@ import { categoryWalkContract, categoryWalkV1 } from './contract.js';
  * One execution per node. On the way down it asks the catalogue for a
  * node's children and opens an execution of itself for each, then
  * waits. On the way up it adds what they found to what it found and
- * answers whoever asked.
+ * answers whoever requested.
  *
  * Three things meet here that meet nowhere else in the run.
  *
@@ -53,13 +53,13 @@ export const categoryWalkHandler = setupArvoEventHandler({
       deepest: z.number(),
     }),
     execute: async (ctx) => {
-      const asked = ctx.state.initEvent.data;
+      const requested = ctx.state.initEvent.data;
 
       // ------------------------------------------------- on the way down
       if (ctx.entry === 'init') {
         const children =
-          asked.remaining > 0
-            ? await ctx.dependencies.catalogue.childrenOf(asked.category)
+          requested.remaining > 0
+            ? await ctx.dependencies.catalogue.childrenOf(requested.category)
             : [];
 
         // A branch that may not descend answers for itself rather than
@@ -71,7 +71,7 @@ export const categoryWalkHandler = setupArvoEventHandler({
           ctx.telemetry.logger.warn(
             'stopped at the bound rather than past it',
             {
-              category: asked.category,
+              category: requested.category,
               depth: ctx.state.depth,
               abandonedChildren: children.length,
             },
@@ -80,7 +80,7 @@ export const categoryWalkHandler = setupArvoEventHandler({
 
         await ctx.setState({
           data: {
-            category: asked.category,
+            category: requested.category,
             visited: 1,
             deepest: ctx.state.depth,
           },
@@ -91,7 +91,7 @@ export const categoryWalkHandler = setupArvoEventHandler({
           return ctx.build({
             type: 'evt_category_walked',
             data: {
-              category: asked.category,
+              category: requested.category,
               visited: 1,
               deepest: ctx.state.depth,
             },
@@ -102,7 +102,7 @@ export const categoryWalkHandler = setupArvoEventHandler({
           descending.map((child) =>
             ctx.build({
               type: 'com_category_walk',
-              data: { category: child, remaining: asked.remaining - 1 },
+              data: { category: child, remaining: requested.remaining - 1 },
             }),
           ),
         );
@@ -114,28 +114,28 @@ export const categoryWalkHandler = setupArvoEventHandler({
       let visited = 1;
       let deepest = ctx.state.depth;
 
-      for (const answer of ctx.state.inFlightEventMap.values()) {
-        if (answer === null) continue;
-        if (answer.type !== 'evt_category_walked') continue;
+      for (const response of ctx.state.inFlightEventMap.values()) {
+        if (response === null) continue;
+        if (response.type !== 'evt_category_walked') continue;
 
-        const found = answer.data as { visited: number; deepest: number };
-        visited += found.visited;
-        deepest = Math.max(deepest, found.deepest);
+        const branch = response.data as { visited: number; deepest: number };
+        visited += branch.visited;
+        deepest = Math.max(deepest, branch.deepest);
       }
 
       await ctx.setState({
-        data: { category: asked.category, visited, deepest },
+        data: { category: requested.category, visited, deepest },
       });
 
       ctx.telemetry.logger.info('walked', {
-        category: asked.category,
+        category: requested.category,
         visited,
         deepest,
       });
 
       return ctx.build({
         type: 'evt_category_walked',
-        data: { category: asked.category, visited, deepest },
+        data: { category: requested.category, visited, deepest },
       });
     },
   })

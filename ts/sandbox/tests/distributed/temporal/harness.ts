@@ -16,22 +16,18 @@ import { createWorkers } from '../../../src/distributed/temporal/workers.js';
 /**
  * The real mechanism, running inside a spec.
  *
- * The workers here are the ones `worker.ts` runs: same construction,
- * same interceptors, same queues, same bounded slots. A suite that
- * started a worker of its own would be testing a worker nobody deploys.
+ * These are the workers `worker.ts` runs: same construction, same
+ * interceptors, same queues, same bounded slots.
  *
- * It needs the stack up and migrated.
+ * Needs the stack up and migrated.
  */
 
-/** Everything a spec needs to start work and then look at what happened. */
+/** Everything a spec needs to start work and then see what happened. */
 export type TemporalHarness = {
-  /** How a spec starts a run, or answers something from outside. */
   readonly client: Client;
-  /** How a spec looks at what was committed. */
   readonly store: RecordStore;
   /** For the queries a spec makes that the store has no business having. */
   readonly pool: Pool;
-  /** What the workers record against, for flushing before reading it back. */
   readonly telemetry: Telemetry;
   /** Stops the workers, finishes what is in flight, and lets go. */
   readonly stop: () => Promise<void>;
@@ -40,8 +36,7 @@ export type TemporalHarness = {
 /**
  * Starts the mechanism and hands back the ways in.
  *
- * @param serviceName - What this spec's process calls itself in a trace,
- * so one spec's spans can be told from another's.
+ * @param serviceName - What this spec calls itself in a trace.
  */
 export const startTemporalHarness = async (
   serviceName: string,
@@ -66,8 +61,7 @@ export const startTemporalHarness = async (
     connection,
     pool,
   });
-  // Not awaited: they run until asked to stop, which is what stop does.
-  const running = workers.map((worker) => worker.run());
+  const runningWorkers = workers.map((worker) => worker.run());
 
   return {
     client: reach.client,
@@ -76,7 +70,7 @@ export const startTemporalHarness = async (
     telemetry,
     stop: async () => {
       for (const worker of workers) worker.shutdown();
-      await Promise.all(running);
+      await Promise.all(runningWorkers);
       await reach.close();
       await connection.close();
       await pool.end();
@@ -85,41 +79,64 @@ export const startTemporalHarness = async (
   };
 };
 
-/**
- * Empties the store, so one spec's rows are not another's evidence.
- *
- * Truncated rather than deleted, because a record may not be deleted.
- */
+/** Empties the store, so one spec's rows are not another's evidence. */
 export const emptyTheStore = async (pool: Pool): Promise<void> => {
+  // truncated rather than deleted, because a record may not be deleted
   await pool.query('TRUNCATE outbox, execution_record, needs_a_person');
 };
 
 /**
  * Waits for something to become true, or gives up saying what it wanted.
  *
- * Every wait in these specs is on a real cluster doing real work, so
- * there is no moment at which a result is guaranteed to have arrived —
- * only a point past which something is wrong.
+ * @param description - What was wanted, read out in the failure.
+ * @param attemptOnce - One attempt, answering null while the answer is absent.
+ * @param within - How long to keep attempting.
  */
 export const until = async <TFound>(
-  what: string,
-  look: () => Promise<TFound | null>,
+  description: string,
+  attemptOnce: () => Promise<TFound | null>,
   within = 60_000,
 ): Promise<TFound> => {
-  const giveUpAt = Date.now() + within;
-  let last: unknown = null;
+  const giveUpAfter = Date.now() + within;
+  let lastFailure: unknown = null;
 
-  while (Date.now() < giveUpAt) {
+  while (Date.now() < giveUpAfter) {
     try {
-      const found = await look();
-      if (found !== null) return found;
-    } catch (raised) {
-      last = raised;
+      const answer = await attemptOnce();
+      if (answer !== null) return answer;
+    } catch (failure) {
+      lastFailure = failure;
     }
     await new Promise((settle) => setTimeout(settle, 250));
   }
 
   throw new Error(
-    `${what} never happened within ${within}ms${last === null ? '' : `: ${String(last)}`}`,
+    `${description} never happened within ${within}ms${lastFailure === null ? '' : `: ${String(lastFailure)}`}`,
   );
+};
+
+/** The latest record of the one execution of this contract, once there is one. */
+export const recordOf = async (
+  pool: Pool,
+  contractType: string,
+): Promise<{ executionId: string; lifecycle: string; document: JSONRecord }> =>
+  until(`a record for ${contractType}`, async () => {
+    const latest = await pool.query<{
+      executionId: string;
+      lifecycle: string;
+      document: JSONRecord;
+    }>(
+      `SELECT execution_id AS "executionId", lifecycle, document
+       FROM execution_record
+       WHERE source = $1
+       ORDER BY cas_version DESC
+       LIMIT 1`,
+      [contractType],
+    );
+    return latest.rows[0] ?? null;
+  });
+
+/** What a stored record looks like to a spec reading one field off it. */
+type JSONRecord = Record<string, unknown> & {
+  data?: Record<string, unknown>;
 };

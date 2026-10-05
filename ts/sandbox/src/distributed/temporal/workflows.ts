@@ -2,7 +2,7 @@ import {
   condition,
   defineQuery,
   defineSignal,
-  getExternalWorkflowHandle,
+  defineUpdate,
   log,
   ParentClosePolicy,
   proxyActivities,
@@ -10,196 +10,298 @@ import {
   startChild,
   workflowInfo,
 } from '@temporalio/workflow';
-import type { Activities, ExecutionReport } from './activities.js';
-import { BOOKKEEPING_ACTIVITY, EXECUTION_ACTIVITY } from './retry.js';
+import type { JSONObject } from 'arvo-core';
+import type { Activities, DeliveryReport } from './activities.js';
+import type {
+  CommitOutcome,
+  CommitRequest,
+  CommittedEvent,
+  DeliveryParam,
+  NeedsAPersonParam,
+  PersonsDecision,
+  RecordParam,
+} from './protocol.js';
+import { BOOKKEEPING_ACTIVITY, DELIVERY_ACTIVITY } from './retry.js';
 
 /**
- * One execution of one handler, as a Temporal workflow.
+ * This mechanism's three workflows.
  *
- * One workflow per execution, named by the execution's own identifier.
- * That is the whole of the design, and it is what makes obligation 5
- * hold for this mechanism: Temporal admits one workflow of a given id,
- * so one execution's record has one writer by construction. The
- * compare-and-swap counter in the record is then a consistency check
- * rather than the thing doing the work — and whether a redundant
- * guarantee is a cost or a defence is one of the questions this is here
- * to answer.
+ * Nothing here is stored outside Temporal. An execution's record is a
+ * workflow's own state, the events committed beside it are that
+ * workflow's queued commands, the queues are task queues, and an event
+ * nothing may answer is a workflow waiting for somebody.
  *
- * What the workflow knows about Arvo is nothing. It takes an event in,
- * hands it to an activity, and does what the activity's report tells it:
- * start these executions, hand these answers to those executions, and
- * close if this one accepts nothing further. Every decision about what
- * an event means was made below it.
- *
- * It rests between deliveries. An execution waiting on five hundred
- * answers is a workflow awaiting five hundred signals, and an execution
- * waiting on a person is a workflow that waits as long as the person
- * does — which is what waiting is supposed to mean.
+ * None of them decide what an event means. Every such decision is made
+ * in an activity, below them, by the handler.
  */
 
-/** An answer arriving for this execution, in the event's own format. */
-export const answer = defineSignal<[string]>('arvo.answer');
+// ---------------------------------------------------------------- record
 
-/** What this execution is doing, for anybody looking at it from outside. */
-export const progress = defineQuery<ExecutionProgress>('arvo.progress');
+/** Reads the record this workflow holds. */
+export const recordHeld = defineQuery<JSONObject | null>('arvo.record');
 
-/** What an execution looks like while it is still going. */
-export type ExecutionProgress = {
-  /** How many deliveries this execution has carried out. */
-  readonly executions: number;
-  /** How many arrived and have not been carried out yet. */
-  readonly waiting: number;
-  /** Where the record rested last, or `null` before anything was committed. */
-  readonly lifecycle: string | null;
-};
+/** Commits a record and the events produced with it, or refuses to. */
+export const commit = defineUpdate<CommitOutcome, [CommitRequest]>(
+  'arvo.commit',
+);
 
-/** What one execution's workflow is started with. */
-export type ExecutionWorkflowParam = {
-  /** The event that opens it, in the event's own format. */
-  readonly triggering: string;
-  /** What it implements, so a history says so without decoding an event. */
-  readonly contractType: string;
-};
+/** How many events this record has published. */
+export const publishedCount = defineQuery<number>('arvo.published');
 
-/** What a finished execution's workflow answers with. */
-export type ExecutionSummary = {
-  readonly executionId: string;
-  readonly contractType: string;
-  /** How many deliveries it took to reach the end. */
-  readonly executions: number;
-  /** Where it came to rest. */
-  readonly lifecycle: string | null;
-  /** What the last delivery did. */
-  readonly outcome: ExecutionReport['outcome'];
-  /** What a person reading a history would want to know, where anything. */
-  readonly note: string | null;
-};
+/** Lifecycles that accept nothing further, so the record may be let go of. */
+const TERMINAL = new Set(['success', 'error', 'cancelled', 'failure']);
 
-const { runOneExecution } = proxyActivities<Activities>(EXECUTION_ACTIVITY);
-const { published, couldNotSend } =
-  proxyActivities<Activities>(BOOKKEEPING_ACTIVITY);
+/** Where a record rests, read off the document the handler wrote. */
+const lifecycleOf = (record: JSONObject): string =>
+  typeof record.lifecycle === 'string' ? record.lifecycle : '';
+
+/** The revision a record states, read off the document the handler wrote. */
+const casVersionOf = (record: JSONObject): number =>
+  typeof record.casVersion === 'number' ? record.casVersion : -1;
 
 /**
- * Sends everything one delivery committed, and says what was sent.
+ * One execution's record, and the events committed with it.
  *
- * All at once rather than one after another: a five-hundred-wide fan-out
- * that started its children in sequence would take five hundred round
- * trips to do what Temporal can be asked to do in one batch.
+ * One workflow per execution, so writes to one record are serialized by
+ * Temporal admitting one workflow of a given name. The revision the
+ * handler writes is still checked against the one held, which makes it a
+ * consistency check here rather than the thing doing the work.
  *
- * Sent from the workflow, which is what makes the workflow the
- * publisher. Its decisions survive the worker that made them, so an
- * event dispatched here is dispatched exactly once however many times
- * the worker dies — and the recovery publisher is left with only what no
- * workflow got round to.
+ * The commit returns as soon as the new record is durable. Publishing
+ * happens afterwards, from what the commit queued — so nothing is
+ * delivered that was not committed, and everything committed is
+ * eventually delivered.
+ *
+ * @param param - The execution whose record this is.
  */
-const sendAll = async (report: ExecutionReport): Promise<void> => {
-  const sent = await Promise.all(
-    report.dispatch.map(async (one) => {
-      if (one.kind === 'opens') {
-        try {
-          await startChild(arvoExecution, {
-            workflowId: one.executionId,
-            taskQueue: one.taskQueue,
-            args: [{ triggering: one.payload, contractType: one.contractType }],
-            // Nothing here owns anything there. An execution outlives
-            // whatever asked for it, and a child cancelled because its
-            // parent finished would be an execution abandoned by
-            // Temporal rather than by Arvo.
-            parentClosePolicy: ParentClosePolicy.ABANDON,
-          });
-          return one.eventId;
-        } catch (raised) {
-          // The execution already exists, which is what a redelivered
-          // request looks like. Already open is the outcome asked for.
-          if (
-            raised instanceof Error &&
-            raised.name === 'WorkflowExecutionAlreadyStartedError'
-          ) {
-            log.info('the execution asked for was already open', {
-              executionId: one.executionId,
-            });
-            return one.eventId;
-          }
-          throw raised;
-        }
+export async function executionRecord(param: RecordParam): Promise<{
+  executionId: string;
+  revisions: number;
+  lifecycle: string;
+  published: number;
+}> {
+  let record: JSONObject | null = null;
+  let revisions = 0;
+  let published = 0;
+
+  /** Committed and not yet delivered. The outbox, as Temporal holds it. */
+  const outstanding: CommittedEvent[] = [];
+
+  setHandler(recordHeld, () => record);
+  setHandler(publishedCount, () => published);
+
+  setHandler(commit, (asked: CommitRequest): CommitOutcome => {
+    const writing = casVersionOf(asked.record);
+
+    if (record === null) {
+      // Create-if-absent: a first record may only be revision zero.
+      if (writing !== 0) {
+        return { committed: false, because: 'revision_out_of_sequence' };
       }
+    } else if (writing !== casVersionOf(record) + 1) {
+      return {
+        committed: false,
+        because:
+          writing <= casVersionOf(record)
+            ? 'revision_taken'
+            : 'revision_out_of_sequence',
+      };
+    }
 
-      try {
-        await getExternalWorkflowHandle(one.executionId).signal(
-          answer,
-          one.payload,
-        );
-        return one.eventId;
-      } catch (raised) {
-        // Temporal retries a signal it thinks could succeed, so a
-        // rejection here means the execution being answered is not
-        // there to answer. An answer nobody can be given is filed
-        // rather than dropped.
-        await couldNotSend({
-          payload: one.payload,
-          executionId: one.executionId,
-          message: `no execution ${one.executionId} to answer: ${String(raised)}`,
-        });
-        return one.eventId;
-      }
-    }),
-  );
+    record = asked.record;
+    revisions += 1;
+    // Queued rather than sent: the caller is told the record is durable,
+    // and these go out after. Sending here would mean an event could
+    // leave before the commit it belongs to was recorded.
+    outstanding.push(...asked.events);
 
-  await published(sent);
-};
-
-/**
- * Carries one execution for as long as it lasts.
- *
- * @param param - The event that opens it, and what it implements.
- * @returns What it did and where it came to rest.
- */
-export async function arvoExecution(
-  param: ExecutionWorkflowParam,
-): Promise<ExecutionSummary> {
-  const executionId = workflowInfo().workflowId;
-
-  /** Deliveries that have arrived and not been carried out. */
-  const arrived: string[] = [param.triggering];
-  let executions = 0;
-  let last: ExecutionReport | null = null;
-
-  setHandler(answer, (payload: string) => {
-    arrived.push(payload);
+    return { committed: true, casVersion: writing };
   });
 
-  setHandler(progress, () => ({
-    executions,
-    waiting: arrived.length,
-    lifecycle: last?.lifecycle ?? null,
-  }));
-
   while (true) {
-    const next = arrived.shift();
+    await condition(
+      () =>
+        outstanding.length > 0 ||
+        (record !== null && TERMINAL.has(lifecycleOf(record))),
+    );
 
-    if (next === undefined) {
-      // Resting. Nothing is held open here: what this execution
-      // remembers is in its record, and this workflow is only the thing
-      // that will be told when an answer arrives.
-      await condition(() => arrived.length > 0);
+    const sending = outstanding.splice(0, outstanding.length);
+    if (sending.length > 0) {
+      await deliverAll(sending);
+      published += sending.length;
       continue;
     }
 
-    const report = await runOneExecution(next);
-    executions += 1;
-    last = report;
-
-    await sendAll(report);
-
-    if (report.finished) {
-      return {
-        executionId,
-        contractType: param.contractType,
-        executions,
-        lifecycle: report.lifecycle,
-        outcome: report.outcome,
-        note: report.note,
-      };
-    }
+    // Terminal and nothing outstanding. The record stays readable from
+    // this workflow's history for as long as the namespace retains it.
+    return {
+      executionId: param.executionId,
+      revisions,
+      lifecycle: record === null ? '' : lifecycleOf(record),
+      published,
+    };
   }
+}
+
+/**
+ * Starts a delivery for each event, and a wait for each nobody can answer.
+ *
+ * All at once: a wide fan-out started one at a time would take one round
+ * trip per event to do what Temporal batches.
+ */
+const deliverAll = async (events: readonly CommittedEvent[]): Promise<void> => {
+  await Promise.all(
+    events.map(async (event) => {
+      if (event.target !== null) {
+        await startOnce(event.target.workflowId, () =>
+          startChild(deliverEvent, {
+            workflowId: event.target?.workflowId ?? event.eventId,
+            taskQueue: event.target?.taskQueue ?? '',
+            args: [
+              {
+                payload: event.payload,
+                addressedTo: event.target?.addressedTo ?? '',
+              },
+            ],
+            // Nothing here owns anything there: a delivery outlives the
+            // record that produced it.
+            parentClosePolicy: ParentClosePolicy.ABANDON,
+          }),
+        );
+        return;
+      }
+
+      await startOnce(`needs-a-person-${event.eventId}`, () =>
+        startChild(needsAPerson, {
+          workflowId: `needs-a-person-${event.eventId}`,
+          taskQueue: workflowInfo().taskQueue,
+          args: [
+            {
+              payload: event.payload,
+              eventType: event.eventType,
+              reason: event.needsAPerson ?? 'addressed_outside',
+              message: null,
+            },
+          ],
+          parentClosePolicy: ParentClosePolicy.ABANDON,
+        }),
+      );
+    }),
+  );
+};
+
+/** Whether a failure is Temporal saying that workflow is already there. */
+const isAlreadyStarted = (raised: unknown): boolean =>
+  raised instanceof Error &&
+  raised.name === 'WorkflowExecutionAlreadyStartedError';
+
+/** Starts something, treating already-started as the outcome asked for. */
+const startOnce = async (
+  workflowId: string,
+  start: () => Promise<unknown>,
+): Promise<void> => {
+  try {
+    await start();
+  } catch (raised) {
+    if (!isAlreadyStarted(raised)) throw raised;
+    log.info('that was already under way', { workflowId });
+  }
+};
+
+// -------------------------------------------------------------- delivery
+
+const { runOneDelivery } = proxyActivities<Activities>(DELIVERY_ACTIVITY);
+const { commitRecord } = proxyActivities<Activities>(BOOKKEEPING_ACTIVITY);
+
+/** What one delivery's workflow answers with. */
+export type DeliverySummary = {
+  readonly eventId: string;
+  readonly addressedTo: string;
+  readonly outcome: DeliveryReport['outcome'];
+  readonly executionId: string | null;
+  readonly note: string | null;
+};
+
+/**
+ * Delivers one event to the handler it is addressed to.
+ *
+ * One workflow per event, named by the event's own id, so an event
+ * delivered twice is delivered once. Nothing is held open between
+ * deliveries: what an execution remembers is in its record, so an
+ * execution waiting on an answer is a record nothing has arrived for
+ * rather than a workflow sitting idle.
+ *
+ * @param param - The event, and what it is addressed to.
+ */
+export async function deliverEvent(
+  param: DeliveryParam,
+): Promise<DeliverySummary> {
+  const report = await runOneDelivery(param.payload);
+
+  if (report.commit !== null) {
+    // The record's own workflow decides whether this revision may be
+    // written, and sends what it accepts.
+    await commitRecord(report.commit);
+  }
+
+  return {
+    eventId: workflowInfo().workflowId,
+    addressedTo: param.addressedTo,
+    outcome: report.outcome,
+    executionId: report.executionId,
+    note: report.note,
+  };
+}
+
+// ------------------------------------------------------- needs a person
+
+/** A person's decision about one lifted event. */
+export const decided = defineSignal<[PersonsDecision]>('arvo.decided');
+
+/** What this is waiting for, for anybody looking at it from outside. */
+export const waitingFor = defineQuery<NeedsAPersonParam>('arvo.waiting_for');
+
+/**
+ * One event nothing in the lattice may answer.
+ *
+ * A request carrying a domain waits here for as long as the person does,
+ * which is what waiting means. An event addressed outside, or a delivery
+ * no further attempt would fix, has nobody to wait for and is recorded
+ * and done — findable afterwards by what it was.
+ *
+ * @param param - The event, and why it is here.
+ */
+export async function needsAPerson(
+  param: NeedsAPersonParam,
+): Promise<{ reason: string; answered: boolean }> {
+  setHandler(waitingFor, () => param);
+
+  if (param.reason !== 'left_the_lattice') {
+    // Nobody is coming. This exists so the event is somewhere a person
+    // can find it rather than nowhere.
+    log.warn('this event needs a person and nothing will answer it', {
+      eventType: param.eventType,
+      reason: param.reason,
+    });
+    return { reason: param.reason, answered: false };
+  }
+
+  let decision: PersonsDecision | null = null;
+  setHandler(decided, (made: PersonsDecision) => {
+    decision = made;
+  });
+
+  await condition(() => decision !== null);
+  const made = decision as unknown as PersonsDecision;
+
+  await startOnce(made.target.workflowId, () =>
+    startChild(deliverEvent, {
+      workflowId: made.target.workflowId,
+      taskQueue: made.target.taskQueue,
+      args: [{ payload: made.payload, addressedTo: made.target.addressedTo }],
+      parentClosePolicy: ParentClosePolicy.ABANDON,
+    }),
+  );
+
+  return { reason: param.reason, answered: true };
 }

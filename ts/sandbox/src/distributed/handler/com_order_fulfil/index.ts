@@ -83,20 +83,20 @@ type ServiceRequest =
       domain: typeof ArvoDomain.FROM_EVENT_CONTRACT;
     };
 
-const whatToAsk = async (
+const requestsFor = async (
   catalogue: DistributedDependencies['catalogue'],
-  asked: {
+  order: {
     orderRef: string;
     category: string;
     width: number;
     depth: number;
   },
 ): Promise<ServiceRequest[]> => {
-  const items = await catalogue.itemsIn(asked.category);
+  const items = await catalogue.itemsIn(order.category);
 
   return [
     // the fan-out: one execution per item, all outstanding at once
-    ...items.slice(0, asked.width).map(
+    ...items.slice(0, order.width).map(
       (sku): ServiceRequest => ({
         type: 'com_inventory_check',
         data: { sku, wanted: 1 },
@@ -106,7 +106,7 @@ const whatToAsk = async (
     // the recursive branch
     {
       type: 'com_category_walk',
-      data: { category: asked.category, remaining: asked.depth },
+      data: { category: order.category, remaining: order.depth },
     },
 
     // work that fails and then does not
@@ -116,13 +116,13 @@ const whatToAsk = async (
     },
 
     // work that never succeeds, and must be given up on
-    { type: 'com_fraud_check', data: { orderRef: asked.orderRef } },
+    { type: 'com_fraud_check', data: { orderRef: order.orderRef } },
 
     // Work nothing here can do, which leaves the lattice — and says so,
     // by naming the contract its domain is read from.
     {
       type: 'com_manual_review',
-      data: { orderRef: asked.orderRef, because: 'every order in this run' },
+      data: { orderRef: order.orderRef, because: 'every order in this run' },
       domain: ArvoDomain.FROM_EVENT_CONTRACT,
     },
   ];
@@ -130,17 +130,17 @@ const whatToAsk = async (
 
 /** How many of the fan-out came back able to supply what was wanted. */
 const sufficientAmong = (
-  answers: Iterable<ArvoEvent | null>,
+  responses: Iterable<ArvoEvent | null>,
 ): { sufficient: number; checked: number } => {
   let sufficient = 0;
   let checked = 0;
 
-  for (const answer of answers) {
-    if (answer === null) continue;
-    if (answer.type !== 'evt_inventory_checked') continue;
+  for (const response of responses) {
+    if (response === null) continue;
+    if (response.type !== 'evt_inventory_checked') continue;
 
     checked += 1;
-    if ((answer.data as { sufficient: boolean }).sufficient) sufficient += 1;
+    if ((response.data as { sufficient: boolean }).sufficient) sufficient += 1;
   }
 
   return { sufficient, checked };
@@ -175,23 +175,23 @@ export const orderFulfilHandler = setupArvoEventHandler({
   .handler('1.0.0', {
     state: firstMemory,
     execute: async (ctx) => {
-      const asked = ctx.state.initEvent.data;
+      const requested = ctx.state.initEvent.data;
 
       if (ctx.entry === 'init') {
         const requests = await Promise.all(
-          (await whatToAsk(ctx.dependencies.catalogue, asked)).map((ask) =>
-            ctx.build(ask),
+          (await requestsFor(ctx.dependencies.catalogue, requested)).map(
+            (request) => ctx.build(request),
           ),
         );
         await ctx.setState({
           data: {
-            orderRef: asked.orderRef,
+            orderRef: requested.orderRef,
             sufficient: 0,
             asked: requests.length,
           },
         });
         ctx.telemetry.logger.info('asked everything', {
-          orderRef: asked.orderRef,
+          orderRef: requested.orderRef,
           requests: requests.length,
         });
         return requests;
@@ -205,23 +205,23 @@ export const orderFulfilHandler = setupArvoEventHandler({
       // given up on. The order still concludes: being told is an
       // answer, and an order that waits for work nobody will do is
       // worse than an order that reports it.
-      const abandoned = [...ctx.state.inFlightEventMap.values()].filter(
-        (answer) => answer?.type?.startsWith('handler_') === true,
+      const givenUpOn = [...ctx.state.inFlightEventMap.values()].filter(
+        (response) => response?.type?.startsWith('handler_') === true,
       ).length;
 
       await ctx.setState({
         data: {
-          orderRef: asked.orderRef,
+          orderRef: requested.orderRef,
           sufficient,
           asked: ctx.state.inFlightEventMap.size,
         },
       });
 
       ctx.telemetry.logger.info('fulfilled', {
-        orderRef: asked.orderRef,
+        orderRef: requested.orderRef,
         checked,
         sufficient,
-        abandoned,
+        givenUpOn,
       });
 
       // The completion and the audit write leave together. The audit
@@ -231,14 +231,14 @@ export const orderFulfilHandler = setupArvoEventHandler({
         ctx.build({
           type: 'evt_order_fulfilled',
           data: {
-            orderRef: asked.orderRef,
+            orderRef: requested.orderRef,
             checked,
-            approved: abandoned === 0 && sufficient === checked,
+            approved: givenUpOn === 0 && sufficient === checked,
           },
         }),
         ctx.build({
           type: 'com_audit_write',
-          data: { orderRef: asked.orderRef, outcome: 'fulfilled' },
+          data: { orderRef: requested.orderRef, outcome: 'fulfilled' },
         }),
       ]);
     },
@@ -246,20 +246,20 @@ export const orderFulfilHandler = setupArvoEventHandler({
   .handler('2.0.0', {
     state: secondMemory,
     execute: async (ctx) => {
-      const asked = ctx.state.initEvent.data;
+      const requested = ctx.state.initEvent.data;
 
       if (ctx.entry === 'init') {
         const requests = await Promise.all(
-          (await whatToAsk(ctx.dependencies.catalogue, asked)).map((ask) =>
-            ctx.build(ask),
+          (await requestsFor(ctx.dependencies.catalogue, requested)).map(
+            (request) => ctx.build(request),
           ),
         );
         await ctx.setState({
           data: {
-            orderRef: asked.orderRef,
+            orderRef: requested.orderRef,
             sufficient: 0,
             asked: requests.length,
-            expedited: asked.expedited,
+            expedited: requested.expedited,
           },
         });
         return requests;
@@ -271,10 +271,10 @@ export const orderFulfilHandler = setupArvoEventHandler({
 
       await ctx.setState({
         data: {
-          orderRef: asked.orderRef,
+          orderRef: requested.orderRef,
           sufficient,
           asked: ctx.state.inFlightEventMap.size,
-          expedited: asked.expedited,
+          expedited: requested.expedited,
         },
       });
 
@@ -282,14 +282,14 @@ export const orderFulfilHandler = setupArvoEventHandler({
         ctx.build({
           type: 'evt_order_dispatched',
           data: {
-            orderRef: asked.orderRef,
+            orderRef: requested.orderRef,
             checked,
-            tracking: `${asked.expedited ? 'EXP' : 'STD'}-${asked.orderRef}`,
+            tracking: `${requested.expedited ? 'EXP' : 'STD'}-${requested.orderRef}`,
           },
         }),
         ctx.build({
           type: 'com_audit_write',
-          data: { orderRef: asked.orderRef, outcome: 'dispatched' },
+          data: { orderRef: requested.orderRef, outcome: 'dispatched' },
         }),
       ]);
     },

@@ -60,7 +60,7 @@ export const needsAPerson = async (
     message: string | null;
   },
 ): Promise<boolean> => {
-  const written = await pool.query(
+  const inserted = await pool.query(
     `INSERT INTO needs_a_person
        (event_id, why, subject, execution_id, event_type, addressed_to,
         domain, message, payload)
@@ -78,7 +78,7 @@ export const needsAPerson = async (
       param.payload,
     ],
   );
-  return written.rowCount === 1;
+  return inserted.rowCount === 1;
 };
 
 /**
@@ -91,7 +91,7 @@ export const outstandingForAPerson = async (
   pool: Pool,
   why?: WhyItNeedsAPerson,
 ): Promise<readonly WaitingForAPerson[]> => {
-  const found = await pool.query<WaitingForAPerson>(
+  const outstanding = await pool.query<WaitingForAPerson>(
     `SELECT event_id     AS "eventId",
             why,
             subject,
@@ -107,7 +107,7 @@ export const outstandingForAPerson = async (
      ORDER BY noticed_at`,
     [why ?? null],
   );
-  return found.rows;
+  return outstanding.rows;
 };
 
 /** Marks one as dealt with, so it stops being outstanding. */

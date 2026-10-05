@@ -38,7 +38,7 @@ const WIRE = new ArvoEventSerializer({ type: 'arvoevent' });
  * and constrain. ADR-007 fixes every one of them, so a record missing
  * one was not written by a handler.
  */
-const addressing = z.object({
+const recordAddressing = z.object({
   executionId: z.string().min(1),
   casVersion: z.number().int().nonnegative(),
   subject: z.string().min(1),
@@ -75,6 +75,8 @@ export type CommitOutcome =
       readonly committed: true;
       readonly executionId: string;
       readonly casVersion: number;
+      /** The events, as written. Publishing these publishes what was committed. */
+      readonly events: readonly CommittedEvent[];
     }
   | { readonly committed: false; readonly because: CommitRefusal };
 
@@ -177,15 +179,15 @@ const OUTBOX_COLUMNS = `event_id      AS "eventId",
           domain,
           payload`;
 
-/** What an event looks like as a row, before it is one. */
-const rowFor = (
+/** The values one outbox row is written from. */
+const outboxRowFor = (
   event: ArvoEvent,
   payload: string,
-  addressed: z.infer<typeof addressing>,
+  addressingFields: z.infer<typeof recordAddressing>,
 ) => [
   event.id,
-  addressed.executionId,
-  addressed.casVersion,
+  addressingFields.executionId,
+  addressingFields.casVersion,
   event.to,
   event.subject,
   event.type,
@@ -194,8 +196,8 @@ const rowFor = (
 ];
 
 /** Which of the store's refusals an error is, or nothing if it is none of them. */
-const refusalFrom = (raised: unknown): CommitRefusal | null => {
-  const code = (raised as { code?: unknown }).code;
+const refusalFor = (failure: unknown): CommitRefusal | null => {
+  const code = (failure as { code?: unknown }).code;
   if (code === OUTCOMES.revisionTaken) return 'revision_taken';
   if (code === OUTCOMES.revisionOutOfSequence)
     return 'revision_out_of_sequence';
@@ -214,20 +216,20 @@ const DRAIN_BATCH = 64;
  */
 export const storeFor = (pool: Pool): RecordStore => ({
   readRecord: async (executionId) => {
-    const found = await pool.query<{ document: Record<string, unknown> }>(
+    const latest = await pool.query<{ document: Record<string, unknown> }>(
       `SELECT document FROM execution_record
        WHERE execution_id = $1
        ORDER BY cas_version DESC
        LIMIT 1`,
       [executionId],
     );
-    return found.rows[0]?.document ?? null;
+    return latest.rows[0]?.document ?? null;
   },
 
   commit: async ({ record, events }) => {
     // The columns, not the record: what is stored is the document the
     // handler wrote, whole and uninterpreted.
-    const addressed = addressing.parse(record);
+    const addressingFields = recordAddressing.parse(record);
 
     // Written before the transaction opens, so a transaction is never
     // held open across work that could fail for its own reasons.
@@ -247,12 +249,12 @@ export const storeFor = (pool: Pool): RecordStore => ({
            (execution_id, cas_version, subject, source, version, lifecycle, document)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
-          addressed.executionId,
-          addressed.casVersion,
-          addressed.subject,
-          addressed.source,
-          addressed.version,
-          addressed.lifecycle,
+          addressingFields.executionId,
+          addressingFields.casVersion,
+          addressingFields.subject,
+          addressingFields.source,
+          addressingFields.version,
+          addressingFields.lifecycle,
           record,
         ],
       );
@@ -266,19 +268,29 @@ export const storeFor = (pool: Pool): RecordStore => ({
            -- An event's id is globally unique, so the same event
            -- committed twice is a repeat rather than a second event.
            ON CONFLICT (event_id) DO NOTHING`,
-          rowFor(event, payload, addressed),
+          outboxRowFor(event, payload, addressingFields),
         );
       }
 
       await client.query('COMMIT');
       return {
         committed: true,
-        executionId: addressed.executionId,
-        casVersion: addressed.casVersion,
+        executionId: addressingFields.executionId,
+        casVersion: addressingFields.casVersion,
+        events: payloads.map(({ event, payload }) => ({
+          eventId: event.id,
+          executionId: addressingFields.executionId,
+          casVersion: addressingFields.casVersion,
+          subject: event.subject,
+          eventType: event.type,
+          addressedTo: event.to,
+          domain: event.domain,
+          payload,
+        })),
       };
     } catch (raised) {
       await client.query('ROLLBACK');
-      const refusal = refusalFrom(raised);
+      const refusal = refusalFor(raised);
       if (refusal === null) throw raised;
       return { committed: false, because: refusal };
     } finally {
@@ -287,7 +299,7 @@ export const storeFor = (pool: Pool): RecordStore => ({
   },
 
   committedFor: async (executionId, triggeringEventId) => {
-    const found = await pool.query<CommittedEvent>(
+    const committed = await pool.query<CommittedEvent>(
       `SELECT ${OUTBOX_COLUMNS}
        FROM outbox
        WHERE execution_id = $1
@@ -299,7 +311,7 @@ export const storeFor = (pool: Pool): RecordStore => ({
        ORDER BY committed_at`,
       [executionId, triggeringEventId],
     );
-    return found.rows;
+    return committed.rows;
   },
 
   markPublished: async (eventIds) => {
@@ -336,15 +348,15 @@ export const storeFor = (pool: Pool): RecordStore => ({
         [atMost, afterMs],
       );
 
-      for (const one of claimed.rows) {
+      for (const claimedEvent of claimed.rows) {
         // Sent inside the claim, so a publisher that dies mid-send
         // releases the row still unpublished and the event is offered
         // again. At-least-once, which is what the receiver's discard is
         // for.
-        await send(one);
+        await send(claimedEvent);
         await client.query(
           'UPDATE outbox SET published_at = now() WHERE event_id = $1',
-          [one.eventId],
+          [claimedEvent.eventId],
         );
         published += 1;
       }

@@ -37,12 +37,12 @@ export const paymentChargeHandler = setupArvoEventHandler({
       attempts: z.number(),
     }),
     execute: async (ctx) => {
-      const asked = ctx.state.initEvent.data;
+      const requested = ctx.state.initEvent.data;
 
-      if (ctx.attempt < asked.failuresBeforeSuccess) {
+      if (ctx.attempt < requested.failuresBeforeSuccess) {
         ctx.telemetry.logger.warn('the gateway did not answer', {
           attempt: ctx.attempt,
-          needed: asked.failuresBeforeSuccess,
+          needed: requested.failuresBeforeSuccess,
         });
 
         throw await ctx.fault({
@@ -52,7 +52,7 @@ export const paymentChargeHandler = setupArvoEventHandler({
         });
       }
 
-      const receipt = `receipt-${ctx.state.subject}-${asked.amount}`;
+      const receipt = `receipt-${ctx.state.subject}-${requested.amount}`;
       await ctx.setState({ data: { receipt, attempts: ctx.attempt } });
 
       ctx.telemetry.logger.info('charged', {

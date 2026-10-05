@@ -27,20 +27,24 @@ export const inventoryCheckHandler = setupArvoEventHandler({
       held: z.number(),
     }),
     execute: async (ctx) => {
-      const asked = ctx.state.initEvent.data;
-      const held = await ctx.dependencies.catalogue.heldOf(asked.sku);
+      const requested = ctx.state.initEvent.data;
+      const held = await ctx.dependencies.catalogue.heldOf(requested.sku);
 
-      await ctx.setState({ data: { sku: asked.sku, held } });
+      await ctx.setState({ data: { sku: requested.sku, held } });
 
-      ctx.telemetry.logger.info(`checked ${asked.sku}`, {
-        sku: asked.sku,
+      ctx.telemetry.logger.info(`checked ${requested.sku}`, {
+        sku: requested.sku,
         held,
-        wanted: asked.wanted,
+        wanted: requested.wanted,
       });
 
       return ctx.build({
         type: 'evt_inventory_checked',
-        data: { sku: asked.sku, held, sufficient: held >= asked.wanted },
+        data: {
+          sku: requested.sku,
+          held,
+          sufficient: held >= requested.wanted,
+        },
       });
     },
   })

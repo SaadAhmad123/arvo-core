@@ -1,20 +1,20 @@
 import {
-  ARVO_CATEGORY_INIT,
   type ArvoEvent,
   cloneArvoEvent,
   createArvoEventFactory,
-  deriveArvoExecutionId,
 } from 'arvo-core';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { inventoryCheckV1 } from '../../../src/distributed/handler/com_inventory_check/contract.js';
 import { inventoryCheckHandler } from '../../../src/distributed/handler/com_inventory_check/index.js';
-import { orderFulfilContract } from '../../../src/distributed/handler/com_order_fulfil/contract.js';
+import {
+  orderFulfilContract,
+  orderFulfilV1,
+} from '../../../src/distributed/handler/com_order_fulfil/contract.js';
 import { orderFulfilHandler } from '../../../src/distributed/handler/com_order_fulfil/index.js';
 import { catalogueFor } from '../../../src/distributed/shared/catalogue.js';
 import { readConfig } from '../../../src/distributed/shared/config.js';
 import {
-  type Destination,
   destinationFor,
   handlerFor,
 } from '../../../src/distributed/shared/routing.js';
@@ -22,16 +22,15 @@ import {
 /**
  * Where an event goes, decided from the event alone.
  *
- * Every event here is one a handler actually built, because the whole
- * claim being tested is that a mechanism needs nothing but the event —
- * and an event assembled by the test could be given whatever fields
- * would make that look true.
+ * Every event here is one a handler actually built, because the claim
+ * being tested is that a mechanism needs nothing but the event — and an
+ * event assembled by the test could be given whatever fields would make
+ * that look true.
  *
- * It needs the stack up and migrated: the orchestrator asks the
- * catalogue what to fan out over.
+ * Needs the stack up and migrated.
  */
 
-/** Deliberately narrow, so a run of this is quick and still fans out. */
+/** Narrow, so a run of this is quick and still fans out. */
 const NARROW = 2;
 
 describe('where an event goes', () => {
@@ -46,9 +45,7 @@ describe('where an event goes', () => {
     });
 
     const { catalogue, release } = await catalogueFor(pool);
-    const opening = createArvoEventFactory(
-      orderFulfilContract.versions['1.0.0'],
-    ).createInput({
+    const opening = createArvoEventFactory(orderFulfilV1).createInput({
       source: 'com.test.routing',
       subject: 'routing-1',
       to: orderFulfilContract.type,
@@ -81,49 +78,50 @@ describe('where an event goes', () => {
     await pool.end();
   });
 
-  /** Where one of the events the order asked for goes. */
-  const destinationOf = async (type: string): Promise<Destination> => {
+  /** One of the events the order asked for. */
+  const askedFor = (type: string): ArvoEvent => {
     const event = asked.find((one) => one.type === type);
-    expect(event).toBeDefined();
     if (event === undefined) throw new Error(`${type} was never asked for`);
-    return destinationFor(event);
+    return event;
   };
 
-  it('opens an execution for work addressed to a handler', async () => {
-    const where = await destinationOf('com_inventory_check');
-    expect(where.kind).toBe('opens');
-    if (where.kind !== 'opens') return;
-
-    const event = asked.find((one) => one.type === 'com_inventory_check');
-    expect(event?.category).toBe(ARVO_CATEGORY_INIT);
-    // derived from the event, so the same request arriving twice finds
-    // the execution the first one opened
-    expect(where.executionId).toBe(
-      await deriveArvoExecutionId(event as ArvoEvent),
-    );
+  it('goes to the handler its `to` names', () => {
+    const where = destinationFor(askedFor('com_inventory_check'));
+    expect(where.kind).toBe('handled');
+    if (where.kind !== 'handled') return;
     expect(where.handler.contracts.self.type).toBe('com_inventory_check');
-    // and the asking execution is carried along, which is what a
-    // mechanism needs to know who is waiting
-    expect(where.awaitingExecutionId).toBe(event?.executionid);
   });
 
-  it('sends a request to itself to an execution of itself', async () => {
-    const where = await destinationOf('com_category_walk');
-    expect(where.kind).toBe('opens');
-    if (where.kind !== 'opens') return;
+  it('goes to an execution of the same handler where a handler asked itself', () => {
+    const where = destinationFor(askedFor('com_category_walk'));
+    expect(where.kind).toBe('handled');
+    if (where.kind !== 'handled') return;
     expect(where.handler.contracts.self.type).toBe('com_category_walk');
   });
 
-  it('lets a domained event leave, whatever it was addressed to', async () => {
-    const where = await destinationOf('com_manual_review');
-    expect(where).toEqual({ kind: 'left', domain: expect.any(String) });
+  it('leaves the lattice where it carries a domain, whatever it is addressed to', () => {
+    expect(destinationFor(askedFor('com_manual_review'))).toEqual({
+      kind: 'left',
+      domain: expect.any(String),
+    });
   });
 
-  it('answers the execution that asked, which the reply names', async () => {
-    const request = asked.find((one) => one.type === 'com_inventory_check');
-    expect(request).toBeDefined();
-    if (request === undefined) return;
+  it('goes nowhere here where nothing implements what it is addressed to', () => {
+    const answer = createArvoEventFactory(inventoryCheckV1).createInput({
+      source: 'com.test.routing',
+      subject: 'routing-outside',
+      to: 'com.some.client',
+      data: { sku: 'sku-wide-0001', wanted: 1 },
+    });
 
+    expect(destinationFor(answer)).toEqual({
+      kind: 'outside',
+      addressedTo: 'com.some.client',
+    });
+  });
+
+  it('is decided by `to` and by nothing else about the event', async () => {
+    const request = askedFor('com_inventory_check');
     const { catalogue, release } = await catalogueFor(pool);
     const checked = await inventoryCheckHandler.execute({
       event: request,
@@ -131,73 +129,35 @@ describe('where an event goes', () => {
       attempt: 0,
       dependencies: {
         catalogue,
-        executionId: await deriveArvoExecutionId(request),
+        executionId: 'unused',
         attempt: 0,
         resumed: null,
       },
     });
     release();
-
     if (checked.kind !== 'produced') throw new Error('nothing was answered');
+
     const reply = checked.events[0];
-    expect(reply).toBeDefined();
-    if (reply === undefined) return;
+    if (reply === undefined) throw new Error('nothing was answered');
 
-    const where = await destinationFor(reply);
-    expect(where.kind).toBe('answers');
-    if (where.kind !== 'answers') return;
+    // A reply goes to the handler that asked, which is what its `to`
+    // names and is a different handler from the one that sent it.
+    const answering = destinationFor(reply);
+    expect(answering.kind).toBe('handled');
+    if (answering.kind !== 'handled') return;
+    expect(answering.handler.contracts.self.type).toBe('com_order_fulfil');
 
-    // the execution that asked, not the one that answered: a reply
-    // carries the asking execution so an answer can be routed without
-    // reading a record
-    expect(where.executionId).toBe(request.executionid);
-    expect(where.handler.contracts.self.type).toBe('com_order_fulfil');
-  });
-
-  it('hands a run its answer, which nothing here implements', async () => {
-    // What the client asked for, answered. Its `to` is whoever asked for
-    // the run, and that is not a handler — so a mechanism puts it where
-    // its caller can find it rather than treating it as work.
-    const factory = createArvoEventFactory(inventoryCheckV1);
-    const toNobody = factory.createInput({
-      source: 'com.test.routing',
-      subject: 'routing-outside',
-      to: 'com.some.client',
-      data: { sku: 'sku-wide-0001', wanted: 1 },
-    });
-
-    expect(await destinationFor(toNobody)).toEqual({
-      kind: 'outside',
-      addressedTo: 'com.some.client',
-    });
-  });
-
-  it('names the recipient by `to`, and by nothing else about the event', async () => {
-    const request = asked.find((one) => one.type === 'com_inventory_check');
-    expect(request).toBeDefined();
-    if (request === undefined) return;
-
-    // The same event, addressed elsewhere. Its type, its source, its
-    // dataschema and its category all still say inventory; only `to`
-    // says fraud, and `to` is what Arvo routes on.
-    const readdressed = cloneArvoEvent(request, { to: 'com_fraud_check' });
-    const where = await destinationFor(readdressed);
-
-    expect(where.kind).not.toBe('outside');
-    if (where.kind === 'left' || where.kind === 'outside') return;
-    expect(where.handler.contracts.self.type).toBe('com_fraud_check');
-
-    // And the role follows the type rather than the address: this is
-    // not the type fraud takes in, so it reads as an answer. Wrong,
-    // and refused at the gate rather than silently run — which is the
-    // division of labour working.
-    expect(where.kind).toBe('answers');
+    // The same request readdressed goes elsewhere, though its type,
+    // source, dataschema and category all still say inventory.
+    const readdressed = destinationFor(
+      cloneArvoEvent(request, { to: 'com_fraud_check' }),
+    );
+    expect(readdressed.kind).toBe('handled');
+    if (readdressed.kind !== 'handled') return;
+    expect(readdressed.handler.contracts.self.type).toBe('com_fraud_check');
   });
 
   it('finds no handler on anything an object has anyway', () => {
-    // `to` is whatever the event says. A lookup that walked the
-    // prototype would find something for every one of these, and what
-    // it found would not be a handler.
     for (const reached of ['__proto__', 'constructor', 'toString', null]) {
       expect(handlerFor(reached)).toBeNull();
     }

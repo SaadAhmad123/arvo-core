@@ -2,9 +2,10 @@ import {
   ApplicationFailure,
   activityInfo,
   heartbeat,
+  log,
 } from '@temporalio/activity';
+import type { Client } from '@temporalio/client';
 import {
-  ARVO_TERMINAL_LIFECYCLES,
   type ArvoEvent,
   ArvoEventSerializer,
   type ArvoHandlerFault,
@@ -12,355 +13,216 @@ import {
 } from 'arvo-core';
 import type { Pool } from 'pg';
 import { catalogueFor } from '../shared/catalogue.js';
-import { needsAPerson, whyFor } from '../shared/needs-a-person.js';
-import { type Destination, destinationFor } from '../shared/routing.js';
-import type { CommittedEvent, RecordStore } from '../shared/store.js';
+import { destinationFor } from '../shared/routing.js';
+import type {
+  CommitRequest,
+  CommittedEvent,
+  DeliveryTarget,
+  NeedsAPersonReason,
+} from './protocol.js';
 import { queueFor } from './queues.js';
+import { commitTo, recordFrom } from './record-store.js';
 
 /**
- * One execution of one handler, as a Temporal activity.
+ * One delivery: the handler an event is addressed to runs, and what it
+ * produced is prepared for commit.
  *
- * This is where ADR-006's five obligations are met for this mechanism,
- * and the whole of what Temporal is told about Arvo. Everything above it
- * — the workflow — knows only that something ran, what it produced, and
- * where each of those has to go; everything below it is the handler,
- * which knows nothing about Temporal at all.
- *
- * Four things here are the obligations rather than conveniences:
- *
- * The record is read on every invocation and never carried forward, so a
- * retry sees whatever the store says now. Temporal counts attempts from
- * one and Arvo from zero, and the translation happens once, here.
- *
- * What is published is read back out of the outbox rather than taken
- * from what the handler returned. On the ordinary path those are the
- * same bytes; on a repeat they are not, because the handler will not
- * produce them a second time — and the bytes that were committed are
- * the ones that have to arrive.
- *
- * A fault decides whether another attempt happens. Where one is in
- * prospect this throws so Temporal retries, with the delay the fault
- * asked for; where none is, it does not throw at all, which is the only
- * way to be sure a mechanism's own retry policy cannot overrule the
- * handler.
- *
- * And a redelivery is not a failure. ADR-008 names the case a mechanism
- * is most likely to get wrong — an opening event for an execution that
- * already exists — and treating it as a failure would publish a handler
- * error for work that had already succeeded.
+ * Everything Arvo-specific in this mechanism is here. The workflows above
+ * carry what this hands back and decide nothing about it; the handler
+ * below knows nothing of Temporal.
  */
 
-/** The format the outbox holds an event in, and the format an activity is given one in. */
+/** The format an event crosses a boundary in, and is stored in. */
 const WIRE = new ArvoEventSerializer({ type: 'arvoevent' });
 
-/** What a mechanism has to do with one event the store committed. */
-export type TemporalDispatch =
-  /** Start an execution, which is this workflow on this queue. */
-  | {
-      readonly kind: 'opens';
-      readonly executionId: string;
-      readonly taskQueue: string;
-      readonly contractType: string;
-      readonly eventId: string;
-      readonly subject: string;
-      readonly payload: string;
-    }
-  /** Hand it to an execution already under way, which is this workflow. */
-  | {
-      readonly kind: 'answers';
-      readonly executionId: string;
-      readonly eventId: string;
-      readonly payload: string;
-    };
-
-/** What one execution did, in the only terms the workflow needs. */
-export type ExecutionReport = {
+/** What one delivery did. */
+export type DeliveryReport = {
   /**
-   * What happened to the record.
-   *
-   * `committed` wrote one. `recovered` found this event had already been
-   * executed and is republishing what that execution committed.
-   * `discarded` found nothing to do at all. `abandoned` gave up, having
-   * committed the record and the event the fault carried.
+   * `produced` wrote a record and events for the record's own workflow
+   * to commit. `settled` found the work already done, or a writer ahead
+   * of it, and left what that execution committed to whoever committed
+   * it. `abandoned` gave up, with the record and event the fault
+   * carried.
    */
-  readonly outcome: 'committed' | 'recovered' | 'discarded' | 'abandoned';
-  /** Where the execution now rests, or `null` where nothing was committed. */
-  readonly lifecycle: string | null;
-  /** Whether it accepts nothing further, so the workflow may close. */
-  readonly finished: boolean;
-  /** Everything to send, and where. Read from the outbox, not from the handler. */
-  readonly dispatch: readonly TemporalDispatch[];
-  /** What a person reading a history would want to know. */
+  readonly outcome: 'produced' | 'settled' | 'abandoned';
+  /** The execution concerned, where anything said which. */
+  readonly executionId: string | null;
+  /** What to commit, or `null` where there is nothing to commit. */
+  readonly commit: CommitRequest | null;
+  /**
+   * Events with no record to be committed with.
+   *
+   * A fault that failed before a record could be read carries an event
+   * for the caller and no record, and the outbox's guarantee is that an
+   * event and a record are kept together — so there is nothing for this
+   * one to be kept together with, and it goes on its own.
+   */
+  readonly orphans: readonly CommittedEvent[];
+  /** Why, where the outcome needs a reason. */
   readonly note: string | null;
 };
 
-/** What the activities reach, built once per worker and handed down. */
+/** What the activities reach, built once per worker. */
 export type ActivityScope = {
+  /** Where the handlers' dependencies come from. Not where records live. */
   readonly pool: Pool;
-  readonly store: RecordStore;
+  /** How a record's own workflow is reached. */
+  readonly client: Client;
+  readonly taskQueue: string;
 };
 
-/** Whether a lifecycle accepts nothing further. */
-const restsForGood = (lifecycle: string | null): boolean =>
-  lifecycle !== null &&
-  (ARVO_TERMINAL_LIFECYCLES as readonly string[]).includes(lifecycle);
-
-/** Where a record says it rests, read off the document a handler wrote. */
-const lifecycleOf = (record: JSONObject): string | null => {
-  const rests = record.lifecycle;
-  return typeof rests === 'string' ? rests : null;
-};
+/** The execution a record belongs to, read off the document. */
+const executionOf = (record: JSONObject): string | null =>
+  typeof record.executionId === 'string' ? record.executionId : null;
 
 /**
- * Everything one execution committed, turned into what to do with it.
+ * Turns the events a handler produced into what to commit with them.
  *
- * Anything that left the lattice or was addressed outside is dealt with
- * here and left out of what comes back: the workflow is given only what
- * it has to do in Temporal, so a history reads as a list of deliveries
- * rather than a list of decisions.
+ * Routing happens here because workflow code cannot see a handler: it is
+ * bundled for an isolate, and the handlers are what decide the queue.
  */
-const dispatchFor = async (
-  scope: ActivityScope,
-  committed: readonly CommittedEvent[],
-): Promise<readonly TemporalDispatch[]> => {
-  const dispatch: TemporalDispatch[] = [];
-  const dealtWith: string[] = [];
+const committedEventsFor = async (
+  events: readonly ArvoEvent[],
+): Promise<readonly CommittedEvent[]> =>
+  Promise.all(
+    events.map(async (event): Promise<CommittedEvent> => {
+      const destination = destinationFor(event);
+      const payload = await WIRE.serialize(event);
 
-  for (const one of committed) {
-    const event = await WIRE.deserialize(one.payload);
-    const where: Destination = await destinationFor(event);
+      const target: DeliveryTarget | null =
+        destination.kind === 'handled'
+          ? {
+              // the event's own id: unique, and the same if delivered again
+              workflowId: event.id,
+              taskQueue: queueFor(destination.handler.contracts.self.type),
+              addressedTo: destination.handler.contracts.self.type,
+            }
+          : null;
 
-    const why = whyFor(where);
-    if (why !== null) {
-      await needsAPerson(scope.pool, {
-        event,
-        payload: one.payload,
-        why,
-        executionId: one.executionId,
-        message: null,
-      });
-      dealtWith.push(one.eventId);
-      continue;
-    }
+      const needsAPerson: NeedsAPersonReason | null =
+        destination.kind === 'left'
+          ? 'left_the_lattice'
+          : destination.kind === 'outside'
+            ? 'addressed_outside'
+            : null;
 
-    if (where.kind === 'opens') {
-      dispatch.push({
-        kind: 'opens',
-        executionId: where.executionId,
-        taskQueue: queueFor(where.handler.contracts.self.type),
-        contractType: where.handler.contracts.self.type,
-        eventId: one.eventId,
-        subject: one.subject,
-        payload: one.payload,
-      });
-      continue;
-    }
+      return {
+        eventId: event.id,
+        eventType: event.type,
+        addressedTo: event.to,
+        payload,
+        target,
+        needsAPerson,
+      };
+    }),
+  );
 
-    if (where.kind === 'answers') {
-      dispatch.push({
-        kind: 'answers',
-        executionId: where.executionId,
-        eventId: one.eventId,
-        payload: one.payload,
-      });
-    }
-  }
-
-  // Published, in the sense that matters: nothing is going to send them
-  // anywhere, and leaving them outstanding would have the recovery
-  // publisher offer them for ever.
-  await scope.store.markPublished(dealtWith);
-
-  return dispatch;
-};
-
-/** What to report where this event's execution had already happened. */
-const republish = async (
-  scope: ActivityScope,
-  executionId: string,
-  triggering: ArvoEvent,
-  note: string,
-): Promise<ExecutionReport> => {
-  const committed = await scope.store.committedFor(executionId, triggering.id);
-  const record = await scope.store.readRecord(executionId);
-  const lifecycle = record === null ? null : lifecycleOf(record as JSONObject);
-
-  return {
-    outcome: committed.length === 0 ? 'discarded' : 'recovered',
-    lifecycle,
-    finished: restsForGood(lifecycle),
-    dispatch: await dispatchFor(scope, committed),
-    note,
-  };
-};
+/** Nothing to do, because this delivery's work was already done. */
+const nothingToDo = (note: string): DeliveryReport => ({
+  outcome: 'settled',
+  executionId: null,
+  commit: null,
+  orphans: [],
+  note,
+});
 
 /**
- * What a fault that nothing will retry leaves behind.
+ * What a fault no further attempt will fix leaves behind.
  *
- * ADR-008 gives a mechanism exactly what the fault carries and nothing
- * of its own, and a fault carries one of three things: both halves of an
- * abandonment, the event alone, or neither. Each is acted on as it
- * stands.
+ * A fault carries both halves of an abandonment, the event alone, or
+ * neither, and each is acted on as it stands — nothing of the
+ * mechanism's own is added
+ * (`docs/adr/008-arvoeventhandler-faults-and-abandonment.md`).
  */
 const giveUp = async (
-  scope: ActivityScope,
   fault: ArvoHandlerFault,
-  triggering: ArvoEvent,
-  executionId: string,
-): Promise<ExecutionReport> => {
-  // Both halves. Committed together under the outbox like any other
-  // record, and composed by nothing here.
+  triggeringEvent: ArvoEvent,
+): Promise<DeliveryReport> => {
+  const note = `${fault.faultKind}: ${fault.message}`;
+
   if (fault.abandonmentState !== null) {
     const record = JSON.parse(fault.abandonmentState) as JSONObject;
-    const event =
+    const abandonmentEvent =
       fault.abandonmentEvent === null
         ? null
         : await WIRE.deserialize(fault.abandonmentEvent);
 
-    const outcome = await scope.store.commit({
-      record,
-      events: event === null ? [] : [event],
-    });
-
-    if (!outcome.committed) {
-      return republish(
-        scope,
-        executionId,
-        triggering,
-        `abandonment was already committed: ${outcome.because}`,
-      );
-    }
-
-    const committed = await scope.store.committedFor(
-      executionId,
-      triggering.id,
-    );
     return {
       outcome: 'abandoned',
-      lifecycle: lifecycleOf(record),
-      finished: restsForGood(lifecycleOf(record)),
-      dispatch: await dispatchFor(scope, committed),
-      note: `${fault.faultKind}: ${fault.message}`,
+      executionId: executionOf(record),
+      commit: {
+        record,
+        events: await committedEventsFor(
+          abandonmentEvent === null ? [] : [abandonmentEvent],
+        ),
+      },
+      orphans: [],
+      note,
     };
   }
 
-  // The event alone, there being no record to carry forward — a failure
-  // that happened before one could be read. There is then nothing for
-  // the event to be preserved *together with*, which is the whole of
-  // what the outbox is for, so it is sent directly and recorded where a
-  // person can see that it was.
-  if (fault.abandonmentEvent !== null) {
-    const event = await WIRE.deserialize(fault.abandonmentEvent);
-    const where = await destinationFor(event);
-
-    if (where.kind === 'answers') {
-      return {
-        outcome: 'abandoned',
-        lifecycle: null,
-        finished: true,
-        dispatch: [
-          {
-            kind: 'answers',
-            executionId: where.executionId,
-            eventId: event.id,
-            payload: fault.abandonmentEvent,
-          },
-        ],
-        note: `${fault.faultKind}: ${fault.message}`,
-      };
-    }
-
-    await needsAPerson(scope.pool, {
-      event,
-      payload: fault.abandonmentEvent,
-      why: 'nothing_will_retry',
-      executionId: fault.executionId,
-      message: `${fault.faultKind}: ${fault.message}`,
-    });
-
-    return {
-      outcome: 'abandoned',
-      lifecycle: null,
-      finished: true,
-      dispatch: [],
-      note: `${fault.faultKind}: ${fault.message}`,
-    };
-  }
-
-  // Neither. The execution answered its caller once already and rests
-  // where it rests, so there is nothing to commit and nobody to tell.
-  await needsAPerson(scope.pool, {
-    event: triggering,
-    payload: await WIRE.serialize(triggering),
-    why: 'nothing_will_retry',
-    executionId: fault.executionId,
-    message: `${fault.faultKind}: ${fault.message}`,
-  });
+  // The event alone, there being no record to carry forward. Nothing for
+  // it to be preserved together with, so it goes on its own — and where
+  // nothing can carry it, somewhere a person will find it.
+  const orphan =
+    fault.abandonmentEvent === null
+      ? triggeringEvent
+      : await WIRE.deserialize(fault.abandonmentEvent);
 
   return {
-    outcome: 'discarded',
-    lifecycle: null,
-    finished: true,
-    dispatch: [],
-    note: `${fault.faultKind}: ${fault.message}`,
+    outcome: 'abandoned',
+    executionId: fault.executionId,
+    commit: null,
+    orphans: await committedEventsFor([orphan]),
+    note,
   };
 };
 
 /**
  * Everything Temporal may run, bound to what this worker reaches.
  *
- * Built from the worker's own scope rather than from module state, so
- * two workers in one process do not share a pool and a worker shutting
- * down takes its own connections with it.
- *
- * @param scope - The store and the pool behind it.
+ * @param scope - The pool the handlers' dependencies come from, and the
+ * client a record's own workflow is reached through.
  */
 export const createActivities = (scope: ActivityScope) => ({
   /**
-   * Runs one execution and commits what it produced.
+   * Runs the handler one event is addressed to.
    *
-   * @param payload - The triggering event, in the event's own format.
-   * @returns What happened, and everything to send.
-   * @throws Where another attempt is in prospect, so Temporal makes one.
+   * @param payload - The event, in the event's own format.
+   * @returns What happened, and what is to be committed.
+   * @throws Where a fault says a further attempt is in prospect, so
+   * Temporal makes one.
    */
-  async runOneExecution(payload: string): Promise<ExecutionReport> {
-    const triggering = await WIRE.deserialize(payload);
-    const where = await destinationFor(triggering);
+  async runOneDelivery(payload: string): Promise<DeliveryReport> {
+    const triggeringEvent = await WIRE.deserialize(payload);
+    const destination = destinationFor(triggeringEvent);
 
-    if (where.kind !== 'opens' && where.kind !== 'answers') {
-      // A mechanism was handed something no handler implements. Not a
-      // failure of the work — a failure of whoever routed it — so no
-      // amount of retrying helps.
+    if (destination.kind !== 'handled') {
+      // Routed here wrongly rather than failed: no attempt fixes it.
       throw ApplicationFailure.nonRetryable(
-        `nothing here implements ${triggering.to}, so this execution cannot be run`,
+        `nothing here implements ${triggeringEvent.to}`,
         'arvo_unroutable',
       );
     }
 
-    const executionId = where.executionId;
-    const handler = where.handler;
-    // Temporal counts attempts from one and Arvo from zero. The
-    // translation happens here and nowhere else.
+    // Temporal counts attempts from one and Arvo from zero.
     const attempt = activityInfo().attempt - 1;
+    heartbeat({ eventId: triggeringEvent.id, attempt });
 
-    // Told once, so a long execution is cancellable and a worker that
-    // dies is noticed rather than waited out.
-    heartbeat({ executionId, attempt });
-
-    const giveBack: Array<() => void> = [];
+    const releaseEach: Array<() => void> = [];
     try {
-      const ran = await handler.tryExecute({
-        event: triggering,
-        // Read on every invocation, and never anything read earlier: a
-        // retry has to see what the store says now.
-        state: async ({ executionId: asked }) =>
-          (await scope.store.readRecord(asked)) as JSONObject | null,
+      const executed = await destination.handler.tryExecute({
+        event: triggeringEvent,
+        // The handler says which execution to read; nothing here works
+        // one out. Read on every invocation, so a retry sees what the
+        // store says now.
+        state: ({ executionId }) => recordFrom(scope.client, executionId),
         attempt,
-        // Resolved through the factory on this attempt and discarded
-        // with it, so nothing live survives a suspension.
+        // Resolved on this attempt and let go of with it, so nothing
+        // live survives a suspension.
         dependencies: async (param) => {
           const { catalogue, release } = await catalogueFor(scope.pool);
-          giveBack.push(release);
+          releaseEach.push(release);
           return {
             catalogue,
             executionId: param.executionId,
@@ -370,24 +232,17 @@ export const createActivities = (scope: ActivityScope) => ({
         },
       });
 
-      if (!ran.ok) {
-        const fault = ran.error;
+      if (!executed.ok) {
+        const fault = executed.error;
 
-        // The case ADR-008 names as the one a mechanism is most likely
-        // to get wrong: this execution already exists, which means this
-        // event has already been executed. A redelivery, not a failure.
+        // An opening event for an execution that already exists is a
+        // redelivery, not a failure. Treating it as one would publish a
+        // handler error for work that succeeded.
         if (fault.faultKind === 'record_unexpected') {
-          return republish(
-            scope,
-            executionId,
-            triggering,
-            'this event had already been executed',
-          );
+          return nothingToDo('this event had already been executed');
         }
 
         if (fault.retry !== null) {
-          // Thrown so Temporal makes the next attempt, after the delay
-          // the fault asked for rather than one a policy invented.
           throw ApplicationFailure.create({
             message: `${fault.faultKind}: ${fault.message}`,
             type: fault.faultKind,
@@ -397,81 +252,67 @@ export const createActivities = (scope: ActivityScope) => ({
           });
         }
 
-        return giveUp(scope, fault, triggering, executionId);
+        return giveUp(fault, triggeringEvent);
       }
 
-      if (ran.value.kind === 'discarded') {
-        return republish(scope, executionId, triggering, ran.value.reason);
+      if (executed.value.kind === 'discarded') {
+        return nothingToDo(executed.value.reason);
       }
 
-      const outcome = await scope.store.commit({
-        record: ran.value.state,
-        events: ran.value.events,
+      const record = executed.value.state;
+      log.info('ran', {
+        executionId: executionOf(record),
+        emitted: executed.value.events.length,
       });
 
-      if (!outcome.committed) {
-        // Another writer reached this revision first. Whatever it
-        // committed is what the world is told; this attempt publishes
-        // that rather than its own.
-        return republish(
-          scope,
-          executionId,
-          triggering,
-          `another writer committed first: ${outcome.because}`,
-        );
-      }
-
-      const committed = await scope.store.committedFor(
-        executionId,
-        triggering.id,
-      );
-      const lifecycle = lifecycleOf(ran.value.state);
-
       return {
-        outcome: 'committed',
-        lifecycle,
-        finished: restsForGood(lifecycle),
-        dispatch: await dispatchFor(scope, committed),
+        outcome: 'produced',
+        executionId: executionOf(record),
+        commit: {
+          record,
+          events: await committedEventsFor(executed.value.events),
+        },
+        orphans: [],
         note: null,
       };
     } finally {
-      for (const release of giveBack) release();
+      for (const release of releaseEach) release();
     }
   },
 
   /**
-   * Says that these events have been sent.
+   * Hands one record and the events beside it to the record's own
+   * workflow, which decides whether that revision may be written.
    *
-   * Called after the workflow has dispatched them, which is what makes
-   * the workflow the publisher and leaves the recovery drain with only
-   * what no workflow got round to.
+   * @param request - What to commit.
+   * @returns Why it was refused, or `null` where it was committed.
    */
-  async published(eventIds: readonly string[]): Promise<number> {
-    return scope.store.markPublished(eventIds);
-  },
+  async commitRecord(request: CommitRequest): Promise<string | null> {
+    const executionId = executionOf(request.record);
+    if (executionId === null) {
+      throw ApplicationFailure.nonRetryable(
+        'this record names no execution, so there is nowhere to commit it',
+        'arvo_unaddressable_record',
+      );
+    }
 
-  /**
-   * Leaves an event where a person can find it, having failed to send it.
-   *
-   * The workflow's own dispatch can fail in a way no retry fixes — an
-   * answer for an execution whose workflow is gone — and an answer that
-   * vanishes is worse than one that is filed.
-   */
-  async couldNotSend(param: {
-    payload: string;
-    executionId: string;
-    message: string;
-  }): Promise<void> {
-    const event = await WIRE.deserialize(param.payload);
-    await needsAPerson(scope.pool, {
-      event,
-      payload: param.payload,
-      why: 'nothing_will_retry',
-      executionId: param.executionId,
-      message: param.message,
+    const outcome = await commitTo(scope.client, {
+      executionId,
+      taskQueue: scope.taskQueue,
+      request,
     });
+
+    if (outcome.committed) return null;
+
+    // Losing is ordinary: the winner's record is what the world is told,
+    // and the winner sends its own events.
+    log.info('another writer committed first', {
+      executionId,
+      because: outcome.because,
+    });
+    return outcome.because;
   },
 });
 
-/** What the workflow sees of the activities, which is their signatures. */
+/** What the workflows see of the activities, which is their signatures. */
 export type Activities = ReturnType<typeof createActivities>;

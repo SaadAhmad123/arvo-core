@@ -26,16 +26,16 @@ export const fraudCheckHandler = setupArvoEventHandler({
   .handler('1.0.0', {
     state: z.object({ asked: z.string() }),
     execute: async (ctx) => {
-      const asked = ctx.state.initEvent.data;
-      await ctx.setState({ data: { asked: asked.orderRef } });
+      const requested = ctx.state.initEvent.data;
+      await ctx.setState({ data: { asked: requested.orderRef } });
 
       ctx.telemetry.logger.error('the model this needs is not deployed', {
-        orderRef: asked.orderRef,
+        orderRef: requested.orderRef,
       });
 
       throw await ctx.fault({
         faultKind: 'executor_raised',
-        message: `no fraud model is deployed for ${asked.orderRef}, so this cannot be judged now or later`,
+        message: `no fraud model is deployed for ${requested.orderRef}, so this cannot be judged now or later`,
         retryable: false,
       });
     },

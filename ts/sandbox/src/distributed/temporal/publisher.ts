@@ -1,26 +1,20 @@
 import type { Client } from '@temporalio/client';
 import { ArvoEventSerializer } from 'arvo-core';
 import type { RecordStore } from '../shared/store.js';
-import { hand } from './client.js';
+import { handToCluster } from './client.js';
 
 /**
  * The publisher of last resort.
  *
- * On the ordinary path a workflow sends what its own execution
- * committed, and a workflow's decisions survive the worker that made
- * them — so almost nothing reaches this. What does reach it is the one
- * case the outbox exists for: a record committed and the events beside
- * it never sent, because whatever was going to send them stopped
- * existing in between.
+ * On the ordinary path a workflow sends what its own delivery committed,
+ * and a workflow's decisions survive the worker that made them. What
+ * reaches this is the case the outbox exists for: a record committed and
+ * the events beside it never sent, because whatever was going to send
+ * them stopped existing in between.
  *
- * It sends the bytes that were committed. It does not ask an executor to
- * produce them again, which is why nothing in this exercise requires a
- * handler to be deterministic — and why an event arriving twice has to
- * be discarded by whoever receives it rather than prevented here.
- *
- * It waits before taking anything over. An event committed a moment ago
- * is probably about to be sent by the workflow that committed it, and a
- * publisher that raced it would double every event in the run.
+ * It sends the bytes that were committed rather than asking an executor
+ * to produce them again, which is why nothing here needs a handler to be
+ * deterministic — and why a receiver must discard a repeat.
  */
 
 /** The format an event was committed in, which is the format it is sent in. */
@@ -29,11 +23,10 @@ const WIRE = new ArvoEventSerializer({ type: 'arvoevent' });
 /** How long an event is left to whoever committed it, by default. */
 const GRACE_MS = 30_000;
 
-/** What one pass of the publisher did. */
+/** What one pass did. */
 export type Recovered = {
-  /** How many events it sent. */
   readonly sent: number;
-  /** What each of them did, for a test that wants to know which path it took. */
+  /** What each send did, for a caller that wants to know which path it took. */
   readonly outcomes: readonly string[];
 };
 
@@ -54,9 +47,11 @@ export const recoverOnce = async (param: {
   const outcomes: string[] = [];
 
   const sent = await param.store.drainOutbox(
-    async (one) => {
-      const event = await WIRE.deserialize(one.payload);
-      const handed = await hand(param.client, event);
+    async (committedEvent) => {
+      const handed = await handToCluster(
+        param.client,
+        await WIRE.deserialize(committedEvent.payload),
+      );
       outcomes.push(handed.kind);
     },
     { afterMs: param.graceMs ?? GRACE_MS, atMost: param.atMost },

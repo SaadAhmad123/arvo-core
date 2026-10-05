@@ -25,25 +25,25 @@ export const DEFAULT_PATIENCE = 30_000;
  * @param within - How long to keep attempting.
  */
 export const until = async <TFound>(
-  what: string,
-  look: () => Promise<TFound | null>,
+  description: string,
+  attemptOnce: () => Promise<TFound | null>,
   within = DEFAULT_PATIENCE,
 ): Promise<TFound> => {
-  const giveUpAt = Date.now() + within;
-  let last: unknown = null;
+  const giveUpAfter = Date.now() + within;
+  let lastFailure: unknown = null;
 
-  while (Date.now() < giveUpAt) {
+  while (Date.now() < giveUpAfter) {
     try {
-      const found = await look();
-      if (found !== null) return found;
-    } catch (raised) {
-      last = raised;
+      const answer = await attemptOnce();
+      if (answer !== null) return answer;
+    } catch (failure) {
+      lastFailure = failure;
     }
     await new Promise((settle) => setTimeout(settle, 500));
   }
 
   throw new Error(
-    `${what} never arrived within ${within}ms${last === null ? '' : `: ${String(last)}`}`,
+    `${description} never arrived within ${within}ms${lastFailure === null ? '' : `: ${String(lastFailure)}`}`,
   );
 };
 
@@ -58,10 +58,10 @@ export const traceFromTempo = async (
   until(
     `the trace ${traceId} in Tempo`,
     async () => {
-      const answered = await fetch(`${TEMPO}/api/traces/${traceId}`);
-      if (!answered.ok) return null;
-      const held = (await answered.json()) as TempoTrace;
-      return (held.batches?.length ?? 0) > 0 ? held : null;
+      const response = await fetch(`${TEMPO}/api/traces/${traceId}`);
+      if (!response.ok) return null;
+      const trace = (await response.json()) as TempoTrace;
+      return (trace.batches?.length ?? 0) > 0 ? trace : null;
     },
     within,
   );
@@ -74,13 +74,15 @@ export const seriesFromPrometheus = async (
   until(
     `the series ${query} in Prometheus`,
     async () => {
-      const answered = await fetch(
+      const response = await fetch(
         `${PROMETHEUS}/api/v1/query?query=${encodeURIComponent(query)}`,
       );
-      if (!answered.ok) return null;
-      const held = (await answered.json()) as { data?: { result?: unknown[] } };
-      const found = held.data?.result ?? [];
-      return found.length > 0 ? found : null;
+      if (!response.ok) return null;
+      const answer = (await response.json()) as {
+        data?: { result?: unknown[] };
+      };
+      const series = answer.data?.result ?? [];
+      return series.length > 0 ? series : null;
     },
     within,
   );
@@ -97,13 +99,15 @@ export const streamsFromLoki = async (
     `the lines ${query} in Loki`,
     async () => {
       const since = Date.now() - LOG_WINDOW_MINUTES * 60 * 1000;
-      const answered = await fetch(
+      const response = await fetch(
         `${LOKI}/loki/api/v1/query_range?query=${encodeURIComponent(query)}&start=${since}000000`,
       );
-      if (!answered.ok) return null;
-      const held = (await answered.json()) as { data?: { result?: unknown[] } };
-      const found = held.data?.result ?? [];
-      return found.length > 0 ? found : null;
+      if (!response.ok) return null;
+      const answer = (await response.json()) as {
+        data?: { result?: unknown[] };
+      };
+      const streams = answer.data?.result ?? [];
+      return streams.length > 0 ? streams : null;
     },
     within,
   );

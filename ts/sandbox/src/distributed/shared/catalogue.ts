@@ -30,18 +30,18 @@ export const catalogueFor = async (
 
   const catalogue: Catalogue = {
     itemsIn: async (category) => {
-      const found = await client.query<CatalogueRow>(
+      const inCategory = await client.query<CatalogueRow>(
         'SELECT sku, held FROM catalogue WHERE category = $1 ORDER BY sku',
         [category],
       );
-      return found.rows.map((row) => row.sku);
+      return inCategory.rows.map((row) => row.sku);
     },
 
     childrenOf: async (category) => {
       // A category's children are the categories one level under it,
       // which this schema encodes as a prefix. Enough to make a tree
       // without a second table to keep honest.
-      const found = await client.query<{ category: string }>(
+      const children = await client.query<{ category: string }>(
         `SELECT DISTINCT category FROM catalogue
          WHERE category LIKE $1 AND category <> $2
            AND length(category) - length(replace(category, '/', '')) =
@@ -49,15 +49,15 @@ export const catalogueFor = async (
          ORDER BY category`,
         [`${category}/%`, category],
       );
-      return found.rows.map((row) => row.category);
+      return children.rows.map((row) => row.category);
     },
 
     heldOf: async (sku) => {
-      const found = await client.query<{ held: number }>(
+      const stock = await client.query<{ held: number }>(
         'SELECT held FROM catalogue WHERE sku = $1',
         [sku],
       );
-      return found.rows[0]?.held ?? 0;
+      return stock.rows[0]?.held ?? 0;
     },
   };
 

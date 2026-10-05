@@ -34,7 +34,7 @@ const LEDGER = 'schema_migrations';
 export const migrateRecords = async (): Promise<readonly string[]> => {
   const config = readConfig('arvo-migrate');
 
-  const ran = await runner({
+  const applied = await runner({
     databaseUrl: config.recordsUrl,
     dir: MIGRATIONS,
     direction: 'up',
@@ -48,7 +48,7 @@ export const migrateRecords = async (): Promise<readonly string[]> => {
     log: () => {},
   });
 
-  return ran.map((one) => one.name);
+  return applied.map((migration) => migration.name);
 };
 
 /** Whether this file is what Node was asked to run, rather than imported. */
@@ -58,12 +58,12 @@ const runDirectly =
 
 if (runDirectly) {
   migrateRecords()
-    .then((ran) => {
-      for (const one of ran) console.log(`  ran ${one}`);
+    .then((applied) => {
+      for (const name of applied) console.log(`  ran ${name}`);
       console.log(
-        ran.length === 0
+        applied.length === 0
           ? '  the store is already at this schema.'
-          : `  the store is at this schema, ${ran.length} migration(s) later.`,
+          : `  the store is at this schema, ${applied.length} migration(s) later.`,
       );
     })
     .catch((raised: unknown) => {

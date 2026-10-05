@@ -27,30 +27,30 @@ const FORBIDDEN = [
 ];
 
 /** Every TypeScript file under the handlers, at any depth. */
-const filesUnder = (where: string): string[] => {
-  const found: string[] = [];
-  for (const entry of readdirSync(where)) {
-    const path = join(where, entry);
+const filesUnder = (directory: string): string[] => {
+  const files: string[] = [];
+  for (const entry of readdirSync(directory)) {
+    const path = join(directory, entry);
     if (statSync(path).isDirectory()) {
-      found.push(...filesUnder(path));
+      files.push(...filesUnder(path));
       continue;
     }
-    if (path.endsWith('.ts')) found.push(path);
+    if (path.endsWith('.ts')) files.push(path);
   }
-  return found;
+  return files;
 };
 
 /** What one file imports, by the specifier it names. */
 const importsOf = (file: string): string[] => {
   const source = readFileSync(file, 'utf8');
-  const found: string[] = [];
-  const pattern = /from\s+['"]([^'"]+)['"]/g;
-  let match = pattern.exec(source);
+  const specifiers: string[] = [];
+  const fromClause = /from\s+['"]([^'"]+)['"]/g;
+  let match = fromClause.exec(source);
   while (match !== null) {
-    if (match[1] !== undefined) found.push(match[1]);
-    match = pattern.exec(source);
+    if (match[1] !== undefined) specifiers.push(match[1]);
+    match = fromClause.exec(source);
   }
-  return found;
+  return specifiers;
 };
 
 describe('the handlers', () => {
@@ -63,13 +63,13 @@ describe('the handlers', () => {
   it.each(files.map((file) => [file.replace(HANDLERS, ''), file]))(
     '%s knows nothing of any mechanism',
     (_named, file) => {
-      const reaching = importsOf(file).filter((specifier) =>
+      const mechanisms = importsOf(file).filter((specifier) =>
         FORBIDDEN.some(
           (forbidden) =>
             specifier === forbidden || specifier.startsWith(forbidden),
         ),
       );
-      expect(reaching).toEqual([]);
+      expect(mechanisms).toEqual([]);
     },
   );
 });
