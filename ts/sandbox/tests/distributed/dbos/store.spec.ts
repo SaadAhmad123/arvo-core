@@ -14,15 +14,14 @@ import {
   expect,
   it,
 } from 'vitest';
-import { inventoryCheckV1 } from '../../../src/distributed/handler/com_inventory_check/contract.js';
-import { inventoryCheckHandler } from '../../../src/distributed/handler/com_inventory_check/index.js';
-import { catalogueFor } from '../../../src/distributed/shared/catalogue.js';
-import { readConfig } from '../../../src/distributed/shared/config.js';
 import {
   type CommittedEvent,
   type RecordStore,
   storeFor,
-} from '../../../src/distributed/shared/store.js';
+} from '../../../src/distributed/dbos/store.js';
+import { inventoryCheckV1 } from '../../../src/distributed/handler/com_inventory_check/contract.js';
+import { inventoryCheckHandler } from '../../../src/distributed/handler/com_inventory_check/index.js';
+import { readConfig } from '../../../src/distributed/shared/config.js';
 
 /**
  * Obligation 1 and obligation 5, against the database that is supposed
@@ -46,9 +45,6 @@ const KNOWN_SKU = 'sku-wide-0001';
 describe('the record store', () => {
   let pool: Pool;
   let store: RecordStore;
-  /** Connections this test opened as a dependency, given back after it. */
-  let opened: Array<() => void>;
-
   beforeAll(() => {
     const config = readConfig('arvo-store-spec');
     pool = new Pool({
@@ -63,14 +59,9 @@ describe('the record store', () => {
   });
 
   beforeEach(async () => {
-    opened = [];
     // Truncated rather than deleted: a record may not be deleted, which
     // is the point of one of these tests.
     await pool.query('TRUNCATE outbox, execution_record');
-  });
-
-  afterEach(() => {
-    for (const release of opened) release();
   });
 
   /** One check, asked of the handler the way a mechanism would ask. */
@@ -89,28 +80,28 @@ describe('the record store', () => {
       state: async ({ executionId }) =>
         (await store.readRecord(executionId)) as JSONObject | null,
       attempt: 0,
-      dependencies: async ({ executionId, attempt, state }) => {
-        const { catalogue, release } = await catalogueFor(pool);
-        opened.push(release);
-        return { catalogue, executionId, attempt, resumed: state };
-      },
+      dependencies: ({ executionId, attempt, state }) => ({
+        executionId,
+        attempt,
+        resumed: state,
+      }),
     });
 
   /** What one execution produced, for a test that then commits it. */
   const produced = async (subject: string) => {
-    const ran = await runOnce(anItemCheck(subject));
-    expect(ran.kind).toBe('produced');
-    if (ran.kind !== 'produced') throw new Error('nothing was produced');
-    return ran;
+    const executed = await runOnce(anItemCheck(subject));
+    expect(executed.kind).toBe('produced');
+    if (executed.kind !== 'produced') throw new Error('nothing was produced');
+    return executed;
   };
 
   // --------------------------------------------------------- obligation 1
 
   it('commits a record and the events produced with it, together', async () => {
-    const ran = await produced('store-together');
+    const executed = await produced('store-together');
     const outcome = await store.commit({
-      record: ran.state,
-      events: ran.events,
+      record: executed.state,
+      events: executed.events,
     });
 
     expect(outcome.committed).toBe(true);
@@ -120,7 +111,7 @@ describe('the record store', () => {
     expect(records.rows[0].cas_version).toBe('0');
 
     const outbox = await pool.query('SELECT * FROM outbox');
-    expect(outbox.rowCount).toBe(ran.events.length);
+    expect(outbox.rowCount).toBe(executed.events.length);
     // and every one of them traces back to the record it was committed
     // with, which the foreign key makes impossible to break
     for (const row of outbox.rows) {
@@ -131,13 +122,16 @@ describe('the record store', () => {
   });
 
   it('publishes nothing where the commit does not succeed', async () => {
-    const ran = await produced('store-no-commit-no-event');
-    await store.commit({ record: ran.state, events: ran.events });
+    const executed = await produced('store-no-commit-no-event');
+    await store.commit({ record: executed.state, events: executed.events });
     const after = await pool.query('SELECT count(*) FROM outbox');
 
     // the same execution committed again: the store refuses it, and the
     // events it carried must not appear a second time
-    const again = await store.commit({ record: ran.state, events: ran.events });
+    const again = await store.commit({
+      record: executed.state,
+      events: executed.events,
+    });
     expect(again).toEqual({ committed: false, because: 'revision_taken' });
 
     const unchanged = await pool.query('SELECT count(*) FROM outbox');
@@ -145,8 +139,8 @@ describe('the record store', () => {
   });
 
   it('holds an event only alongside a record that exists', async () => {
-    const ran = await produced('store-no-orphans');
-    await store.commit({ record: ran.state, events: ran.events });
+    const executed = await produced('store-no-orphans');
+    await store.commit({ record: executed.state, events: executed.events });
 
     const orphans = await pool.query(
       `SELECT o.event_id FROM outbox o
@@ -160,13 +154,13 @@ describe('the record store', () => {
   // --------------------------------------------------------- obligation 5
 
   it('creates a record at revision zero only where none exists', async () => {
-    const ran = await produced('store-create-if-absent');
+    const executed = await produced('store-create-if-absent');
 
     // two writers, one record: whichever is second is told so rather
     // than overwriting what the first wrote
     const [first, second] = await Promise.all([
-      store.commit({ record: ran.state, events: ran.events }),
-      store.commit({ record: ran.state, events: ran.events }),
+      store.commit({ record: executed.state, events: executed.events }),
+      store.commit({ record: executed.state, events: executed.events }),
     ]);
 
     const committed = [first, second].filter((one) => one.committed);
@@ -177,13 +171,13 @@ describe('the record store', () => {
   });
 
   it('refuses a revision that does not follow the one before it', async () => {
-    const ran = await produced('store-out-of-sequence');
-    await store.commit({ record: ran.state, events: ran.events });
+    const executed = await produced('store-out-of-sequence');
+    await store.commit({ record: executed.state, events: executed.events });
 
     // a writer that read nothing and wrote far ahead. Refused by the
     // database, not by anything that remembered to check.
     const ahead = await store.commit({
-      record: { ...ran.state, casVersion: 7 },
+      record: { ...executed.state, casVersion: 7 },
       events: [],
     });
     expect(ahead).toEqual({
@@ -193,8 +187,8 @@ describe('the record store', () => {
   });
 
   it('refuses to alter a revision already written', async () => {
-    const ran = await produced('store-written-once');
-    await store.commit({ record: ran.state, events: ran.events });
+    const executed = await produced('store-written-once');
+    await store.commit({ record: executed.state, events: executed.events });
 
     await expect(
       pool.query("UPDATE execution_record SET lifecycle = 'cancelled'"),
@@ -232,23 +226,25 @@ describe('the record store', () => {
   // ----------------------------------------------------------- the outbox
 
   it('publishes what was committed, byte for byte', async () => {
-    const ran = await produced('store-bytes');
-    await store.commit({ record: ran.state, events: ran.events });
+    const executed = await produced('store-bytes');
+    await store.commit({ record: executed.state, events: executed.events });
 
     const sent: CommittedEvent[] = [];
-    const published = await store.drainOutbox(async (one) => {
-      sent.push(one);
+    const published = await store.drainOutbox(async (committedEvent) => {
+      sent.push(committedEvent);
     });
 
-    expect(published).toBe(ran.events.length);
-    for (const one of sent) {
-      const was = ran.events.find((event) => event.id === one.eventId);
-      expect(was).toBeDefined();
-      if (was === undefined) continue;
+    expect(published).toBe(executed.events.length);
+    for (const committedEvent of sent) {
+      const asEmitted = executed.events.find(
+        (event) => event.id === committedEvent.eventId,
+      );
+      expect(asEmitted).toBeDefined();
+      if (asEmitted === undefined) continue;
       // not merely equivalent: the same string, so recovery sends what
       // was committed rather than running the execution again to
       // produce something equivalent
-      expect(one.payload).toBe(await WIRE.serialize(was));
+      expect(committedEvent.payload).toBe(await WIRE.serialize(asEmitted));
     }
 
     // and nothing is offered twice
@@ -256,8 +252,8 @@ describe('the record store', () => {
   });
 
   it('offers an event again where sending it failed', async () => {
-    const ran = await produced('store-send-failed');
-    await store.commit({ record: ran.state, events: ran.events });
+    const executed = await produced('store-send-failed');
+    await store.commit({ record: executed.state, events: executed.events });
 
     await expect(
       store.drainOutbox(async () => {
@@ -268,22 +264,24 @@ describe('the record store', () => {
     const still = await pool.query(
       'SELECT count(*) FROM outbox WHERE published_at IS NULL',
     );
-    expect(still.rows[0].count).toBe(String(ran.events.length));
+    expect(still.rows[0].count).toBe(String(executed.events.length));
 
     // and the next drain sends it, which is why a receiver has to
     // discard a repeat rather than process it twice
-    expect(await store.drainOutbox(async () => {})).toBe(ran.events.length);
+    expect(await store.drainOutbox(async () => {})).toBe(
+      executed.events.length,
+    );
   });
 
   it('divides the work between publishers rather than repeating it', async () => {
     for (const which of [1, 2, 3, 4, 5, 6]) {
-      const ran = await produced(`store-divided-${which}`);
-      await store.commit({ record: ran.state, events: ran.events });
+      const executed = await produced(`store-divided-${which}`);
+      await store.commit({ record: executed.state, events: executed.events });
     }
 
     const sent: string[] = [];
-    const collect = async (one: CommittedEvent): Promise<void> => {
-      sent.push(one.eventId);
+    const collect = async (committedEvent: CommittedEvent): Promise<void> => {
+      sent.push(committedEvent.eventId);
     };
 
     // two publishers draining at once. Each claim skips what the other

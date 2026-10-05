@@ -1,5 +1,6 @@
 import { setupArvoEventHandler } from 'arvo-core';
 import { z } from 'zod';
+import { childrenOf } from '../catalogue.js';
 import type { DistributedDependencies } from '../dependencies.js';
 import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { categoryWalkContract, categoryWalkV1 } from './contract.js';
@@ -58,9 +59,7 @@ export const categoryWalkHandler = setupArvoEventHandler({
       // ------------------------------------------------- on the way down
       if (ctx.entry === 'init') {
         const children =
-          requested.remaining > 0
-            ? await ctx.dependencies.catalogue.childrenOf(requested.category)
-            : [];
+          requested.remaining > 0 ? childrenOf(requested.category) : [];
 
         // A branch that may not descend answers for itself rather than
         // asking and being refused: the protocol offers this precisely

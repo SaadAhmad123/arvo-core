@@ -3,8 +3,7 @@ import {
   cloneArvoEvent,
   createArvoEventFactory,
 } from 'arvo-core';
-import { Pool } from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { inventoryCheckV1 } from '../../../src/distributed/handler/com_inventory_check/contract.js';
 import { inventoryCheckHandler } from '../../../src/distributed/handler/com_inventory_check/index.js';
 import {
@@ -12,8 +11,6 @@ import {
   orderFulfilV1,
 } from '../../../src/distributed/handler/com_order_fulfil/contract.js';
 import { orderFulfilHandler } from '../../../src/distributed/handler/com_order_fulfil/index.js';
-import { catalogueFor } from '../../../src/distributed/shared/catalogue.js';
-import { readConfig } from '../../../src/distributed/shared/config.js';
 import {
   destinationFor,
   handlerFor,
@@ -34,17 +31,9 @@ import {
 const NARROW = 2;
 
 describe('where an event goes', () => {
-  let pool: Pool;
   let asked: readonly ArvoEvent[];
 
   beforeAll(async () => {
-    const config = readConfig('arvo-routing-spec');
-    pool = new Pool({
-      connectionString: config.recordsUrl,
-      max: config.recordsPoolSize,
-    });
-
-    const { catalogue, release } = await catalogueFor(pool);
     const opening = createArvoEventFactory(orderFulfilV1).createInput({
       source: 'com.test.routing',
       subject: 'routing-1',
@@ -61,21 +50,11 @@ describe('where an event goes', () => {
       event: opening,
       state: () => null,
       attempt: 0,
-      dependencies: {
-        catalogue,
-        executionId: 'unused',
-        attempt: 0,
-        resumed: null,
-      },
+      dependencies: { executionId: 'unused', attempt: 0, resumed: null },
     });
-    release();
 
     if (ran.kind !== 'produced') throw new Error('the order asked for nothing');
     asked = ran.events;
-  });
-
-  afterAll(async () => {
-    await pool.end();
   });
 
   /** One of the events the order asked for. */
@@ -122,19 +101,12 @@ describe('where an event goes', () => {
 
   it('is decided by `to` and by nothing else about the event', async () => {
     const request = askedFor('com_inventory_check');
-    const { catalogue, release } = await catalogueFor(pool);
     const checked = await inventoryCheckHandler.execute({
       event: request,
       state: () => null,
       attempt: 0,
-      dependencies: {
-        catalogue,
-        executionId: 'unused',
-        attempt: 0,
-        resumed: null,
-      },
+      dependencies: { executionId: 'unused', attempt: 0, resumed: null },
     });
-    release();
     if (checked.kind !== 'produced') throw new Error('nothing was answered');
 
     const reply = checked.events[0];

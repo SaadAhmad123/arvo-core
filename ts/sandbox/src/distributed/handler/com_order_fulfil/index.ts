@@ -1,13 +1,13 @@
 import type { ArvoEvent } from 'arvo-core';
 import { ArvoDomain, setupArvoEventHandler } from 'arvo-core';
 import { z } from 'zod';
+import { itemsFor } from '../catalogue.js';
 import { auditWriteV1 } from '../com_audit_write/contract.js';
 import { categoryWalkV1 } from '../com_category_walk/contract.js';
 import { fraudCheckV1 } from '../com_fraud_check/contract.js';
 import { inventoryCheckV1 } from '../com_inventory_check/contract.js';
 import { manualReviewV1 } from '../com_manual_review/contract.js';
 import { paymentChargeV1 } from '../com_payment_charge/contract.js';
-import type { DistributedDependencies } from '../dependencies.js';
 import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { orderFulfilContract } from './contract.js';
 
@@ -83,20 +83,15 @@ type ServiceRequest =
       domain: typeof ArvoDomain.FROM_EVENT_CONTRACT;
     };
 
-const requestsFor = async (
-  catalogue: DistributedDependencies['catalogue'],
-  order: {
-    orderRef: string;
-    category: string;
-    width: number;
-    depth: number;
-  },
-): Promise<ServiceRequest[]> => {
-  const items = await catalogue.itemsIn(order.category);
-
+const requestsFor = (order: {
+  orderRef: string;
+  category: string;
+  width: number;
+  depth: number;
+}): ServiceRequest[] => {
   return [
     // the fan-out: one execution per item, all outstanding at once
-    ...items.slice(0, order.width).map(
+    ...itemsFor(order.orderRef, order.width).map(
       (sku): ServiceRequest => ({
         type: 'com_inventory_check',
         data: { sku, wanted: 1 },
@@ -158,7 +153,6 @@ export const orderFulfilHandler = setupArvoEventHandler({
       audit: auditWriteV1,
     },
   },
-  types: {} as { dependencies: DistributedDependencies },
   telemetry: HANDLER_TELEMETRY,
   options: {
     // A wide execution rebuilds its whole collection on every answer,
@@ -179,9 +173,7 @@ export const orderFulfilHandler = setupArvoEventHandler({
 
       if (ctx.entry === 'init') {
         const requests = await Promise.all(
-          (await requestsFor(ctx.dependencies.catalogue, requested)).map(
-            (request) => ctx.build(request),
-          ),
+          requestsFor(requested).map((request) => ctx.build(request)),
         );
         await ctx.setState({
           data: {
@@ -250,9 +242,7 @@ export const orderFulfilHandler = setupArvoEventHandler({
 
       if (ctx.entry === 'init') {
         const requests = await Promise.all(
-          (await requestsFor(ctx.dependencies.catalogue, requested)).map(
-            (request) => ctx.build(request),
-          ),
+          requestsFor(requested).map((request) => ctx.build(request)),
         );
         await ctx.setState({
           data: {

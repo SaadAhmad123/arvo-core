@@ -1,5 +1,6 @@
 import { setupArvoEventHandler } from 'arvo-core';
 import { z } from 'zod';
+import { heldOf } from '../catalogue.js';
 import type { DistributedDependencies } from '../dependencies.js';
 import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { inventoryCheckContract } from './contract.js';
@@ -28,7 +29,7 @@ export const inventoryCheckHandler = setupArvoEventHandler({
     }),
     execute: async (ctx) => {
       const requested = ctx.state.initEvent.data;
-      const held = await ctx.dependencies.catalogue.heldOf(requested.sku);
+      const held = heldOf(requested.sku);
 
       await ctx.setState({ data: { sku: requested.sku, held } });
 

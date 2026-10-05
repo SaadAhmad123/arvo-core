@@ -1,6 +1,5 @@
 import type { ArvoEvent } from 'arvo-core';
 import type { Pool } from 'pg';
-import type { Destination } from './routing.js';
 
 /**
  * Where an event goes when nothing running will carry it further.
@@ -33,13 +32,6 @@ export type WaitingForAPerson = {
   readonly domain: string | null;
   readonly message: string | null;
   readonly payload: string;
-};
-
-/** Which of the three a destination is, where it is one of them. */
-export const whyFor = (destination: Destination): WhyItNeedsAPerson | null => {
-  if (destination.kind === 'left') return 'left_the_lattice';
-  if (destination.kind === 'outside') return 'addressed_outside';
-  return null;
 };
 
 /**

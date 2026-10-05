@@ -166,20 +166,3 @@ CREATE INDEX outbox_unpublished
 -- Everything one execution emitted, for comparing a replay against the run.
 CREATE INDEX outbox_by_execution
   ON outbox (execution_id, cas_version);
-
--- ------------------------------------------------- what the handlers read
-
--- Dependencies a handler resolves through its factory, so that what an
--- executor is given comes from somewhere real rather than from a literal.
--- What goes in it is the next migration's business; the shape is this
--- one's, because a seed that invents its own columns is a seed that
--- stops matching the store.
-
-CREATE TABLE catalogue (
-  sku            TEXT        NOT NULL PRIMARY KEY,
-  category       TEXT        NOT NULL,
-  held           INTEGER     NOT NULL DEFAULT 0,
-  CONSTRAINT catalogue_held_non_negative CHECK (held >= 0)
-);
-
-CREATE INDEX catalogue_by_category ON catalogue (category, sku);
