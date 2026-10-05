@@ -38,7 +38,12 @@ export type {
 } from './ArvoEvent/types.js';
 export { ArvoExecutionContext } from './ArvoEventHandler/context/index.js';
 export { ArvoExecutionContextTelemetry } from './ArvoEventHandler/context/telemetry/index.js';
-export type { ArvoLogger } from './ArvoEventHandler/context/telemetry/types.js';
+export type {
+  ArvoLogger,
+  ArvoLogRecord,
+  ArvoLogSeverity,
+} from './ArvoEventHandler/context/telemetry/types.js';
+export { ARVO_LOG_SEVERITY } from './ArvoEventHandler/context/telemetry/types.js';
 export type {
   ArvoContextState,
   ArvoDataWrite,

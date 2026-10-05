@@ -1,5 +1,5 @@
 import { SpanStatusCode } from '@opentelemetry/api';
-import { SeverityNumber } from '@opentelemetry/api-logs';
+import { ARVO_LOG_SEVERITY } from 'arvo-core';
 import { readConfig } from './config.js';
 import { startTelemetry } from './telemetry.js';
 
@@ -104,7 +104,7 @@ const probe = async (): Promise<void> => {
     .add(1, { marker });
 
   telemetry.logger.emit({
-    severityNumber: SeverityNumber.INFO,
+    severityNumber: ARVO_LOG_SEVERITY.info,
     body: `pipeline probe ${marker}`,
     attributes: { marker },
   });
