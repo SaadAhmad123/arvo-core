@@ -147,9 +147,12 @@ describe('one run under Temporal', () => {
 
   it('took the payment that failed first, counting attempts from zero', async () => {
     const charged = await handlerStates('com_payment_charge');
-    expect(charged[0]?.lifecycle).toBe('success');
+    const first = charged[0];
+    if (first === undefined) throw new Error('nothing was charged');
+
+    expect(first.lifecycle).toBe('success');
     // asked to fail twice, so it succeeded on the attempt after those
-    expect((charged[0]?.data as { attempts: number }).attempts).toBe(2);
+    expect((first.data as { attempts: number }).attempts).toBe(2);
   });
 
   it('gave up on the work that never succeeds', async () => {

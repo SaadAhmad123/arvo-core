@@ -6,7 +6,6 @@ import {
   log,
   proxyActivities,
   setHandler,
-  workflowInfo,
 } from '@temporalio/workflow';
 import type { JSONObject } from 'arvo-core';
 import type { Activities } from './activities.js';
