@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
-import { ArvoLattice } from '../version/scenarios/lattice.js';
+import { ArvoLattice, chanceFrom } from '../version/scenarios/lattice.js';
 import {
   declareHandler,
   declareInventoryWorker,
@@ -133,6 +133,126 @@ describe('what chance must never produce', () => {
         expect(count, `seed ${seed}, ${subject} answered ${count} times`).toBe(
           1,
         );
+      }
+    }
+  }, 120_000);
+});
+
+describe('what a mechanism supplies, under the same chance', () => {
+  /**
+   * A lattice whose supplied inputs misbehave as often as its transport
+   * does: a store that cannot be read, a factory that cannot build, and
+   * hooks that are not what anything expected.
+   */
+  const latticeSupplying = (seed: number) => {
+    const chance = chanceFrom(seed);
+    const handler = declareHandler();
+    const broken = { reads: 0, builds: 0 };
+
+    const lattice = new ArvoLattice({
+      versions: {},
+      handlers: {
+        [fulfilContract.type]: {
+          execute: (param: {
+            event: unknown;
+            state: (asked: { executionId: string }) => unknown;
+            attempt: number;
+          }) =>
+            handler.execute({
+              event: param.event as never,
+              // a store that is sometimes unreachable
+              state: (asked) => {
+                if (chance() < 0.15) {
+                  broken.reads += 1;
+                  throw new Error('the store is unreachable');
+                }
+                return param.state(asked) as never;
+              },
+              attempt: param.attempt,
+              // a factory that sometimes cannot build
+              dependencies: () => {
+                if (chance() < 0.15) {
+                  broken.builds += 1;
+                  throw new Error('the pool is exhausted');
+                }
+                return {};
+              },
+              // and hooks that are whatever this mechanism felt like
+              hooks: (chance() < 0.3
+                ? undefined
+                : { whatever: chance() }) as never,
+            }),
+        } as never,
+        [inventoryV1.type]: declareInventoryWorker() as never,
+        [paymentV1.type]: declarePaymentWorker() as never,
+      },
+      seed,
+      chaos: { duplicate: 0.2, shuffle: true, loseRace: 0.1 },
+    });
+
+    return { lattice, broken };
+  };
+
+  it('holds every invariant while the store and the factory keep failing', async () => {
+    for (let seed = 401; seed <= 460; seed += 1) {
+      const { lattice } = latticeSupplying(seed);
+      for (const order of ordersFor(seed)) lattice.publish(order);
+      await lattice.settle();
+      while (lattice.holding > 0) await lattice.recover().settle();
+
+      try {
+        await checkHandlerInvariants(lattice);
+      } catch (broke) {
+        throw new Error(
+          `seed ${seed} broke an invariant: ${(broke as Error).message}`,
+        );
+      }
+    }
+  }, 120_000);
+
+  it('reads every failure to build as one worth trying again', async () => {
+    let sawOne = false;
+    for (let seed = 501; seed <= 560; seed += 1) {
+      const { lattice } = latticeSupplying(seed);
+      for (const order of ordersFor(seed)) lattice.publish(order);
+      await lattice.settle();
+      while (lattice.holding > 0) await lattice.recover().settle();
+
+      for (const { fault } of lattice.transcript.faults) {
+        if (
+          fault.faultKind !== 'dependency_resolution_failed' &&
+          fault.faultKind !== 'state_resolution_failed'
+        ) {
+          continue;
+        }
+        sawOne = true;
+        // in prospect only while there is budget left, which is the one
+        // rule about retrying that is pinned rather than chosen
+        if (fault.retry !== null) {
+          expect(fault.attempt, `seed ${seed}`).toBeLessThan(
+            fault.retry.maxRetryAttemptsAllowed,
+          );
+          expect(fault.retry.retryAt, `seed ${seed}`).toBe(
+            fault.timestamp + fault.retry.retryInMs,
+          );
+        }
+      }
+    }
+    expect(sawOne, 'nothing failed to build in any run').toBe(true);
+  }, 120_000);
+
+  it('never lets what a mechanism supplied reach a record', async () => {
+    for (let seed = 601; seed <= 640; seed += 1) {
+      const { lattice } = latticeSupplying(seed);
+      for (const order of ordersFor(seed)) lattice.publish(order);
+      await lattice.settle();
+      while (lattice.holding > 0) await lattice.recover().settle();
+
+      for (const row of lattice.store.values()) {
+        expect(
+          JSON.stringify(row),
+          `seed ${seed} stored something a mechanism supplied`,
+        ).not.toContain('whatever');
       }
     }
   }, 120_000);

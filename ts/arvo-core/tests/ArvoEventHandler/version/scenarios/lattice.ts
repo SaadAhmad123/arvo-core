@@ -127,7 +127,7 @@ export type ArvoLatticeParam = {
 };
 
 /** A deterministic source of chance, so a failing run can be repeated. */
-const chanceFrom = (seed: number) => {
+export const chanceFrom = (seed: number) => {
   let held = seed >>> 0;
   return () => {
     held = (held + 0x6d2b79f5) >>> 0;

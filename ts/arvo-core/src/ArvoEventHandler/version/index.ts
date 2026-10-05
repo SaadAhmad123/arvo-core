@@ -586,7 +586,15 @@ export class ArvoEventHandlerVersion<
     try {
       return await resolver({
         event: param.event,
-        state: record as ArvoExecutionState<TDataSchema>,
+        // An event opening an execution read no record, and the one
+        // built for it says nothing a factory could not work out from
+        // the event — so what it is handed is the absence that says
+        // which kind of execution this is.
+        state:
+          param.state === null
+            ? null
+            : (record as ArvoExecutionState<TDataSchema>),
+        executionId: param.executionId,
         attempt: param.attempt,
       });
     } catch (raised) {

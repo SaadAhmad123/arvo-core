@@ -81,8 +81,27 @@ export type ArvoDependencyResolver<
   | ((param: {
       /** The event that caused this execution. */
       event: ArvoEvent;
-      /** What the execution remembers, or `null` where it has no record. */
+      /**
+       * What the execution remembers, or `null` where it has none yet.
+       *
+       * `null` on an event opening an execution: nothing was read, and
+       * there is nothing a record could say about an execution that did
+       * not exist a moment ago. Present on one answering an execution,
+       * already validated.
+       *
+       * Which it is therefore says whether this is opening something or
+       * resuming it, and a factory may reasonably open different
+       * resources for each.
+       */
       state: ArvoExecutionState<TDataSchema> | null;
+      /**
+       * The execution this is for, whether or not a record exists yet.
+       *
+       * Supplied so that something keyed on the execution — a lock, a
+       * lease, a scoped client — can be built on the execution that
+       * opens one as readily as on one that resumes it.
+       */
+      executionId: string;
       /** Which attempt this is, counting from 0. */
       attempt: number;
     }) => PromiseAble<TDependencies>);
