@@ -1,0 +1,189 @@
+# Every service one distributed run needs, pinned and health-checked.
+#
+# Two Postgres instances on purpose. Temporal keeps its own, and the
+# execution records keep theirs: sharing one would hide which of them
+# caused a problem, and the record store is the thing under test.
+#
+# Nothing here is a stand-in. The Temporal cluster is a real cluster,
+# the collector is the real collector, and the three backends are the
+# ones a deployment would use.
+
+name: arvo-distributed
+
+services:
+  # ---------------------------------------------------------------- Temporal
+
+  temporal-postgres:
+    image: postgres:16.4-alpine
+    container_name: arvo-temporal-postgres
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    volumes:
+      - temporal-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U temporal -d temporal']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [arvo]
+
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    container_name: arvo-temporal
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-postgres
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
+      # the namespace the run uses, created as the cluster comes up
+      DEFAULT_NAMESPACE: arvo
+      DEFAULT_NAMESPACE_RETENTION: 24h
+      # Prometheus scrapes this, so the framework's view of a run sits
+      # beside Arvo's own
+      PROMETHEUS_ENDPOINT: 0.0.0.0:8000
+    volumes:
+      - ./temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+    ports:
+      - '7233:7233'
+    healthcheck:
+      test: ['CMD', 'tctl', '--address', 'temporal:7233', 'cluster', 'health']
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+    networks: [arvo]
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    container_name: arvo-temporal-ui
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:8080
+    ports:
+      - '8080:8080'
+    networks: [arvo]
+
+  # ------------------------------------------------- the record store itself
+
+  records-postgres:
+    image: postgres:16.4-alpine
+    container_name: arvo-records-postgres
+    environment:
+      POSTGRES_USER: arvo
+      POSTGRES_PASSWORD: arvo
+      POSTGRES_DB: arvo_records
+    volumes:
+      - records-postgres:/var/lib/postgresql/data
+    ports:
+      - '5433:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U arvo -d arvo_records']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [arvo]
+
+  # ------------------------------------------------------------ observability
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.112.0
+    container_name: arvo-otel-collector
+    command: ['--config=/etc/otel/config.yaml']
+    depends_on:
+      tempo:
+        condition: service_started
+      loki:
+        condition: service_started
+    volumes:
+      - ./otel/config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - '4317:4317' # OTLP over gRPC, which the workers export to
+      - '4318:4318' # OTLP over HTTP
+      - '8889:8889' # what Prometheus scrapes
+      - '13133:13133' # the collector's own health, polled from the host
+    # The image carries no shell and no curl, so health is checked from
+    # outside rather than pretended at from within.
+    networks: [arvo]
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: arvo-tempo
+    command: ['-config.file=/etc/tempo/config.yaml']
+    user: '0:0'
+    volumes:
+      - ./tempo/config.yaml:/etc/tempo/config.yaml:ro
+      - tempo:/var/tempo
+    ports:
+      - '3200:3200' # queried directly, so a test can walk a trace
+    networks: [arvo]
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: arvo-prometheus
+    command:
+      - '--config.file=/etc/prometheus/config.yaml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-remote-write-receiver'
+    volumes:
+      - ./prometheus/config.yaml:/etc/prometheus/config.yaml:ro
+      - prometheus:/prometheus
+    ports:
+      - '9090:9090' # queried directly, so a test can read a counter
+    networks: [arvo]
+
+  loki:
+    image: grafana/loki:3.2.1
+    container_name: arvo-loki
+    command: ['-config.file=/etc/loki/config.yaml']
+    user: '0:0'
+    volumes:
+      - ./loki/config.yaml:/etc/loki/config.yaml:ro
+      - loki:/loki
+    ports:
+      - '3100:3100' # queried directly, so a test can find a log line
+    networks: [arvo]
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: arvo-grafana
+    depends_on:
+      tempo:
+        condition: service_started
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana:/var/lib/grafana
+    ports:
+      - '3000:3000'
+    networks: [arvo]
+
+volumes:
+  temporal-postgres:
+  records-postgres:
+  tempo:
+  prometheus:
+  loki:
+  grafana:
+
+networks:
+  arvo:
+    name: arvo-distributed

@@ -4,7 +4,12 @@
   "type": "module",
   "description": "A local playground for exercising arvo-core (ts) without publishing it. Not part of the published package.",
   "scripts": {
-    "play": "tsx src/playground.ts"
+    "play": "tsx src/playground.ts",
+    "distributed:up": "docker compose -f infra/docker-compose.yml up -d --wait",
+    "distributed:down": "docker compose -f infra/docker-compose.yml down",
+    "distributed:reset": "docker compose -f infra/docker-compose.yml down -v",
+    "distributed:migrate": "docker exec -i arvo-records-postgres psql -U arvo -d arvo_records -v ON_ERROR_STOP=1 -f - < infra/postgres/001_records_and_outbox.sql",
+    "distributed:probe": "tsx src/distributed/shared/pipeline-probe.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
@@ -14,6 +19,26 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@dbos-inc/dbos-sdk": "5.2.11",
+    "@opentelemetry/api-logs": "0.222.0",
+    "@opentelemetry/exporter-logs-otlp-grpc": "0.222.0",
+    "@opentelemetry/exporter-metrics-otlp-grpc": "0.222.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "0.222.0",
+    "@opentelemetry/instrumentation-pg": "0.74.0",
+    "@opentelemetry/resources": "2.11.0",
+    "@opentelemetry/sdk-logs": "0.222.0",
+    "@opentelemetry/sdk-metrics": "2.11.0",
+    "@opentelemetry/sdk-node": "0.222.0",
+    "@opentelemetry/semantic-conventions": "1.43.0",
+    "@temporalio/activity": "1.24.0",
+    "@temporalio/client": "1.24.0",
+    "@temporalio/interceptors-opentelemetry": "1.24.0",
+    "@temporalio/testing": "1.24.0",
+    "@temporalio/worker": "1.24.0",
+    "@temporalio/workflow": "1.24.0",
+    "@types/pg": "8.15.6",
+    "node-pg-migrate": "8.0.3",
+    "pg": "8.16.3",
     "tsx": "^4.19.0",
     "typescript": "7.0.2"
   }

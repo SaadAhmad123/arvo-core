@@ -1,0 +1,54 @@
+# Provisioned rather than clicked together, so the stack comes up
+# already showing the run.
+#
+# The correlations are the point: a span leads to the lines written
+# under it, and a line leads back to its span. An execution that cannot
+# be followed between the three is an execution nobody can debug.
+
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    isDefault: true
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: -1m
+        spanEndTimeShift: 1m
+        filterByTraceID: true
+        filterBySpanID: false
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: -1m
+        spanEndTimeShift: 1m
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    jsonData:
+      httpMethod: POST
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
+
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '"trace_id":"(\w+)"'
+          url: '$${__value.raw}'
+          datasourceUid: tempo

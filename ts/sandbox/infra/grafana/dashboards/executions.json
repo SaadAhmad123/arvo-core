@@ -1,0 +1,191 @@
+{
+  "uid": "arvo-executions",
+  "title": "Arvo executions",
+  "description": "One run, end to end. The four panels across the top are the metrics ADR-006 names a handler should publish; below them is how to find one execution out of five hundred, and what it wrote.",
+  "tags": ["arvo", "distributed"],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "subject",
+        "label": "Workflow (subject)",
+        "type": "textbox",
+        "query": "",
+        "current": { "text": "", "value": "" },
+        "description": "The only thing an operator has. Everything below filters by it."
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Deliveries by outcome",
+      "description": "What the handler concluded. Produced against discarded: a run with no discards under at-least-once delivery is a run that has not been repeated yet.",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(arvo_executions_total[1m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "fillOpacity": 20 } },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Faults by kind",
+      "description": "A fault writes no record, so this and the trace are the only places a retried-away failure is ever visible.",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (fault_kind) (rate(arvo_faults_total[1m]))",
+          "legendFormat": "{{fault_kind}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "fillOpacity": 20 } },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Executor duration",
+      "description": "Time inside business code alone, separated from time in the protocol around it. The run clock bounds this and nothing else.",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le, contract_type) (rate(arvo_executor_duration_ms_bucket[1m])))",
+          "legendFormat": "p99 {{contract_type}}"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.50, sum by (le, contract_type) (rate(arvo_executor_duration_ms_bucket[1m])))",
+          "legendFormat": "p50 {{contract_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Collection size",
+      "description": "How many answers an execution was waiting for. This is what grows with a fan-out, and it is rehydrated whole on every delivery.",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(arvo_collection_size_bucket[1m])))",
+          "legendFormat": "p99 awaited"
+        },
+        {
+          "refId": "B",
+          "expr": "max(arvo_collection_size_max)",
+          "legendFormat": "widest seen"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "traces",
+      "title": "One workflow, every execution in it",
+      "description": "Filtered by subject, which is all an operator has. One trace should hold the framework's workflow and activity spans and Arvo's execution span nested inside them — across a suspension and across workflows.",
+      "gridPos": { "h": 11, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "{ .subject = \"$subject\" }",
+          "limit": 50
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "logs",
+      "title": "What those executions wrote",
+      "description": "Correlated by trace, so a line leads back to the execution that wrote it.",
+      "gridPos": { "h": 11, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=~\"arvo.+\"} |= `$subject`",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": true,
+        "sortOrder": "Ascending"
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Temporal's own view of the same run",
+      "description": "The framework's numbers beside Arvo's. Where the two disagree about how many times something was attempted, one of them is wrong — and that is worth knowing.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (operation) (rate(service_requests{job=\"temporal\"}[1m]))",
+          "legendFormat": "{{operation}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "The telemetry pipeline itself",
+      "description": "Refused or dropped spans mean the panels above are lying. A pipeline that fails silently is worse than none.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (exporter) (rate(otelcol_exporter_send_failed_spans[1m]))",
+          "legendFormat": "failed spans {{exporter}}"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (processor) (rate(otelcol_processor_dropped_spans[1m]))",
+          "legendFormat": "dropped spans {{processor}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      }
+    }
+  ]
+}

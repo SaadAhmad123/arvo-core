@@ -1,0 +1,67 @@
+# The one place every signal is sent.
+#
+# Workers know nothing but an OTLP endpoint, which is what lets a
+# backend change without a line of application code changing. Each
+# pipeline is wired explicitly: a telemetry pipeline that fails
+# silently is worse than no pipeline at all.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Bounded, so a five-hundred-wide run cannot take the collector down
+  # with the memory it produces.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # the execution's identity has to survive onto the series, or a
+    # metric cannot be read beside the trace that produced it
+    resource_to_telemetry_conversion:
+      enabled: true
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki]

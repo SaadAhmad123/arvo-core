@@ -1,0 +1,37 @@
+# What the cluster is told about itself.
+#
+# A five-hundred-wide fan-out means one workflow holding five hundred
+# outstanding children, and a record that grows with them. The defaults
+# are set for ordinary workflows, so the ones a wide run actually hits
+# are raised here deliberately rather than discovered as a failure.
+
+# How much one workflow may hold before the server complains, and before
+# it refuses. A wide execution's record is the thing that grows.
+limit.blobSize.warn:
+  - value: 2097152
+limit.blobSize.error:
+  - value: 20971520
+
+# One workflow starts five hundred children in a single decision.
+limit.numPendingChildExecutions:
+  - value: 2000
+limit.numPendingActivities:
+  - value: 2000
+limit.numPendingSignals:
+  - value: 2000
+
+# History grows with the fan-out; let it, and measure where it breaks
+# rather than being stopped early by a default.
+limit.historySize.warn:
+  - value: 52428800
+limit.historySize.error:
+  - value: 524288000
+limit.historyCount.warn:
+  - value: 51200
+limit.historyCount.error:
+  - value: 512000
+
+# Search attributes the workflows set, so an execution can be found by
+# what identifies it rather than by its workflow id alone.
+frontend.enableUpdateWorkflowExecution:
+  - value: true
