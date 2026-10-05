@@ -1,5 +1,5 @@
 import type { ArvoEvent } from 'arvo-core';
-import { setupArvoEventHandler } from 'arvo-core';
+import { ArvoDomain, setupArvoEventHandler } from 'arvo-core';
 import { z } from 'zod';
 import { auditWriteV1 } from '../com_audit_write/contract.js';
 import { categoryWalkV1 } from '../com_category_walk/contract.js';
@@ -65,7 +65,16 @@ type ServiceRequest =
       data: { amount: number; currency: string; failuresBeforeSuccess: number };
     }
   | { type: 'com_fraud_check'; data: { orderRef: string } }
-  | { type: 'com_manual_review'; data: { orderRef: string; because: string } };
+  | {
+      type: 'com_manual_review';
+      data: { orderRef: string; because: string };
+      /**
+       * Asked for explicitly. A contract carrying a domain does not
+       * domain the events built from it — the asker decides, every
+       * time — so a request meant to leave the lattice has to say so.
+       */
+      domain: typeof ArvoDomain.FROM_EVENT_CONTRACT;
+    };
 
 const whatToAsk = async (
   catalogue: DistributedDependencies['catalogue'],
@@ -106,6 +115,7 @@ const whatToAsk = async (
     {
       type: 'com_manual_review',
       data: { orderRef: asked.orderRef, because: 'every order in this run' },
+      domain: ArvoDomain.FROM_EVENT_CONTRACT,
     },
   ];
 };
