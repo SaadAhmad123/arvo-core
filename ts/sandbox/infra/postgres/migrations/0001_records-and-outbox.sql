@@ -54,6 +54,61 @@ CREATE TABLE execution_record (
   CONSTRAINT execution_record_revision_non_negative CHECK (cas_version >= 0)
 );
 
+-- Each of these raises an error code of its own, so a writer that loses
+-- can tell what it lost to without reading a message: AR001 is a
+-- revision out of sequence, AR002 an attempt to alter one already
+-- written, and the primary key's own 23505 is another writer having
+-- reached that revision first.
+--
+-- A record is written once and never altered. Obligation 5 is about who
+-- may write the next revision; this is about there being no other way to
+-- change what a revision says. Both frameworks have a way to write
+-- twice, and neither may use it.
+CREATE FUNCTION execution_record_is_written_once() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION
+    'revision % of execution % has already been written',
+    OLD.cas_version, OLD.execution_id
+    USING ERRCODE = 'AR002';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER execution_record_immutable
+  BEFORE UPDATE OR DELETE ON execution_record
+  FOR EACH ROW EXECUTE FUNCTION execution_record_is_written_once();
+
+-- And a revision must be exactly one past the one before it. The primary
+-- key already makes two writers at one revision impossible and makes
+-- revision 0 a create-if-absent; this is the other half, so a writer
+-- that read a stale record cannot land a revision out of sequence.
+--
+-- In the database rather than in application code, because a check every
+-- writer has to remember to make is a check one of them will not.
+CREATE FUNCTION execution_record_revision_follows() RETURNS trigger AS $$
+BEGIN
+  IF NEW.cas_version = 0 THEN
+    RETURN NEW;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM execution_record
+    WHERE execution_id = NEW.execution_id
+      AND cas_version = NEW.cas_version - 1
+  ) THEN
+    RAISE EXCEPTION
+      'revision % of execution % does not follow the revision before it',
+      NEW.cas_version, NEW.execution_id
+      USING ERRCODE = 'AR001';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER execution_record_in_sequence
+  BEFORE INSERT ON execution_record
+  FOR EACH ROW EXECUTE FUNCTION execution_record_revision_follows();
+
 -- What a read of one execution answers with: its latest revision.
 CREATE INDEX execution_record_latest
   ON execution_record (execution_id, cas_version DESC);

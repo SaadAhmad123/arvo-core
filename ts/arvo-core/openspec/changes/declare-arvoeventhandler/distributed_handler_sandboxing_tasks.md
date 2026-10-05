@@ -181,8 +181,8 @@ One run that does everything at once, because nothing here is interesting in iso
 > Writes to one execution record MUST be serialized. A mechanism MUST commit at `cas_version` `0` only where no record exists.
 
 - [ ] 11.1 State how each gets it, and where that makes `cas_version` redundant: one workflow per execution *is* a lock, so the counter becomes a consistency check rather than the mechanism. Whether a redundant guarantee is a cost or a defence is one of the questions this answers.
-- [ ] 11.2 Assert create-if-absent against the real schema — a unique constraint, not a read-then-write — with two opening events for one execution and exactly one record created.
-- [ ] 11.3 Assert a record whose revision is not exactly one greater is refused by the database rather than by the application.
+- [x] 11.2 Assert create-if-absent against the real schema — a unique constraint, not a read-then-write — with two opening events for one execution and exactly one record created.
+- [x] 11.3 Assert a record whose revision is not exactly one greater is refused by the database rather than by the application.
 - [ ] 11.4 Deliver two answers to one execution at the same moment: one commits, the loser publishes nothing, re-reads, and converges.
 - [ ] 11.5 Assert that where both racing deliveries entered their executor, **both ran** — which compare-and-swap does not prevent and the protocol says it does not. Whatever an executor did outside Arvo was done twice, and the sandbox says so out loud rather than hiding it.
 
