@@ -116,6 +116,35 @@ export type RecordStore = {
   }): Promise<CommitOutcome>;
 
   /**
+   * Every event committed with the record that one triggering event
+   * produced, exactly as the outbox holds them.
+   *
+   * This is the recovery read. A delivery repeated after its commit
+   * finds the execution already answered, and what it has to publish is
+   * what the first one committed rather than anything it could produce
+   * again — so the second attempt reads the bytes rather than
+   * re-deriving them.
+   *
+   * @param executionId - The execution concerned.
+   * @param triggeringEventId - The event whose execution committed them.
+   */
+  committedFor(
+    executionId: string,
+    triggeringEventId: string,
+  ): Promise<readonly CommittedEvent[]>;
+
+  /**
+   * Marks these events published, having been sent by something other
+   * than {@link drainOutbox}.
+   *
+   * A mechanism durable enough to send them itself — a workflow, whose
+   * decisions survive the worker that made them — publishes and then
+   * says so. The drain is then only for what such a mechanism never got
+   * round to.
+   */
+  markPublished(eventIds: readonly string[]): Promise<number>;
+
+  /**
    * Hands every committed-but-unpublished event to `send`, oldest
    * first, and marks as published only what `send` accepted.
    *
@@ -125,13 +154,28 @@ export type RecordStore = {
    * again, which is why a receiver must discard a repeat rather than
    * process it twice.
    *
+   * @param send - How to send one event.
+   * @param param - How many to claim, and how long to leave an event to
+   * whoever committed it before taking it over. A grace period of zero
+   * claims everything outstanding, which is what a test recovering from
+   * a killed worker wants and what a running system does not.
    * @returns How many events were published.
    */
   drainOutbox(
     send: (one: CommittedEvent) => Promise<void>,
-    atMost?: number,
+    param?: { atMost?: number; afterMs?: number },
   ): Promise<number>;
 };
+
+/** How an outbox row is read back, named as the type names it. */
+const OUTBOX_COLUMNS = `event_id      AS "eventId",
+          execution_id  AS "executionId",
+          cas_version   AS "casVersion",
+          subject,
+          event_type    AS "eventType",
+          addressed_to  AS "addressedTo",
+          domain,
+          payload`;
 
 /** What an event looks like as a row, before it is one. */
 const rowFor = (
@@ -242,7 +286,33 @@ export const storeFor = (pool: Pool): RecordStore => ({
     }
   },
 
-  drainOutbox: async (send, atMost = DRAIN_BATCH) => {
+  committedFor: async (executionId, triggeringEventId) => {
+    const found = await pool.query<CommittedEvent>(
+      `SELECT ${OUTBOX_COLUMNS}
+       FROM outbox
+       WHERE execution_id = $1
+         AND cas_version IN (
+           SELECT cas_version FROM execution_record
+           WHERE execution_id = $1
+             AND document -> 'triggeringEvent' ->> 'id' = $2
+         )
+       ORDER BY committed_at`,
+      [executionId, triggeringEventId],
+    );
+    return found.rows;
+  },
+
+  markPublished: async (eventIds) => {
+    if (eventIds.length === 0) return 0;
+    const marked = await pool.query(
+      `UPDATE outbox SET published_at = now()
+       WHERE event_id = ANY($1::text[]) AND published_at IS NULL`,
+      [[...eventIds]],
+    );
+    return marked.rowCount ?? 0;
+  },
+
+  drainOutbox: async (send, { atMost = DRAIN_BATCH, afterMs = 0 } = {}) => {
     const client: PoolClient = await pool.connect();
     let published = 0;
 
@@ -250,23 +320,20 @@ export const storeFor = (pool: Pool): RecordStore => ({
       await client.query('BEGIN');
 
       const claimed = await client.query<CommittedEvent>(
-        `SELECT event_id      AS "eventId",
-                execution_id  AS "executionId",
-                cas_version   AS "casVersion",
-                subject,
-                event_type    AS "eventType",
-                addressed_to  AS "addressedTo",
-                domain,
-                payload
+        `SELECT ${OUTBOX_COLUMNS}
          FROM outbox
          WHERE published_at IS NULL
+           -- left to whoever committed it for this long first, so the
+           -- ordinary path publishes its own events and this one picks
+           -- up only what was abandoned mid-send
+           AND committed_at < now() - ($2::bigint * interval '1 millisecond')
          ORDER BY committed_at
          LIMIT $1
          -- Other publishers pass over what this one holds, so draining
          -- from several workers divides the work rather than repeating
          -- it.
          FOR UPDATE SKIP LOCKED`,
-        [atMost],
+        [atMost, afterMs],
       );
 
       for (const one of claimed.rows) {

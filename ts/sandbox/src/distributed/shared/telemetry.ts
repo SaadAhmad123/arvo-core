@@ -3,10 +3,15 @@ import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-grpc';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-grpc';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
 import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
+import type { Resource } from '@opentelemetry/resources';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
+import {
+  BatchSpanProcessor,
+  type SpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
 import {
   ATTR_SERVICE_NAME,
   ATTR_SERVICE_VERSION,
@@ -37,6 +42,23 @@ export type Telemetry = {
   /** What log records are emitted through. */
   readonly logger: ArvoLogger;
   /**
+   * What names this process on every signal it produces.
+   *
+   * Exposed because a framework with tracing of its own has to be given
+   * the same one. Two resources would make one run two services, and
+   * nothing would join them.
+   */
+  readonly resource: Resource;
+  /**
+   * Where spans go.
+   *
+   * Exposed for the same reason as the resource, and it must be this
+   * instance rather than an equivalent one: a framework exporting
+   * through a processor of its own would flush on its own schedule, and
+   * a trace half-exported is a trace nobody can read.
+   */
+  readonly spanProcessor: SpanProcessor;
+  /**
    * Flushes everything buffered and stops.
    *
    * Called on the way out, before the process exits: a span that was
@@ -58,9 +80,15 @@ export const startTelemetry = (config: DistributedConfig): Telemetry => {
     [ATTR_SERVICE_VERSION]: config.serviceVersion,
   });
 
+  // One processor, shared with whatever framework is carrying the work,
+  // so both views of one run arrive through the same pipeline.
+  const spanProcessor = new BatchSpanProcessor(
+    new OTLPTraceExporter({ url: config.otlpEndpoint }),
+  );
+
   const sdk = new NodeSDK({
     resource,
-    traceExporter: new OTLPTraceExporter({ url: config.otlpEndpoint }),
+    spanProcessors: [spanProcessor],
     metricReader: new PeriodicExportingMetricReader({
       exporter: new OTLPMetricExporter({ url: config.otlpEndpoint }),
       // short, so a test that has just finished a run can read a counter
@@ -85,6 +113,8 @@ export const startTelemetry = (config: DistributedConfig): Telemetry => {
     tracer: trace.getTracer(config.serviceName, config.serviceVersion),
     meter: metrics.getMeter(config.serviceName, config.serviceVersion),
     logger: loggerFor(config.serviceName, config.serviceVersion),
+    resource,
+    spanProcessor,
     shutdown: () => sdk.shutdown(),
   };
 };

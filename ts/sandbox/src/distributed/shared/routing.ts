@@ -1,8 +1,4 @@
-import {
-  ARVO_CATEGORY_INIT,
-  type ArvoEvent,
-  deriveArvoExecutionId,
-} from 'arvo-core';
+import { type ArvoEvent, deriveArvoExecutionId } from 'arvo-core';
 import { HANDLERS, type RoutableHandler } from '../handler/index.js';
 
 /**
@@ -11,10 +7,23 @@ import { HANDLERS, type RoutableHandler } from '../handler/index.js';
  * ADR-006 gives routing to the mechanism and gives it nothing else to go
  * on but the event, which is deliberate: an event that could only be
  * routed by consulting a record could not be routed by a mechanism that
- * had lost the record. Everything needed is on the event — its category
- * says whether it opens an execution or answers one, its `to` says whose
- * execution, and its `domain` says whether anything here may carry it at
- * all.
+ * had lost the record. Everything needed is on the event — its `domain`
+ * says whether anything here may carry it, its `to` says whose work it
+ * is, and its `type` says whether it opens an execution or answers one.
+ *
+ * The last of those is worth saying plainly, because the obvious answer
+ * is wrong. An event's `category` states whether it opens or completes,
+ * and routing on it fails: a handler sets it on everything it builds,
+ * and a client building the event that starts a run does not. A
+ * mechanism keying on it would route the first event of every run as an
+ * answer to an execution that does not exist.
+ *
+ * What always holds is the type. A contract has exactly one type it
+ * takes in, so an event of that type opens an execution of it and an
+ * event of any other type the contract knows about answers one. That is
+ * the same rule the handler itself resolves by, which is the point:
+ * a mechanism that decided differently would hand events to a handler
+ * that then refused them.
  *
  * Shared between the mechanisms on purpose. Two of them deciding
  * differently where an event goes would be two different exercises, and
@@ -29,7 +38,14 @@ export type Destination =
       readonly kind: 'opens';
       readonly executionId: string;
       readonly handler: RoutableHandler;
-      /** The execution that asked, which is the one awaiting the answer. */
+      /**
+       * What the event says is awaiting its answer.
+       *
+       * The asking execution, where a handler built the request. An
+       * event that opens a run was built by a client and names whatever
+       * the client named, so this says who is waiting only as far as
+       * the event does.
+       */
       readonly awaitingExecutionId: string;
     }
   /** It answers an execution already under way, which is this one. */
@@ -87,7 +103,7 @@ export const destinationFor = async (
   // execution does not exist yet to have an identifier read off it.
   // Derived rather than minted, so the same event arriving twice
   // resolves to the execution the first one opened.
-  if (event.category === ARVO_CATEGORY_INIT) {
+  if (event.type === handler.contracts.self.type) {
     return {
       kind: 'opens',
       executionId: await deriveArvoExecutionId(event),

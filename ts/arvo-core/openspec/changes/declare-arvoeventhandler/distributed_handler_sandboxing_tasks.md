@@ -90,7 +90,7 @@ One directory per handler, named for what it takes in. Every framework directory
 
 - [x] 3.1 `@temporalio/client`, `@temporalio/worker`, `@temporalio/workflow`, `@temporalio/activity` — the real SDK, exact versions.
 - [x] 3.2 `@temporalio/interceptors-opentelemetry`, which is how Temporal carries trace context into workflows and activities. Without it the two traces never meet, and §4.3 is what proves they do.
-- [ ] 3.3 `@temporalio/testing` as well, but only for §12.5, where Temporal's own replay checker is the thing under test. It stands in for nothing.
+- [x] 3.3 `@temporalio/testing` as well, but only for §12.5, where Temporal's own replay checker is the thing under test. It stands in for nothing.
 - [x] 3.4 `@dbos-inc/dbos-sdk` at an exact version, and whatever it needs to run against Postgres.
 - [x] 3.5 The OpenTelemetry SDK for Node, the three OTLP exporters — traces, metrics, logs — the logs API, and the resource and semantic-convention packages.
 - [x] 3.6 Instrumentation for Postgres, so the store's own queries appear beneath the span that caused them.
@@ -103,7 +103,7 @@ ADR-006 places the OpenTelemetry API inside the model: a handler must be observa
 
 - [x] 4.1 One place that builds the SDK: resource attributes naming the service and its version, OTLP exporters for all three signals, and a shutdown that **flushes** rather than dropping what was buffered. Built once per worker process and handed down.
 - [x] 4.2 A real `tracer`, `meter` and `logger` handed to `setupArvoEventHandler` — the last through an adapter from the package's own logger shape onto the OpenTelemetry logs API. No no-ops anywhere: a missing signal means nothing produced it.
-- [ ] 4.3 **The traces join.** Temporal's interceptors carry context into the workflow and the activity; Arvo continues the event's own `traceparent`. One trace must hold the workflow span, the activity span and Arvo's execution span nested inside it — **across a suspension and across workflows**, which is where a trace usually breaks. Asserted by fetching the trace from Tempo and walking its parentage, not by looking at a screenshot.
+- [x] 4.3 **The traces join.** Temporal's interceptors carry context into the workflow and the activity; Arvo continues the event's own `traceparent`. One trace must hold the workflow span, the activity span and Arvo's execution span nested inside it — **across a suspension and across workflows**, which is where a trace usually breaks. Asserted by fetching the trace from Tempo and walking its parentage, not by looking at a screenshot.
 - [ ] 4.4 **The stages are visible.** ADR-006 asks that entry validation, hydration, classification, collection, executor entry, return validation and emission each be distinguishable, so a delivery refused at the gate and one refused on what it returned can be told apart from telemetry alone. Assert both produce traces differing in exactly that way.
 - [ ] 4.5 **Every fault is on its span before it is raised**, with its kind and whether a retry is in prospect as attributes — the only place a retried-away failure is ever visible, since a fault writes no record. Assert a run that retried and then succeeded still shows its failures in Tempo.
 - [ ] 4.6 **The metrics mean something.** Query Prometheus for the four ADR-006 names and assert each moved as the scenario says: deliveries by outcome against what the run did, faults by kind against the faults raised, collection size against the fan-out width.
@@ -129,11 +129,11 @@ ADR-006 places the OpenTelemetry API inside the model: a handler must be observa
 One run that does everything at once, because nothing here is interesting in isolation.
 
 - [ ] 6.1 A root order fans out to **five hundred** inventory checks under `collect: 'all'`, so the executor is entered once with a complete collection and the record carries the whole of it.
-- [ ] 6.2 One branch walks a category tree **deep**, each level a child execution of the same contract, with `max_depth` set so the boundary is respected in one variant and crossed on purpose in another.
-- [ ] 6.3 One branch asks for a manual review, which **leaves the lattice** and is answered from outside — a signal in Temporal, an awaited event in DBOS. Until it is, the execution rests at `waiting`, which is what waiting means.
-- [ ] 6.4 A payment that **fails and then does not**, so the attempt number has to cross the mechanism boundary intact.
-- [ ] 6.5 A fraud check that **never succeeds**, so a mechanism has to stop and abandon.
-- [ ] 6.6 An audit write that answers nobody, emitted in the same batch as the completion — the only way a sink can be asked for anything without its caller waiting forever.
+- [x] 6.2 One branch walks a category tree **deep**, each level a child execution of the same contract, with `max_depth` set so the boundary is respected in one variant and crossed on purpose in another.
+- [x] 6.3 One branch asks for a manual review, which **leaves the lattice** and is answered from outside — a signal in Temporal, an awaited event in DBOS. Until it is, the execution rests at `waiting`, which is what waiting means.
+- [x] 6.4 A payment that **fails and then does not**, so the attempt number has to cross the mechanism boundary intact.
+- [x] 6.5 A fraud check that **never succeeds**, so a mechanism has to stop and abandon.
+- [x] 6.6 An audit write that answers nobody, emitted in the same batch as the completion — the only way a sink can be asked for anything without its caller waiting forever.
 - [ ] 6.7 Several whole runs at once, so nothing depends on being the only thing happening.
 
 ## 7. Obligation 1 — the outbox
@@ -163,7 +163,7 @@ One run that does everything at once, because nothing here is interesting in iso
 - [ ] 9.1 Assert a fault whose `retry` is null is **never redelivered** — which means mapping it onto a non-retryable failure rather than letting a retry policy run its course. In Temporal an application failure marked non-retryable; in DBOS the equivalent.
 - [ ] 9.2 Assert that where a mechanism abandons, it commits the record and publishes the event **together**, under the outbox, and composes neither.
 - [ ] 9.3 Assert the three shapes separately: a fault carrying both halves, one carrying only the event, and one carrying neither. A mechanism acts on every contingency a fault carries and on nothing it does not.
-- [ ] 9.4 Assert an opening event for an execution that already exists is **not** read as a failure. ADR-008 names this as the case a mechanism is most likely to get wrong, and both of ours get a chance to.
+- [x] 9.4 Assert an opening event for an execution that already exists is **not** read as a failure. ADR-008 names this as the case a mechanism is most likely to get wrong, and both of ours get a chance to.
 - [ ] 9.5 A fault nothing will retry lands somewhere a person could find it — §13.12's poison path — rather than vanishing into a log.
 
 ## 10. Obligation 4 — every retry a fresh delivery
@@ -202,17 +202,17 @@ A handler that comes out somewhere else on a replay is a handler whose record wa
 What the standard means concretely, so it can be checked rather than claimed.
 
 - [x] 13.1 **Configuration** read from the environment, validated at boot by a schema, and a process that refuses to start rather than running half-configured.
-- [ ] 13.2 **Worker lifecycle**: a real worker process per framework, with graceful shutdown on signal — stop accepting work, finish what is in flight, flush telemetry, close pools, exit non-zero only on genuine failure.
-- [ ] 13.3 **Task queues** designed rather than defaulted: separate queues for the orchestrator and the leaves, so a five-hundred-wide fan-out cannot starve the thing waiting for it.
-- [ ] 13.4 **Retry policies declared**, never inherited — and declared to agree with what the fault says, which is the whole of §9.
+- [x] 13.2 **Worker lifecycle**: a real worker process per framework, with graceful shutdown on signal — stop accepting work, finish what is in flight, flush telemetry, close pools, exit non-zero only on genuine failure.
+- [x] 13.3 **Task queues** designed rather than defaulted: separate queues for the orchestrator and the leaves, so a five-hundred-wide fan-out cannot starve the thing waiting for it.
+- [x] 13.4 **Retry policies declared**, never inherited — and declared to agree with what the fault says, which is the whole of §9.
 - [ ] 13.5 **Workflow versioning**: patched or versioned workflow code, with the determinism check of §12.5 run against a recorded history, so a change that would break running executions fails before it ships.
 - [x] 13.6 **Migrations** rather than schema created on the fly, run as a step of bringing the stack up.
-- [ ] 13.7 **Connection pooling** with bounded size, and a store that surfaces exhaustion as a failure the handler can see rather than as a hang.
+- [x] 13.7 **Connection pooling** with bounded size, and a store that surfaces exhaustion as a failure the handler can see rather than as a hang.
 - [ ] 13.8 **Structured logs** carrying the execution's identity on every line, so one execution can be followed across both frameworks.
 - [ ] 13.9 **Metrics**: the four ADR-006 names, plus whatever each framework publishes of its own.
-- [ ] 13.10 **Health and readiness**, distinguishing a worker that is alive from one that can take work.
-- [ ] 13.11 **Back-pressure**: bounded concurrency per worker, and a run that slows rather than falls over.
-- [ ] 13.12 **Poison handling**: somewhere for a delivery that will never succeed to go, which is where §9's abandonment pair lands.
+- [x] 13.10 **Health and readiness**, distinguishing a worker that is alive from one that can take work.
+- [x] 13.11 **Back-pressure**: bounded concurrency per worker, and a run that slows rather than falls over.
+- [x] 13.12 **Poison handling**: somewhere for a delivery that will never succeed to go, which is where §9's abandonment pair lands.
 - [ ] 13.13 **No `any`, no silent catch, no sleep-based synchronisation.** Lint and typecheck clean under the same rules the package holds itself to.
 
 ## 14. Chaos, against the real stack
