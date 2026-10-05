@@ -70,9 +70,15 @@ type ServiceRequest =
       type: 'com_manual_review';
       data: { orderRef: string; because: string };
       /**
-       * Asked for explicitly. A contract carrying a domain does not
-       * domain the events built from it — the asker decides, every
-       * time — so a request meant to leave the lattice has to say so.
+       * Said out loud, which is the rule rather than a formality.
+       *
+       * A domained event is lifted out of the lattice holding it and
+       * fulfilled somewhere else entirely, so ADR-001 makes `null` the
+       * default and the ordinary case. Leaving a contract's own domain
+       * to be inherited would mean work silently escaping the lattice
+       * because of something written in a contract somebody else
+       * declared — so the asker names the domain, or names where to
+       * read one from, every time it asks.
        */
       domain: typeof ArvoDomain.FROM_EVENT_CONTRACT;
     };
@@ -112,7 +118,8 @@ const whatToAsk = async (
     // work that never succeeds, and must be given up on
     { type: 'com_fraud_check', data: { orderRef: asked.orderRef } },
 
-    // work nothing here can do, which leaves the lattice
+    // Work nothing here can do, which leaves the lattice — and says so,
+    // by naming the contract its domain is read from.
     {
       type: 'com_manual_review',
       data: { orderRef: asked.orderRef, because: 'every order in this run' },

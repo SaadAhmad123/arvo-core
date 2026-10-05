@@ -1,6 +1,7 @@
 import {
   ARVO_CATEGORY_INIT,
   type ArvoEvent,
+  cloneArvoEvent,
   createArvoEventFactory,
   deriveArvoExecutionId,
 } from 'arvo-core';
@@ -169,6 +170,28 @@ describe('where an event goes', () => {
       kind: 'outside',
       addressedTo: 'com.some.client',
     });
+  });
+
+  it('names the recipient by `to`, and by nothing else about the event', async () => {
+    const request = asked.find((one) => one.type === 'com_inventory_check');
+    expect(request).toBeDefined();
+    if (request === undefined) return;
+
+    // The same event, addressed elsewhere. Its type, its source, its
+    // dataschema and its category all still say inventory; only `to`
+    // says fraud, and `to` is what Arvo routes on.
+    const readdressed = cloneArvoEvent(request, { to: 'com_fraud_check' });
+    const where = await destinationFor(readdressed);
+
+    expect(where.kind).not.toBe('outside');
+    if (where.kind === 'left' || where.kind === 'outside') return;
+    expect(where.handler.contracts.self.type).toBe('com_fraud_check');
+
+    // And the role follows the type rather than the address: this is
+    // not the type fraud takes in, so it reads as an answer. Wrong,
+    // and refused at the gate rather than silently run — which is the
+    // division of labour working.
+    expect(where.kind).toBe('answers');
   });
 
   it('finds no handler on anything an object has anyway', () => {
