@@ -67,11 +67,11 @@ One directory per handler, named for what it takes in. Every framework directory
 
 ## 1. Infrastructure, real and checked in
 
-- [ ] 1.1 `infra/docker-compose.yml` bringing up a real Temporal cluster: the server with explicit setup, its own Postgres, and the Temporal UI. Images pinned to exact tags, never `latest`.
-- [ ] 1.2 A second Postgres for DBOS and the record store, separate from Temporal's, because sharing one would hide whichever of them caused a problem.
-- [ ] 1.3 Health checks on every service, and dependency ordering that waits for health rather than for a port to open.
-- [ ] 1.4 Named volumes, so a run survives a restart and §12's replay has something to replay from.
-- [ ] 1.5 One network, with ports published only where a host process needs them.
+- [x] 1.1 `infra/docker-compose.yml` bringing up a real Temporal cluster: the server with explicit setup, its own Postgres, and the Temporal UI. Images pinned to exact tags, never `latest`.
+- [x] 1.2 A second Postgres for DBOS and the record store, separate from Temporal's, because sharing one would hide whichever of them caused a problem.
+- [x] 1.3 Health checks on every service, and dependency ordering that waits for health rather than for a port to open.
+- [x] 1.4 Named volumes, so a run survives a restart and §12's replay has something to replay from.
+- [x] 1.5 One network, with ports published only where a host process needs them.
 - [ ] 1.6 `infra/temporal/` holding dynamic config — the search attributes the workflows need registered, and any namespace defaults a run depends on.
 - [ ] 1.7 `infra/postgres/` holding the schema as migrations rather than a dump: the execution-record store, the outbox table, and their indexes.
 - [ ] 1.8 The namespace registered and the search attributes created as part of bringing the stack up, not by hand.
@@ -79,30 +79,30 @@ One directory per handler, named for what it takes in. Every framework directory
 
 ## 2. The observability stack, also real
 
-- [ ] 2.1 An **OpenTelemetry Collector** (`otel/opentelemetry-collector-contrib`) as the one place every signal is sent. Workers know nothing but an OTLP endpoint, which is what lets a backend change without a line of application code changing.
-- [ ] 2.2 **Tempo** for traces, **Prometheus** for metrics, **Loki** for logs. Each pinned, each with a volume.
-- [ ] 2.3 **Grafana**, with datasources and dashboards **provisioned from files** rather than clicked together, so it comes up already showing the run. The dashboard carries what ADR-006 names: deliveries by outcome, faults by kind, executor duration, collection size.
-- [ ] 2.4 Collector pipelines wired explicitly in `infra/otel/`: OTLP in; traces to Tempo; metrics to Prometheus; logs to Loki. Its own health and its own metrics exposed, because a telemetry pipeline that fails silently is worse than no pipeline.
-- [ ] 2.5 Temporal's own Prometheus endpoint scraped as well, so the framework's view and Arvo's view of one run sit side by side and can be compared.
-- [ ] 2.6 Trace-to-log and trace-to-metric correlation configured in Grafana, so one execution can be followed from a span into the lines it wrote.
+- [x] 2.1 An **OpenTelemetry Collector** (`otel/opentelemetry-collector-contrib`) as the one place every signal is sent. Workers know nothing but an OTLP endpoint, which is what lets a backend change without a line of application code changing.
+- [x] 2.2 **Tempo** for traces, **Prometheus** for metrics, **Loki** for logs. Each pinned, each with a volume.
+- [x] 2.3 **Grafana**, with datasources and dashboards **provisioned from files** rather than clicked together, so it comes up already showing the run. The dashboard carries what ADR-006 names: deliveries by outcome, faults by kind, executor duration, collection size.
+- [x] 2.4 Collector pipelines wired explicitly in `infra/otel/`: OTLP in; traces to Tempo; metrics to Prometheus; logs to Loki. Its own health and its own metrics exposed, because a telemetry pipeline that fails silently is worse than no pipeline.
+- [x] 2.5 Temporal's own Prometheus endpoint scraped as well, so the framework's view and Arvo's view of one run sit side by side and can be compared.
+- [x] 2.6 Trace-to-log and trace-to-metric correlation configured in Grafana, so one execution can be followed from a span into the lines it wrote.
 
 ## 3. Dependencies, real and pinned
 
-- [ ] 3.1 `@temporalio/client`, `@temporalio/worker`, `@temporalio/workflow`, `@temporalio/activity` — the real SDK, exact versions.
-- [ ] 3.2 `@temporalio/interceptors-opentelemetry`, which is how Temporal carries trace context into workflows and activities. Without it the two traces never meet, and §4.3 is what proves they do.
+- [x] 3.1 `@temporalio/client`, `@temporalio/worker`, `@temporalio/workflow`, `@temporalio/activity` — the real SDK, exact versions.
+- [x] 3.2 `@temporalio/interceptors-opentelemetry`, which is how Temporal carries trace context into workflows and activities. Without it the two traces never meet, and §4.3 is what proves they do.
 - [ ] 3.3 `@temporalio/testing` as well, but only for §12.5, where Temporal's own replay checker is the thing under test. It stands in for nothing.
-- [ ] 3.4 `@dbos-inc/dbos-sdk` at an exact version, and whatever it needs to run against Postgres.
-- [ ] 3.5 The OpenTelemetry SDK for Node, the three OTLP exporters — traces, metrics, logs — the logs API, and the resource and semantic-convention packages.
-- [ ] 3.6 Instrumentation for Postgres, so the store's own queries appear beneath the span that caused them.
-- [ ] 3.7 A Postgres driver and a migration tool, chosen once and used by the DBOS side and the store alike.
+- [x] 3.4 `@dbos-inc/dbos-sdk` at an exact version, and whatever it needs to run against Postgres.
+- [x] 3.5 The OpenTelemetry SDK for Node, the three OTLP exporters — traces, metrics, logs — the logs API, and the resource and semantic-convention packages.
+- [x] 3.6 Instrumentation for Postgres, so the store's own queries appear beneath the span that caused them.
+- [x] 3.7 A Postgres driver and a migration tool, chosen once and used by the DBOS side and the store alike.
 - [ ] 3.8 All of it in `ts/sandbox`, which is private and never published, so `arvo-core`'s own dependency list is untouched. A check asserts that.
 
 ## 4. Observability, end to end
 
 ADR-006 places the OpenTelemetry API inside the model: a handler must be observable without an executor writing any instrumentation, every execution produces a span continuing the event's trace, and a fault is recorded on that span before it is raised. Under a framework with telemetry of its own, the question is whether those two views become one trace or two — and a workflow whose spans and Arvo's spans do not join is a workflow nobody can debug at three in the morning.
 
-- [ ] 4.1 One place that builds the SDK: resource attributes naming the service and its version, OTLP exporters for all three signals, and a shutdown that **flushes** rather than dropping what was buffered. Built once per worker process and handed down.
-- [ ] 4.2 A real `tracer`, `meter` and `logger` handed to `setupArvoEventHandler` — the last through an adapter from the package's own logger shape onto the OpenTelemetry logs API. No no-ops anywhere: a missing signal means nothing produced it.
+- [x] 4.1 One place that builds the SDK: resource attributes naming the service and its version, OTLP exporters for all three signals, and a shutdown that **flushes** rather than dropping what was buffered. Built once per worker process and handed down.
+- [x] 4.2 A real `tracer`, `meter` and `logger` handed to `setupArvoEventHandler` — the last through an adapter from the package's own logger shape onto the OpenTelemetry logs API. No no-ops anywhere: a missing signal means nothing produced it.
 - [ ] 4.3 **The traces join.** Temporal's interceptors carry context into the workflow and the activity; Arvo continues the event's own `traceparent`. One trace must hold the workflow span, the activity span and Arvo's execution span nested inside it — **across a suspension and across workflows**, which is where a trace usually breaks. Asserted by fetching the trace from Tempo and walking its parentage, not by looking at a screenshot.
 - [ ] 4.4 **The stages are visible.** ADR-006 asks that entry validation, hydration, classification, collection, executor entry, return validation and emission each be distinguishable, so a delivery refused at the gate and one refused on what it returned can be told apart from telemetry alone. Assert both produce traces differing in exactly that way.
 - [ ] 4.5 **Every fault is on its span before it is raised**, with its kind and whether a retry is in prospect as attributes — the only place a retried-away failure is ever visible, since a fault writes no record. Assert a run that retried and then succeeded still shows its failures in Tempo.
@@ -114,15 +114,15 @@ ADR-006 places the OpenTelemetry API inside the model: a handler must be observa
 
 ## 5. The handlers, knowing nothing of any mechanism
 
-- [ ] 5.1 `handler/com_order_fulfil/` — the orchestrator. Fans out wide, delegates a recursive walk, asks for a review it cannot do itself, and answers its caller once everything is in. Two versions, so a rolling upgrade is reachable.
-- [ ] 5.2 `handler/com_inventory_check/` — the fan-out leaf. Answers at once, and there are hundreds of executions of it per run.
-- [ ] 5.3 `handler/com_category_walk/` — declares itself as its own service, descends a tree, and unwinds. Depth, recursion and `max_depth` in one handler.
-- [ ] 5.4 `handler/com_payment_charge/` — fails for the first few attempts and then succeeds, keyed on `attempt` so every mechanism agrees on what it does.
-- [ ] 5.5 `handler/com_fraud_check/` — raises a fault no attempt can fix. Must stop a mechanism retrying, and must be abandoned with the pair.
-- [ ] 5.6 `handler/com_manual_review/` — a contract carrying a `domain`, so its events leave the lattice and only something outside can answer them.
-- [ ] 5.7 `handler/com_audit_write/` — no outputs and no services: the one shape that completes by returning nothing. Proves a sink works where a framework expects a return value.
-- [ ] 5.8 Every handler takes its dependencies through the factory — a real Postgres-backed catalogue and stock lookup, not a literal — so §10.2 has something genuine to resolve.
-- [ ] 5.9 A check asserts no file under `handler/` imports either framework. The handlers are the constant; the mechanisms are what vary.
+- [x] 5.1 `handler/com_order_fulfil/` — the orchestrator. Fans out wide, delegates a recursive walk, asks for a review it cannot do itself, and answers its caller once everything is in. Two versions, so a rolling upgrade is reachable.
+- [x] 5.2 `handler/com_inventory_check/` — the fan-out leaf. Answers at once, and there are hundreds of executions of it per run.
+- [x] 5.3 `handler/com_category_walk/` — declares itself as its own service, descends a tree, and unwinds. Depth, recursion and `max_depth` in one handler.
+- [x] 5.4 `handler/com_payment_charge/` — fails for the first few attempts and then succeeds, keyed on `attempt` so every mechanism agrees on what it does.
+- [x] 5.5 `handler/com_fraud_check/` — raises a fault no attempt can fix. Must stop a mechanism retrying, and must be abandoned with the pair.
+- [x] 5.6 `handler/com_manual_review/` — a contract carrying a `domain`, so its events leave the lattice and only something outside can answer them.
+- [x] 5.7 `handler/com_audit_write/` — no outputs and no services: the one shape that completes by returning nothing. Proves a sink works where a framework expects a return value.
+- [x] 5.8 Every handler takes its dependencies through the factory — a real Postgres-backed catalogue and stock lookup, not a literal — so §10.2 has something genuine to resolve.
+- [x] 5.9 A check asserts no file under `handler/` imports either framework. The handlers are the constant; the mechanisms are what vary.
 
 ## 6. The scenario
 
@@ -201,12 +201,12 @@ A handler that comes out somewhere else on a replay is a handler whose record wa
 
 What the standard means concretely, so it can be checked rather than claimed.
 
-- [ ] 13.1 **Configuration** read from the environment, validated at boot by a schema, and a process that refuses to start rather than running half-configured.
+- [x] 13.1 **Configuration** read from the environment, validated at boot by a schema, and a process that refuses to start rather than running half-configured.
 - [ ] 13.2 **Worker lifecycle**: a real worker process per framework, with graceful shutdown on signal — stop accepting work, finish what is in flight, flush telemetry, close pools, exit non-zero only on genuine failure.
 - [ ] 13.3 **Task queues** designed rather than defaulted: separate queues for the orchestrator and the leaves, so a five-hundred-wide fan-out cannot starve the thing waiting for it.
 - [ ] 13.4 **Retry policies declared**, never inherited — and declared to agree with what the fault says, which is the whole of §9.
 - [ ] 13.5 **Workflow versioning**: patched or versioned workflow code, with the determinism check of §12.5 run against a recorded history, so a change that would break running executions fails before it ships.
-- [ ] 13.6 **Migrations** rather than schema created on the fly, run as a step of bringing the stack up.
+- [x] 13.6 **Migrations** rather than schema created on the fly, run as a step of bringing the stack up.
 - [ ] 13.7 **Connection pooling** with bounded size, and a store that surfaces exhaustion as a failure the handler can see rather than as a hang.
 - [ ] 13.8 **Structured logs** carrying the execution's identity on every line, so one execution can be followed across both frameworks.
 - [ ] 13.9 **Metrics**: the four ADR-006 names, plus whatever each framework publishes of its own.

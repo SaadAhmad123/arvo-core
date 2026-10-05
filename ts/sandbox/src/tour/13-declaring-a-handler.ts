@@ -110,7 +110,10 @@ const optionsPerVersion = (): void => {
 
   console.log('  1.0.0 maxDepth (its own):', first.maxDepth);
   console.log('  1.1.0 maxDepth (inherited):', second.maxDepth);
-  console.log('  1.1.0 maxRetryAttempts (the handler’s):', second.maxRetryAttempts);
+  console.log(
+    '  1.1.0 maxRetryAttempts (the handler’s):',
+    second.maxRetryAttempts,
+  );
   console.log('  1.1.0 collect (the protocol’s):', second.collect);
 };
 

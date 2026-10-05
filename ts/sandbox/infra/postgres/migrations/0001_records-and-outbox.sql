@@ -13,8 +13,9 @@
 -- The second of those is a unique constraint and a conditional update
 -- rather than a read-then-write, because a read-then-write is only a
 -- lock if everybody agrees to take it.
-
-BEGIN;
+--
+-- Run by the migration tool, which wraps it in one transaction of its
+-- own, so nothing here opens one.
 
 -- ---------------------------------------------------------------- records
 
@@ -115,6 +116,9 @@ CREATE INDEX outbox_by_execution
 
 -- Dependencies a handler resolves through its factory, so that what an
 -- executor is given comes from somewhere real rather than from a literal.
+-- What goes in it is the next migration's business; the shape is this
+-- one's, because a seed that invents its own columns is a seed that
+-- stops matching the store.
 
 CREATE TABLE catalogue (
   sku            TEXT        NOT NULL PRIMARY KEY,
@@ -124,5 +128,3 @@ CREATE TABLE catalogue (
 );
 
 CREATE INDEX catalogue_by_category ON catalogue (category, sku);
-
-COMMIT;

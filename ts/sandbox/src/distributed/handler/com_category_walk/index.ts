@@ -66,11 +66,14 @@ export const categoryWalkHandler = setupArvoEventHandler({
         const descending = ctx.atMaxDepth ? [] : children;
 
         if (ctx.atMaxDepth && children.length > 0) {
-          ctx.telemetry.logger.warn('stopped at the bound rather than past it', {
-            category: asked.category,
-            depth: ctx.state.depth,
-            abandonedChildren: children.length,
-          });
+          ctx.telemetry.logger.warn(
+            'stopped at the bound rather than past it',
+            {
+              category: asked.category,
+              depth: ctx.state.depth,
+              abandonedChildren: children.length,
+            },
+          );
         }
 
         await ctx.setState({

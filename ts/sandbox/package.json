@@ -4,15 +4,18 @@
   "type": "module",
   "description": "A local playground for exercising arvo-core (ts) without publishing it. Not part of the published package.",
   "scripts": {
-    "play": "tsx src/playground.ts",
-    "distributed:up": "docker compose -f infra/docker-compose.yml up -d --wait",
     "distributed:down": "docker compose -f infra/docker-compose.yml down",
-    "distributed:reset": "docker compose -f infra/docker-compose.yml down -v",
-    "distributed:migrate": "docker exec -i arvo-records-postgres psql -U arvo -d arvo_records -v ON_ERROR_STOP=1 -f - < infra/postgres/001_records_and_outbox.sql",
+    "distributed:migrate": "tsx src/distributed/shared/migrate.ts",
     "distributed:probe": "vitest run tests/distributed/shared/pipeline.spec.ts",
     "distributed:purity": "vitest run tests/distributed/handler/purity.spec.ts",
+    "distributed:reset": "docker compose -f infra/docker-compose.yml down -v",
+    "distributed:up": "docker compose -f infra/docker-compose.yml up -d --wait",
+    "lint": "biome check",
+    "lint:fix": "biome check --fix",
+    "play": "tsx src/playground.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
@@ -22,6 +25,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.5",
     "@dbos-inc/dbos-sdk": "5.2.11",
     "@opentelemetry/api-logs": "0.222.0",
     "@opentelemetry/exporter-logs-otlp-grpc": "0.222.0",

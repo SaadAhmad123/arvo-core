@@ -93,7 +93,10 @@ const aWholeWorkflow = async (): Promise<void> => {
   });
   if (asked.kind !== 'produced') return;
 
-  console.log('  asked for:', asked.events.map((one) => one.type));
+  console.log(
+    '  asked for:',
+    asked.events.map((one) => one.type),
+  );
   console.log('  resting at:', asked.state.lifecycle);
   console.log('  revision:', asked.state.casVersion);
   store.commit(asked.state);
@@ -119,7 +122,10 @@ const aWholeWorkflow = async (): Promise<void> => {
   });
   if (answered.kind !== 'produced') return;
 
-  console.log('  answered with:', answered.events.map((one) => one.type));
+  console.log(
+    '  answered with:',
+    answered.events.map((one) => one.type),
+  );
   console.log('  addressed to:', answered.events[0]?.to);
   console.log('  resting at:', answered.state.lifecycle);
   console.log('  revision:', answered.state.casVersion);

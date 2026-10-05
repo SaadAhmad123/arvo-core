@@ -60,7 +60,10 @@ const loggerFor = (name: string, version: string): ArvoLogger => {
       emitting.emit({
         severityNumber: record.severityNumber,
         body: record.body,
-        attributes: record.attributes as Record<string, string | number | boolean>,
+        attributes: record.attributes as Record<
+          string,
+          string | number | boolean
+        >,
       });
     },
   };
