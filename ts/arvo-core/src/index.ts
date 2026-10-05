@@ -56,6 +56,14 @@ export type {
   ArvoFaultKind,
   ArvoFaultRetry,
 } from './ArvoEventHandler/fault/types.js';
+export {
+  ARVO_CATEGORY_COMPLETE,
+  ARVO_CATEGORY_INIT,
+} from './ArvoEventHandler/helpers/defaults.js';
+export {
+  deriveArvoExecutionId,
+  isArvoExecutionId,
+} from './ArvoEventHandler/helpers/execution-id.js';
 export { ArvoEventHandler } from './ArvoEventHandler/index.js';
 export { ArvoEventHandlerSetup } from './ArvoEventHandler/setup.js';
 export { ArvoExecutionState } from './ArvoEventHandler/state/index.js';
@@ -65,6 +73,10 @@ export type {
   ArvoTerminalLifecycle,
   ArvoTouchedEvent,
   ArvoTouchedEventDirection,
+} from './ArvoEventHandler/state/types.js';
+export {
+  ARVO_EXECUTION_LIFECYCLES,
+  ARVO_TERMINAL_LIFECYCLES,
 } from './ArvoEventHandler/state/types.js';
 export type {
   ArvoCreatedVersion,
