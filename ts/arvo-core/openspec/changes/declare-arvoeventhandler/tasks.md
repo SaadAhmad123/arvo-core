@@ -164,3 +164,9 @@ race, a service answers twice and a human never answers at all.
 - [x] 9.2 Worked through [`handler_testing_tasks.md`](./handler_testing_tasks.md): the same rigour for the layer above, where the inputs are an event and a way to reach a store rather than an event already placed. Three versions in flight at once, a store that lies, a rolling upgrade from the outside, the version's own lattice driven through the handler with its own invariants asserted, three hundred seeded runs, and four real threads against one store with a broker that decides nothing.
 
 It found one defect in the code — a crafted `dataschema` or `type` crashed the handler rather than being refused — and three in the harness.
+
+## 10. Running it under a mechanism nobody here wrote
+
+Every mechanism the suites run against was written by the same hand as the thing it tests, which is the limit of what any of them can say. Temporal and DBOS are mechanisms in ADR-006's own sense, and ADR-006 places five obligations on one.
+
+- [ ] 10.1 Work through [`distributed_handler_sandboxing_tasks.md`](./distributed_handler_sandboxing_tasks.md): the handlers under `ts/sandbox/src/distributed/handler/`, knowing nothing of either framework, and each framework a pure adapter over them — judged obligation by obligation. Plus a prototype of the shape the protocol cannot currently express, where the framework's history is the memory rather than the record, to find out what a change would have to concede.
