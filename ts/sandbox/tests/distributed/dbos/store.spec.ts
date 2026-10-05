@@ -21,6 +21,7 @@ import {
 } from '../../../src/distributed/dbos/store.js';
 import { inventoryCheckV1 } from '../../../src/distributed/handler/com_inventory_check/contract.js';
 import { inventoryCheckHandler } from '../../../src/distributed/handler/com_inventory_check/index.js';
+import { catalogueFor } from '../../../src/distributed/shared/catalogue.js';
 import { readConfig } from '../../../src/distributed/shared/config.js';
 
 /**
@@ -45,6 +46,8 @@ const KNOWN_SKU = 'sku-wide-0001';
 describe('the record store', () => {
   let pool: Pool;
   let store: RecordStore;
+  /** Connections this test took as a dependency, given back after it. */
+  let giveBack: Array<() => void>;
   beforeAll(() => {
     const config = readConfig('arvo-store-spec');
     pool = new Pool({
@@ -58,7 +61,12 @@ describe('the record store', () => {
     await pool.end();
   });
 
+  afterEach(() => {
+    for (const release of giveBack) release();
+  });
+
   beforeEach(async () => {
+    giveBack = [];
     // Truncated rather than deleted: a record may not be deleted, which
     // is the point of one of these tests.
     await pool.query('TRUNCATE outbox, execution_record');
@@ -80,11 +88,16 @@ describe('the record store', () => {
       state: async ({ executionId }) =>
         (await store.readRecord(executionId)) as JSONObject | null,
       attempt: 0,
-      dependencies: ({ executionId, attempt, state }) => ({
-        executionId,
-        attempt,
-        resumed: state,
-      }),
+      dependencies: async ({ executionId, attempt, state }) => {
+        const opened = await catalogueFor(pool);
+        giveBack.push(opened.release);
+        return {
+          catalogue: opened.catalogue,
+          executionId,
+          attempt,
+          resumed: state,
+        };
+      },
     });
 
   /** What one execution produced, for a test that then commits it. */

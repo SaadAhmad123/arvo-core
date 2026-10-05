@@ -31,7 +31,16 @@ limit.historyCount.warn:
 limit.historyCount.error:
   - value: 512000
 
-# Search attributes the workflows set, so an execution can be found by
-# what identifies it rather than by its workflow id alone.
+# An update is how a delivery commits a revision to the record's own
+# workflow, and how it learns whether that revision was accepted.
 frontend.enableUpdateWorkflowExecution:
+  - value: true
+
+# Update-with-start is how a first revision is committed only where no
+# record exists: the record's workflow is created and updated in one
+# call, so there is no read followed by a write to lose a race in
+# between. Off by default, and the mechanism does not work without it.
+system.enableExecuteMultiOperation:
+  - value: true
+frontend.enableExecuteMultiOperation:
   - value: true
