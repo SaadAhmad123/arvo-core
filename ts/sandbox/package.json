@@ -9,7 +9,10 @@
     "distributed:down": "docker compose -f infra/docker-compose.yml down",
     "distributed:reset": "docker compose -f infra/docker-compose.yml down -v",
     "distributed:migrate": "docker exec -i arvo-records-postgres psql -U arvo -d arvo_records -v ON_ERROR_STOP=1 -f - < infra/postgres/001_records_and_outbox.sql",
-    "distributed:probe": "tsx src/distributed/shared/pipeline-probe.ts"
+    "distributed:probe": "vitest run tests/distributed/shared/pipeline.spec.ts",
+    "distributed:purity": "vitest run tests/distributed/handler/purity.spec.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
@@ -40,6 +43,7 @@
     "node-pg-migrate": "8.0.3",
     "pg": "8.16.3",
     "tsx": "^4.19.0",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vitest": "^3.2.7"
   }
 }

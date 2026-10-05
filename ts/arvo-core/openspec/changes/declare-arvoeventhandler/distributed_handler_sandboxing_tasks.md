@@ -57,7 +57,11 @@ infra/
   otel/                      the collector's pipelines
   grafana/                   provisioned datasources and dashboards
   tempo/ prometheus/ loki/   each backend's own configuration
+tests/                       every spec and every probe, mirroring src/
+  distributed/...            run with vitest, against the real stack
 ```
+
+Nothing that asserts lives under `src/`. Every check — the probes included — is a vitest `*.spec.ts` under `tests/`, laid out to mirror the thing it is about, so what the sandbox *is* and what is *claimed of it* never share a file.
 
 One directory per handler, named for what it takes in. Every framework directory imports the same handlers and adds nothing to them. **If either framework needs a handler changed, that is a finding**, and it is recorded in §17 rather than worked around.
 
