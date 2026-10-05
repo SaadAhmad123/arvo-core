@@ -233,27 +233,32 @@ function it was the first time — which is only true because the state
 resolver is injected, so nothing had to be kept alive in between.
 
 ```
-answer(domainedEvent, decision, deps):
+answer(domainedEvent, decision, deps, traceHeader):
+    #   traceHeader   the answerer's own, or null where it has none.
+    #                 Passed in. Nothing here reads an ambient context:
+    #                 the party answering may be a request handler, a
+    #                 batch job or a person at a desk, and only it knows
+    #                 which trace this belongs to.
 
-    trace = activeSpanContext()                  # the answerer's own, if any
-    if trace is null:
-        trace = { traceparent: domainedEvent.traceparent,
-                  tracestate:  domainedEvent.tracestate }
+    if traceHeader is null:
+        # fall back to the trace of the request that left the lattice, so
+        # an answer still hangs off the run that asked for it
+        traceHeader = { traceparent: domainedEvent.traceparent,
+                        tracestate:  domainedEvent.tracestate }
 
     reply = build(decision,
                   to          = domainedEvent.source,  # the handler that asked
                   source      = the run's own answer address,
                   initid      = domainedEvent.id,      # what it answers
                   parentid    = domainedEvent.id,
-                  traceparent = trace.traceparent,
-                  tracestate  = trace.tracestate)
+                  traceparent = traceHeader.traceparent,
+                  tracestate  = traceHeader.tracestate)
 
     return run(reply, deps)
 ```
 
-The trace continues either way: the answerer's own span context where it
-has one, and otherwise the trace of the request that left the lattice — so
-a review answered hours later still hangs off the run that asked for it.
+Either way the trace continues, so a review answered hours later is still
+one trace with the run that asked for it.
 
 ## What each mechanism supplies
 
