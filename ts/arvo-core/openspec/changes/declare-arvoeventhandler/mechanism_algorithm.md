@@ -233,26 +233,28 @@ function it was the first time — which is only true because the state
 resolver is injected, so nothing had to be kept alive in between.
 
 ```
-answer(domainedEvent, decision, deps, traceHeader):
-    #   traceHeader   the answerer's own, or null where it has none.
-    #                 Passed in. Nothing here reads an ambient context:
-    #                 the party answering may be a request handler, a
-    #                 batch job or a person at a desk, and only it knows
-    #                 which trace this belongs to.
+answer(domainedEvent, decision, deps, span):
+    #   span   the answerer's own span, or null where it has none.
+    #          Passed in rather than read from an ambient context: the
+    #          party answering may be a request handler, a batch job or a
+    #          desk a person works at, and only it knows which trace this
+    #          answer belongs to.
 
-    if traceHeader is null:
-        # fall back to the trace of the request that left the lattice, so
-        # an answer still hangs off the run that asked for it
-        traceHeader = { traceparent: domainedEvent.traceparent,
-                        tracestate:  domainedEvent.tracestate }
+    if span is not null:
+        trace = traceContextFromSpan(span)
+    else:
+        # the trace of the request that left the lattice, so an answer
+        # still hangs off the run that asked for it
+        trace = { traceparent: domainedEvent.traceparent,
+                  tracestate:  domainedEvent.tracestate }
 
     reply = build(decision,
                   to          = domainedEvent.source,  # the handler that asked
                   source      = the run's own answer address,
                   initid      = domainedEvent.id,      # what it answers
                   parentid    = domainedEvent.id,
-                  traceparent = traceHeader.traceparent,
-                  tracestate  = traceHeader.tracestate)
+                  traceparent = trace.traceparent,
+                  tracestate  = trace.tracestate)
 
     return run(reply, deps)
 ```
