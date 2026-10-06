@@ -38,7 +38,7 @@ flowchart TB
         deliver["resolve the handler by <code>to</code><br/>run it<br/>commit what it produced"]
     end
 
-    subgraph record["executionRevisions — one workflow per execution"]
+    subgraph record["executionRecord — one workflow per execution"]
         direction TB
         revisions["revisions<br/><i>{ state, events } each</i>"]
     end
@@ -60,7 +60,7 @@ Three parts, and each knows nothing about the others' business:
   runs it, and commits. It is also where the one fact the loop cannot see
   is settled — whether a handler exists for an address — because workflow
   code is bundled for an isolate that cannot import the handlers.
-- **`executionRevisions`** is the record store. One workflow per
+- **`executionRecord`** is the record store. One workflow per
   execution, so writes to one record are serialized by Temporal admitting
   one workflow of a given name.
 
@@ -72,8 +72,8 @@ sequenceDiagram
     participant C as caller
     participant R as arvoRun
     participant D as deliverOne
-    participant X as executionRevisions<br/>(order)
-    participant L as executionRevisions<br/>(leaf)
+    participant X as executionRecord<br/>(order)
+    participant L as executionRecord<br/>(leaf)
 
     C->>R: startRun(order event)
     R->>D: deliver the order

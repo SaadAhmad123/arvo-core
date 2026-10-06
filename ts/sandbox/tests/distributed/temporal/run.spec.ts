@@ -185,7 +185,7 @@ describe('one run under Temporal', () => {
     const since = startedAt.toISOString();
 
     for await (const workflow of harness.client.workflow.list({
-      query: `WorkflowType = 'executionRevisions' AND StartTime > '${since}'`,
+      query: `WorkflowType = 'executionRecord' AND StartTime > '${since}'`,
     })) {
       const state = await harness.client.workflow
         .getHandle(workflow.workflowId)

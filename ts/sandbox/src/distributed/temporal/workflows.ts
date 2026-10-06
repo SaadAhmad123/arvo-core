@@ -57,7 +57,7 @@ const casVersionOf = (state: JSONObject): number =>
   typeof state.casVersion === 'number' ? state.casVersion : -1;
 
 /**
- * One execution's revisions.
+ * One execution's record.
  *
  * One workflow per execution, named after the execution the handler
  * identified, so writes to one record are serialized by Temporal
@@ -74,9 +74,9 @@ const casVersionOf = (state: JSONObject): number =>
  * keeps its workflow open, which is what waiting means — and what it
  * costs, since a namespace expires only what has closed.
  *
- * @param param - The execution whose revisions these are.
+ * @param param - The execution whose record this is.
  */
-export async function executionRevisions(param: RecordParam): Promise<{
+export async function executionRecord(param: RecordParam): Promise<{
   executionId: string;
   revisions: number;
   lifecycle: string;

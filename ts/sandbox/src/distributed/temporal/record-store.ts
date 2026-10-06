@@ -7,7 +7,7 @@ import {
 import type { JSONObject } from 'arvo-core';
 import type { CommitOutcome, Revision } from './protocol.js';
 import { RECORD_QUEUE } from './queues.js';
-import { commitRevision, executionRevisions, stateHeld } from './workflows.js';
+import { commitRevision, executionRecord, stateHeld } from './workflows.js';
 
 /**
  * The record store, as Temporal holds it.
@@ -67,7 +67,7 @@ export const commitTo = async (
 ): Promise<CommitOutcome> =>
   client.workflow.executeUpdateWithStart(commitRevision, {
     args: [param.revision],
-    startWorkflowOperation: new WithStartWorkflowOperation(executionRevisions, {
+    startWorkflowOperation: new WithStartWorkflowOperation(executionRecord, {
       workflowId: recordWorkflowId(param.executionId),
       taskQueue: RECORD_QUEUE,
       args: [{ executionId: param.executionId }],
