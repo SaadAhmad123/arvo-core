@@ -12,6 +12,7 @@ import {
   type JSONObject,
 } from 'arvo-core';
 import type { Pool } from 'pg';
+import { HANDLERS } from '../handler/index.js';
 import { catalogueFor } from '../shared/catalogue.js';
 import { destinationFor } from '../shared/routing.js';
 import type { DeliveryReport, EmittedEvent } from './protocol.js';
@@ -179,21 +180,20 @@ const converged = (
 };
 
 /**
- * Everything Temporal may run, bound to what this worker reaches.
+ * Delivers one event to the handler it is addressed to.
  *
- * @param scope - The client a record's own workflow is reached through.
+ * @param scope - What this worker reaches.
+ * @param payload - The event, in the event's own format.
+ * @returns What happened, and everything committed, for the loop to
+ * sort.
+ * @throws Where a fault says a further attempt is in prospect, so
+ * Temporal makes one.
  */
-export const createActivities = (scope: ActivityScope) => ({
-  /**
-   * Delivers one event to the handler it is addressed to.
-   *
-   * @param payload - The event, in the event's own format.
-   * @returns What happened, and everything committed, for the loop to
-   * sort.
-   * @throws Where a fault says a further attempt is in prospect, so
-   * Temporal makes one.
-   */
-  async deliverOne(payload: string): Promise<DeliveryReport> {
+const deliver = async (
+  scope: ActivityScope,
+  payload: string,
+): Promise<DeliveryReport> => {
+  {
     const triggeringEvent = await WIRE.deserialize(payload);
     const destination = destinationFor(triggeringEvent);
 
@@ -308,8 +308,32 @@ export const createActivities = (scope: ActivityScope) => ({
     } finally {
       for (const release of releaseEach) release();
     }
-  },
-});
+  }
+};
 
-/** What the loop sees of the activities, which is their signatures. */
-export type Activities = ReturnType<typeof createActivities>;
+/**
+ * Everything Temporal may run.
+ *
+ * One activity per handler, each named after the contract that handler
+ * implements and every one of them the same delivery. Naming them this
+ * way is the difference between a history that says `com_payment_charge`
+ * ran and one that says something ran.
+ *
+ * @param scope - The client a record's own workflow is reached through,
+ * and the pool the handlers' own data comes from.
+ */
+export const createActivities = (
+  scope: ActivityScope,
+): Record<string, (payload: string) => Promise<DeliveryReport>> =>
+  Object.fromEntries(
+    Object.keys(HANDLERS).map((contractType) => [
+      contractType,
+      (payload: string) => deliver(scope, payload),
+    ]),
+  );
+
+/** What the loop sees of the activities: one per handler, by its own name. */
+export type Activities = Record<
+  string,
+  (payload: string) => Promise<DeliveryReport>
+>;

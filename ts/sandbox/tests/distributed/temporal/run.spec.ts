@@ -44,9 +44,12 @@ describe('one run under Temporal', () => {
   let answered: RunOutcome;
   let lifted: EmittedEvent;
   let subject: string;
+  /** When this spec began, so stale workflows are not read as this run's. */
+  let startedAt: Date;
 
   beforeAll(async () => {
     harness = await startTemporalHarness('arvo-temporal-run-spec');
+    startedAt = new Date();
 
     subject = `temporal-run-${Date.now()}`;
     const opening = createArvoEventFactory(orderFulfilV1).createInput({
@@ -176,8 +179,13 @@ describe('one run under Temporal', () => {
   ): Promise<readonly Record<string, unknown>[]> => {
     const found: Record<string, unknown>[] = [];
 
+    // Only this run's. A record is a workflow, so a record written by an
+    // earlier build of the workflow code is still there — and querying
+    // one replays history the current code was not written against.
+    const since = startedAt.toISOString();
+
     for await (const workflow of harness.client.workflow.list({
-      query: `WorkflowType = 'executionRevisions'`,
+      query: `WorkflowType = 'executionRevisions' AND StartTime > '${since}'`,
     })) {
       const state = await harness.client.workflow
         .getHandle(workflow.workflowId)

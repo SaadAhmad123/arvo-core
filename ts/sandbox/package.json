@@ -10,6 +10,7 @@
     "distributed:purity": "vitest run tests/distributed/handler/purity.spec.ts",
     "distributed:reset": "docker compose -f infra/docker-compose.yml down -v",
     "distributed:temporal": "vitest run tests/distributed/temporal",
+    "distributed:temporal:clear": "tsx src/distributed/temporal/clear.ts",
     "distributed:temporal:worker": "tsx src/distributed/temporal/worker.ts",
     "distributed:up": "docker compose -f infra/docker-compose.yml up -d --wait",
     "lint": "biome check",

@@ -78,10 +78,25 @@ export type CommitOutcome =
       readonly alreadyCommitted: readonly EmittedEvent[] | null;
     };
 
+/** One event to deliver, and the handler it goes to. */
+export type Delivery = {
+  /** The event, in the event's own format. */
+  readonly payload: string;
+  /**
+   * The handler's own contract type.
+   *
+   * Also the name of the activity that delivers it, so a history and a
+   * trace say which handler ran rather than that something ran.
+   */
+  readonly addressedTo: string;
+};
+
 /** What one run's workflow is started with. */
 export type RunParam = {
   /** The event entering the lattice, in the event's own format. */
   readonly payload: string;
+  /** The handler it is addressed to, which names the activity. */
+  readonly addressedTo: string;
   /**
    * Where this run answers, which is that event's `source`.
    *

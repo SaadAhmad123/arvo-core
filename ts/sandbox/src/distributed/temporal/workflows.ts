@@ -11,6 +11,7 @@ import type { JSONObject } from 'arvo-core';
 import type { Activities } from './activities.js';
 import type {
   CommitOutcome,
+  Delivery,
   EmittedEvent,
   RecordParam,
   Revision,
@@ -55,9 +56,6 @@ const lifecycleOf = (state: JSONObject): string =>
 const casVersionOf = (state: JSONObject): number =>
   typeof state.casVersion === 'number' ? state.casVersion : -1;
 
-/** How long a terminal record stays readable before its workflow ends. */
-const LINGER = '24 hours';
-
 /**
  * One execution's revisions.
  *
@@ -70,6 +68,11 @@ const LINGER = '24 hours';
  * A revision is the record and the events committed with it, kept as one
  * thing — so whatever happens after the write, those events can still be
  * read back and sent.
+ *
+ * It ends when the execution comes to rest, and stays queryable after
+ * that from its own history. An execution that has not come to rest
+ * keeps its workflow open, which is what waiting means — and what it
+ * costs, since a namespace expires only what has closed.
  *
  * @param param - The execution whose revisions these are.
  */
@@ -126,13 +129,10 @@ export async function executionRevisions(param: RecordParam): Promise<{
     return { committed: true, casVersion: writing };
   });
 
-  // Stays readable after the execution comes to rest, because a run that
-  // is answered later still has to find what this committed.
   await condition(() => {
     const held = latest();
     return held !== null && TERMINAL.has(lifecycleOf(held));
   });
-  await condition(() => false, LINGER);
 
   const held = latest();
   return {
@@ -144,7 +144,14 @@ export async function executionRevisions(param: RecordParam): Promise<{
 
 // ------------------------------------------------------------------- run
 
-const { deliverOne } = proxyActivities<Activities>(DELIVERY_ACTIVITY);
+/**
+ * One activity per handler, each named after the contract it implements.
+ *
+ * Reached by name so a history and a trace say which handler ran. The
+ * loop learns the name from the event's own address, which the activity
+ * put on every emission.
+ */
+const deliverTo = proxyActivities<Activities>(DELIVERY_ACTIVITY);
 
 /** How many deliveries the loop makes at once. */
 const AT_ONCE = 64;
@@ -176,7 +183,9 @@ export async function arvoRun(param: RunParam): Promise<RunOutcome> {
   // handler is named by.
   const answersTo = param.answersTo;
 
-  const work: string[] = [param.payload];
+  const work: Delivery[] = [
+    { payload: param.payload, addressedTo: param.addressedTo },
+  ];
   const domained: EmittedEvent[] = [];
   const responses: EmittedEvent[] = [];
   let delivered = 0;
@@ -187,7 +196,16 @@ export async function arvoRun(param: RunParam): Promise<RunOutcome> {
     const taking = work.splice(0, AT_ONCE);
 
     const reports = await Promise.all(
-      taking.map((payload) => deliverOne(payload)),
+      taking.map((delivery) => {
+        const deliverToHandler = deliverTo[delivery.addressedTo];
+        if (deliverToHandler === undefined) {
+          throw ApplicationFailure.nonRetryable(
+            `no handler named ${delivery.addressedTo} is registered on this worker`,
+            'arvo_unroutable',
+          );
+        }
+        return deliverToHandler(delivery.payload);
+      }),
     );
     delivered += taking.length;
 
@@ -201,8 +219,11 @@ export async function arvoRun(param: RunParam): Promise<RunOutcome> {
           responses.push(emitted);
           continue;
         }
-        if (emitted.handled) {
-          work.push(emitted.payload);
+        if (emitted.handled && emitted.addressedTo !== null) {
+          work.push({
+            payload: emitted.payload,
+            addressedTo: emitted.addressedTo,
+          });
           continue;
         }
 

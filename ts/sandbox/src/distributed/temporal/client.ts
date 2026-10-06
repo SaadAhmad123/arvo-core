@@ -7,7 +7,7 @@ import {
   cloneArvoEvent,
   traceContextFromSpan,
 } from 'arvo-core';
-import { handlerFor } from '../shared/routing.js';
+import { destinationFor, handlerFor } from '../shared/routing.js';
 import type { RunOutcome } from './protocol.js';
 import { RUN_QUEUE } from './queues.js';
 import type { arvoRun } from './workflows.js';
@@ -82,11 +82,24 @@ export const startRun = async (
 ): Promise<RunOutcome> => {
   checkSource(event.source);
 
+  const destination = destinationFor(event);
+  if (destination.kind !== 'handled') {
+    throw new Error(
+      `${event.type} ${event.id} is addressed to ${event.to}, which no handler in this lattice implements, so there is no run to start`,
+    );
+  }
+
   return client.workflow.execute<typeof arvoRun>('arvoRun', {
     // the event's own id: unique, and the same if the run is started again
     workflowId: `run-${event.id}`,
     taskQueue: RUN_QUEUE,
-    args: [{ payload: await WIRE.serialize(event), answersTo: event.source }],
+    args: [
+      {
+        payload: await WIRE.serialize(event),
+        addressedTo: destination.handler.contracts.self.type,
+        answersTo: event.source,
+      },
+    ],
   });
 };
 

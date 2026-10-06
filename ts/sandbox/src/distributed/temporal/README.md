@@ -167,7 +167,7 @@ second time.
 | file | what |
 |---|---|
 | `workflows.ts` | the loop and the record. Bundled for an isolate, so it imports no handler and reaches nothing |
-| `activities.ts` | one delivery: resolve by `to`, run the handler, commit. The only Arvo-aware code here |
+| `activities.ts` | one activity per handler, each named after its contract, every one the same delivery. The only Arvo-aware code here |
 | `record-store.ts` | reading a record is a query, committing one is an update-with-start |
 | `protocol.ts` | the plain shapes the two sides pass, because the isolate cannot import the handlers |
 | `queues.ts` | two task queues, so a wide run cannot starve its own records |
@@ -175,6 +175,7 @@ second time.
 | `client.ts` | how something outside starts a run or answers one, and where a sender's obligations are checked |
 | `workers.ts` | the workers, apart from the process, so a suite runs the ones a deployment runs |
 | `worker.ts` | the process: config, health, bounded slots, graceful shutdown |
+| `clear.ts` | terminates what is still running, for a sandbox run against several builds. Nothing a deployment would run |
 | `workflow-spans.ts` | workflow spans into this process's own pipeline, across an OpenTelemetry major version boundary |
 
 ## Running it
@@ -198,7 +199,14 @@ the workflows and `localhost:3000` for the traces.
   wide fan-out here.
 - **A record lives as long as its workflow's history is retained.** The
   namespace's retention is the store's retention, and that is a real
-  difference from a table.
+  difference from a table. A record workflow closes when its execution
+  comes to rest, and one resting at `waiting` stays open for as long as
+  it waits — so a namespace expires only the executions that finished.
+- **Changing workflow code can make existing records unreadable.**
+  Reading a record replays its workflow's history, so a history written
+  by an earlier build replays against code that was not written for it
+  and fails as a determinism error. A table does not have this property.
+  `clear.ts` exists because of it.
 - **Parallel delivery is not in the algorithm.** The algorithm takes one
   event at a time. Delivering a batch at once is this mechanism's choice,
   and the convergence retry is what pays for it.
