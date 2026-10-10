@@ -49,9 +49,13 @@ export const createWorkers = async (param: {
   // Context reaches workflow code through a module that runs inside the
   // isolate and activities through one that runs out here; without both,
   // Temporal's spans and Arvo's are two traces about the same work.
+  // The module exporting `interceptors`, not the one exporting the
+  // classes it builds them from. A module with no such export registers
+  // nothing, silently — and then the loop has no span, so every delivery
+  // beneath it starts a trace of its own.
   const workflowInterceptors = [
     createRequire(import.meta.url).resolve(
-      '@temporalio/interceptors-opentelemetry/lib/workflow',
+      '@temporalio/interceptors-opentelemetry/lib/workflow-interceptors',
     ),
   ];
 

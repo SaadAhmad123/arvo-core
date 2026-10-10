@@ -1,4 +1,9 @@
-import type { Span, SpanContext } from '@opentelemetry/api';
+import {
+  context as activeContext,
+  type Span,
+  type SpanContext,
+  trace as traceApi,
+} from '@opentelemetry/api';
 import { Client, Connection } from '@temporalio/client';
 import { OpenTelemetryWorkflowClientInterceptor } from '@temporalio/interceptors-opentelemetry';
 import {
@@ -70,37 +75,69 @@ const checkSource = (source: string): void => {
 };
 
 /**
+ * Stamps an event with a span's trace context, so what it causes belongs
+ * to the trace that caused it.
+ *
+ * An event entering the lattice with no trace context of its own starts
+ * a trace of its own, and everything the run does hangs off that instead
+ * of off the caller.
+ */
+const continuing = (event: ArvoEvent, span?: Span | SpanContext): ArvoEvent => {
+  if (span === undefined) return event;
+  const trace = traceContextFromSpan(span);
+  return cloneArvoEvent(event, {
+    traceparent: trace.traceparent,
+    tracestate: trace.tracestate ?? undefined,
+  });
+};
+
+/**
  * Starts a run, and hands back how it ended.
  *
  * @param client - The cluster.
  * @param event - The event entering the lattice. Its `source` is where
  * the run answers, and must not be a handler's contract type.
+ * @param span - What the run belongs to. Without one the run is a trace
+ * of its own, which is right for something nothing else caused and
+ * wrong for everything else.
  */
 export const startRun = async (
   client: Client,
   event: ArvoEvent,
+  span?: Span | SpanContext,
 ): Promise<RunOutcome> => {
   checkSource(event.source);
 
-  const destination = destinationFor(event);
+  const entering = continuing(event, span);
+  const destination = destinationFor(entering);
   if (destination.kind !== 'handled') {
     throw new Error(
       `${event.type} ${event.id} is addressed to ${event.to}, which no handler in this lattice implements, so there is no run to start`,
     );
   }
 
-  return client.workflow.execute<typeof arvoRun>('arvoRun', {
-    // the event's own id: unique, and the same if the run is started again
-    workflowId: `run-${event.id}`,
-    taskQueue: RUN_QUEUE,
-    args: [
-      {
-        payload: await WIRE.serialize(event),
-        addressedTo: destination.handler.contracts.self.type,
-        answersTo: event.source,
-      },
-    ],
-  });
+  const starting = async (): Promise<RunOutcome> =>
+    client.workflow.execute<typeof arvoRun>('arvoRun', {
+      // the event's own id: unique, and the same if started again
+      workflowId: `run-${entering.id}`,
+      taskQueue: RUN_QUEUE,
+      args: [
+        {
+          payload: await WIRE.serialize(entering),
+          addressedTo: destination.handler.contracts.self.type,
+          answersTo: entering.source,
+        },
+      ],
+    });
+
+  // Temporal's own client interceptor reads the active context rather
+  // than taking a span, so the span has to be made active around the
+  // call for the workflow to be part of this trace.
+  if (span === undefined || !('spanContext' in span)) return starting();
+  return activeContext.with(
+    traceApi.setSpan(activeContext.active(), span),
+    starting,
+  );
 };
 
 /**
@@ -137,5 +174,6 @@ export const answerFromOutside = async (
       traceparent: trace.traceparent ?? undefined,
       tracestate: trace.tracestate ?? undefined,
     }),
+    param.span,
   );
 };
