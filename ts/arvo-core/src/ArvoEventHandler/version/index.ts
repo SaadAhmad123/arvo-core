@@ -270,7 +270,7 @@ export class ArvoEventHandlerVersion<
       TMechanismHooks
     >,
     record: ArvoContextState<TSelf, TServices, TDataSchema>,
-    dependencies: TDependencies,
+    dependencies: TDependencies | null,
   ): Promise<ArvoEventHandlerExecuteResponse> {
     const collected =
       param.entry === 'followup'
@@ -302,10 +302,7 @@ export class ArvoEventHandlerVersion<
       telemetry: param.telemetry,
       options: this.options,
       dependencies,
-      // The one place an empty bag is invented, and it is invented for
-      // the executor rather than standing in for something missing: an
-      // executor must always find an object, and nothing was supplied.
-      hooks: param.hooks ?? ({} as TMechanismHooks),
+      hooks: param.hooks,
     });
 
     markStage(param.telemetry, 'executor_entered', {
@@ -625,10 +622,10 @@ export class ArvoEventHandlerVersion<
     >,
     record: ArvoExecutionState,
     scope: ArvoDependencyScope,
-  ): Promise<TDependencies> {
+  ): Promise<TDependencies | null> {
     const dependencies: IArvoEventHandlerDependency<TDependencies> | null =
       param.dependencies;
-    if (dependencies === null) return {} as TDependencies;
+    if (dependencies === null) return null;
 
     try {
       await dependencies.open(scope);

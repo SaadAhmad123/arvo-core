@@ -30,6 +30,18 @@ export const inventoryCheckHandler = setupArvoEventHandler({
     }),
     execute: async (ctx) => {
       const requested = ctx.state.initEvent.data;
+      // Declared and not supplied. This handler cannot do its work
+      // without data, so it says what was missing rather than failing on
+      // a member that is not there.
+      if (ctx.dependencies === null) {
+        throw await ctx.fault({
+          faultKind: 'executor_raised',
+          message:
+            'com_inventory_check needs a catalogue and was given none, so there is nothing for it to read',
+          retryable: false,
+        });
+      }
+
       const held = await ctx.dependencies.catalogue.heldOf(requested.sku);
 
       // Takes what it needs where there is enough, which is a handler

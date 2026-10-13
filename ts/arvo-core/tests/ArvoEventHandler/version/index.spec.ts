@@ -454,7 +454,7 @@ describe('what an executor is given to work with', () => {
     const seen: unknown[] = [];
     const version = declared({
       execute: async (ctx) => {
-        seen.push(ctx.dependencies.db);
+        seen.push(ctx.dependencies?.db);
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
       },
     });
@@ -467,7 +467,7 @@ describe('what an executor is given to work with', () => {
     const version = declared({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
-        expect(ctx.dependencies.db).toBe('from the factory');
+        expect(ctx.dependencies?.db).toBe('from the factory');
       },
     });
     await open(

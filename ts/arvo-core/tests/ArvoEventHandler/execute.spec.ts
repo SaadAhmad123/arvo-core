@@ -572,7 +572,7 @@ describe('what the executor is given', () => {
         state: z.object({ seen: z.string() }),
         execute: async (ctx) => {
           await ctx.setState({
-            data: { seen: `${ctx.dependencies.note}/${ctx.hooks.ticket}` },
+            data: { seen: `${ctx.dependencies?.note}/${ctx.hooks?.ticket}` },
           });
         },
       })

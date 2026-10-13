@@ -227,12 +227,12 @@ describe('ArvoExecutionContext', async () => {
   describe('what the mechanism supplied', () => {
     it('carries the dependencies resolved for this execution', () => {
       const db = { find: () => 'x' };
-      expect(onInit({ dependencies: { db } }).dependencies.db).toBe(db);
+      expect(onInit({ dependencies: { db } }).dependencies?.db).toBe(db);
     });
 
     it('carries whatever hooks the mechanism exposed', () => {
       const scheduler = {};
-      expect(onInit({ hooks: { scheduler } }).hooks.scheduler).toBe(scheduler);
+      expect(onInit({ hooks: { scheduler } }).hooks?.scheduler).toBe(scheduler);
     });
 
     it('carries an empty object where a mechanism supplied neither', () => {

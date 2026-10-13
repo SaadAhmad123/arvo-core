@@ -8,12 +8,13 @@ Two facts about the existing code shape the work. The factory was resolved in th
 
 **Goals:**
 - One spelling for supplying a dependency, so the handler never asks which form it was given.
-- Not one existing executor body changes. `ctx.dependencies.x.y()` stays one property access.
+- `ctx.dependencies.x.y()` stays one property access for an executor that has stated what it expects.
 - The cast disappears rather than moving.
 - The two calls land where nothing can skip them, including the paths a reader forgets exist.
 
 **Non-Goals:**
-- Giving hooks a lifetime. Their nullability here is a typing tidy under the package's **Optional inputs** rule and nothing more.
+- Giving hooks a lifetime. Their nullability is about absence being visible, not about a lifetime.
+- Obliging a mechanism to supply what a version declared. See **Absence reaches the executor**.
 - Typing the record a supplier receives by default. Optional, for the reason under **Decisions**.
 - Enforcing idempotency. It cannot be checked, only documented.
 
@@ -33,13 +34,38 @@ One property access, so no executor body changes and `close` is unreachable from
 
 The alternative, handing over the object, was rejected on two counts: `ctx.dependencies.attributes.catalogue.itemsIn(...)` is a hop at every call site, and a reachable `close` would release every resource the object holds.
 
+### Absence reaches the executor, rather than stopping at the context
+
+`ctx.dependencies` and `ctx.hooks` become `TDependencies | null` and `TMechanismHooks | null`. Nothing fabricates an empty object anywhere.
+
+The deciding argument is that a mechanism cannot be obliged to supply what a version declared, because it does not know which handler it is about to run — `destinationFor(event)` resolves one from a map keyed by the event's `to`, so there is no call site at which the declared shape is known. An obligation expressed against that shape could only be met by asserting it, which is the unchecked claim again one layer earlier.
+
+So absence stays possible, and the only honest thing is to say so. The cost is one guard per executor rather than per call site, because TypeScript narrows after it:
+
+```ts
+execute: async (ctx) => {
+  if (ctx.dependencies === null) {
+    throw await ctx.fault({
+      faultKind: 'executor_raised',
+      message: 'this version needs a catalogue and was given none',
+      retryable: false,
+    });
+  }
+  await ctx.dependencies.catalogue.itemsIn('orders');   // narrowed
+};
+```
+
+Which is better than the empty object in three ways: the failure is a fault naming what was missing rather than a `TypeError` on an absent member; the party deciding is the one that knows whether it can degrade; and an executor that genuinely can work without them writes no guard at all.
+
+Rejected alternatives are in ADR-012. The one worth repeating here is refusing the delivery where a declaration was not satisfied — it makes the protocol decide something only the executor knows, and turns a degradable execution into a failed one.
+
 ### `null` inside, `undefined` outside
 
 The package's **Optional inputs** rule, unchanged: `dependencies?: IArvoEventHandlerDependency<TDependencies>` at the boundary a caller writes, normalized once in `ArvoEventHandler#dispatch` to `| null` for everything below. One line where the two spellings meet rather than a `??` down the call chain.
 
 Nothing fabricates an instance. The empty object survives in exactly one place — where the execution context is built — and is about the *attributes*, which an executor must always find. That separates two absences the old code conflated: the dependency object can be absent; what the executor reads cannot.
 
-Applied to hooks at the same time, which recovers a distinction the old `?? {}` destroyed: a mechanism that deliberately exposed nothing is now a different fact from one that was never asked, though an executor still finds `{}` either way.
+Applied to hooks at the same time, which recovers a distinction the old `?? {}` destroyed: a mechanism that deliberately exposed nothing is now a different fact from one that was never asked — and under ADR-012 the executor sees that difference too.
 
 ### The scope's state schema is optional
 
@@ -80,4 +106,5 @@ They are themselves conformant, and `dependency.spec.ts` proves it — idempoten
 - **Breaking, with no compatible path.** A value has no release point, which is the whole problem, so there is no form that accepts both.
 - **A dependency holding nothing is now a class with two empty methods.** Ceremony, accepted for one path through the handler.
 - **Idempotency is a rule nothing checks.** A supplier that gets it wrong fails in a way that reads as the handler's fault. All an implementation can do is say so at the surface, which the interface's own documentation does.
+- **Every executor reaching for a declared dependency or a hook now states its expectation.** One guard, charged to the party that knows what absence means. The ones that break are the ones whose expectation was unchecked, which is the intended effect.
 - **The default scope types the record loosely.** A supplier serving one version can recover it; one serving a handler cannot, and narrows by hand. The alternative types nothing at all for multi-version handlers.

@@ -176,6 +176,17 @@ export const orderFulfilHandler = setupArvoEventHandler({
     state: firstMemory,
     execute: async (ctx) => {
       const requested = ctx.state.initEvent.data;
+      // Declared and not supplied. This handler cannot do its work
+      // without data, so it says what was missing rather than failing on
+      // a member that is not there.
+      if (ctx.dependencies === null) {
+        throw await ctx.fault({
+          faultKind: 'executor_raised',
+          message:
+            'com_order_fulfil needs a catalogue and was given none, so there is nothing for it to read',
+          retryable: false,
+        });
+      }
 
       if (ctx.entry === 'init') {
         const requests = await Promise.all(
@@ -247,6 +258,17 @@ export const orderFulfilHandler = setupArvoEventHandler({
     state: secondMemory,
     execute: async (ctx) => {
       const requested = ctx.state.initEvent.data;
+      // Declared and not supplied. This handler cannot do its work
+      // without data, so it says what was missing rather than failing on
+      // a member that is not there.
+      if (ctx.dependencies === null) {
+        throw await ctx.fault({
+          faultKind: 'executor_raised',
+          message:
+            'com_order_fulfil needs a catalogue and was given none, so there is nothing for it to read',
+          retryable: false,
+        });
+      }
 
       if (ctx.entry === 'init') {
         const requests = await Promise.all(

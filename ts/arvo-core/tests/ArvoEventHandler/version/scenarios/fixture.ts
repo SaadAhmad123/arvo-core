@@ -163,11 +163,15 @@ export type ArvoScenarioDependencies = {
 };
 
 /** Whichever the scenario supplied, or what this version does by default. */
-const behaving = <TContext extends { dependencies: ArvoScenarioDependencies }>(
+const behaving = <
+  TContext extends { dependencies: ArvoScenarioDependencies | null },
+>(
   ctx: TContext,
   byDefault: ArvoBehaviour<TContext>,
 ): PromiseAble<ArvoExecutorEmission> => {
-  const told = ctx.dependencies.behave as ArvoBehaviour<TContext> | undefined;
+  // These versions run without being told to behave differently, so
+  // absence is the default rather than a reason to fail.
+  const told = ctx.dependencies?.behave as ArvoBehaviour<TContext> | undefined;
   return told === undefined ? byDefault(ctx) : told(ctx);
 };
 

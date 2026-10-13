@@ -164,12 +164,19 @@ export type ScenarioDependencies = {
   [key: string]: unknown;
 };
 
-/** Whichever the scenario supplied, or what this version does by default. */
-const behaving = <TContext extends { dependencies: ScenarioDependencies }>(
+/**
+ * Whichever the scenario supplied, or what this version does by default.
+ *
+ * These versions can run without a scenario telling them to behave
+ * differently, so absence is the default rather than a reason to fail.
+ */
+const behaving = <
+  TContext extends { dependencies: ScenarioDependencies | null },
+>(
   ctx: TContext,
   byDefault: (ctx: TContext) => PromiseAble<ArvoExecutorEmission>,
 ): PromiseAble<ArvoExecutorEmission> => {
-  const told = ctx.dependencies.behave;
+  const told = ctx.dependencies?.behave;
   return told === undefined
     ? byDefault(ctx)
     : told(ctx as unknown as Parameters<ScenarioBehaviour>[0]);

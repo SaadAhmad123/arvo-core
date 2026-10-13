@@ -39,7 +39,16 @@ Written first, because the question of whether `close` runs before or after the 
 - [x] 5.1 The Temporal activity loses its array of release functions, its push into it, and its `finally`. `PostgresCatalogue` becomes the dependency rather than something the activity opens and remembers to release.
 - [x] 5.2 The sandbox's own specs follow.
 
-## 6. Hooks, deliberately
+## 6. Absence reaches the executor
 
-- [x] 6.1 Hooks are nullable past the boundary, under the same **Optional inputs** rule, which preserves the difference between a mechanism that exposed nothing and one that was never asked.
-- [x] 6.2 The line between the two written where both are declared: a thing that needs the event, the record or the attempt is a dependency; a thing that needs none of them is a hook.
+[ADR-012](../../../../docs/adr/012-absent-dependencies-and-hooks.md). A mechanism cannot be held to a declaration it cannot see, so absence stays possible — and the only honest thing is to say so where it can be acted on.
+
+- [x] 6.1 Specs first: a declared dependency that was not supplied reads as absence and the executor is still entered; an executor that cannot proceed faults naming what was missing; one that can proceed concludes normally; the same for hooks; and an empty set of hooks deliberately supplied reads as supplied rather than as absence.
+- [x] 6.2 `context/types.ts` and `context/index.ts`: both members nullable, and nothing invents an empty object.
+- [x] 6.3 `version/index.ts`: pass both through as they arrived.
+- [x] 6.4 Every executor in the suite and the sandbox that reaches for one states what it expects.
+
+## 7. Hooks, deliberately
+
+- [x] 7.1 Hooks are nullable past the boundary, under the same **Optional inputs** rule, which preserves the difference between a mechanism that exposed nothing and one that was never asked.
+- [x] 7.2 The line between the two written where both are declared: a thing that needs the event, the record or the attempt is a dependency; a thing that needs none of them is a hook.

@@ -204,7 +204,7 @@ describe('the way a handler reaches a store', () => {
 });
 
 describe('what an executor is given to work with', () => {
-  it('is an empty object where nothing was supplied, never absent', async () => {
+  it('is absence where nothing was supplied, and says so', async () => {
     const seen = watching();
     const { resolver } = storeWatching(seen);
     await handlerRecording(seen).execute({
@@ -212,8 +212,9 @@ describe('what an executor is given to work with', () => {
       state: resolver,
       attempt: 0,
     });
-    expect(seen.dependencies[0]).toEqual({});
-    expect(seen.dependencies[0]).not.toBeUndefined();
+    // not an empty object standing in for one: a version that declared
+    // something and was given none must be able to tell
+    expect(seen.dependencies[0]).toBeNull();
   });
 
   it('is what the dependency exposes, and not the dependency', async () => {
@@ -377,7 +378,7 @@ describe('what an executor is given to work with', () => {
 });
 
 describe('whatever the mechanism exposes to an executor', () => {
-  it('is an empty object where nothing was supplied, never absent', async () => {
+  it('is absence where nothing was exposed, and says so', async () => {
     const seen = watching();
     const { resolver } = storeWatching(seen);
     await handlerRecording(seen).execute({
@@ -385,8 +386,7 @@ describe('whatever the mechanism exposes to an executor', () => {
       state: resolver,
       attempt: 0,
     });
-    expect(seen.hooks[0]).toEqual({});
-    expect(seen.hooks[0]).not.toBeUndefined();
+    expect(seen.hooks[0]).toBeNull();
   });
 
   it('is passed through exactly as it was given, uninterpreted', async () => {
@@ -439,7 +439,7 @@ describe('whatever the mechanism exposes to an executor', () => {
           await ctx.setState({ data: { stage: 'reading' } });
           return ctx.build({
             type: 'evt_order_fulfilled',
-            data: { order_id: ctx.hooks.brittle },
+            data: { order_id: String(ctx.hooks?.brittle) },
           });
         },
       })
@@ -521,5 +521,156 @@ describe('what one execution cannot leave behind for the next', () => {
     expect(JSON.stringify(handler.contracts)).not.toContain('given');
     expect(Object.keys(handler)).not.toContain('dependencies');
     expect(Object.keys(handler)).not.toContain('hooks');
+  });
+});
+
+describe('what an executor is told where nothing was supplied', () => {
+  /**
+   * A mechanism routes an event to whichever handler it names, so it
+   * cannot be held to a declaration it has not seen. Absence stays
+   * possible, and the only honest thing is to say so where it can be
+   * acted on — which is the executor, the one party that knows whether
+   * it can work without what it asked for.
+   */
+
+  /** A handler whose executor refuses to run without what it declared. */
+  const handlerNeeding = () =>
+    setupArvoEventHandler({
+      contracts: { self: fulfilContract, services: { inventory: inventoryV1 } },
+      types: {} as {
+        dependencies: ScenarioDependencies;
+        mechanismHooks: { ticket: string };
+      },
+    })
+      .handler('1.0.0', {
+        state: z.object({ stage: z.string() }),
+        execute: async (ctx) => {
+          if (ctx.dependencies === null) {
+            throw await ctx.fault({
+              faultKind: 'executor_raised',
+              message: 'this version needs a catalogue and was given none',
+              retryable: false,
+            });
+          }
+          await ctx.setState({ data: { stage: 'asking' } });
+          return ctx.build({
+            type: 'com_inventory_reserve',
+            data: { items: ['book'] },
+          });
+        },
+      })
+      .handler('1.1.0', {
+        state: z.object({ stage: z.string(), rush: z.boolean() }),
+        execute: async () => {},
+      })
+      .handler('2.0.0', async (ctx) =>
+        ctx.build({ type: 'evt_order_shipped', data: { tracking: 't-1' } }),
+      )
+      .build();
+
+  /** A handler whose executor works either way, and records which. */
+  const handlerDegrading = (seen: { had: (boolean | null)[] }) =>
+    setupArvoEventHandler({
+      contracts: { self: fulfilContract, services: { inventory: inventoryV1 } },
+      types: {} as {
+        dependencies: ScenarioDependencies;
+        mechanismHooks: { ticket: string };
+      },
+    })
+      .handler('1.0.0', {
+        state: z.object({ stage: z.string() }),
+        execute: async (ctx) => {
+          seen.had.push(ctx.dependencies !== null);
+          await ctx.setState({ data: { stage: 'asking' } });
+          return ctx.build({
+            type: 'com_inventory_reserve',
+            data: { items: ['book'] },
+          });
+        },
+      })
+      .handler('1.1.0', {
+        state: z.object({ stage: z.string(), rush: z.boolean() }),
+        execute: async () => {},
+      })
+      .handler('2.0.0', async (ctx) =>
+        ctx.build({ type: 'evt_order_shipped', data: { tracking: 't-1' } }),
+      )
+      .build();
+
+  it('reads absence where a declared dependency was not supplied', async () => {
+    const seen = { had: [] as (boolean | null)[] };
+    const { resolver } = storeWatching(watching());
+
+    const ran = await handlerDegrading(seen).execute({
+      event: anOrder(),
+      state: resolver,
+      attempt: 0,
+    });
+
+    // entered, not refused: the protocol does not decide this
+    expect(ran.kind).toBe('produced');
+    expect(seen.had[0]).toBe(false);
+  });
+
+  it('lets an executor that cannot proceed fail, naming what was missing', async () => {
+    const { resolver } = storeWatching(watching());
+
+    const refused = await handlerNeeding().tryExecute({
+      event: anOrder(),
+      state: resolver,
+      attempt: 0,
+    });
+
+    expect(refused.ok).toBe(false);
+    if (refused.ok) return;
+    expect(refused.error.faultKind).toBe('executor_raised');
+    expect(refused.error.message).toContain('needs a catalogue');
+    // its own choice, so no further attempt is in prospect
+    expect(refused.error.retry).toBeNull();
+  });
+
+  it('lets an executor that can proceed carry on', async () => {
+    const seen = { had: [] as (boolean | null)[] };
+    const { resolver } = storeWatching(watching());
+    const given = heldDependencies({} as ScenarioDependencies).dependency;
+
+    const ran = await handlerDegrading(seen).execute({
+      event: anOrder(),
+      state: resolver,
+      attempt: 0,
+      dependencies: given,
+    });
+
+    expect(ran.kind).toBe('produced');
+    expect(seen.had[0]).toBe(true);
+  });
+
+  it('reads absence where the mechanism exposed nothing', async () => {
+    const seen = watching();
+    const { resolver } = storeWatching(seen);
+
+    await handlerRecording(seen).execute({
+      event: anOrder(),
+      state: resolver,
+      attempt: 0,
+    });
+
+    expect(seen.hooks[0]).toBeNull();
+  });
+
+  it('reads an empty set deliberately exposed as supplied, not as absence', async () => {
+    const seen = watching();
+    const { resolver } = storeWatching(seen);
+
+    await handlerRecording(seen).execute({
+      event: anOrder(),
+      state: resolver,
+      attempt: 0,
+      hooks: {},
+    });
+
+    // the distinction the empty-object substitution destroyed
+    expect(seen.hooks[0]).not.toBeNull();
+    expect(seen.hooks[0]).toEqual({});
   });
 });

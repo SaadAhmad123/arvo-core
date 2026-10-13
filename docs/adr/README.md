@@ -30,3 +30,4 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | [ADR-009](./009-execution-bounds.md) | Execution Bounds | Accepted |
 | [ADR-010](./010-delivery-classification-and-entry-validation.md) | Delivery Classification and Entry Validation | Accepted |
 | [ADR-011](./011-dependency-lifetime.md) | Dependency Lifetime | Accepted |
+| [ADR-012](./012-absent-dependencies-and-hooks.md) | Absent Dependencies and Hooks | Accepted |

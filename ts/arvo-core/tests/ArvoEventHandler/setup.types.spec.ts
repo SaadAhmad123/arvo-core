@@ -64,6 +64,10 @@ describe('what an executor is typed to see', () => {
       },
     }).handler('1.0.0', {
       execute: async (ctx) => {
+        // a version that declared both and cannot run without either
+        if (ctx.dependencies === null || ctx.hooks === null) {
+          throw new Error('this version was given neither');
+        }
         const row: string = ctx.dependencies.db.read();
         const when: number = ctx.hooks.scheduler.at;
         seen.row = row;

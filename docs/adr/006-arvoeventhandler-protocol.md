@@ -2,7 +2,7 @@
 
 - **Status:** Partially Superseded
 - **Date:** 2026-09-28
-- **Partially superseded by:** [ADR-011](./011-dependency-lifetime.md), which replaces **The two forms: a value or a factory** and the sections elaborating it. Everything else here stands. The replaced text is kept and annotated, because ADR-011 argues against it
+- **Partially superseded by:** [ADR-011](./011-dependency-lifetime.md), which replaces **The two forms: a value or a factory** and the sections elaborating it; and [ADR-012](./012-absent-dependencies-and-hooks.md), which replaces what an executor finds where no dependency or hooks were supplied. Everything else here stands. Replaced text is kept and annotated, because both argue against it
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)
 - **Companions:** this ADR is the core of five that together specify the protocol. [ADR-007](./007-execution-record.md) defines the execution record, [ADR-008](./008-execution-faults-and-abandonment.md) the failure categories, the fault object and abandonment, [ADR-009](./009-execution-bounds.md) depth, retry, timeouts and collection, and [ADR-010](./010-delivery-classification-and-entry-validation.md) classification and the entry gate. They were written as one and split for size; where this ADR refers to a heading in one of them, the reference names the ADR
@@ -180,14 +180,14 @@ The members below are normative in their existence and semantics. What each is c
 | **collected** | map: emitted event `id` → ArvoEvent \| `null` | The responses in hand for the current round, keyed as `in_flight_event_map` keys them, and which keys are still outstanding. Under the default join it is always complete when the executor is entered ([ADR-009](./009-execution-bounds.md), **Collection**). | read |
 | **state** | the declared schema's type \| `null`; absent where none declared | The executor's own business state, `state.data`. Present only where the version declared a schema. `null` on a new execution until written. Written through **set state** and no other way. | read, and write through `set state` |
 | **set state** | operation: (value) → nothing; faults on rejection | Replaces the business state whole. There is no partial write and no merge: an executor that keeps part of the old state copies it forward itself. Validated against the declared schema, and a value the schema rejects is a non-retryable execution fault, `state_schema_rejected` ([ADR-008](./008-execution-faults-and-abandonment.md), **Failure protocol**). | write |
-| **dependencies** | the executor's own type; empty object where none supplied | Whatever the dependency factory resolved for this delivery, or the value supplied (**Dependencies**). | read |
+| **dependencies** | ~~the executor's own type; empty object where none supplied~~ — **[ADR-012](./012-absent-dependencies-and-hooks.md): absence is stated, not substituted** | Whatever the dependency resolved for this delivery, or absence where none was supplied (**Dependencies**, [ADR-011](./011-dependency-lifetime.md)). | read |
 | **event builder** | operation: (`type`, `data`, options) → ArvoEvent | Constructs a fully addressed event from a `type` and a `data`, applying every default under **Addressing an emitted event**, and exposing the safe fields and the visibly unsafe group. The only member that produces an event. | produces an event |
 | **at max depth** | boolean | True when an event this execution emits to a service could no longer increment `depth` without reaching the version's maximum ([ADR-009](./009-execution-bounds.md), **Depth**). | read |
 | **time remaining** | object: `run` integer ms \| `null`, `execution` integer ms \| `null` | How many milliseconds remain on each of the version's two clocks at the moment the executor is entered: the run clock for this attempt, and the execution clock from the init event to the moment this execution's lifecycle becomes terminal ([ADR-009](./009-execution-bounds.md), **Timeouts**). `null` for a clock the version leaves unbounded. Read at entry and not updated: an executor that needs the live figure subtracts its own elapsed time. | read |
 | **cancel** | operation: (reason string) → nothing | Marks this execution `cancelled` with a reason, terminal ([ADR-007](./007-execution-record.md), **The execution record**). | write |
 | **fault** | operation: (reason string, retryable boolean = true) → ArvoHandlerFault | Builds an execution fault for the executor to raise deliberately, with a reason and whether a redelivery could fix it ([ADR-008](./008-execution-faults-and-abandonment.md), **Failure protocol**). | produces a fault |
 | **telemetry** | object: `span`, `logger`, `meter` — OpenTelemetry API objects | The delivery's OpenTelemetry objects: its **span**, a **logger** bound to that span's context, and a **meter** scoped to the handler (**Observability**). | read, and record |
-| **mechanism hooks** | object; empty where none supplied | Whatever the mechanism running this handler chooses to expose to an executor, supplied to the handler alongside the delivery. Which hooks exist is the mechanism's own scope and undefined here. Where none are supplied it is an empty object, never absent. | read, or stable mutation only — see below |
+| **mechanism hooks** | ~~object; empty where none supplied~~ — **[ADR-012](./012-absent-dependencies-and-hooks.md): absence is stated, not substituted** | Whatever the mechanism running this handler chooses to expose to an executor, supplied to the handler alongside the delivery. Which hooks exist is the mechanism's own scope and undefined here. ~~Where none are supplied it is an empty object, never absent.~~ | read, or stable mutation only — see below |
 
 #### What the context does not expose
 
@@ -204,7 +204,9 @@ A mechanism MAY hand the handler a set of hooks for the executor, and the handle
 
 This ADR places one constraint on them, because they cross into the executor's view of the protocol. A hook MUST be **read-only**, or it MUST permit only **stable mutation**: a change whose effect on this execution is the same however many times the delivery is attempted, and which alters nothing the protocol owns — not the record, not the events returned, not the lifecycle, not the outcome of any gate or guard. A hook that could change what this delivery concludes, or that a retry would apply twice with a different result, breaks the atomicity [ADR-010](./010-delivery-classification-and-entry-validation.md), **Entry validation** relies on and MUST NOT be exposed.
 
-Where a mechanism supplies no hooks, the member is present and empty, so an executor written against it never has to test for its absence.
+~~Where a mechanism supplies no hooks, the member is present and empty, so an executor written against it never has to test for its absence.~~
+
+**Replaced by [ADR-012](./012-absent-dependencies-and-hooks.md).** The sentence above is kept because ADR-012 argues against it: an executor written against something declared is exactly the party that has to test for its absence, and an empty object is what stops it being able to.
 
 #### The builder is help, not a gate
 
