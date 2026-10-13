@@ -35,7 +35,7 @@ Both were separate changes until the context needed them. Tests first, as every 
 **Deferred, and named so it is not lost:** `retry` on `ctx.fault` is the whole `ArvoFaultRetry` block today, because the version's resolved options are not on the context yet and nothing here can work out when the next attempt is due. Once they are, this becomes a boolean and the context does the arithmetic.
 
 - [x] 1a.8 Add three readers to `ArvoExecutionState`, each logic a version would otherwise repeat at every delivery: `isTerminal` against `ARVO_TERMINAL_LIFECYCLES`, the four places an execution rests for good; `isCollectionComplete`, true where nothing awaited is still unanswered, which is the join decision under the default `collect`; and `identity`, the five fields grouped, which is the shape ADR-006's context table names as one member.
-- [x] 1a.9 Remove the record's `contracts` snapshot. Nothing in the protocol read it, it is derivable from the declaration, and it was the only field no delivery could check, so a wrong one could rot for the whole life of an execution. **Recorded as ADR-007 Addendum 1**, which argues the case and states the exemption from that ADR's no-removal rule: removal reinterprets stored records, and none exists.
+- [x] 1a.9 Remove the record's `contracts` snapshot. Nothing in the protocol read it, it is derivable from the declaration, and it was the only field no delivery could check, so a wrong one could rot for the whole life of an execution. **Recorded as [ADR-013](../../../../docs/adr/013-record-contracts-snapshot-removed.md)**, which argues the case and states the exemption from that ADR's no-removal rule: removal reinterprets stored records, and none exists.
 
 ## 1b. The rest of the context
 
