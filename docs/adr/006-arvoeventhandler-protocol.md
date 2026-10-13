@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-28
+- **Amended by:** **Addendum 1 — the dependency lifetime**, at the end of this ADR. **The two forms: a value or a factory** and the sections that follow it describe dependencies as originally accepted; read them with that addendum
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)
 - **Companions:** this ADR is the core of five that together specify the protocol. [ADR-007](./007-execution-record.md) defines the execution record, [ADR-008](./008-execution-faults-and-abandonment.md) the failure categories, the fault object and abandonment, [ADR-009](./009-execution-bounds.md) depth, retry, timeouts and collection, and [ADR-010](./010-delivery-classification-and-entry-validation.md) classification and the entry gate. They were written as one and split for size; where this ADR refers to a heading in one of them, the reference names the ADR
@@ -484,7 +485,9 @@ An executor's implementation dependencies — a database client, an HTTP client,
 
 Dependencies are distinct from **mechanism hooks** (**The execution context**). Dependencies are the executor's: things its business code needs and would need under any mechanism. Hooks are the mechanism's: things one particular runner chooses to expose. An executor that uses a dependency is coupled to nothing; one that uses a hook is coupled to that mechanism by its own choice.
 
-#### The two forms: a value or a factory
+#### ~~The two forms: a value or a factory~~
+
+**Replaced by Addendum 1, which admits one form only.** What follows is the requirement as accepted, kept because the addendum argues against it.
 
 An implementation MUST accept dependencies in either of two forms:
 
@@ -506,6 +509,8 @@ The factory receives the attempt number for the same reason the state function d
 
 #### Why the factory form matters for resumability
 
+**Amended by Addendum 1.** The reasoning below stands and is why the addendum keeps acquisition per delivery; what it misses is that acquiring a thing says nothing about releasing it.
+
 The factory form is what a resumable handler needs. A handler runs only when something delivers to it, and between deliveries there is no process to hold anything; ADR-000's rule that no live dependency survives a suspension is not a restriction the protocol imposes on an executor so much as a description of the executor's situation. The factory makes that situation the ordinary one: nothing live is constructed until a delivery needs it, it lives for that delivery, and nothing about it is captured anywhere the next delivery could see. An executor that stashes a client in module scope and reaches for it next time has stepped outside the protocol, and an implementation SHOULD make the factory the easy path so that it need not.
 
 Giving the factory the delivered event and the record lets a dependency be built *for this execution* rather than for the process: a client scoped to the tenant the init event names, a lock keyed on `execution_id`, a signal keyed on `subject`. That is what makes the cooperative pattern under **Cancellation** possible without adding anything to the model.
@@ -514,9 +519,11 @@ Three rules follow, and they are the whole of what the protocol asks:
 
 - a resolved dependency MUST NOT be retained by the handler across deliveries — it is built for one and discarded with it, exactly as the execution context is (**One object, built per delivery**);
 - a resolved dependency MUST NOT be written into the execution record — the record is JSON and a dependency is live, and `data` that will not survive a round trip is already a fault ([ADR-007](./007-execution-record.md), **Serializability of `data`**);
-- a factory MUST NOT be able to alter the outcome of any other gate step, the collection, the depth check or the timeouts — it runs after every other step has decided and before the executor, and it is given the record to read, not to write.
+- ~~a factory~~ **acquisition, under Addendum 1** MUST NOT be able to alter the outcome of any other gate step, the collection, the depth check or the timeouts — it runs after every other step has decided and before the executor, and it is given the record to read, not to write.
 
 #### A failing factory is a retry-safe fault
+
+**Amended by Addendum 1 in name only: read "a factory that fails" as "acquisition that fails".** The fault, its verdict and its reasoning are unchanged, and the addendum adds the one case this section does not cover — a failure to *release*, which is not a fault at all.
 
 **A factory that fails is an execution fault, `dependency_resolution_failed`, and it is retry safe.** However the language signals the failure, the handler MUST NOT catch and reinterpret it: it surfaces as a fault with the failure rendered into `cause`, and nothing is emitted or written. It is retry safe because constructing a dependency reaches outside the handler — a pool that is exhausted now, a service that is restarting — and what is outside may answer differently a moment later. It is, with the state function, one of the two gate faults with that verdict ([ADR-008](./008-execution-faults-and-abandonment.md), **The `fault_kind` vocabulary and retry verdicts**), and for the same reason. Like every retry-safe fault it is subject to exhaustion, and on a followup it carries the abandonment pair, so a mechanism facing a dependency that never comes back can end the execution at `failure` with the cause on record rather than leave it at `waiting` forever.
 
@@ -536,7 +543,7 @@ The absence is also honest about what a cancel event could not do. A response al
 
 What the model provides is enough for an execution to stop itself and say so, and nothing more:
 
-- **a way to notice.** The dependency factory receives the delivered event and the record (**Dependencies**), so it can consult whatever cancellation signal an application maintains — a flag in a store, a revoked token, a closed ticket — and hand the answer to the executor as part of its dependencies;
+- **a way to notice.** Dependency acquisition receives the delivered event and the record (**Dependencies**, and Addendum 1), so it can consult whatever cancellation signal an application maintains — a flag in a store, a revoked token, a closed ticket — and hand the answer to the executor as part of its dependencies;
 - **a way to record it.** The **cancel** member of the execution context marks the execution `cancelled` with a reason, and `cancelled` is terminal ([ADR-007](./007-execution-record.md), **Marking an execution `cancelled`**);
 - **a way for the caller to be told.** An execution that marks itself cancelled and does not answer its caller raises `execution_cancelled`, non-retryable, carrying the abandonment pair, so a mechanism that abandons has the caller's answer ready and nothing to compose.
 
@@ -797,6 +804,8 @@ execute(ctx):
 
 ### What the mechanism calls
 
+**Amended by Addendum 1: `dependencies` is one object, acquired and released by the handler, not a value or a factory.**
+
 The handler is entered once per delivery and holds nothing between them. It is given a way to reach the record, never the record itself.
 
 ```
@@ -805,7 +814,12 @@ execute(
     state           an operation: (execution_id, telemetry, attempt) → record | absence
                     reads the store on every call; parses and nothing more;
                     knows nothing of init or followup
-    dependencies    a value, or a factory (event, record | absence, attempt) → value
+    dependencies    optional; one object -- see Addendum 1
+                      acquire (event, record | absence, execution_id, attempt)
+                      release (the same)
+                      a readable surface, which is what the executor is given
+                    as accepted: a value, or a factory (event, record | absence,
+                      attempt) → value
     attempt         which attempt this delivery is, from 0
     telemetry       the delivery's OpenTelemetry context
     hooks           optional; whatever this mechanism exposes to executors
@@ -826,3 +840,86 @@ execute(
 The asymmetry in that return is the failure model in one place. A handler error comes back as `produced`, because it is a concluded execution that happens to have emitted an error event. Only a fault comes back as `fault`, and only a fault is a mechanism's problem.
 
 Note what the two returns have in common. `produced` hands over events and a record to commit together, and a fault's abandonment pair is the same two things held back for a decision only the mechanism can make. A mechanism that has implemented `produced` correctly has already implemented most of abandonment.
+
+## Addendum 1 — the dependency lifetime
+
+- **Status:** Accepted
+- **Date:** 2026-10-13
+- **Amends:** **Dependencies** — **The two forms: a value or a factory** is replaced; **Why the factory form matters for resumability**, the three rules that follow it, and **A failing factory is a retry-safe fault** are amended as annotated
+
+This addendum replaces the two forms a dependency may be supplied in with one, and adds the obligation the original section never stated: that a dependency is **released** when the execution that acquired it ends.
+
+### What was wrong
+
+Not the factory. The factory's reasoning is correct and this addendum keeps all of it: a dependency is acquired per delivery, acquisition is the last gate step, it receives the validated record or absence and the attempt number, and nothing live is constructed until a delivery needs it.
+
+What was wrong is that the section said how a dependency comes to exist and never said how it stops. It claimed, under **Outside the model, supplied per delivery**, to settle how dependencies reach an executor "so that the constraint holds by construction rather than by discipline" — ADR-000's rule that no live implementation dependency may be relied upon to survive a suspension. It does not hold by construction. A factory opens a pooled connection and nothing in the protocol ever closes it. Every mechanism has to wrap its own call to the handler in whatever its language calls a `finally`, and remember what the factory took. A rule each mechanism must separately remember is discipline, which is the thing the section said it was replacing.
+
+The value form compounded it. It existed for a dependency "safe to share across deliveries and hold no per-execution state — a configuration object, a pure client", and a pure client is exactly the thing that turns out to hold a socket. The form invited the mistake and gave the protocol no place to correct it.
+
+### The one form
+
+**A dependency is supplied as one object that can be acquired, read, and released.** An implementation MUST accept that and MUST NOT accept a bare value or a bare factory.
+
+```
+dependencies    optional; where absent, the context member is present and empty
+
+    one object      exposing
+                      acquire   taking the delivered event,
+                                       the execution record or absence,
+                                       the execution identifier,
+                                       and the attempt number
+                      release   taking the same
+                      a readable surface, which is what the executor is given
+                    both operations may be asynchronous where a language
+                      distinguishes it
+```
+
+**One object, not a set of them.** A handler that needs several resources is given one dependency that holds them, and how they relate is that object's own business. This is not a restriction but the removal of one: with a set, the protocol would have to decide what happens when the second of three acquisitions fails while the first is already held, and it has no basis for deciding. With one object, there is nothing to unwind that the supplier cannot unwind itself, in the order its own resources require.
+
+**Member names are each language's own** (ADR-004). So is the shape of the readable surface, and so is whether an executor is handed that surface or the object carrying it — **Outside the model, supplied per delivery** already leaves what the executor finds on **dependencies** to each language, and this addendum does not narrow it.
+
+### Acquire
+
+Unchanged in position and in consequence. The handler acquires **exactly once per delivery**, as the last step of the gate — step 16 under [ADR-010](./010-delivery-classification-and-entry-validation.md), **Entry validation** — after every other check has passed and before the executor is entered. It receives a record the handler has already validated, or absence on an init.
+
+**A failure to acquire is `dependency_resolution_failed`, retry safe**, exactly as a failing factory was, for exactly the reasons **A failing factory is a retry-safe fault** gives. The executor is not entered, nothing is emitted and nothing is written.
+
+### Release
+
+**The handler MUST release the dependency after the execution ends, on every path out.** Not only where the executor returned: a refusal at return validation, a record that would not serialize, an expired run clock, a cancellation, an executor that raised, and a fault raised by any of them all end an execution, and each MUST release. This is the obligation that makes ADR-000's rule hold by construction, because there is now exactly one place a dependency's life ends and it is inside the protocol.
+
+Release runs after the protocol's outputs are decided and before the delivery returns to the mechanism. Nothing released may be needed to produce the record or the events, so a dependency is never let go of while something still needs it.
+
+**A failure to release MUST NOT fail the execution.** It is recorded on the delivery span and discarded, in the same way a telemetry failure is (**Telemetry**). By the time release runs the execution has concluded and its record and events are decided; turning a concluded execution into a fault because a socket would not close would make a mechanism retry business logic over a cleanup problem, and would make a successful execution's outcome depend on something that happened after it finished. An implementation MUST NOT surface a release failure as an execution fault, and SHOULD record it where a reader of the trace can see it.
+
+**Release is not under the run clock** ([ADR-009](./009-execution-bounds.md), **Timeouts**), for the same reason acquisition is not: the run clock bounds the executor's code. An implementation MAY bound release on its own account, and where it does, expiry is recorded and discarded like any other release failure rather than raised.
+
+### Both operations are idempotent, and that is the supplier's obligation
+
+**Acquire and release MUST each be safe to call more than once, and release MUST be safe to call on something never acquired.** This is required of the supplied object, not provided by the handler: the handler keeps no record of what it has already called and MUST NOT be expected to.
+
+The obligation is placed there deliberately. A handler that tracked acquisition state would be holding something about a dependency across the steps of a delivery, and would have to decide what that state means when a retry arrives, when acquisition fails halfway, or when the same object is supplied to two deliveries at once. The supplier already knows what its own resources require. An object whose acquire is not idempotent is non-conformant, and its failures will present as the handler's.
+
+### What may be retained, and what may not
+
+The rule that **a resolved dependency MUST NOT be retained by the handler across deliveries** is unchanged and unaffected: the handler holds nothing between deliveries, dependencies included.
+
+What this addendum clarifies is the supplier's side, which the original section did not address. **A mechanism MAY retain the dependency object across deliveries** — constructing one per worker rather than one per delivery is the ordinary case, and is why acquire and release must be idempotent. What MUST NOT survive a delivery is anything live the object holds, and release is the whole of how that is guaranteed. The object is a handle to a lifetime, not the lifetime.
+
+The rule that a resolved dependency MUST NOT be written into the execution record is likewise unchanged.
+
+### Mechanism hooks are deliberately unchanged
+
+Hooks keep the shape they have. They are not given a lifetime, and the asymmetry is the decision rather than an oversight.
+
+A dependency's acquisition needs the **record**, which is why acquisition cannot happen before the handler has read and validated one, and therefore why it has to be the handler that does it. A hook needs nothing from inside the execution — it is what one mechanism chooses to expose, and is available before the delivery begins. The mechanism is the caller; it already surrounds the delivery and can acquire and release anything of its own without the protocol's help.
+
+That gives the line between the two, which this addendum states so it need not be re-derived: **a thing that needs the event, the record or the attempt is a dependency; a thing that needs none of them is a hook.** A hook that turns out to need a lifetime is a dependency that was declared in the wrong place, and the correction is to move it rather than to grow a second lifetime mechanism.
+
+### Consequences
+
+- An implementation that accepted a bare value or a bare factory is non-conformant until it accepts the one object instead. This is a breaking change to every implementation's handler surface, and is the cost of the obligation.
+- A dependency that genuinely holds nothing — a configuration object, a set of constants — is now supplied as an object whose acquire and release do nothing. That is ceremony, and it is accepted: one path through the handler is worth more than the keystrokes, and the protocol can now state a release point that exists for every dependency rather than for some of them.
+- A mechanism loses the `finally` it used to need, and with it the bookkeeping of what its factory took. This is the whole of the gain.
+- Nothing observable about a conformant execution changes: the same events, the same record, the same faults. What changes is that a dependency is now certain to be released, where before it was likely to be.

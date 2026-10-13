@@ -353,3 +353,76 @@ ADR-007 gives the record a `contracts` field holding the contracts as they stood
 *Why.* Nothing in the protocol reads it. It is derivable from the declaration at any time, so storing it duplicates what the handler already holds. And it is the only field a record carries that no delivery can check, so a stale or wrong one would never be caught. Storing a copy of a declaration inside every record of every execution is a cost paid on every write for a reader who can get the same answer from the handler.
 
 **This requires an addendum to ADR-007**, since a record field is one of the two things that ADR pins most tightly, on the grounds that changing it reinterprets data already in a store. Nothing is published, so no stored record exists to reinterpret, but the addendum is owed before this change archives.
+
+## The dependency lifetime, in TypeScript
+
+ADR-006 Addendum 1 replaces the two dependency forms with one object that is acquired, read and released, and leaves the member names and the surface the executor sees to each language. This is what TypeScript does with that.
+
+### The interface
+
+```ts
+export interface IArvoEventHandlerDependency<
+  TAttributes extends ArvoDependencies,
+> {
+  open(scope: ArvoDependencyScope): PromiseAble<void>;
+  close(scope: ArvoDependencyScope): PromiseAble<void>;
+  readonly attributes: TAttributes;
+}
+
+type ArvoDependencyScope = {
+  event: ArvoEvent;
+  state: ArvoExecutionState | null;
+  executionId: string;
+  attempt: number;
+};
+```
+
+`open` and `close` rather than `acquire` and `release`: shorter at the two call sites that matter, and already the words a reader expects on something holding a connection. Both take the same scope, so a `close` knows which execution it is letting go of without the object having had to remember.
+
+### The declaration keeps declaring the attributes
+
+```ts
+types: {} as {
+  dependencies: { catalogue: Catalogue; payments: PaymentGateway };
+}
+```
+
+Unchanged. A declaration describes what a version's executor needs, and has no business naming how a connection is acquired — that differs per deployment and per mechanism. The lifetime appears only where a mechanism supplies it:
+
+```ts
+dependencies?: IArvoEventHandlerDependency<TDependencies>;
+```
+
+So the param's type is derived from the declaration, and `TDependencies` keeps meaning what it means today.
+
+### Only an instance may be passed
+
+`execute` accepts an instance of `IArvoEventHandlerDependency` and nothing else. No bare value, no factory. The handler always has an `open` and a `close` to call and never has to ask which form it was given, which is the whole reason the addendum admits one form.
+
+### The executor is handed `attributes`
+
+```ts
+ctx.dependencies.catalogue.itemsIn('orders');
+```
+
+One property access, exactly as today, so no executor body changes. The handler maps the object to its `attributes` after opening it, which means an executor is never holding the thing that has a lifetime and cannot call `close` on it — not because it is told not to, but because it has nothing to call it on.
+
+The alternative — handing over the object, so an executor writes `ctx.dependencies.attributes.catalogue.itemsIn(...)` — was rejected on both counts: a second hop at every call site, and a reachable `close` that would release every resource the object holds.
+
+### Where the two calls go
+
+Both in `ArvoEventHandlerVersion.execute`, which is where dependencies are resolved today. `open` replaces the factory call at its existing position. `close` goes in a `finally` around everything after it — the executor, return validation, record serialization and every fault path — because the record is serialized after the executor returns and a connection released before that is one the serialization might have needed.
+
+The handler threads the object down and makes neither call itself.
+
+### Failure
+
+`open` failing is `dependency_resolution_failed`, retry safe, exactly as a failing factory is today — the same code path, the same fault, the same cause rendering.
+
+`close` failing is recorded on the delivery span and discarded. It is not a fault, it does not change the response, and it never reaches the mechanism. The execution has concluded by then.
+
+### What this costs us
+
+Every mechanism in this repository changes: the Temporal activity, the DBOS store, and every spec that passes dependencies. That is a handful of call sites and each one gets shorter — the Temporal activity loses an array of release functions, a push into it, and a `finally`.
+
+A dependency holding nothing still has to be an object with two empty methods. Accepted, for the reason the addendum gives.
