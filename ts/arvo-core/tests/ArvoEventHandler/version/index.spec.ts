@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import type { ArvoEvent } from '../../../src/ArvoEvent/index.js';
 import type { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
@@ -668,6 +669,54 @@ describe('when an executor cannot finish the work', () => {
       },
     });
     expect((await readBack((await opened({}, version)).state)).data).toBeNull();
+  });
+
+  it('faults where the event that would tell the caller cannot be built', async () => {
+    // A domain holding a control character: the option check accepts any
+    // non-blank string, and no event may carry one
+    // (`src/ArvoEvent/validator.ts`). So the handler error event cannot
+    // be built for a reason that has nothing to do with the failure it
+    // was going to report — and the failure must not be lost to it.
+    const version = declared({
+      options: {
+        ...ARVO_DEFAULT_HANDLER_OPTIONS,
+        handlerErrorDomain: 'orders\u0000held',
+      },
+      execute: async () => {
+        throw new Error('the warehouse is on fire');
+      },
+    });
+
+    const fault = await faulted(open({}, version));
+    expect(fault.faultKind).toBe('executor_raised');
+    // both failures, the original one included
+    expect(fault.message).toContain('the warehouse is on fire');
+    expect(fault.message).toContain('could not be built');
+    // and nothing was committed, there being nothing to answer with
+    expect(fault.message).toContain('Nothing was emitted or stored');
+  });
+
+  it('faults where the record it would leave behind cannot be stored', async () => {
+    // A failed execution still leaves a record, so a record that will
+    // not serialize fails the reporting of the failure as well as the
+    // work. The schema permits this value; JSON cannot carry it, which
+    // a declared schema cannot prevent.
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+
+    const version = declared({
+      state: z.object({ anything: z.any() }) as unknown as typeof orderData,
+      execute: async (ctx) => {
+        await ctx.setState({
+          data: { anything: circular } as unknown as never,
+        });
+        throw new Error('the warehouse is on fire');
+      },
+    });
+
+    const fault = await faulted(open({}, version));
+    expect(fault.faultKind).toBe('state_not_serializable');
+    expect(fault.retry).toBeNull();
   });
 
   it('lets a fault it raised itself through, a fault being no answer', async () => {
