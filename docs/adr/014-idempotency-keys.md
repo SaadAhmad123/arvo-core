@@ -64,6 +64,43 @@ All three are functions of the record and the delivered event alone. Nothing is 
 
 **There is deliberately no scope keyed on the attempt.** A key that changed per attempt would defeat its own purpose, and its absence is the one thing about this surface an implementation MUST NOT make good on request.
 
+### Choosing between them
+
+The table above is exact and still leaves the choice harder than it needs to be, so here is one run with the three keys in it.
+
+An order is placed. It asks for two inventory checks, a payment charge, a fraud check and a review, then answers its caller once all five have answered. Each of those is an execution of its own, and a recursive walk under it has more.
+
+**The workflow key is one string for all of them.** The order, both checks, the payment, the fraud check, every walk node, at every depth. It comes from `subject`, which is constant across a workflow by definition. So it is the key for something that must happen once per order wherever in the run it is decided — one confirmation to the customer, one audit entry. If the order handler sends the confirmation, and a year later a second handler is added that also sends one, both compose the same key and the customer gets one message.
+
+**The execution key is one string per execution, and nothing outside that execution shares it.** Not another handler, and not another execution of the *same* handler: the two inventory checks run the same code and get two different execution keys, which is right, because they are reserving different items.
+
+What it spans is the whole of one execution — from the event that opened it, through everything it emitted, through every answer it took in, through every retry of each, to the answer that finished it. **Including the waiting.** An order resting at `waiting` for a week while a person reviews it has the same execution key before and after. That is what makes it usable for *charge the card once*: the charge and the eventual completion belong to one execution however much time and however many events pass between them.
+
+**The delivery key is one string per event an execution receives.** The order is entered six times — once to open it and once per answer — and the two keys part company there:
+
+| the order was entered by | its execution key | its delivery key |
+|---|---|---|
+| the order request | the same one | one of its own |
+| the first inventory answer | the same one | one of its own |
+| the second inventory answer | the same one | one of its own |
+| the payment answer | the same one | one of its own |
+| the fraud answer | the same one | one of its own |
+| the review answer | the same one | one of its own |
+
+So: *once per run* is the workflow key. *Once ever, by this execution* is the execution key. *Once for each thing that arrives* is the delivery key.
+
+#### Where the two are interchangeable, and where they are not
+
+An execution that receives one event in its life — an inventory check, a payment charge, a fraud check: asked, answers, done — has one delivery, so both keys are constant across everything that happens to it and either will do. They are never the same string, because the scope name is inside the hash, but they are equally correct.
+
+They part company for an execution that waits and is entered again, which is exactly where choosing wrongly is silent.
+
+**Choosing the execution key for per-event work loses work.** If the order reserves stock each time a supplier answers and keys on the execution, all six deliveries present the same key. The first reservation is made and the service recognises the next five as repeats of it. Five reservations gone, no error anywhere, and the run reports success.
+
+**Choosing the delivery key for once-ever work duplicates it.** A payment charge keyed on the delivery is correct while the payment has one delivery — and stops being correct the day someone adds a step that waits for an answer, because the execution is then entered twice, composes two delivery keys, and charges twice. Nothing about that change looks risky.
+
+Which makes the execution key the safer default for *once ever*: it is the one that survives a handler later becoming one that waits.
+
 ### The composition is pinned
 
 For each scope:
