@@ -2,6 +2,7 @@
 
 - **Status:** Partially Superseded
 - **Date:** 2026-09-28
+- **Amended by:** [ADR-014](./014-idempotency-keys.md), which adds one member to **The execution context**. Additive: nothing already there changes
 - **Partially superseded by:** [ADR-011](./011-dependency-lifetime.md), which replaces **The two forms: a value or a factory** and the sections elaborating it; and [ADR-012](./012-absent-dependencies-and-hooks.md), which replaces what an executor finds where no dependency or hooks were supplied. Everything else here stands. Replaced text is kept and annotated, because both argue against it
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)
@@ -180,6 +181,7 @@ The members below are normative in their existence and semantics. What each is c
 | **collected** | map: emitted event `id` → ArvoEvent \| `null` | The responses in hand for the current round, keyed as `in_flight_event_map` keys them, and which keys are still outstanding. Under the default join it is always complete when the executor is entered ([ADR-009](./009-execution-bounds.md), **Collection**). | read |
 | **state** | the declared schema's type \| `null`; absent where none declared | The executor's own business state, `state.data`. Present only where the version declared a schema. `null` on a new execution until written. Written through **set state** and no other way. | read, and write through `set state` |
 | **set state** | operation: (value) → nothing; faults on rejection | Replaces the business state whole. There is no partial write and no merge: an executor that keeps part of the old state copies it forward itself. Validated against the declared schema, and a value the schema rejects is a non-retryable execution fault, `state_schema_rejected` ([ADR-008](./008-execution-faults-and-abandonment.md), **Failure protocol**). | write |
+| **idempotency keys** | object of three strings — **added by [ADR-014](./014-idempotency-keys.md)** | A key for each of three scopes: the workflow, the execution, and this delivery. Derived from the record and the delivered event, so a replay produces the same ones. For an executor to hand to something outside Arvo that accepts one. | read |
 | **dependencies** | ~~the executor's own type; empty object where none supplied~~ — **[ADR-012](./012-absent-dependencies-and-hooks.md): absence is stated, not substituted** | Whatever the dependency resolved for this delivery, or absence where none was supplied (**Dependencies**, [ADR-011](./011-dependency-lifetime.md)). | read |
 | **event builder** | operation: (`type`, `data`, options) → ArvoEvent | Constructs a fully addressed event from a `type` and a `data`, applying every default under **Addressing an emitted event**, and exposing the safe fields and the visibly unsafe group. The only member that produces an event. | produces an event |
 | **at max depth** | boolean | True when an event this execution emits to a service could no longer increment `depth` without reaching the version's maximum ([ADR-009](./009-execution-bounds.md), **Depth**). | read |

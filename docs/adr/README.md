@@ -32,3 +32,4 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | [ADR-011](./011-dependency-lifetime.md) | Dependency Lifetime | Accepted |
 | [ADR-012](./012-absent-dependencies-and-hooks.md) | Absent Dependencies and Hooks | Accepted |
 | [ADR-013](./013-record-contracts-snapshot-removed.md) | The Record's Contracts Snapshot Is Removed | Accepted |
+| [ADR-014](./014-idempotency-keys.md) | Idempotency Keys | Accepted |
