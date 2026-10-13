@@ -164,11 +164,11 @@ The handlers' own data is Postgres under both, through the dependency, and is no
 
 > The mechanism MUST supply the state function, and MUST answer it live.
 
-- [ ] 8.1 Supply it in each mechanism as a real read against that mechanism's store, without classifying, deriving or filtering: one identifier in, what is under it out, parsed and nothing more.
-- [ ] 8.2 Assert it is asked **on every delivery**, including every retry, and never answered from something read earlier. Advance a record behind the mechanism's back and watch the next attempt see the change.
-- [ ] 8.3 Assert it is never given the event or the classification — by construction, since the signature cannot carry them.
-- [ ] 8.4 Assert it validates nothing: a row that is not a record reaches the handler and is refused *there*, not rejected by the mechanism on the handler's behalf.
-- [ ] 8.5 Take the store away mid-run and assert `state_resolution_failed` reaches the mechanism as retry-safe and is retried under the declared policy.
+- [x] 8.1 Supply it in each mechanism as a real read against that mechanism's store, without classifying, deriving or filtering: one identifier in, what is under it out, parsed and nothing more.
+- [x] 8.2 Assert it is asked **on every delivery**, including every retry, and never answered from something read earlier. Advance a record behind the mechanism's back and watch the next attempt see the change.
+- [x] 8.3 Assert it is never given the event or the classification — by construction, since the signature cannot carry them.
+- [x] 8.4 Assert it validates nothing: a row that is not a record reaches the handler and is refused *there*, not rejected by the mechanism on the handler's behalf.
+- [x] 8.5 Take the store away mid-run and assert `state_resolution_failed` reaches the mechanism as retry-safe and is retried under the declared policy.
 
 ## 9. Obligation 3 — abandonment, exactly as handed
 

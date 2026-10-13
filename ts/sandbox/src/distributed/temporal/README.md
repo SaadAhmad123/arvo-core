@@ -202,6 +202,13 @@ the workflows and `localhost:3000` for the traces.
   difference from a table. A record workflow closes when its execution
   comes to rest, and one resting at `waiting` stays open for as long as
   it waits — so a namespace expires only the executions that finished.
+- **A record that has come to rest is read-only, and the store is what
+  enforces that.** A record workflow ends when its execution reaches a
+  terminal lifecycle, and a closed workflow takes no further update — so
+  a revision after the last one is refused by Temporal rather than by
+  anything that remembered to check. ADR-007 says a terminal lifecycle
+  accepts nothing further, and here that holds by construction. A table
+  would accept the write and need a rule to refuse it.
 - **Changing workflow code can make existing records unreadable.**
   Reading a record replays its workflow's history, so a history written
   by an earlier build replays against code that was not written for it
