@@ -16,7 +16,7 @@ import { HANDLERS } from '../handler/index.js';
 import { PostgresCatalogue } from '../shared/catalogue.js';
 import { destinationFor } from '../shared/routing.js';
 import type { DeliveryReport, EmittedEvent } from './protocol.js';
-import { commitTo, stateOf } from './record-store.js';
+import { commitTo, revisionsOf, stateOf } from './record-store.js';
 
 /**
  * One delivery: the handler an event is addressed to runs, and what it
@@ -66,6 +66,36 @@ const emittedFrom = async (event: ArvoEvent): Promise<EmittedEvent> => ({
   handled: destinationFor(event).kind === 'handled',
   payload: await WIRE.serialize(event),
 });
+
+/**
+ * What a delivery that was already carried out hands back.
+ *
+ * The bytes its first attempt committed, read out of the revision that
+ * names it. Nothing is produced a second time, which is why no handler
+ * here has to be deterministic — and nothing is dropped, which is what
+ * obligation 1 requires of an event once its record is committed.
+ */
+const republish = async (
+  scope: ActivityScope,
+  executionId: string | null,
+  triggeringEvent: ArvoEvent,
+  note: string,
+): Promise<DeliveryReport> => {
+  if (executionId === null) return nothingToDo(note);
+
+  const committed = (await revisionsOf(scope.client, executionId)).find(
+    (revision) => revision.triggeringEventId === triggeringEvent.id,
+  );
+  if (committed === undefined) return nothingToDo(note);
+
+  return {
+    outcome: 'recovered',
+    executionId,
+    lifecycle: lifecycleOf(committed.state),
+    emitted: committed.events,
+    note,
+  };
+};
 
 /** Nothing to do, because this delivery's work was already done. */
 const nothingToDo = (note: string): DeliveryReport => ({
@@ -226,8 +256,18 @@ const deliver = async (
     // An opening event for an execution that already exists is a
     // redelivery, not a failure. Treating it as one would publish a
     // handler error for work that succeeded.
+    //
+    // But not a failure is not the same as nothing to do. The events
+    // the first delivery committed still have to reach their
+    // destinations, and a redelivery arriving is the only sign that
+    // they may not have.
     if (fault.faultKind === 'record_unexpected') {
-      return nothingToDo('this event had already been executed');
+      return republish(
+        scope,
+        fault.executionId,
+        triggeringEvent,
+        'this event had already been executed',
+      );
     }
 
     if (fault.retry !== null) {
@@ -243,8 +283,16 @@ const deliver = async (
     return giveUp(scope, fault, triggeringEvent);
   }
 
+  // Already processed, which only an answer can be: an opening event for
+  // an existing execution is refused above. The execution it answers is
+  // the one the event names, so nothing here works anything out.
   if (executed.value.kind === 'discarded') {
-    return nothingToDo(executed.value.reason);
+    return republish(
+      scope,
+      triggeringEvent.executionid,
+      triggeringEvent,
+      executed.value.reason,
+    );
   }
 
   const state = executed.value.state;

@@ -140,25 +140,35 @@ One run that does everything at once, because nothing here is interesting in iso
 - [x] 6.6 An audit write that answers nobody, emitted in the same batch as the completion — the only way a sink can be asked for anything without its caller waiting forever.
 - [ ] 6.7 Several whole runs at once, so nothing depends on being the only thing happening.
 
+## The obligation is the constant; the store is the mechanism's
+
+Each obligation below is one thing, asserted twice. What differs is where a mechanism keeps what it keeps, and that difference is the point of running two of them.
+
+**Temporal keeps its own state in Temporal.** A revision — `{ state, events }` — is a workflow's own state, committed by one update and published after; the queues are task queues. Nothing of the mechanism is in a database. **DBOS keeps its state in Postgres**, where a revision is a row and its outbox rows, committed in one transaction.
+
+So where a task below says "the store", read Temporal's record workflow or DBOS's tables. Where it says "a transaction", read whichever makes the write atomic. A task naming one store specifically is a task about that mechanism.
+
+The handlers' own data is Postgres under both, through the dependency, and is not either mechanism's state.
+
 ## 7. Obligation 1 — the outbox
 
 > The emitted events and the next execution record MUST be preserved together, and the events MUST reach their destinations once the record is committed.
 
-- [ ] 7.1 Implement it for real in each: the record and the outbox rows in one Postgres transaction, published from the outbox afterwards. Not events held in memory and hoped for.
-- [ ] 7.2 Assert nothing is published before the commit succeeds — a commit made to fail leaves no event anywhere.
-- [ ] 7.3 Assert recovery sends **what was committed**, byte for byte, rather than re-running the delivery to produce it again. Kill the worker between commit and publish and compare the bytes that arrive against the bytes in the outbox.
-- [ ] 7.4 Assert the re-sent copy is **discarded** at the receiver rather than processed twice, which is what makes an abandonment event's `id` matter.
-- [ ] 7.5 Assert the negative continuously: at no point in any run does a record exist without the events committed with it, or an event get published without that commit having succeeded. Checked against the database, not against a transcript.
+- [x] 7.1 Implement it for real in each: the record and the events it produced written as one thing, published from what was written afterwards. Not events held in memory and hoped for.
+- [x] 7.2 Assert nothing is published before the commit succeeds — a commit made to fail leaves no event anywhere.
+- [x] 7.3 Assert recovery sends **what was committed**, byte for byte, rather than re-running the delivery to produce it again. Compare the bytes a repeat delivery hands back against the bytes the first one wrote.
+- [x] 7.4 Assert the re-sent copy is **discarded** at the receiver rather than processed twice, which is what makes an abandonment event's `id` matter.
+- [x] 7.5 Assert the negative continuously: at no point in any run does a record exist without the events committed with it, or an event get published without that commit having succeeded. Checked against the store, not against a transcript.
 
 ## 8. Obligation 2 — the state function, answered live
 
 > The mechanism MUST supply the state function, and MUST answer it live.
 
-- [ ] 8.1 Supply it in each mechanism as a real query against Postgres, without classifying, deriving or filtering: one identifier in, what is under it out, parsed and nothing more.
-- [ ] 8.2 Assert it is asked **on every delivery**, including every retry, and never answered from something read earlier. Change a record behind the mechanism's back and watch the next attempt see the change.
+- [ ] 8.1 Supply it in each mechanism as a real read against that mechanism's store, without classifying, deriving or filtering: one identifier in, what is under it out, parsed and nothing more.
+- [ ] 8.2 Assert it is asked **on every delivery**, including every retry, and never answered from something read earlier. Advance a record behind the mechanism's back and watch the next attempt see the change.
 - [ ] 8.3 Assert it is never given the event or the classification — by construction, since the signature cannot carry them.
 - [ ] 8.4 Assert it validates nothing: a row that is not a record reaches the handler and is refused *there*, not rejected by the mechanism on the handler's behalf.
-- [ ] 8.5 Take the database away mid-run and assert `state_resolution_failed` reaches the mechanism as retry-safe and is retried under the declared policy.
+- [ ] 8.5 Take the store away mid-run and assert `state_resolution_failed` reaches the mechanism as retry-safe and is retried under the declared policy.
 
 ## 9. Obligation 3 — abandonment, exactly as handed
 
@@ -227,7 +237,7 @@ What the standard means concretely, so it can be checked rather than claimed.
 - [ ] 14.4 The network partitioned between worker and server, then healed.
 - [ ] 14.5 Signals and events delivered twice, and out of order.
 - [ ] 14.6 A run interrupted and resumed by a **different** worker process, nothing of the first still alive.
-- [ ] 14.7 The same invariants the in-process suites assert, asserted here against the database: one terminal state per execution, every request answered exactly once, revisions advancing one at a time from zero, every execution on one version for its whole life.
+- [ ] 14.7 The same invariants the in-process suites assert, asserted here against the store: one terminal state per execution, every request answered exactly once, revisions advancing one at a time from zero, every execution on one version for its whole life.
 - [ ] 14.8 The outbox holding under every one of these, as §7.5 requires.
 - [ ] 14.9 Every one of these visible in Grafana afterwards, because a failure nobody can see in telemetry is a failure a deployment will meet blind.
 

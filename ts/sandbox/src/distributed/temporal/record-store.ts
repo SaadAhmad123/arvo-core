@@ -7,7 +7,12 @@ import {
 import type { JSONObject } from 'arvo-core';
 import type { CommitOutcome, Revision } from './protocol.js';
 import { RECORD_QUEUE } from './queues.js';
-import { commitRevision, executionRecord, stateHeld } from './workflows.js';
+import {
+  commitRevision,
+  executionRecord,
+  revisionsHeld,
+  stateHeld,
+} from './workflows.js';
 
 /**
  * The record store, as Temporal holds it.
@@ -46,6 +51,30 @@ export const stateOf = async (
   } catch (raised) {
     // No workflow is absence: an execution nothing has opened.
     if (raised instanceof WorkflowNotFoundError) return null;
+    throw raised;
+  }
+};
+
+/**
+ * Every revision one execution has committed, as it committed them.
+ *
+ * The recovery read, and what a spec compares bytes against. Each
+ * revision is the record and the events written with it, so what is
+ * published can be read back rather than produced again.
+ *
+ * @param client - The cluster.
+ * @param executionId - The execution to read.
+ */
+export const revisionsOf = async (
+  client: Client,
+  executionId: string,
+): Promise<readonly Revision[]> => {
+  try {
+    return await client.workflow
+      .getHandle(recordWorkflowId(executionId))
+      .query(revisionsHeld);
+  } catch (raised) {
+    if (raised instanceof WorkflowNotFoundError) return [];
     throw raised;
   }
 };
