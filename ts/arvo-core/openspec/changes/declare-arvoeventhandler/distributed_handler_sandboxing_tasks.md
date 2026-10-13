@@ -174,11 +174,11 @@ The handlers' own data is Postgres under both, through the dependency, and is no
 
 > A mechanism that abandons an execution MUST do so with the fault's `abandonment_state` and `abandonment_event`, together, and with nothing of its own.
 
-- [ ] 9.1 Assert a fault whose `retry` is null is **never redelivered** — which means mapping it onto a non-retryable failure rather than letting a retry policy run its course. In Temporal an application failure marked non-retryable; in DBOS the equivalent.
-- [ ] 9.2 Assert that where a mechanism abandons, it commits the record and publishes the event **together**, under the outbox, and composes neither.
-- [ ] 9.3 Assert the three shapes separately: a fault carrying both halves, one carrying only the event, and one carrying neither. A mechanism acts on every contingency a fault carries and on nothing it does not.
+- [x] 9.1 Assert a fault whose `retry` is null is **never redelivered**. Temporal does this by not failing at all where the execution was abandoned — the delivery did what the protocol asked, and marking it failed would make a correct abandonment look like a broken worker. Nothing is thrown, so no retry policy has anything to act on, which is a stronger guarantee than a failure marked non-retryable. A delivery nothing can route does fail non-retryably, which is the other half.
+- [x] 9.2 Assert that where a mechanism abandons, it commits the record and publishes the event **together**, under the outbox, and composes neither.
+- [x] 9.3 Assert the three shapes separately: a fault carrying both halves, one carrying only the event, and one carrying neither. A mechanism acts on every contingency a fault carries and on nothing it does not.
 - [x] 9.4 Assert an opening event for an execution that already exists is **not** read as a failure. ADR-008 names this as the case a mechanism is most likely to get wrong, and both of ours get a chance to.
-- [ ] 9.5 A fault nothing will retry lands somewhere a person could find it — §13.12's poison path — rather than vanishing into a log.
+- [x] 9.5 A fault nothing will retry lands somewhere a person could find it — §13.12's poison path — rather than vanishing into a log.
 
 ## 10. Obligation 4 — every retry a fresh delivery
 

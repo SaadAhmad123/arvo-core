@@ -202,6 +202,13 @@ the workflows and `localhost:3000` for the traces.
   difference from a table. A record workflow closes when its execution
   comes to rest, and one resting at `waiting` stays open for as long as
   it waits — so a namespace expires only the executions that finished.
+- **The poison path is a failed workflow, not a table.** A delivery
+  nothing will retry either abandons — in which case the fault's record
+  and event are committed as a revision and the event goes out, so it is
+  in the record — or cannot be routed at all, in which case the delivery
+  fails non-retryably and its workflow comes to rest as failed with the
+  reason in its history. Both are findable without a mechanism inventing
+  a place to put them.
 - **A record that has come to rest is read-only, and the store is what
   enforces that.** A record workflow ends when its execution reaches a
   terminal lifecycle, and a closed workflow takes no further update — so
