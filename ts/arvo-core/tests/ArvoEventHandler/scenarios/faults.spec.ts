@@ -5,6 +5,7 @@ import type { ArvoEventHandlerExecuteParam } from '../../../src/ArvoEventHandler
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
 import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
 import type { JSONObject } from '../../../src/types.js';
+import { heldDependencies, openedPerExecution } from '../dependency.js';
 import {
   declareHandler,
   declareHandlerAfterDrain,
@@ -470,23 +471,23 @@ describe('what the handler passes through from the version unaltered', () => {
     expect(fault.violations.join(' ')).toContain('com_somebody_else');
   });
 
-  it('a dependency factory that could not answer', async () => {
+  it('a dependency that could not be opened', async () => {
     const { fault } = await refusing({
       event: anOrder(),
-      dependencies: () => {
+      dependencies: openedPerExecution(() => {
         throw new Error('the pool is exhausted');
-      },
+      }).dependency,
     });
     expect(fault.faultKind).toBe('dependency_resolution_failed');
     expect(fault.retry).not.toBeNull();
   });
 
-  it('a dependency factory that failed with something that is not an error', async () => {
+  it('a dependency that failed to open with something that is not an error', async () => {
     const { fault } = await refusing({
       event: anOrder(),
-      dependencies: () => {
+      dependencies: openedPerExecution(() => {
         throw 'the pool said only this';
-      },
+      }).dependency,
     });
     expect(fault.faultKind).toBe('dependency_resolution_failed');
     expect(fault.cause).toBe('the pool said only this');
@@ -495,14 +496,14 @@ describe('what the handler passes through from the version unaltered', () => {
   it('an executor that raised one deliberately', async () => {
     const { fault } = await refusing({
       event: anOrder(),
-      dependencies: {
+      dependencies: heldDependencies<ScenarioDependencies>({
         behave: async (ctx) => {
           throw await ctx.fault({
             faultKind: 'executor_raised',
             message: 'the executor said so',
           });
         },
-      },
+      }).dependency,
     });
     expect(fault.faultKind).toBe('executor_raised');
     expect(fault.message).toContain('the executor said so');

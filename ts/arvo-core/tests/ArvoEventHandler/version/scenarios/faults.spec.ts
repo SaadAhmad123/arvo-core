@@ -9,6 +9,7 @@ import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFacto
 import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
 import { createArvoEvent } from '../../../../src/factories/createArvoEvent.js';
 import type { JSONObject } from '../../../../src/types.js';
+import { heldDependencies, openedPerExecution } from '../../dependency.js';
 import {
   type AuditContext,
   auditV1,
@@ -83,7 +84,7 @@ const faulted = async (
       state: null,
       executionId: await deriveArvoExecutionId(event),
       attempt: 0,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: telemetry(),
       ...param,
@@ -107,7 +108,7 @@ const waiting = async () => {
     state: null,
     executionId,
     attempt: 0,
-    dependencies: {},
+    dependencies: null,
     hooks: {},
     telemetry: telemetry(),
   } as never);
@@ -281,9 +282,9 @@ describe('what refuses an execution on the way in', () => {
 
   it('dependencies that would not resolve, which may resolve later', async () => {
     const fault = await faulted({
-      dependencies: () => {
+      dependencies: openedPerExecution(() => {
         throw new Error('the pool is exhausted');
-      },
+      }).dependency,
     });
     expect(fault.faultKind).toBe('dependency_resolution_failed');
     expect(fault.retry).not.toBeNull();
@@ -295,14 +296,18 @@ describe('what refuses an execution on the way in', () => {
 
 describe('what refuses an execution once its executor has run', () => {
   const misbehaving = (behave: (ctx: OrderContext) => unknown) =>
-    faulted({ dependencies: { behave } });
+    faulted({ dependencies: heldDependencies({ behave }).dependency });
 
   it('an executor that did not come back in time', async () => {
     const versions = declareVersions({
       [orderV1.type]: { runTimeout: 20 },
     });
     const fault = await faulted(
-      { dependencies: { behave: () => new Promise(() => undefined) } },
+      {
+        dependencies: heldDependencies({
+          behave: () => new Promise(() => undefined),
+        }).dependency,
+      },
       '1.0.0',
       versions,
     );
@@ -360,7 +365,7 @@ describe('what refuses an execution once its executor has run', () => {
     const versions = declareVersions({ [orderV1.type]: { maxDepth: 1 } });
     const fault = await faulted(
       {
-        dependencies: {
+        dependencies: heldDependencies({
           behave: async (ctx: OrderContext) => {
             await ctx.setState({ data: { stage: 'done', answers: 0 } });
             return ctx.build({
@@ -368,7 +373,7 @@ describe('what refuses an execution once its executor has run', () => {
               data: { amount: 1 },
             });
           },
-        },
+        }).dependency,
       },
       '1.0.0',
       versions,
@@ -414,11 +419,11 @@ describe('what refuses an execution once its executor has run', () => {
         state: null,
         executionId: await deriveArvoExecutionId(writing),
         attempt: 0,
-        dependencies: {
+        dependencies: heldDependencies({
           behave: async (ctx: AuditContext) => {
             await ctx.setState({ data: { circular } });
           },
-        },
+        }).dependency,
         hooks: {},
         telemetry: telemetry(),
       } as never);
@@ -437,9 +442,9 @@ describe('what refuses an execution once its executor has run', () => {
 describe('what every fault carries, whichever it is', () => {
   it('names the execution it happened to, where one was resolved', async () => {
     const fault = await faulted({
-      dependencies: () => {
+      dependencies: openedPerExecution(() => {
         throw new Error('no');
-      },
+      }).dependency,
     });
     expect(fault.subject).toBe('order-1');
     expect(fault.executionId).not.toBeNull();
@@ -449,9 +454,9 @@ describe('what every fault carries, whichever it is', () => {
 
   it('survives being written out, for whatever stores it', async () => {
     const fault = await faulted({
-      dependencies: () => {
+      dependencies: openedPerExecution(() => {
         throw new Error('no');
-      },
+      }).dependency,
     });
     const written = JSON.parse(JSON.stringify(fault.toJSON()));
     expect(written.faultKind).toBe('dependency_resolution_failed');

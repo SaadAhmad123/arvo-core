@@ -9,6 +9,7 @@ import { createArvoEventFactory } from '../../src/factories/ArvoEventFactory/ind
 import { cloneArvoEvent } from '../../src/factories/cloneArvoEvent.js';
 import { setupArvoEventHandler } from '../../src/factories/setupArvoEventHandler.js';
 import type { JSONObject } from '../../src/types.js';
+import { heldDependencies, openedPerExecution } from './dependency.js';
 import { orderContract, orderVersion, paymentVersion } from './fixtures.js';
 
 /** A store the handler reaches through, as a mechanism would supply one. */
@@ -577,12 +578,12 @@ describe('what the executor is given', () => {
       })
       .build();
 
-  it('reaches a dependency supplied as a value', async () => {
+  it('reaches what a dependency that holds nothing exposes', async () => {
     const ran = await handlerReading().execute({
       event: anOrder(),
       state: storing().read(),
       attempt: 0,
-      dependencies: { note: 'given' },
+      dependencies: heldDependencies({ note: 'given' }).dependency,
       hooks: { ticket: 'T-1' },
     });
     expect(ran.kind === 'produced' && ran.state.data).toEqual({
@@ -590,12 +591,14 @@ describe('what the executor is given', () => {
     });
   });
 
-  it('reaches one built by a factory for this execution alone', async () => {
+  it('reaches one opened for this execution alone', async () => {
     const ran = await handlerReading().execute({
       event: anOrder(),
       state: storing().read(),
       attempt: 0,
-      dependencies: ({ attempt }) => ({ note: `attempt-${attempt}` }),
+      dependencies: openedPerExecution((scope) => ({
+        note: `attempt-${scope.attempt}`,
+      })).dependency,
       hooks: { ticket: 'T-2' },
     });
     expect(ran.kind === 'produced' && ran.state.data).toEqual({

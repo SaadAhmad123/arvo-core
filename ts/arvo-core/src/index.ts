@@ -84,6 +84,10 @@ export type {
   ArvoVersionInput,
 } from './ArvoEventHandler/types/declaration.js';
 export type {
+  ArvoDependencyScope,
+  IArvoEventHandlerDependency,
+} from './ArvoEventHandler/types/dependency.js';
+export type {
   ArvoEventHandlerExecuteParam,
   ArvoEventHandlerExecuteResponse,
   ArvoEventHandlerExecutor,
@@ -100,7 +104,6 @@ export type { ArvoEventHandlerSetupParam } from './ArvoEventHandler/types/setup.
 export type {
   ArvoDeclaredTypes,
   ArvoDependencies,
-  ArvoDependencyResolver,
   ArvoMechanismHooks,
   ArvoNone,
 } from './ArvoEventHandler/types/supplied.js';

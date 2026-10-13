@@ -4,6 +4,7 @@ import type { JSONObject } from '../../types.js';
 import type { ArvoExecutionContextTelemetry } from '../context/telemetry/index.js';
 
 import type { ArvoFaultKind } from '../fault/types.js';
+import type { IArvoEventHandlerDependency } from '../types/dependency.js';
 import type {
   ArvoEventHandlerExecutor,
   ArvoExecutorEmission,
@@ -17,7 +18,6 @@ import type {
 import type {
   ArvoDeclaredTypes,
   ArvoDependencies,
-  ArvoDependencyResolver,
   ArvoMechanismHooks,
 } from '../types/supplied.js';
 
@@ -84,10 +84,28 @@ type ArvoVersionExecuteCommon<
   executionId: string;
   /** Which attempt this is, counting from 0. */
   attempt: number;
-  /** A value, or a factory called once for this execution. */
-  dependencies: ArvoDependencyResolver<TDependencies, TDataSchema>;
-  /** Whatever this mechanism exposes to an executor. */
-  hooks: TMechanismHooks;
+  /**
+   * What the executor is given, or `null` where nothing was supplied.
+   *
+   * `null` rather than absent: the handler normalizes once at its own
+   * boundary, so nothing below it has two spellings for nothing.
+   *
+   * Declared with this version's state schema, so a supplier written for
+   * one version is handed a record typed by it. One written for a
+   * handler still satisfies this: `open` and `close` are methods, whose
+   * parameters TypeScript checks bivariantly.
+   */
+  dependencies: IArvoEventHandlerDependency<TDependencies, TDataSchema> | null;
+  /**
+   * Whatever this mechanism exposes to an executor, or `null` where it
+   * exposed nothing.
+   *
+   * `null` rather than absent, and rather than an empty object: the
+   * handler normalizes once at its own boundary, and a mechanism that
+   * deliberately exposed nothing is then a different fact from one that
+   * was never asked.
+   */
+  hooks: TMechanismHooks | null;
   /** This execution's telemetry, built by whatever runs the handler. */
   telemetry: ArvoExecutionContextTelemetry;
 

@@ -54,7 +54,7 @@ parentPort?.on('message', async (asked: Asked) => {
       state: asked.state,
       executionId: asked.executionId,
       attempt: asked.attempt,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: new ArvoExecutionContextTelemetry({
         span: trace.getTracer('worker').startSpan('execution'),

@@ -6,6 +6,7 @@ import { deriveArvoExecutionId } from '../../../../src/ArvoEventHandler/helpers/
 import type { ArvoEventHandlerExecuteResponse } from '../../../../src/ArvoEventHandler/types/execute.js';
 import { ArvoEventSerializer } from '../../../../src/serializers/ArvoEventSerializer/index.js';
 import type { JSONObject } from '../../../../src/types.js';
+import { heldDependencies } from '../../dependency.js';
 import type { ArvoBehaviour, ArvoVersionsUnderTest } from './fixture.js';
 
 /** How a lattice may misbehave, every one of them off by default. */
@@ -429,7 +430,9 @@ export class ArvoLattice {
         event,
         state: ({ executionId }) => this.stored(executionId),
         attempt,
-        dependencies: { behave: this.#behaviours.get(event.to as string) },
+        dependencies: heldDependencies({
+          behave: this.#behaviours.get(event.to as string),
+        }).dependency,
         hooks: {},
       });
 
@@ -468,7 +471,9 @@ export class ArvoLattice {
       state: route.read,
       executionId: route.executionId,
       attempt,
-      dependencies: { behave: this.#behaviours.get(event.to as string) },
+      dependencies: heldDependencies({
+        behave: this.#behaviours.get(event.to as string),
+      }).dependency,
       hooks: {},
       telemetry: this.#telemetry(),
     } as never)) as ArvoEventHandlerExecuteResponse;

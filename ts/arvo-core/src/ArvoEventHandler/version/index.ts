@@ -21,6 +21,10 @@ import { atNextRevision } from '../state/revision.js';
 import type { ArvoExecutionStateSerializerError } from '../state/serializer/errors.js';
 import { mutateState } from '../state/utils.js';
 import type {
+  ArvoDependencyScope,
+  IArvoEventHandlerDependency,
+} from '../types/dependency.js';
+import type {
   ArvoEventHandlerExecuteResponse,
   ArvoEventHandlerExecutor,
 } from '../types/execute.js';
@@ -28,7 +32,6 @@ import type { ArvoEventHandlerOptions } from '../types/options.js';
 import type { ArvoServiceMap } from '../types/services.js';
 import type {
   ArvoDependencies,
-  ArvoDependencyResolver,
   ArvoMechanismHooks,
 } from '../types/supplied.js';
 import { ArvoEventDepthValidator } from '../validators/depth/index.js';
@@ -51,6 +54,7 @@ import {
   markExecutorRan,
   markOutcome,
   markStage,
+  markSwallowed,
 } from './telemetry.js';
 import type {
   ArvoEventHandlerVersionExecuteParam,
@@ -231,9 +235,43 @@ export class ArvoEventHandlerVersion<
       throw await this.#entryFaultFor(param, record, refusal);
     }
 
-    const dependencies = await this.#resolveDependencies(param, record);
+    const scope: ArvoDependencyScope = {
+      event: param.event,
+      // An event opening an execution read no record, and the one built
+      // for it says nothing a supplier could not work out from the
+      // event — so what it is handed is the absence that says which
+      // kind of execution this is.
+      state: param.state === null ? null : record,
+      executionId: param.executionId,
+      attempt: param.attempt,
+      telemetry: param.telemetry,
+    };
+
+    const dependencies = await this.#openDependencies(param, record, scope);
     markStage(param.telemetry, 'dependencies_resolved');
 
+    // From here to every exit the dependency is open, so every exit has
+    // to close it — including a return validation refusal and a record
+    // that would not serialize, both of which happen after the executor.
+    try {
+      return await this.#runOpened(param, record, dependencies);
+    } finally {
+      await this.#closeDependencies(param, scope);
+    }
+  }
+
+  /** Everything from the collection to the record, with dependencies open. */
+  async #runOpened(
+    param: ArvoEventHandlerVersionExecuteParam<
+      TSelf,
+      TServices,
+      TDataSchema,
+      TDependencies,
+      TMechanismHooks
+    >,
+    record: ArvoContextState<TSelf, TServices, TDataSchema>,
+    dependencies: TDependencies,
+  ): Promise<ArvoEventHandlerExecuteResponse> {
     const collected =
       param.entry === 'followup'
         ? collectResponse(record, param.event)
@@ -264,7 +302,10 @@ export class ArvoEventHandlerVersion<
       telemetry: param.telemetry,
       options: this.options,
       dependencies,
-      hooks: param.hooks,
+      // The one place an empty bag is invented, and it is invented for
+      // the executor rather than standing in for something missing: an
+      // executor must always find an object, and nothing was supplied.
+      hooks: param.hooks ?? ({} as TMechanismHooks),
     });
 
     markStage(param.telemetry, 'executor_entered', {
@@ -567,7 +608,14 @@ export class ArvoEventHandlerVersion<
   }
 
   /** What the executor is given to work with, by value or from a factory. */
-  async #resolveDependencies(
+  /**
+   * Opens what the executor will be given, and reads it.
+   *
+   * Reading the surface is part of opening: a dependency that took
+   * something and then could not hand it over did not become usable,
+   * which is the same failure for the same reason.
+   */
+  async #openDependencies(
     param: ArvoEventHandlerVersionExecuteParam<
       TSelf,
       TServices,
@@ -576,34 +624,49 @@ export class ArvoEventHandlerVersion<
       TMechanismHooks
     >,
     record: ArvoExecutionState,
+    scope: ArvoDependencyScope,
   ): Promise<TDependencies> {
-    const resolver = param.dependencies as ArvoDependencyResolver<
-      TDependencies,
-      TDataSchema
-    >;
-    if (typeof resolver !== 'function') return resolver;
+    const dependencies: IArvoEventHandlerDependency<TDependencies> | null =
+      param.dependencies;
+    if (dependencies === null) return {} as TDependencies;
 
     try {
-      return await resolver({
-        event: param.event,
-        // An event opening an execution read no record, and the one
-        // built for it says nothing a factory could not work out from
-        // the event — so what it is handed is the absence that says
-        // which kind of execution this is.
-        state:
-          param.state === null
-            ? null
-            : (record as ArvoExecutionState<TDataSchema>),
-        executionId: param.executionId,
-        attempt: param.attempt,
-      });
+      await dependencies.open(scope);
+      return dependencies.attributes;
     } catch (raised) {
       throw await this.#entryFaultFor(param, record, {
         faultKind: 'dependency_resolution_failed',
-        message: `the dependencies for ${this.#contractAtVersion} could not be resolved, so your executor was never entered: ${raised instanceof Error ? raised.message : String(raised)}. Another attempt may succeed`,
+        message: `the dependencies for ${this.#contractAtVersion} could not be opened, so your executor was never entered: ${raised instanceof Error ? raised.message : String(raised)}. Another attempt may succeed`,
         violations: [],
         cause: raised instanceof Error ? raised.message : String(raised),
       });
+    }
+  }
+
+  /**
+   * Lets go of what was opened, whatever happened in between.
+   *
+   * A failure here cannot change what the execution concluded, so it is
+   * recorded and discarded. Turning a committed execution into a fault
+   * because a connection would not close would retry business logic over
+   * a cleanup problem.
+   */
+  async #closeDependencies(
+    param: ArvoEventHandlerVersionExecuteParam<
+      TSelf,
+      TServices,
+      TDataSchema,
+      TDependencies,
+      TMechanismHooks
+    >,
+    scope: ArvoDependencyScope,
+  ): Promise<void> {
+    if (param.dependencies === null) return;
+
+    try {
+      await param.dependencies.close(scope);
+    } catch (raised) {
+      markSwallowed(param.telemetry, 'dependencies_not_closed', raised);
     }
   }
 

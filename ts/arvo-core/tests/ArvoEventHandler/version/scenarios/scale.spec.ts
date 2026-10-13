@@ -4,6 +4,7 @@ import { ArvoExecutionContextTelemetry } from '../../../../src/ArvoEventHandler/
 import { deriveArvoExecutionId } from '../../../../src/ArvoEventHandler/helpers/execution-id.js';
 import type { ArvoEventHandlerExecuteResponse } from '../../../../src/ArvoEventHandler/types/execute.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
+import { heldDependencies } from '../../dependency.js';
 import {
   declareVersions,
   type OrderContext,
@@ -142,7 +143,7 @@ describe('two thousand executions through one version', () => {
         state: null,
         executionId: await deriveArvoExecutionId(event),
         attempt: 0,
-        dependencies: {
+        dependencies: heldDependencies({
           behave: async (ctx: OrderContext) => {
             await ctx.setState({
               data: { stage: ctx.state.subject, answers: at },
@@ -152,7 +153,7 @@ describe('two thousand executions through one version', () => {
               data: { order_id: ctx.state.subject },
             });
           },
-        },
+        }).dependency,
         hooks: {},
         telemetry: telemetryFor(),
       } as never)) as ArvoEventHandlerExecuteResponse;
@@ -192,7 +193,7 @@ describe('two thousand executions through one version', () => {
         state: null,
         executionId: await deriveArvoExecutionId(event),
         attempt: 0,
-        dependencies: { behave: interleaving },
+        dependencies: heldDependencies({ behave: interleaving }).dependency,
         hooks: {},
         telemetry: telemetryFor(),
       } as never)) as ArvoEventHandlerExecuteResponse;
@@ -247,7 +248,7 @@ describe('telemetry that fights back', () => {
       state: null,
       executionId: await deriveArvoExecutionId(event),
       attempt: 0,
-      dependencies: {
+      dependencies: heldDependencies({
         behave: async (ctx: OrderContext) => {
           await ctx.setState({ data: { stage: 'done', answers: 0 } });
           return ctx.build({
@@ -255,7 +256,7 @@ describe('telemetry that fights back', () => {
             data: { order_id: 'o-1' },
           });
         },
-      },
+      }).dependency,
       hooks: {},
       telemetry: hostile(),
     } as never)) as ArvoEventHandlerExecuteResponse;
@@ -274,12 +275,12 @@ describe('telemetry that fights back', () => {
         state: null,
         executionId: await deriveArvoExecutionId(event),
         attempt: 0,
-        dependencies: {
+        dependencies: heldDependencies({
           behave: async (ctx: OrderContext) => {
             await ctx.setState({ data: { stage: 'done', answers: 0 } });
             return 'not an event';
           },
-        },
+        }).dependency,
         hooks: {},
         telemetry: hostile(),
       } as never),

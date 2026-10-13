@@ -6,6 +6,7 @@ import { deriveArvoExecutionId } from '../../../../src/ArvoEventHandler/helpers/
 import type { ArvoEventHandlerExecuteResponse } from '../../../../src/ArvoEventHandler/types/execute.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
 import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
+import { heldDependencies } from '../../dependency.js';
 import {
   type AuditContext,
   auditV1,
@@ -59,7 +60,7 @@ const run = async (param: {
       state: null,
       executionId: await deriveArvoExecutionId(event),
       attempt: param.attempt ?? 0,
-      dependencies: { behave: param.behave },
+      dependencies: heldDependencies({ behave: param.behave }).dependency,
       hooks: {},
       telemetry: telemetryFor(),
     } as never)) as ArvoEventHandlerExecuteResponse;
@@ -270,11 +271,11 @@ describe('payloads nobody writes on purpose', () => {
         state: null,
         executionId: await deriveArvoExecutionId(event),
         attempt: 0,
-        dependencies: {
+        dependencies: heldDependencies({
           behave: async (ctx: AuditContext) => {
             await ctx.setState({ data });
           },
-        },
+        }).dependency,
         hooks: {},
         telemetry: telemetryFor(),
       } as never)) as ArvoEventHandlerExecuteResponse;

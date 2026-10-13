@@ -13,7 +13,7 @@ import {
 } from 'arvo-core';
 import type { Pool } from 'pg';
 import { HANDLERS } from '../handler/index.js';
-import { catalogueFor } from '../shared/catalogue.js';
+import { PostgresCatalogue } from '../shared/catalogue.js';
 import { destinationFor } from '../shared/routing.js';
 import type { DeliveryReport, EmittedEvent } from './protocol.js';
 import { commitTo, stateOf } from './record-store.js';
@@ -193,122 +193,105 @@ const deliver = async (
   scope: ActivityScope,
   payload: string,
 ): Promise<DeliveryReport> => {
-  {
-    const triggeringEvent = await WIRE.deserialize(payload);
-    const destination = destinationFor(triggeringEvent);
+  const triggeringEvent = await WIRE.deserialize(payload);
+  const destination = destinationFor(triggeringEvent);
 
-    if (destination.kind !== 'handled') {
-      // Routed here wrongly rather than failed: no attempt fixes it.
-      throw ApplicationFailure.nonRetryable(
-        `nothing here implements ${triggeringEvent.to}`,
-        'arvo_unroutable',
-      );
-    }
-
-    // Temporal counts attempts from one and Arvo from zero.
-    const attempt = activityInfo().attempt - 1;
-    heartbeat({ eventId: triggeringEvent.id, attempt });
-
-    const releaseEach: Array<() => void> = [];
-    try {
-      const executed = await destination.handler.tryExecute({
-        event: triggeringEvent,
-        // The handler says which execution to read; nothing here works
-        // one out. Read on every invocation, so a retry sees what is
-        // stored now rather than what an earlier attempt read.
-        state: ({ executionId }) => stateOf(scope.client, executionId),
-        attempt,
-        // Resolved on this attempt and let go of with it, so nothing
-        // live survives a suspension and a leak exhausts the pool rather
-        // than slowing a worker down.
-        dependencies: async (param) => {
-          const opened = await catalogueFor(scope.pool);
-          releaseEach.push(opened.release);
-          return {
-            catalogue: opened.catalogue,
-            executionId: param.executionId,
-            attempt: param.attempt,
-            resumed: param.state,
-          };
-        },
-      });
-
-      if (!executed.ok) {
-        const fault = executed.error;
-
-        // An opening event for an execution that already exists is a
-        // redelivery, not a failure. Treating it as one would publish a
-        // handler error for work that succeeded.
-        if (fault.faultKind === 'record_unexpected') {
-          return nothingToDo('this event had already been executed');
-        }
-
-        if (fault.retry !== null) {
-          throw ApplicationFailure.create({
-            message: `${fault.faultKind}: ${fault.message}`,
-            type: fault.faultKind,
-            nonRetryable: false,
-            nextRetryDelay: fault.retry.retryInMs,
-            details: [{ faultKind: fault.faultKind, attempt: fault.attempt }],
-          });
-        }
-
-        return giveUp(scope, fault, triggeringEvent);
-      }
-
-      if (executed.value.kind === 'discarded') {
-        return nothingToDo(executed.value.reason);
-      }
-
-      const state = executed.value.state;
-      const executionId = executionOf(state);
-      if (executionId === null) {
-        throw ApplicationFailure.nonRetryable(
-          'this record names no execution, so there is nowhere to commit it',
-          'arvo_unaddressable_record',
-        );
-      }
-
-      const emitted = await Promise.all(executed.value.events.map(emittedFrom));
-
-      const outcome = await commitTo(scope.client, {
-        executionId,
-        revision: {
-          triggeringEventId: triggeringEvent.id,
-          state,
-          events: emitted,
-        },
-      });
-
-      if (!outcome.committed) {
-        log.info('another writer committed first', {
-          executionId,
-          because: outcome.because,
-        });
-        return {
-          outcome: 'recovered',
-          executionId,
-          lifecycle: lifecycleOf(state),
-          emitted: converged(
-            outcome.alreadyCommitted,
-            executionId,
-            triggeringEvent,
-          ),
-          note: outcome.because,
-        };
-      }
-
-      return {
-        outcome: 'produced',
-        executionId,
-        lifecycle: lifecycleOf(state),
-        emitted,
-        note: null,
-      };
-    } finally {
-      for (const release of releaseEach) release();
-    }
+  if (destination.kind !== 'handled') {
+    // Routed here wrongly rather than failed: no attempt fixes it.
+    throw ApplicationFailure.nonRetryable(
+      `nothing here implements ${triggeringEvent.to}`,
+      'arvo_unroutable',
+    );
   }
+
+  // Temporal counts attempts from one and Arvo from zero.
+  const attempt = activityInfo().attempt - 1;
+  heartbeat({ eventId: triggeringEvent.id, attempt });
+
+  const executed = await destination.handler.tryExecute({
+    event: triggeringEvent,
+    // The handler says which execution to read; nothing here works
+    // one out. Read on every invocation, so a retry sees what is
+    // stored now rather than what an earlier attempt read.
+    state: ({ executionId }) => stateOf(scope.client, executionId),
+    attempt,
+    // Opened before the executor and closed after it, by the handler,
+    // so nothing here holds a connection to remember to give back.
+    dependencies: new PostgresCatalogue(scope.pool),
+  });
+
+  if (!executed.ok) {
+    const fault = executed.error;
+
+    // An opening event for an execution that already exists is a
+    // redelivery, not a failure. Treating it as one would publish a
+    // handler error for work that succeeded.
+    if (fault.faultKind === 'record_unexpected') {
+      return nothingToDo('this event had already been executed');
+    }
+
+    if (fault.retry !== null) {
+      throw ApplicationFailure.create({
+        message: `${fault.faultKind}: ${fault.message}`,
+        type: fault.faultKind,
+        nonRetryable: false,
+        nextRetryDelay: fault.retry.retryInMs,
+        details: [{ faultKind: fault.faultKind, attempt: fault.attempt }],
+      });
+    }
+
+    return giveUp(scope, fault, triggeringEvent);
+  }
+
+  if (executed.value.kind === 'discarded') {
+    return nothingToDo(executed.value.reason);
+  }
+
+  const state = executed.value.state;
+  const executionId = executionOf(state);
+  if (executionId === null) {
+    throw ApplicationFailure.nonRetryable(
+      'this record names no execution, so there is nowhere to commit it',
+      'arvo_unaddressable_record',
+    );
+  }
+
+  const emitted = await Promise.all(executed.value.events.map(emittedFrom));
+
+  const outcome = await commitTo(scope.client, {
+    executionId,
+    revision: {
+      triggeringEventId: triggeringEvent.id,
+      state,
+      events: emitted,
+    },
+  });
+
+  if (!outcome.committed) {
+    log.info('another writer committed first', {
+      executionId,
+      because: outcome.because,
+    });
+    return {
+      outcome: 'recovered',
+      executionId,
+      lifecycle: lifecycleOf(state),
+      emitted: converged(
+        outcome.alreadyCommitted,
+        executionId,
+        triggeringEvent,
+      ),
+      note: outcome.because,
+    };
+  }
+
+  return {
+    outcome: 'produced',
+    executionId,
+    lifecycle: lifecycleOf(state),
+    emitted,
+    note: null,
+  };
 };
 
 /**

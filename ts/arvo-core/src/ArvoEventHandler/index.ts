@@ -529,8 +529,10 @@ export class ArvoEventHandler<
       state: stored,
       executionId,
       attempt: param.attempt,
-      dependencies: param.dependencies ?? ({} as TDependencies),
-      hooks: param.hooks ?? ({} as TMechanismHooks),
+      // The one place the two spellings for nothing meet: a caller
+      // omits, everything below reads null.
+      dependencies: param.dependencies ?? null,
+      hooks: param.hooks ?? null,
       telemetry,
       // Judged where the protocol puts it: after the record has had its
       // say about depth, lifecycle, time and addressing, so a late event

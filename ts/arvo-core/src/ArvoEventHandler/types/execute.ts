@@ -4,12 +4,9 @@ import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { JSONObject, PromiseAble } from '../../types.js';
 import type { ArvoExecutionContext } from '../context/index.js';
 import type { ArvoExecutionContextTelemetry } from '../context/telemetry/index.js';
+import type { IArvoEventHandlerDependency } from './dependency.js';
 import type { ArvoServiceMap } from './services.js';
-import type {
-  ArvoDependencies,
-  ArvoDependencyResolver,
-  ArvoMechanismHooks,
-} from './supplied.js';
+import type { ArvoDependencies, ArvoMechanismHooks } from './supplied.js';
 
 /**
  * What one call to `execute` produced.
@@ -122,11 +119,16 @@ export type ArvoEventHandlerExecuteParam<
   attempt: number;
 
   /**
-   * What this version's executor is given to work with: a value used as
-   * it stands, or a factory called exactly once for this execution.
-   * Omitted, the executor finds an empty object.
+   * What this version's executor is given to work with, and how it is
+   * opened and closed.
+   *
+   * Opened once before the executor is entered and closed once after
+   * the execution ends, on every path out. Omitted, the executor finds
+   * an empty object and nothing is opened.
+   *
+   * See {@link IArvoEventHandlerDependency} for what it owes.
    */
-  dependencies?: ArvoDependencyResolver<TDependencies, z.$ZodObject>;
+  dependencies?: IArvoEventHandlerDependency<TDependencies>;
 
   /**
    * Whatever the mechanism running this handler exposes to an executor.

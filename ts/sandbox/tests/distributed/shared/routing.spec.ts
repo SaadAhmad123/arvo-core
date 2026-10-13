@@ -12,7 +12,7 @@ import {
   orderFulfilV1,
 } from '../../../src/distributed/handler/com_order_fulfil/contract.js';
 import { orderFulfilHandler } from '../../../src/distributed/handler/com_order_fulfil/index.js';
-import { catalogueFor } from '../../../src/distributed/shared/catalogue.js';
+import { PostgresCatalogue } from '../../../src/distributed/shared/catalogue.js';
 import { readConfig } from '../../../src/distributed/shared/config.js';
 import {
   destinationFor,
@@ -44,7 +44,6 @@ describe('where an event goes', () => {
       max: config.recordsPoolSize,
     });
 
-    const opened = await catalogueFor(pool);
     const opening = createArvoEventFactory(orderFulfilV1).createInput({
       source: 'com.test.routing',
       subject: 'routing-1',
@@ -61,14 +60,8 @@ describe('where an event goes', () => {
       event: opening,
       state: () => null,
       attempt: 0,
-      dependencies: {
-        catalogue: opened.catalogue,
-        executionId: 'unused',
-        attempt: 0,
-        resumed: null,
-      },
+      dependencies: new PostgresCatalogue(pool),
     });
-    opened.release();
 
     if (ran.kind !== 'produced') throw new Error('the order asked for nothing');
     asked = ran.events;
@@ -122,19 +115,12 @@ describe('where an event goes', () => {
 
   it('is decided by `to` and by nothing else about the event', async () => {
     const request = askedFor('com_inventory_check');
-    const opened = await catalogueFor(pool);
     const checked = await inventoryCheckHandler.execute({
       event: request,
       state: () => null,
       attempt: 0,
-      dependencies: {
-        catalogue: opened.catalogue,
-        executionId: 'unused',
-        attempt: 0,
-        resumed: null,
-      },
+      dependencies: new PostgresCatalogue(pool),
     });
-    opened.release();
     if (checked.kind !== 'produced') throw new Error('nothing was answered');
 
     const reply = checked.events[0];

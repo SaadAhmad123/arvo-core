@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
+import { openedPerExecution } from '../dependency.js';
 import { ArvoLattice, chanceFrom } from '../version/scenarios/lattice.js';
 import {
   declareHandler,
@@ -169,14 +170,14 @@ describe('what a mechanism supplies, under the same chance', () => {
                 return param.state(asked) as never;
               },
               attempt: param.attempt,
-              // a factory that sometimes cannot build
-              dependencies: () => {
+              // a dependency that sometimes cannot open
+              dependencies: openedPerExecution(() => {
                 if (chance() < 0.15) {
                   broken.builds += 1;
                   throw new Error('the pool is exhausted');
                 }
                 return {};
-              },
+              }).dependency,
               // and hooks that are whatever this mechanism felt like
               hooks: (chance() < 0.3
                 ? undefined

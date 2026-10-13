@@ -6,6 +6,7 @@ import { deriveArvoExecutionId } from '../../../../src/ArvoEventHandler/helpers/
 import type { ArvoEventHandlerExecuteResponse } from '../../../../src/ArvoEventHandler/types/execute.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
 import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
+import { heldDependencies } from '../../dependency.js';
 import { declareVersions, type OrderContext, orderV1 } from './fixture.js';
 
 /**
@@ -45,7 +46,7 @@ const running = async (
       state: null,
       executionId: await deriveArvoExecutionId(event),
       attempt: 0,
-      dependencies: { behave },
+      dependencies: heldDependencies({ behave }).dependency,
       hooks: {},
       telemetry: telemetryFor(),
     } as never)) as ArvoEventHandlerExecuteResponse;
@@ -248,14 +249,14 @@ describe('an executor that raises a fault belonging to somebody else', () => {
         state: null,
         executionId: await deriveArvoExecutionId(event),
         attempt: 0,
-        dependencies: {
+        dependencies: heldDependencies({
           behave: async (ctx: OrderContext) => {
             throw await ctx.fault({
               faultKind: 'executor_raised',
               message: 'the gateway refused this other order',
             });
           },
-        },
+        }).dependency,
         hooks: {},
         telemetry: telemetryFor(),
       } as never);

@@ -108,7 +108,7 @@ const resumedWith = async (
       state: becomes(row),
       executionId,
       attempt: 0,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: telemetryFor(),
     } as never);
@@ -218,7 +218,7 @@ describe('a row from a deployment that knows more than this one', () => {
       state: { ...row, somethingNewer: { added: 'later' } },
       executionId,
       attempt: 0,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: telemetryFor(),
     } as never);

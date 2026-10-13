@@ -145,3 +145,25 @@ export const markOutcome = (
     { emitted: param.emitted ?? 0 },
   );
 };
+
+/**
+ * Records a failure the execution carried on from.
+ *
+ * For the one kind of failure that cannot change what an execution
+ * concluded, so has nowhere else to be seen. Letting go of a dependency
+ * happens after the record and the events are decided, and a connection
+ * that would not close is not a reason to run business code again.
+ *
+ * @param telemetry - Where this execution records.
+ * @param what - Which failure this was.
+ * @param raised - Whatever was thrown.
+ */
+export const markSwallowed = (
+  telemetry: ArvoExecutionContextTelemetry,
+  what: string,
+  raised: unknown,
+): void => {
+  telemetry.addEvent(`swallowed.${what}`, {
+    message: raised instanceof Error ? raised.message : String(raised),
+  });
+};

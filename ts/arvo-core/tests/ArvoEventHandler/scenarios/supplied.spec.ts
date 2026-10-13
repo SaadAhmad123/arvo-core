@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
 import { setupArvoEventHandler } from '../../../src/factories/setupArvoEventHandler.js';
 import type { JSONObject } from '../../../src/types.js';
+import { heldDependencies, openedPerExecution } from '../dependency.js';
 import {
   fulfilContract,
   fulfilV1,
@@ -215,52 +216,79 @@ describe('what an executor is given to work with', () => {
     expect(seen.dependencies[0]).not.toBeUndefined();
   });
 
-  it('is a value used exactly as it stands', async () => {
+  it('is what the dependency exposes, and not the dependency', async () => {
     const seen = watching();
     const { resolver } = storeWatching(seen);
-    const given = { note: 'given' };
+    const given = { note: 'given' } as unknown as ScenarioDependencies;
+    const { dependency } = heldDependencies(given);
+
     await handlerRecording(seen).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
-      dependencies: given,
+      dependencies: dependency,
     });
+
+    // what it exposes, so an executor cannot reach the lifetime
     expect(seen.dependencies[0]).toBe(given);
+    expect(seen.dependencies[0]).not.toBe(dependency);
+    expect(seen.dependencies[0]).not.toHaveProperty('open');
+    expect(seen.dependencies[0]).not.toHaveProperty('close');
   });
 
-  it('is built exactly once for one execution', async () => {
+  it('is opened exactly once for one execution, before the executor', async () => {
     const seen = watching();
     const { resolver } = storeWatching(seen);
-    let built = 0;
+    const { dependency, calls } = openedPerExecution(
+      () => ({ note: 'built' }) as unknown as ScenarioDependencies,
+    );
 
     await handlerRecording(seen).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
-      dependencies: () => {
-        built += 1;
-        return { note: 'built' };
-      },
+      dependencies: dependency,
     });
-    expect(built).toBe(1);
+
+    expect(calls.opened.length).toBe(1);
+    // the executor read it, so it was open by the time it ran
+    expect(seen.dependencies[0]).toEqual({ note: 'built' });
   });
 
-  it('is built again for the next execution, never kept from the last', async () => {
+  it('is closed exactly once, after the execution has produced its record', async () => {
+    const seen = watching();
+    const { resolver } = storeWatching(seen);
+    const { dependency, calls } = openedPerExecution(
+      () => ({ note: 'built' }) as unknown as ScenarioDependencies,
+    );
+
+    const produced = await handlerRecording(seen).execute({
+      event: anOrder(),
+      state: resolver,
+      attempt: 0,
+      dependencies: dependency,
+    });
+
+    expect(produced.kind).toBe('produced');
+    expect(calls.closed.length).toBe(1);
+  });
+
+  it('is opened again for the next execution, never kept from the last', async () => {
     const seen = watching();
     const { store, resolver } = storeWatching(seen);
     const handler = handlerRecording(seen);
     let built = 0;
 
-    const factory = () => {
+    const { dependency } = openedPerExecution(() => {
       built += 1;
-      return { note: `built-${built}` };
-    };
+      return { note: `built-${built}` } as unknown as ScenarioDependencies;
+    });
 
     const opened = await handler.execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
-      dependencies: factory,
+      dependencies: dependency,
     });
     if (opened.kind !== 'produced') throw new Error('nothing was opened');
     store.commit(opened.state);
@@ -269,9 +297,12 @@ describe('what an executor is given to work with', () => {
       event: answering(opened),
       state: resolver,
       attempt: 0,
-      dependencies: factory,
+      dependencies: dependency,
     });
 
+    // the same object twice, and a different thing held each time —
+    // which is why a supplier may keep the object and must not keep
+    // what it holds
     expect(built).toBe(2);
     expect(seen.dependencies[0]).not.toBe(seen.dependencies[1]);
   });
@@ -280,200 +311,68 @@ describe('what an executor is given to work with', () => {
     const seen = watching();
     const { resolver } = storeWatching(seen);
     const order = anOrder();
+    const { dependency, calls } = openedPerExecution(
+      () => ({}) as unknown as ScenarioDependencies,
+    );
 
     await handlerRecording(seen).execute({
       event: order,
       state: resolver,
       attempt: 2,
-      dependencies: (param) => {
-        seen.factoryCalls.push({
-          event: param.event.id,
-          state: param.state,
-          executionId: param.executionId,
-          attempt: param.attempt,
-        });
-        return {};
-      },
+      dependencies: dependency,
     });
 
-    expect(seen.factoryCalls[0]?.event).toBe(order.id);
-    expect(seen.factoryCalls[0]?.attempt).toBe(2);
+    expect(calls.opened[0]?.event.id).toBe(order.id);
+    expect(calls.opened[0]?.attempt).toBe(2);
   });
 
-  it('is given the record where one was read', async () => {
-    const seen = watching();
-    const { store, resolver } = storeWatching(seen);
-    const handler = handlerRecording(seen);
-
-    const opened = await handler.execute({
-      event: anOrder(),
-      state: resolver,
-      attempt: 0,
-    });
-    if (opened.kind !== 'produced') throw new Error('nothing was opened');
-    store.commit(opened.state);
-
-    await handler.execute({
-      event: answering(opened),
-      state: resolver,
-      attempt: 0,
-      dependencies: (param) => {
-        seen.factoryCalls.push({
-          event: param.event.id,
-          state: param.state,
-          executionId: param.executionId,
-          attempt: param.attempt,
-        });
-        return {};
-      },
-    });
-
-    const given = seen.factoryCalls[0]?.state as { executionId: string } | null;
-    expect(given).not.toBeNull();
-    expect(given?.executionId).toBe(String(opened.state.executionId));
-  });
-
-  it('is given nothing where no record was read', async () => {
+  it('is told the execution it is for, and where that execution records', async () => {
     const seen = watching();
     const { resolver } = storeWatching(seen);
-
-    // an event opening an execution has no record to read, so there is
-    // nothing of one to hand a factory
-    await handlerRecording(seen).execute({
-      event: anOrder(),
-      state: resolver,
-      attempt: 0,
-      dependencies: (param) => {
-        seen.factoryCalls.push({
-          event: param.event.id,
-          state: param.state,
-          executionId: param.executionId,
-          attempt: param.attempt,
-        });
-        return {};
-      },
-    });
-
-    expect(seen.factoryCalls[0]?.state).toBeNull();
-  });
-
-  it('is told the execution anyway, so one can be keyed on it either way', async () => {
-    const seen = watching();
-    const { store, resolver } = storeWatching(seen);
-    const handler = handlerRecording(seen);
-    const record = (param: {
-      event: { id: string };
-      state: unknown;
-      executionId: string;
-      attempt: number;
-    }) => {
-      seen.factoryCalls.push({
-        event: param.event.id,
-        state: param.state,
-        executionId: param.executionId,
-        attempt: param.attempt,
-      });
-      return {};
-    };
-
-    const opened = await handler.execute({
-      event: anOrder(),
-      state: resolver,
-      attempt: 0,
-      dependencies: record,
-    });
-    if (opened.kind !== 'produced') throw new Error('nothing was opened');
-    store.commit(opened.state);
-
-    await handler.execute({
-      event: answering(opened),
-      state: resolver,
-      attempt: 0,
-      dependencies: record,
-    });
-
-    // the same execution, named on the one that opened it and on the one
-    // that resumed it, though only the second had a record to read
-    const named = seen.factoryCalls.map((one) => one.executionId);
-    expect(named).toEqual([
-      String(opened.state.executionId),
-      String(opened.state.executionId),
-    ]);
-    expect(seen.factoryCalls[0]?.state).toBeNull();
-    expect(seen.factoryCalls[1]?.state).not.toBeNull();
-  });
-
-  it('is placed unchanged, whatever it turns out to be', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
-
-    // the handler does not inspect what a factory yields
-    for (const yielded of [null, 7, 'a string', []]) {
-      await handlerRecording(seen).execute({
-        event: anOrder(),
-        state: resolver,
-        attempt: 0,
-        dependencies: (() => yielded) as never,
-      });
-    }
-    expect(seen.dependencies.slice(-4)).toEqual([null, 7, 'a string', []]);
-  });
-
-  it('never reaches the record, which is JSON and it is not', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
-
-    const ran = await handlerRecording(seen).execute({
-      event: anOrder(),
-      state: resolver,
-      attempt: 0,
-      dependencies: { live: () => 'a client nothing can store' },
-    });
-
-    if (ran.kind !== 'produced') throw new Error('nothing was opened');
-    expect(JSON.stringify(ran.state)).not.toContain('live');
-    expect(ran.state.data).toEqual({ stage: 'asking' });
-  });
-
-  it('ends the execution where it cannot be built, and is worth another attempt', async () => {
-    const refused = await handlerRecording(watching()).tryExecute({
-      event: anOrder(),
-      state: new ScenarioStore().resolver,
-      attempt: 0,
-      dependencies: () => {
-        throw new Error('the pool is exhausted');
-      },
-    });
-    expect(!refused.ok && refused.error.faultKind).toBe(
-      'dependency_resolution_failed',
+    const { dependency, calls } = openedPerExecution(
+      () => ({}) as unknown as ScenarioDependencies,
     );
-    expect(!refused.ok && refused.error.retry).not.toBeNull();
-  });
 
-  it('stops being worth another attempt once they are spent', async () => {
-    const refused = await handlerRecording(watching()).tryExecute({
+    const produced = await handlerRecording(seen).execute({
       event: anOrder(),
-      state: new ScenarioStore().resolver,
-      attempt: 3,
-      dependencies: () => {
-        throw new Error('the pool is exhausted');
-      },
-    });
-    expect(!refused.ok && refused.error.retry).toBeNull();
-    expect(!refused.ok && refused.error.abandonmentEvent).not.toBeNull();
-  });
-
-  it('is never entered where it could not be built', async () => {
-    const seen = watching();
-    await handlerRecording(seen).tryExecute({
-      event: anOrder(),
-      state: new ScenarioStore().resolver,
+      state: resolver,
       attempt: 0,
-      dependencies: () => {
-        throw new Error('the pool is exhausted');
-      },
+      dependencies: dependency,
     });
-    expect(seen.dependencies).toEqual([]);
+    if (produced.kind !== 'produced') throw new Error('nothing was produced');
+
+    expect(calls.opened[0]?.executionId).toBe(produced.state.executionId);
+    expect(calls.opened[0]?.telemetry).toBeDefined();
+    // closed for the same execution it was opened for
+    expect(calls.closed[0]?.executionId).toBe(produced.state.executionId);
+  });
+
+  it('sees absence where the execution had no record yet, and the record where it did', async () => {
+    const seen = watching();
+    const { store, resolver } = storeWatching(seen);
+    const handler = handlerRecording(seen);
+    const { dependency, calls } = openedPerExecution(
+      () => ({}) as unknown as ScenarioDependencies,
+    );
+
+    const opened = await handler.execute({
+      event: anOrder(),
+      state: resolver,
+      attempt: 0,
+      dependencies: dependency,
+    });
+    if (opened.kind !== 'produced') throw new Error('nothing was opened');
+    store.commit(opened.state);
+
+    await handler.execute({
+      event: answering(opened),
+      state: resolver,
+      attempt: 0,
+      dependencies: dependency,
+    });
+
+    expect(calls.opened[0]?.state).toBeNull();
+    expect(calls.opened[1]?.state).not.toBeNull();
   });
 });
 
@@ -584,7 +483,9 @@ describe('what one execution cannot leave behind for the next', () => {
         event: anOrder(subject),
         state: resolver,
         attempt: 0,
-        dependencies: { note: subject },
+        dependencies: heldDependencies({
+          note: subject,
+        } as unknown as ScenarioDependencies).dependency,
         hooks: { ticket: subject },
       });
       if (ran.kind === 'produced') store.commit(ran.state);
@@ -611,7 +512,9 @@ describe('what one execution cannot leave behind for the next', () => {
       event: anOrder(),
       state: resolver,
       attempt: 0,
-      dependencies: { note: 'given' },
+      dependencies: heldDependencies({
+        note: 'given',
+      } as unknown as ScenarioDependencies).dependency,
       hooks: { ticket: 'T-1' },
     });
 

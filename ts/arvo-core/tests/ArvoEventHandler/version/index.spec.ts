@@ -13,6 +13,7 @@ import { ArvoEventHandlerVersion } from '../../../src/ArvoEventHandler/version/i
 import type { ArvoEventHandlerVersionParam } from '../../../src/ArvoEventHandler/version/types.js';
 import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
 import type { JSONObject } from '../../../src/types.js';
+import { heldDependencies, openedPerExecution } from '../dependency.js';
 import {
   chargedEvent,
   initEvent,
@@ -66,7 +67,7 @@ const open = (
     state: null,
     executionId: EXECUTION_ID,
     attempt: 0,
-    dependencies: {},
+    dependencies: null,
     hooks: {},
     telemetry: telemetry().telemetry,
     ...overrides,
@@ -111,7 +112,7 @@ const resume = async (
     state: first.state as JSONObject,
     executionId: EXECUTION_ID,
     attempt: 0,
-    dependencies: {},
+    dependencies: null,
     hooks: {},
     telemetry: telemetry().telemetry,
     ...overrides,
@@ -211,9 +212,9 @@ describe('opening an execution', () => {
   it('stores nothing where what the executor works with would not resolve, that being the last way in', async () => {
     const fault = await faulted(
       open({
-        dependencies: () => {
+        dependencies: openedPerExecution(() => {
           throw new Error('the pool is exhausted');
-        },
+        }).dependency,
       }),
     );
     expect(fault.abandonmentState).toBeNull();
@@ -261,7 +262,7 @@ describe('answering something an execution awaited', () => {
       state: first.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: telemetry().telemetry,
     });
@@ -281,7 +282,7 @@ describe('answering something an execution awaited', () => {
       state: first.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: telemetry().telemetry,
     });
@@ -293,7 +294,7 @@ describe('answering something an execution awaited', () => {
       state: once.state,
       executionId: EXECUTION_ID,
       attempt: 0,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: telemetry().telemetry,
     });
@@ -397,7 +398,7 @@ describe('whether an answer re-enters the executor', () => {
       state: first.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: telemetry().telemetry,
     });
@@ -416,7 +417,7 @@ describe('whether an answer re-enters the executor', () => {
       state: first.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: telemetry().telemetry,
     });
@@ -438,7 +439,7 @@ describe('whether an answer re-enters the executor', () => {
       state: first.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: telemetry().telemetry,
     });
@@ -448,7 +449,7 @@ describe('whether an answer re-enters the executor', () => {
 });
 
 describe('what an executor is given to work with', () => {
-  it('is the value it was handed, where one was handed over', async () => {
+  it('is what a dependency exposes, where one was handed over', async () => {
     const db = {};
     const seen: unknown[] = [];
     const version = declared({
@@ -457,11 +458,11 @@ describe('what an executor is given to work with', () => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
       },
     });
-    await open({ dependencies: { db } }, version);
+    await open({ dependencies: heldDependencies({ db }).dependency }, version);
     expect(seen[0]).toBe(db);
   });
 
-  it('is what a factory yielded, called once with the execution so far', async () => {
+  it('is what one open yielded, called once with the execution so far', async () => {
     const calls: unknown[] = [];
     const version = declared({
       execute: async (ctx) => {
@@ -471,10 +472,10 @@ describe('what an executor is given to work with', () => {
     });
     await open(
       {
-        dependencies: (given: Record<string, unknown>) => {
+        dependencies: openedPerExecution((given: Record<string, unknown>) => {
           calls.push(given);
           return { db: 'from the factory' };
-        },
+        }).dependency,
       },
       version,
     );
@@ -485,9 +486,9 @@ describe('what an executor is given to work with', () => {
   it('is a fault where the factory could not answer', async () => {
     const fault = await faulted(
       open({
-        dependencies: () => {
+        dependencies: openedPerExecution(() => {
           throw new Error('the pool is exhausted');
-        },
+        }).dependency,
       }),
     );
     expect(fault.faultKind).toBe('dependency_resolution_failed');
@@ -497,9 +498,9 @@ describe('what an executor is given to work with', () => {
   it('is worth another attempt, a pool recovering a moment later', async () => {
     const fault = await faulted(
       open({
-        dependencies: () => {
+        dependencies: openedPerExecution(() => {
           throw new Error('the pool is exhausted');
-        },
+        }).dependency,
       }),
     );
     expect(fault.retry).not.toBeNull();
@@ -860,7 +861,7 @@ describe('what one execution records as it goes', () => {
       state: first.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: telemetry().telemetry,
     });
@@ -872,7 +873,7 @@ describe('what one execution records as it goes', () => {
       state: once.state,
       executionId: EXECUTION_ID,
       attempt: 0,
-      dependencies: {},
+      dependencies: null,
       hooks: {},
       telemetry: watch.telemetry,
     });
@@ -946,9 +947,9 @@ describe('what a fault tells whoever has to fix it', () => {
   it('says the dependencies would not resolve, and why, and that it may pass', async () => {
     const fault = await faulted(
       open({
-        dependencies: () => {
+        dependencies: openedPerExecution(() => {
           throw new Error('the pool is exhausted');
-        },
+        }).dependency,
       }),
     );
     expect(fault.message).toContain('the pool is exhausted');
