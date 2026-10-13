@@ -176,10 +176,12 @@ export const orderFulfilHandler = setupArvoEventHandler({
     state: firstMemory,
     execute: async (ctx) => {
       const requested = ctx.state.initEvent.data;
-      // Declared and not supplied. This handler cannot do its work
-      // without data, so it says what was missing rather than failing on
-      // a member that is not there.
-      if (ctx.dependencies === null) {
+      // Declared and not supplied. A mechanism hands what it has to
+      // whichever handler an event names, so the member is checked
+      // rather than the whole — and this handler cannot do its work
+      // without data.
+      const catalogue = ctx.dependencies?.catalogue;
+      if (catalogue === undefined) {
         throw await ctx.fault({
           faultKind: 'executor_raised',
           message:
@@ -190,8 +192,8 @@ export const orderFulfilHandler = setupArvoEventHandler({
 
       if (ctx.entry === 'init') {
         const requests = await Promise.all(
-          (await requestsFor(ctx.dependencies.catalogue, requested)).map(
-            (request) => ctx.build(request),
+          (await requestsFor(catalogue, requested)).map((request) =>
+            ctx.build(request),
           ),
         );
         await ctx.setState({
@@ -258,10 +260,12 @@ export const orderFulfilHandler = setupArvoEventHandler({
     state: secondMemory,
     execute: async (ctx) => {
       const requested = ctx.state.initEvent.data;
-      // Declared and not supplied. This handler cannot do its work
-      // without data, so it says what was missing rather than failing on
-      // a member that is not there.
-      if (ctx.dependencies === null) {
+      // Declared and not supplied. A mechanism hands what it has to
+      // whichever handler an event names, so the member is checked
+      // rather than the whole — and this handler cannot do its work
+      // without data.
+      const catalogue = ctx.dependencies?.catalogue;
+      if (catalogue === undefined) {
         throw await ctx.fault({
           faultKind: 'executor_raised',
           message:
@@ -272,8 +276,8 @@ export const orderFulfilHandler = setupArvoEventHandler({
 
       if (ctx.entry === 'init') {
         const requests = await Promise.all(
-          (await requestsFor(ctx.dependencies.catalogue, requested)).map(
-            (request) => ctx.build(request),
+          (await requestsFor(catalogue, requested)).map((request) =>
+            ctx.build(request),
           ),
         );
         await ctx.setState({

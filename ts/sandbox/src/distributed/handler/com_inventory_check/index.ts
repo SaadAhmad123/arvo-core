@@ -30,10 +30,12 @@ export const inventoryCheckHandler = setupArvoEventHandler({
     }),
     execute: async (ctx) => {
       const requested = ctx.state.initEvent.data;
-      // Declared and not supplied. This handler cannot do its work
-      // without data, so it says what was missing rather than failing on
-      // a member that is not there.
-      if (ctx.dependencies === null) {
+      // Declared and not supplied. A mechanism hands what it has to
+      // whichever handler an event names, so the member is checked
+      // rather than the whole — and this handler cannot do its work
+      // without data.
+      const catalogue = ctx.dependencies?.catalogue;
+      if (catalogue === undefined) {
         throw await ctx.fault({
           faultKind: 'executor_raised',
           message:
@@ -42,16 +44,13 @@ export const inventoryCheckHandler = setupArvoEventHandler({
         });
       }
 
-      const held = await ctx.dependencies.catalogue.heldOf(requested.sku);
+      const held = await catalogue.heldOf(requested.sku);
 
       // Takes what it needs where there is enough, which is a handler
       // changing the world through a dependency rather than reading one.
       const reserved =
         held >= requested.wanted
-          ? await ctx.dependencies.catalogue.reserve(
-              requested.sku,
-              requested.wanted,
-            )
+          ? await catalogue.reserve(requested.sku, requested.wanted)
           : 0;
 
       await ctx.setState({ data: { sku: requested.sku, held, reserved } });

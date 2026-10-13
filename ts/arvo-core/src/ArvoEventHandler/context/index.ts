@@ -83,10 +83,10 @@ export class ArvoExecutionContext<
   readonly dataSchema: TDataSchema;
 
   /** What this execution was given to work with, or empty where none was declared. */
-  readonly dependencies: TDependencies | null;
+  readonly dependencies: Partial<TDependencies> | null;
 
   /** What the mechanism running this handler exposed, or empty where it exposed none. */
-  readonly hooks: TMechanismHooks | null;
+  readonly hooks: Partial<TMechanismHooks> | null;
 
   /** This execution's telemetry object */
   readonly telemetry: ArvoExecutionContextTelemetry;

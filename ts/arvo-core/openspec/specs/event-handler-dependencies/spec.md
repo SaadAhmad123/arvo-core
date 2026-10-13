@@ -22,6 +22,8 @@ Omitting it SHALL be the only way to say there is none.
 
 Where no dependency was supplied, what the executor reads SHALL state absence and SHALL NOT be an empty value standing in for one. The same SHALL hold for whatever the mechanism exposes.
 
+Where what was supplied does not carry everything the version declared, each member it does not carry SHALL also state absence. A declared member SHALL NOT read as satisfied because the thing carrying it arrived.
+
 An empty value that was supplied SHALL remain a supplied value, distinguishable from nothing having been supplied.
 
 The execution SHALL be carried out either way: a handler SHALL NOT refuse a delivery because something a version declared was not supplied, and SHALL NOT decide on the executor's behalf what absence means. An executor that cannot proceed SHALL be able to fail the execution itself, naming what was missing; one that can proceed SHALL be able to.
@@ -42,6 +44,12 @@ The execution SHALL be carried out either way: a handler SHALL NOT refuse a deli
 #### Scenario: Nothing exposed by the mechanism
 - **WHEN** an execution is given no hooks
 - **THEN** the executor reads absence rather than an empty value
+
+#### Scenario: Part of a declaration arrived
+- **WHEN** a version declares two things and a mechanism supplies one of them
+- **THEN** the member that arrived reads as present
+- **AND** the member that did not reads as absent
+- **AND** the executor decides about each of them separately
 
 #### Scenario: An empty value deliberately supplied
 - **WHEN** a mechanism deliberately exposes an empty set of hooks

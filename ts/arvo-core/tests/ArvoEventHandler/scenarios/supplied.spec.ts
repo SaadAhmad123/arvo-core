@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import type { IArvoEventHandlerDependency } from '../../../src/ArvoEventHandler/types/dependency.js';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
 import { setupArvoEventHandler } from '../../../src/factories/setupArvoEventHandler.js';
 import type { JSONObject } from '../../../src/types.js';
@@ -656,6 +657,105 @@ describe('what an executor is told where nothing was supplied', () => {
     });
 
     expect(seen.hooks[0]).toBeNull();
+  });
+
+  it('reads a declared member that was not supplied as absent', async () => {
+    /**
+     * A mechanism hands what it has to whichever handler an event names,
+     * so part of a declaration arriving is the ordinary case rather than
+     * an edge. A member that did not arrive is absent for the same
+     * reason the whole thing can be.
+     */
+    const seen = { had: [] as (boolean | null)[] };
+    const { resolver } = storeWatching(watching());
+
+    const partial = heldDependencies({
+      behave: undefined,
+    } as ScenarioDependencies).dependency;
+
+    const ran = await handlerDegrading(seen).execute({
+      event: anOrder(),
+      state: resolver,
+      attempt: 0,
+      dependencies: partial,
+    });
+
+    // the object arrived, so this is not the null case
+    expect(ran.kind).toBe('produced');
+    expect(seen.had[0]).toBe(true);
+  });
+
+  it('lets an executor decide per member, not once for the whole', async () => {
+    const asked: (string | undefined)[] = [];
+    const { resolver } = storeWatching(watching());
+
+    const handler = setupArvoEventHandler({
+      contracts: {
+        self: fulfilContract,
+        services: { inventory: inventoryV1 },
+      },
+      types: {} as {
+        dependencies: { needed: string; optional?: string };
+      },
+    })
+      .handler('1.0.0', {
+        state: z.object({ stage: z.string() }),
+        execute: async (ctx) => {
+          // one it cannot do without
+          if (ctx.dependencies?.needed === undefined) {
+            throw await ctx.fault({
+              faultKind: 'executor_raised',
+              message: 'this version needs `needed` and was given none',
+              retryable: false,
+            });
+          }
+          // and one it can
+          asked.push(ctx.dependencies.optional);
+          await ctx.setState({ data: { stage: 'asking' } });
+          return ctx.build({
+            type: 'com_inventory_reserve',
+            data: { items: ['book'] },
+          });
+        },
+      })
+      .handler('1.1.0', {
+        state: z.object({ stage: z.string(), rush: z.boolean() }),
+        execute: async () => {},
+      })
+      .handler('2.0.0', async (ctx) =>
+        ctx.build({ type: 'evt_order_shipped', data: { tracking: 't-1' } }),
+      )
+      .build();
+
+    // the member it needs, and not the one it does not
+    const ran = await handler.execute({
+      event: anOrder(),
+      state: resolver,
+      attempt: 0,
+      dependencies: heldDependencies({ needed: 'here' }).dependency,
+    });
+
+    expect(ran.kind).toBe('produced');
+    expect(asked[0]).toBeUndefined();
+
+    // And the other way round: the one it needs is missing. A mechanism
+    // that knowingly carries less than a version declared says so here,
+    // which is the one place that knows its coverage is partial.
+    const refused = await handler.tryExecute({
+      event: anOrder('order-2'),
+      state: resolver,
+      attempt: 0,
+      dependencies: heldDependencies({
+        optional: 'here',
+      }).dependency as IArvoEventHandlerDependency<{
+        needed: string;
+        optional?: string;
+      }>,
+    });
+
+    expect(refused.ok).toBe(false);
+    if (refused.ok) return;
+    expect(refused.error.message).toContain('needs `needed`');
   });
 
   it('reads an empty set deliberately exposed as supplied, not as absence', async () => {

@@ -108,7 +108,7 @@ export type ArvoExecutionContextParam<
    */
   telemetry: ArvoExecutionContextTelemetry;
   /** What this execution's executor is given to work with. */
-  dependencies: TDependencies | null;
+  dependencies: Partial<TDependencies> | null;
   /** What the mechanism running this handler exposes to an executor. */
-  hooks: TMechanismHooks | null;
+  hooks: Partial<TMechanismHooks> | null;
 };

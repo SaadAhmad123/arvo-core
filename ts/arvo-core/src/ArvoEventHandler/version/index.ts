@@ -270,7 +270,7 @@ export class ArvoEventHandlerVersion<
       TMechanismHooks
     >,
     record: ArvoContextState<TSelf, TServices, TDataSchema>,
-    dependencies: TDependencies | null,
+    dependencies: Partial<TDependencies> | null,
   ): Promise<ArvoEventHandlerExecuteResponse> {
     const collected =
       param.entry === 'followup'
@@ -622,7 +622,7 @@ export class ArvoEventHandlerVersion<
     >,
     record: ArvoExecutionState,
     scope: ArvoDependencyScope,
-  ): Promise<TDependencies | null> {
+  ): Promise<Partial<TDependencies> | null> {
     const dependencies: IArvoEventHandlerDependency<TDependencies> | null =
       param.dependencies;
     if (dependencies === null) return null;

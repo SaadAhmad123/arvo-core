@@ -14,7 +14,7 @@ Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-a
 
 ### What this ADR defines
 
-What an executor finds on the execution context's **dependencies** and **mechanism hooks** members where a mechanism supplied neither: absence, stated as absence, rather than an empty object standing in for it.
+What an executor finds on the execution context's **dependencies** and **mechanism hooks** members where what a mechanism supplied does not match what the version declared: absence, stated as absence, whether none of it arrived or only some of it.
 
 ### What this ADR deliberately does not define
 
@@ -42,6 +42,12 @@ A version declares the shape its executor expects on **dependencies**. Supplying
 
 The sentence ADR-006 gives as the justification is therefore the problem: an executor written against a declared dependency is exactly the party that has to test for its absence, and the empty object is what prevents it from being able to.
 
+### The same lie survives partial supply
+
+Absence is not all-or-nothing. A mechanism holds what it has and hands it to whichever handler an event names, so what arrives may satisfy part of a declaration and not the rest: a version declaring a catalogue and a payment gateway, running in a deployment that has the first and not the second.
+
+A member the declaration promised and the mechanism did not supply is absent for exactly the reason the whole thing can be — and reads as present for exactly the same reason. Stating absence only where *nothing* arrived would close one case of the lie and leave the other, which is why this ADR addresses the declaration member by member rather than as a whole.
+
 ### A mechanism cannot be held to a declaration it cannot see
 
 The obvious repair — oblige a mechanism to supply whatever a version declared — is not available, and the reason is worth stating because it is the reason this ADR exists.
@@ -56,7 +62,11 @@ So supplying remains optional, and absence remains possible. What changes is tha
 
 **Where a mechanism supplies no dependency, the context's `dependencies` member MUST state absence. Where it supplies no hooks, `mechanism hooks` MUST state absence.** A handler MUST NOT substitute an empty object for either.
 
-How absence is spelled is each language's own (ADR-004) — a null, a none, an empty optional — provided it is distinguishable from a supplied value and an executor cannot read a member off it by mistake.
+**Where what was supplied does not carry everything the version declared, each member it does not carry MUST also state absence.** A handler MUST NOT present a declared member as satisfied because the thing carrying it arrived. What a version declared is what its executor expects; what arrived is whatever the mechanism had.
+
+How absence is spelled is each language's own (ADR-004) — a null, a none, an empty optional, a declaration in which every member is optional — provided it is distinguishable from a supplied value, applies per declared member as well as to the whole, and an executor cannot read a member off it by mistake.
+
+**What a supplier says about itself is exact.** A supplier describes what it exposes and is not guessing, so nothing here weakens that description. The requirement is on what the handler presents to the executor, where the question is whether what arrived matches what this version asked for.
 
 **An empty value that was supplied remains a supplied value.** A mechanism that deliberately exposes an empty set of hooks has supplied them, and the context says so. This is the distinction the substitution destroyed, and it is now observable.
 
@@ -66,6 +76,8 @@ The protocol says nothing about what an executor does with absence, because only
 
 - an executor that cannot proceed raises a fault, naming what was missing. This is an ordinary executor fault and needs no new vocabulary ([ADR-008](./008-execution-faults-and-abandonment.md)), and it produces a readable failure where the substitution produced a failure on the use of an absent member;
 - an executor that can proceed without it does so. A cache it would have read, a metrics sink it would have written to, a hook belonging to a mechanism it is not running under: all legitimately absent, and an executor that degrades rather than failing is doing the right thing.
+
+Both decisions are taken per member. An executor needing one of the two things it declared and able to do without the other says so about each.
 
 An implementation MUST NOT decide between these on an executor's behalf, and in particular MUST NOT refuse the delivery because something a version declared was not supplied. The executor is entered and the decision is its.
 
@@ -80,14 +92,14 @@ An implementation MUST NOT decide between these on an executor's behalf, and in 
 
 ### Gained
 
-- A declared dependency that was not supplied is visible at the one place that can act on it, and the resulting failure names what was missing rather than surfacing as a member read off an empty object.
+- A declared dependency that was not supplied is visible at the one place that can act on it, and the resulting failure names what was missing rather than surfacing as a member read off an empty object. The same holds for one member of several.
 - An executor that can run without something is able to say so, and to mean it.
 - A mechanism that deliberately exposes nothing is distinguishable from one that was never asked.
 - No party is obliged to honour a declaration it cannot see.
 
 ### Paid for
 
-- **An executor that uses a declared dependency now states its expectation in code.** One guard at the top of the executor, after which a static language narrows the type and the rest of the executor reads as before. That is the cost, and it is charged to the party that knows what absence means.
+- **An executor that uses a declared dependency now states its expectation in code**, and does so for each member it uses rather than once for the whole. In a static language the check narrows that member and the rest of the executor reads as before. This is the larger half of the cost, and it is charged to the party that knows what absence means.
 - **Breaking for executors already written.** One written against the empty object compiles against it no longer, and must say what it expects. This is the intended effect: the ones that break are the ones whose expectation was unchecked.
 - A reader of ADR-006's context table must now read two rows against this ADR.
 
@@ -108,6 +120,10 @@ Rejected. It makes the protocol decide something only the executor knows, and it
 ### Absence only for hooks, keeping the empty object for dependencies
 
 Considered, on the grounds that a hook is more obviously optional. Rejected: the lie is the same lie, and it is worse for dependencies, because a dependency is what a version declared it needs rather than what a mechanism offered.
+
+### Stating absence for the whole and not for each member
+
+Considered, and it is where this ADR first stopped. Rejected on its own argument: a mechanism that cannot be held to a declaration cannot be held to all of it either, so a declared member that did not arrive is absent for the same reason the whole thing can be. Closing one case and leaving the other produces a type that is honest about the easy failure and silent about the likely one.
 
 ## Conformance to ADR-000
 

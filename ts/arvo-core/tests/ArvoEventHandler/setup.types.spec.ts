@@ -64,12 +64,15 @@ describe('what an executor is typed to see', () => {
       },
     }).handler('1.0.0', {
       execute: async (ctx) => {
-        // a version that declared both and cannot run without either
-        if (ctx.dependencies === null || ctx.hooks === null) {
-          throw new Error('this version was given neither');
+        // Declared both and cannot run without either, so it says so
+        // per member: what arrived is whatever the mechanism had.
+        const db = ctx.dependencies?.db;
+        const scheduler = ctx.hooks?.scheduler;
+        if (db === undefined || scheduler === undefined) {
+          throw new Error('this version was not given what it declared');
         }
-        const row: string = ctx.dependencies.db.read();
-        const when: number = ctx.hooks.scheduler.at;
+        const row: string = db.read();
+        const when: number = scheduler.at;
         seen.row = row;
         seen.when = when;
       },
