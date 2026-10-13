@@ -202,6 +202,23 @@ the workflows and `localhost:3000` for the traces.
   difference from a table. A record workflow closes when its execution
   comes to rest, and one resting at `waiting` stays open for as long as
   it waits — so a namespace expires only the executions that finished.
+- **The revision counter is a consistency check here, not the mechanism.**
+  Writes to one record are serialized because a record *is* a workflow:
+  Temporal admits one workflow of a given name, and applies updates to
+  one of them in turn. So nothing is locked and nothing is compared —
+  the ordering is structural. The counter still earns its place twice
+  over: it is what makes a first revision refusable where a record
+  already exists, and it is what tells a losing delivery that the record
+  moved under it, which is the difference between converging and
+  dropping an event. A guarantee that is redundant for ordering is not
+  redundant for saying *which* write this was.
+- **Compare-and-swap does not stop two executors running.** Two
+  deliveries of one event both find no record, both enter their
+  executor, and both do whatever that executor does outside Arvo. One
+  revision is committed; the side effect happened twice. The protocol
+  says this plainly and the sandbox demonstrates it rather than hiding
+  it: a spec races two inventory checks and asserts the stock went down
+  twice while one record exists.
 - **The poison path is a failed workflow, not a table.** A delivery
   nothing will retry either abandons — in which case the fault's record
   and event are committed as a revision and the event goes out, so it is
