@@ -38,6 +38,6 @@ Two of those vectors exist to catch the two mistakes the composition is designed
 
 ## Risks / Trade-offs
 
-- **A pinned derivation is a pinned derivation.** Changing any part of it invalidates every key already handed to a third party, and can only be done by a superseding ADR. The prefix carries a version so two compositions can be told apart by reading rather than by a duplicate charge.
+- **A pinned derivation is a pinned derivation.** Changing any part of it invalidates every key already handed to a third party, and can only be done by a superseding ADR. The prefix is where such a change has to show, so two compositions can be told apart by reading rather than by an effect made twice.
 - **Three hashes per delivery, used or not.** Accepted above.
 - **An opaque key is harder to trace to its execution.** The prefix names the scope; the rest needs the record. A readable key was rejected in ADR-014 for reasons that still hold.

@@ -108,3 +108,35 @@ export const openedPerExecution = <TAttributes extends ArvoDependencies>(
     },
   };
 };
+
+/**
+ * A dependency that opens but cannot be let go of.
+ *
+ * Deliberately not conformant: a close that raises is the whole point
+ * of it. For proving what such a failure costs an execution, which is
+ * nothing — the protocol records it and carries on, a connection that
+ * would not go back being no reason to tell a caller its work failed.
+ *
+ * @param attributes - What the executor will find.
+ * @param raised - What closing it raises.
+ */
+export const failingToClose = <TAttributes extends ArvoDependencies>(
+  attributes: TAttributes,
+  raised: unknown,
+): WatchedDependency<TAttributes> => {
+  const held = heldDependencies(attributes);
+
+  return {
+    calls: held.calls,
+    dependency: {
+      open: held.dependency.open,
+      close: (scope: ArvoDependencyScope) => {
+        held.dependency.close(scope);
+        throw raised;
+      },
+      get attributes() {
+        return held.dependency.attributes;
+      },
+    },
+  };
+};

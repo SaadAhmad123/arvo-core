@@ -56,17 +56,65 @@ const catalogueOn = (client: PoolClient): Catalogue => ({
     return rows.rows[0]?.held ?? 0;
   },
 
-  reserve: async (sku, wanted) => {
-    // Takes what it can and says how much rather than failing: a handler
-    // decides what a short answer means.
-    const rows = await client.query<{ held: number }>(
-      `UPDATE catalogue
-       SET held = held - LEAST(held, $2::int)
-       WHERE sku = $1
-       RETURNING held`,
-      [sku, wanted],
-    );
-    return rows.rows.length === 0 ? 0 : wanted;
+  reserve: async (sku, wanted, idempotencyKey) => {
+    // Claimed under a key, so carrying this delivery out twice takes
+    // stock once. The key is the reservation table's primary key: the
+    // second claim loses to a constraint rather than to a check this
+    // code does, which is the difference between being idempotent and
+    // intending to be.
+    //
+    // In one transaction, because claiming the key and taking the stock
+    // have to happen together or not at all — a key claimed without the
+    // stock taken would make the work look done when it is not.
+    await client.query('BEGIN');
+    try {
+      // Nothing else may take this item while this decides how much is
+      // there to take, two reservations for one item otherwise both
+      // reading what only one of them can have.
+      const locked = await client.query<{ held: number }>(
+        'SELECT held FROM catalogue WHERE sku = $1 FOR UPDATE',
+        [sku],
+      );
+      const held = locked.rows[0]?.held;
+      if (held === undefined) {
+        await client.query('COMMIT');
+        return 0;
+      }
+
+      // Takes what it can and says how much rather than failing: a
+      // handler decides what a short answer means.
+      const taking = Math.min(held, wanted);
+
+      const claimed = await client.query<{ taken: number }>(
+        `INSERT INTO reservation (idempotency_key, sku, taken)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (idempotency_key) DO NOTHING
+         RETURNING taken`,
+        [idempotencyKey, sku, taking],
+      );
+
+      // The key was claimed before, so this delivery has already taken
+      // what it was going to take. What it took then is the answer now:
+      // reporting zero would say the stock is still there.
+      if (claimed.rows.length === 0) {
+        const already = await client.query<{ taken: number }>(
+          'SELECT taken FROM reservation WHERE idempotency_key = $1',
+          [idempotencyKey],
+        );
+        await client.query('COMMIT');
+        return already.rows[0]?.taken ?? 0;
+      }
+
+      await client.query(
+        'UPDATE catalogue SET held = held - $2 WHERE sku = $1',
+        [sku, taking],
+      );
+      await client.query('COMMIT');
+      return taking;
+    } catch (raised) {
+      await client.query('ROLLBACK');
+      throw raised;
+    }
   },
 });
 

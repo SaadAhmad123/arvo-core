@@ -9,7 +9,7 @@ This change implements [ADR-014: Idempotency Keys](../../../../docs/adr/014-idem
 ## What Changes
 
 - The execution context gains an `idempotency` member holding three keys: `workflow`, `execution` and `delivery`.
-- Each is composed exactly as ADR-014 pins it — the scope name inside the hash, `0x00` between the parts, SHA-256, 64 lowercase hex, behind a readable versioned prefix.
+- Each is composed exactly as ADR-014 pins it — the scope name inside the hash, `0x00` between the parts, SHA-256, 64 lowercase hex, behind a readable prefix.
 - There is deliberately **no** key scoped on the attempt, and no way to ask for one.
 - All three are derived from the record and the delivered event, so nothing is stored, no field is added, and a replay of the same events produces the same keys.
 

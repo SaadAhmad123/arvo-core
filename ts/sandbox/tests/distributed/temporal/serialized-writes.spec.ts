@@ -273,8 +273,15 @@ describe('writes to one record', () => {
      * This is what compare-and-swap does not buy, and the protocol says
      * it does not. Two deliveries of one event both find no record,
      * both enter the executor, and both do what the executor does
-     * outside Arvo. One revision is committed; the side effect happened
-     * twice.
+     * outside Arvo. One revision is committed; both executors ran.
+     *
+     * What keeps the stock right is therefore not the record. It is the
+     * key the executor passed: both reservations claim one delivery
+     * key, the second loses to a primary key, and the item moves once.
+     * The last assertion here is the proof that the record did nothing
+     * about it — a second reservation under a different key takes stock
+     * again, which is the failure this handler would still have if it
+     * passed no key.
      */
     const sku = `sku-raced-${Date.now()}`;
     await harness.pool.query(stockFor(sku, 10));
@@ -297,11 +304,36 @@ describe('writes to one record', () => {
       ).length,
     ).toBe(1);
 
-    // and the stock went down twice, because both executors reserved it
-    const held = await harness.pool.query<{ held: number }>(
-      'SELECT held FROM catalogue WHERE sku = $1',
+    const heldOf = async () =>
+      (
+        await harness.pool.query<{ held: number }>(
+          'SELECT held FROM catalogue WHERE sku = $1',
+          [sku],
+        )
+      ).rows[0]?.held;
+
+    // the stock moved once, though both executors reserved it: one
+    // delivery key, claimed once
+    expect(await heldOf()).toBe(9);
+    expect(
+      (
+        await harness.pool.query('SELECT 1 FROM reservation WHERE sku = $1', [
+          sku,
+        ])
+      ).rowCount,
+    ).toBe(1);
+
+    // and nothing about the record is what did that. The same item,
+    // taken again under a different key, goes down again.
+    await harness.pool.query(
+      `INSERT INTO reservation (idempotency_key, sku, taken)
+       VALUES ($1, $2, 1)`,
+      [`not-the-executors-key-${Date.now()}`, sku],
+    );
+    await harness.pool.query(
+      'UPDATE catalogue SET held = held - 1 WHERE sku = $1',
       [sku],
     );
-    expect(held.rows[0]?.held).toBe(8);
+    expect(await heldOf()).toBe(8);
   }, 180_000);
 });

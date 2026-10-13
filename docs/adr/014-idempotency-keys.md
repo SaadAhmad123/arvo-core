@@ -97,7 +97,7 @@ Which makes the execution scope the safer default for *once by this execution*: 
 For each scope:
 
 ```
-key = "arvo1-" ‖ scope ‖ "-" ‖ hex( SHA-256( input ) )
+key = "arvo-" ‖ scope ‖ "-" ‖ hex( SHA-256( input ) )
 
 input(workflow)  = utf8("workflow")  ‖ 0x00 ‖ utf8(subject)
 input(execution) = utf8("execution") ‖ 0x00 ‖ utf8(execution_id)
@@ -120,7 +120,7 @@ Every part of that is fixed. The literals, their order, the separator byte, the 
 
 **The output is hashed rather than readable.** Two reasons. A `subject` is chosen by whoever started the workflow and may be any length and may carry something an application would not choose to disclose to a third party; a hash is fixed-length and reveals neither. And many services that accept an idempotency key bound its length, so a key that is sometimes short and sometimes very long is a key that sometimes fails.
 
-**The prefix is readable.** `arvo1-execution-` in a third party's dashboard says what the key is and where it came from, which a bare hash does not. The `1` is this composition's version: a superseding ADR changing any part of the input would change it, so a reader can tell two compositions apart rather than discovering the difference through an effect made twice.
+**The prefix is readable.** `arvo-execution-` in a third party's dashboard says what the key is and where it came from, which a bare hash does not. It is also where a change to the composition has to show: a superseding ADR altering any part of the input must alter the prefix with it, so that a reader can tell two compositions apart rather than discovering the difference through an effect made twice.
 
 ### What it does not do
 
@@ -153,7 +153,7 @@ This is the position before this ADR. Rejected for the three reasons under **Why
 
 ### A readable key rather than a hash
 
-Considered: `arvo1-execution-<execution_id>` is debuggable and needs no hashing. Rejected for the `workflow` scope, whose input is a caller-chosen string of unbounded length and unknown sensitivity — and taking one form for two scopes and another for the third would be worse than either.
+Considered: `arvo-execution-<execution_id>` is debuggable and needs no hashing. Rejected for the `workflow` scope, whose input is a caller-chosen string of unbounded length and unknown sensitivity — and taking one form for two scopes and another for the third would be worse than either.
 
 ### One key instead of three
 

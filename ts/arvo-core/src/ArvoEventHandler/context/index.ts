@@ -16,6 +16,7 @@ import type {
   ArvoDependencies,
   ArvoMechanismHooks,
 } from '../types/supplied.js';
+import type { ArvoIdempotencyKeys } from './idempotency.js';
 import type { ArvoExecutionContextTelemetry } from './telemetry/index.js';
 import type {
   ArvoContextState,
@@ -55,6 +56,8 @@ import type {
  * await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
  * await ctx.setState({ data: (now) => ({ ...now, attempts: now.attempts + 1 }) });
  * ctx.state.data.attempts;         // 2
+ *
+ * await charge({ amount: 4200, idempotencyKey: ctx.idempotency.execution });
  * ```
  */
 export class ArvoExecutionContext<
@@ -82,10 +85,23 @@ export class ArvoExecutionContext<
   /** The schema every write to this execution's data is checked against. */
   readonly dataSchema: TDataSchema;
 
-  /** What this execution was given to work with, or empty where none was declared. */
+  /**
+   * A key for each scope an effect outside Arvo can be made once per.
+   *
+   * Pass one to something that accepts an idempotency key, and an
+   * attempt that runs twice makes its effect once. Which to pass is a
+   * question about the effect: see {@link ArvoIdempotencyKeys}.
+   *
+   * Derived from what this execution already carries, so the same events
+   * carried out again produce the same keys. Nothing here makes anything
+   * idempotent on its own — whatever is handed the key has to honour it.
+   */
+  readonly idempotency: ArvoIdempotencyKeys;
+
+  /** What this execution was given to work with, or `null` where none was supplied. */
   readonly dependencies: Partial<TDependencies> | null;
 
-  /** What the mechanism running this handler exposed, or empty where it exposed none. */
+  /** What the mechanism running this handler exposed, or `null` where it exposed none. */
   readonly hooks: Partial<TMechanismHooks> | null;
 
   /** This execution's telemetry object */
@@ -126,6 +142,7 @@ export class ArvoExecutionContext<
     this.attempt = param.attempt;
     this.options = param.options;
     this.dataSchema = param.dataSchema;
+    this.idempotency = param.idempotency;
     this.dependencies = param.dependencies;
     this.hooks = param.hooks;
     this.telemetry = param.telemetry;

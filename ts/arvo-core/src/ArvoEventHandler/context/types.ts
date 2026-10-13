@@ -11,6 +11,7 @@ import type {
   ArvoDependencies,
   ArvoMechanismHooks,
 } from '../types/supplied.js';
+import type { ArvoIdempotencyKeys } from './idempotency.js';
 import type { ArvoExecutionContextTelemetry } from './telemetry/index.js';
 
 /**
@@ -107,6 +108,8 @@ export type ArvoExecutionContextParam<
    * assembled here.
    */
   telemetry: ArvoExecutionContextTelemetry;
+  /** A key per scope, for an effect outside Arvo that accepts one. */
+  idempotency: ArvoIdempotencyKeys;
   /** What this execution's executor is given to work with. */
   dependencies: Partial<TDependencies> | null;
   /** What the mechanism running this handler exposes to an executor. */

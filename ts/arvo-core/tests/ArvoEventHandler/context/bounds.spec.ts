@@ -9,7 +9,13 @@ import type {
   ArvoDependencies,
   ArvoMechanismHooks,
 } from '../../../src/ArvoEventHandler/types/supplied.js';
-import { initEvent, orderVersion, services, telemetry } from '../fixtures.js';
+import {
+  initEvent,
+  orderVersion,
+  placeholderIdempotencyKeys,
+  services,
+  telemetry,
+} from '../fixtures.js';
 
 /** What an execution records against; these tests only carry it. */
 const { telemetry: tracing } = telemetry();
@@ -48,6 +54,7 @@ const opened = (overrides: InitOverrides = {}) => {
     attempt: 0,
     telemetry: tracing,
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
+    idempotency: placeholderIdempotencyKeys,
     dependencies: {},
     hooks: {},
     ...overrides,

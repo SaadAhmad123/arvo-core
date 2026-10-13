@@ -36,6 +36,10 @@ export type {
   ArvoEventParam,
   ArvoEventValidationOptions,
 } from './ArvoEvent/types.js';
+export type {
+  ArvoIdempotencyKeys,
+  ArvoIdempotencyParts,
+} from './ArvoEventHandler/context/idempotency.js';
 export { ArvoExecutionContext } from './ArvoEventHandler/context/index.js';
 export { ArvoExecutionContextTelemetry } from './ArvoEventHandler/context/telemetry/index.js';
 export type {

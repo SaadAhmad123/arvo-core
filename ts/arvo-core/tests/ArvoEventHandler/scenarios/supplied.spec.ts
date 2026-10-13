@@ -4,7 +4,11 @@ import type { IArvoEventHandlerDependency } from '../../../src/ArvoEventHandler/
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
 import { setupArvoEventHandler } from '../../../src/factories/setupArvoEventHandler.js';
 import type { JSONObject } from '../../../src/types.js';
-import { heldDependencies, openedPerExecution } from '../dependency.js';
+import {
+  failingToClose,
+  heldDependencies,
+  openedPerExecution,
+} from '../dependency.js';
 import {
   fulfilContract,
   fulfilV1,
@@ -272,6 +276,29 @@ describe('what an executor is given to work with', () => {
     });
 
     expect(produced.kind).toBe('produced');
+    expect(calls.closed.length).toBe(1);
+  });
+
+  it('costs the execution nothing where it cannot be let go of', async () => {
+    // Closing happens after the work is done and the record is built,
+    // so a failure to close has nothing left to spoil. It is recorded
+    // on the span and goes no further — the caller is told what the
+    // execution produced, not that a connection would not go back.
+    const seen = watching();
+    const { resolver } = storeWatching(seen);
+    const { dependency, calls } = failingToClose(
+      { note: 'built' } as unknown as ScenarioDependencies,
+      new Error('the pool had already gone'),
+    );
+
+    const produced = await handlerRecording(seen).tryExecute({
+      event: anOrder(),
+      state: resolver,
+      attempt: 0,
+      dependencies: dependency,
+    });
+
+    expect(produced.ok && produced.value.kind).toBe('produced');
     expect(calls.closed.length).toBe(1);
   });
 

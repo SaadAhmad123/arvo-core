@@ -17,8 +17,16 @@ export type Catalogue = {
   childrenOf(category: string): Promise<readonly string[]>;
   /** How much of one item is held, which is what a check answers with. */
   heldOf(sku: string): Promise<number>;
-  /** Takes some of what is held, which is a handler changing the world. */
-  reserve(sku: string, wanted: number): Promise<number>;
+  /**
+   * Takes some of what is held, which is a handler changing the world.
+   *
+   * @param idempotencyKey - One of the keys the executor was given. The
+   * same key takes stock once however many times this is called, so the
+   * scope it came from decides what "once" means here.
+   * @returns How much was taken, which on a repeat is what the first
+   * call took rather than nothing.
+   */
+  reserve(sku: string, wanted: number, idempotencyKey: string): Promise<number>;
 };
 
 /** What an executor in this run can reach. */

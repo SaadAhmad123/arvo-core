@@ -1,6 +1,7 @@
 import { metrics, trace } from '@opentelemetry/api';
 import { z } from 'zod';
 import { ArvoContract } from '../../src/ArvoContract/index.js';
+import type { ArvoIdempotencyKeys } from '../../src/ArvoEventHandler/context/idempotency.js';
 import { ArvoExecutionContextTelemetry } from '../../src/ArvoEventHandler/context/telemetry/index.js';
 import { createArvoEventFactory } from '../../src/factories/ArvoEventFactory/index.js';
 
@@ -73,3 +74,16 @@ export const telemetry = () => {
     emitted,
   };
 };
+
+/**
+ * Keys for a context whose specs are about something other than keys.
+ *
+ * Shaped like real ones and derived from nothing, so a spec that reads a
+ * key reads an obvious placeholder rather than a plausible wrong value.
+ * The composition itself is proven in `context/idempotency.spec.ts`.
+ */
+export const placeholderIdempotencyKeys: ArvoIdempotencyKeys = Object.freeze({
+  workflow: `arvo-workflow-${'0'.repeat(64)}`,
+  execution: `arvo-execution-${'0'.repeat(64)}`,
+  delivery: `arvo-delivery-${'0'.repeat(64)}`,
+});

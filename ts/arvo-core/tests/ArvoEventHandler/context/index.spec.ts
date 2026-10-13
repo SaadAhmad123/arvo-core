@@ -21,6 +21,7 @@ import {
   initEvent,
   orderVersion,
   paymentFailedEvent,
+  placeholderIdempotencyKeys,
   services,
   telemetry,
 } from '../fixtures.js';
@@ -83,6 +84,7 @@ const base = {
   attempt: 0,
   telemetry: tracing,
   options: ARVO_DEFAULT_HANDLER_OPTIONS,
+  idempotency: placeholderIdempotencyKeys,
   dependencies: {},
   hooks: {},
 };
@@ -553,6 +555,7 @@ describe('ArvoExecutionContext', async () => {
         'enteredAt',
         'entry',
         'hooks',
+        'idempotency',
         'options',
         'telemetry',
       ]);

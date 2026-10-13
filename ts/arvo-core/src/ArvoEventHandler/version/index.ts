@@ -2,6 +2,7 @@ import type * as z from 'zod/v4/core';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { ArvoSemanticVersion } from '../../semver/index.js';
+import { arvoIdempotencyKeysFor } from '../context/idempotency.js';
 import { ArvoExecutionContext } from '../context/index.js';
 import type { ArvoContextState } from '../context/types.js';
 import { buildHandlerErrorEvent } from '../emission/handler-error.js';
@@ -284,6 +285,20 @@ export class ArvoEventHandlerVersion<
       return this.#produce(param, collected, []);
     }
 
+    // Derived from the record rather than remembered on it: nothing is
+    // stored, so carrying out the same events again gives the same keys.
+    //
+    // Derived here rather than by the context, which holds all three
+    // parts and derives everything else of this sort itself: hashing is
+    // async, and a context is constructed synchronously and frozen. The
+    // member has to be a plain property to be worth having, so the one
+    // await happens on the way in.
+    const idempotency = await arvoIdempotencyKeysFor({
+      subject: collected.subject,
+      executionId: collected.executionId,
+      deliveredEventId: collected.triggeringEvent.id,
+    });
+
     const ctx = new ArvoExecutionContext<
       TSelf,
       TServices,
@@ -301,6 +316,7 @@ export class ArvoEventHandlerVersion<
       attempt: param.attempt,
       telemetry: param.telemetry,
       options: this.options,
+      idempotency,
       dependencies,
       hooks: param.hooks,
     });

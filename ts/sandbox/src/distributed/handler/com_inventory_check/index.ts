@@ -48,9 +48,18 @@ export const inventoryCheckHandler = setupArvoEventHandler({
 
       // Takes what it needs where there is enough, which is a handler
       // changing the world through a dependency rather than reading one.
+      //
+      // Under the delivery key, this being an effect made once per event
+      // received: two workers carrying out one delivery is a thing a
+      // mechanism permits, and the record being written once afterwards
+      // does nothing about the stock both of them would otherwise take.
       const reserved =
         held >= requested.wanted
-          ? await catalogue.reserve(requested.sku, requested.wanted)
+          ? await catalogue.reserve(
+              requested.sku,
+              requested.wanted,
+              ctx.idempotency.delivery,
+            )
           : 0;
 
       await ctx.setState({ data: { sku: requested.sku, held, reserved } });

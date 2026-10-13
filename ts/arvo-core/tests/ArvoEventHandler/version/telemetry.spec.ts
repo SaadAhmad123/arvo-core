@@ -5,6 +5,7 @@ import {
   markExecutorRan,
   markOutcome,
   markStage,
+  markSwallowed,
 } from '../../../src/ArvoEventHandler/version/telemetry.js';
 import { initEvent, orderVersion, telemetry } from '../fixtures.js';
 import { buildState } from '../state/fixtures.js';
@@ -133,5 +134,41 @@ describe('what the span says this execution came to', () => {
     });
     expect(written.emitted).toHaveLength(1);
     expect(written.emitted[0]?.body).toContain('success');
+  });
+});
+
+describe('what the span says about a failure nothing acts on', () => {
+  /**
+   * A failure that is recorded and then carried on from. Releasing a
+   * dependency is the case this exists for: it happens after the work
+   * is done, and failing to do it changes nothing a caller is told —
+   * so the span is the only place it is ever visible.
+   */
+  it('records what was swallowed and why', () => {
+    const written = recorded();
+    markSwallowed(
+      written.telemetry,
+      'dependencies_not_closed',
+      new Error('the pool had already gone'),
+    );
+
+    expect(written.events).toHaveBeenCalledWith(
+      'arvo.swallowed.dependencies_not_closed',
+      { message: 'the pool had already gone' },
+    );
+  });
+
+  it('records something raised that is not an error at all', () => {
+    const written = recorded();
+    markSwallowed(
+      written.telemetry,
+      'dependencies_not_closed',
+      'just a string',
+    );
+
+    expect(written.events).toHaveBeenCalledWith(
+      'arvo.swallowed.dependencies_not_closed',
+      { message: 'just a string' },
+    );
   });
 });

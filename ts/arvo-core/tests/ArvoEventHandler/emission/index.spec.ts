@@ -13,6 +13,7 @@ import {
   initEvent,
   orderVersion,
   paymentVersion,
+  placeholderIdempotencyKeys,
   services,
   telemetry,
 } from '../fixtures.js';
@@ -46,6 +47,7 @@ const ctx = () => {
     attempt: 0,
     telemetry: tracing,
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
+    idempotency: placeholderIdempotencyKeys,
     dependencies: {},
     hooks: {},
   });
@@ -325,6 +327,7 @@ describe('which processing path an emitted event takes', () => {
       attempt: 0,
       telemetry: tracing,
       options: ARVO_DEFAULT_HANDLER_OPTIONS,
+      idempotency: placeholderIdempotencyKeys,
       dependencies: {},
       hooks: {},
     });

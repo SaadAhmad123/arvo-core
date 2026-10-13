@@ -73,7 +73,7 @@ Every key SHALL be a function of what the record and the delivered event already
 
 ### Requirement: How Each Key Is Composed Is Fixed
 
-Each key SHALL be composed exactly as [ADR-014](../../../../../docs/adr/014-idempotency-keys.md) states: the scope's name, then the parts that scope is keyed on, separated by a byte that cannot occur within any of them, hashed, rendered as lowercase hexadecimal, behind a prefix naming the composition and its version.
+Each key SHALL be composed exactly as [ADR-014](../../../../../docs/adr/014-idempotency-keys.md) states: the scope's name, then the parts that scope is keyed on, separated by a byte that cannot occur within any of them, hashed, rendered as lowercase hexadecimal, behind a prefix naming the composition.
 
 Two implementations SHALL produce the same key for the same execution.
 
