@@ -184,11 +184,11 @@ The handlers' own data is Postgres under both, through the dependency, and is no
 
 > The mechanism re-invokes the handler with the same event and the incremented attempt number.
 
-- [ ] 10.1 Map the attempt number across the boundary and assert it: Temporal counts from one and Arvo from zero, and a mechanism that forgets has a retry budget off by one.
-- [ ] 10.2 Assert dependencies are **re-resolved** through the factory on every attempt, never carried forward — against a real pooled connection, so a leak shows up as exhaustion.
-- [ ] 10.3 Assert the record is re-read on every attempt, with nothing cached behind the state function.
-- [ ] 10.4 Assert only the attempt number carries forward, by changing the record between attempts and watching the retry see the change.
-- [ ] 10.5 Assert the delay a fault asks for is honoured by the declared policy, or that ignoring it is a visible choice rather than an accident.
+- [x] 10.1 Map the attempt number across the boundary and assert it: Temporal counts from one and Arvo from zero, and a mechanism that forgets has a retry budget off by one.
+- [x] 10.2 Assert dependencies are **re-resolved** through the factory on every attempt, never carried forward — against a real pooled connection, so a leak shows up as exhaustion.
+- [x] 10.3 Assert the record is re-read on every attempt, with nothing cached behind the state function.
+- [x] 10.4 Assert only the attempt number carries forward, by changing the record between attempts and watching the retry see the change.
+- [x] 10.5 Assert the delay a fault asks for is honoured by the declared policy, or that ignoring it is a visible choice rather than an accident.
 
 ## 11. Obligation 5 — writes serialized
 
