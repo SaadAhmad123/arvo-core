@@ -374,10 +374,21 @@ type ArvoDependencyScope = {
   state: ArvoExecutionState | null;
   executionId: string;
   attempt: number;
+  telemetry: ArvoExecutionContextTelemetry;
 };
 ```
 
 `open` and `close` rather than `acquire` and `release`: shorter at the two call sites that matter, and already the words a reader expects on something holding a connection. Both take the same scope, so a `close` knows which execution it is letting go of without the object having had to remember.
+
+`telemetry` is the whole context object rather than a bare span, matching what `ArvoExecutionStateResolver` already receives. A dependency wanting a child span for taking a connection needs a tracer, not just a parent; one wanting to explain a slow close needs the logger. Handing over only the span would send it to the globals for the rest, which is what having the object avoids.
+
+### Absence is `undefined` outside and `null` inside
+
+The package's **Optional inputs** rule, unchanged: `dependencies?: IArvoEventHandlerDependency<TDependencies>` at every boundary a caller writes, normalised once to `| null` for everything below it. One line in the codebase where the two spellings meet, rather than a `??` down the call chain.
+
+Nothing is ever fabricated. A dependency object is supplied or it is `null`, and `null` means nothing to open and nothing to close.
+
+That separates two absences worth keeping apart. The dependency *object* can be absent. The *attributes* cannot — an executor must always find something on `ctx.dependencies` — so `{} as TDependencies` survives in exactly one place, where the context is built, and is about the attributes only: `null` dependency gives `{}`, an instance gives `instance.attributes`.
 
 ### The declaration keeps declaring the attributes
 
@@ -420,6 +431,8 @@ The handler threads the object down and makes neither call itself.
 `open` failing is `dependency_resolution_failed`, retry safe, exactly as a failing factory is today — the same code path, the same fault, the same cause rendering.
 
 `close` failing is recorded on the delivery span and discarded. It is not a fault, it does not change the response, and it never reaches the mechanism. The execution has concluded by then.
+
+`version/telemetry.ts` has `markStage`, `markExecutorRan` and `markOutcome` and nothing for recording a failure that is then carried on from, so this needs one.
 
 ### What this costs us
 

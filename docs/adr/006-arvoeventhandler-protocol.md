@@ -868,7 +868,8 @@ dependencies    optional; where absent, the context member is present and empty
                       acquire   taking the delivered event,
                                        the execution record or absence,
                                        the execution identifier,
-                                       and the attempt number
+                                       the attempt number,
+                                       and the delivery's telemetry
                       release   taking the same
                       a readable surface, which is what the executor is given
                     both operations may be asynchronous where a language
@@ -876,6 +877,12 @@ dependencies    optional; where absent, the context member is present and empty
 ```
 
 **One object, not a set of them.** A handler that needs several resources is given one dependency that holds them, and how they relate is that object's own business. This is not a restriction but the removal of one: with a set, the protocol would have to decide what happens when the second of three acquisitions fails while the first is already held, and it has no basis for deciding. With one object, there is nothing to unwind that the supplier cannot unwind itself, in the order its own resources require.
+
+**Both operations receive the delivery's telemetry**, for the same reason the state function does ([ADR-010](./010-delivery-classification-and-entry-validation.md), **Resolving the existing execution**): acquiring a connection is work that takes time, and time a reader cannot account for is time that looks like the handler's. A supplier MAY record its own span, metric or log against the delivery, and a pool that takes four seconds to answer is then visible as that rather than as an unexplained gap inside the delivery span.
+
+What it may not do is change what the execution concluded. This is the same latitude a mechanism hook has and the same limit: a supplier can change what the trace says and nothing else. A supplier that marked the delivery span failed on an execution that succeeded would mislead every reader of that trace, and an implementation SHOULD document at this surface that the delivery's span is shared rather than the supplier's own.
+
+The handler's own obligation to record a release failure (**Release**) is unaffected by this. A supplier recording its own as well is additional, not instead.
 
 **Member names are each language's own** (ADR-004). So is the shape of the readable surface, and so is whether an executor is handed that surface or the object carrying it — **Outside the model, supplied per delivery** already leaves what the executor finds on **dependencies** to each language, and this addendum does not narrow it.
 

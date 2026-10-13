@@ -175,11 +175,12 @@ Every mechanism the suites run against was written by the same hand as the thing
 
 ADR-006 settled how a dependency comes to exist and never said how it stops, so every mechanism had to remember its own cleanup — which is discipline, and the section it was written in claimed to be replacing discipline with construction. [ADR-006 Addendum 1](../../../../docs/adr/006-arvoeventhandler-protocol.md) replaces the two forms with one object the handler opens and closes, and **The dependency lifetime, in TypeScript** in [`design.md`](./design.md) settles the shape.
 
-- [ ] 11.1 `IArvoEventHandlerDependency<TAttributes>` with `open`, `close` and `attributes`, and the scope both calls receive. `ArvoDependencies` keeps meaning what an executor finds.
+- [ ] 11.1 `IArvoEventHandlerDependency<TAttributes>` with `open`, `close` and `attributes`, and the scope both calls receive — the event, the record or absence, the execution identifier, the attempt, and the delivery's telemetry, so a supplier can account for its own time where a reader is already looking.
+- [ ] 11.1a Absence is `undefined` at every boundary a caller writes and `null` everywhere below it, normalised once. The empty attributes object stays where the context is built and is about the attributes only.
 - [ ] 11.2 The execute param takes an instance and nothing else — the value form and the factory form both go.
 - [ ] 11.3 The version opens at the factory's old position, and closes in a `finally` around everything after it: the executor, return validation, record serialization, and every fault path.
 - [ ] 11.4 `open` failing is `dependency_resolution_failed`, retry safe, by the path a failing factory takes today.
-- [ ] 11.5 `close` failing is recorded on the span and discarded — not a fault, not visible to the mechanism, never able to change what the execution concluded.
+- [ ] 11.5 `close` failing is recorded on the span and discarded — not a fault, not visible to the mechanism, never able to change what the execution concluded. `version/telemetry.ts` gains the one helper it lacks for recording a failure that is carried on from.
 - [ ] 11.6 The executor is handed `attributes`, so no executor body changes and `close` is unreachable from one.
 - [ ] 11.7 Specs first: open called once before the executor; close called once on success, on a fault, on a timeout and on a refusal at return; close called after the record is serialized; a throwing close leaves the response untouched; a throwing open is the retry-safe fault; both called with the execution's own scope.
 - [ ] 11.8 Mechanism hooks are left exactly as they are, and the line between the two is stated where both are declared: a thing that needs the event, the record or the attempt is a dependency; a thing that needs none of them is a hook.
