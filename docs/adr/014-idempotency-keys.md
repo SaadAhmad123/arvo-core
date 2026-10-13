@@ -40,7 +40,7 @@ The protocol says this plainly and does not pretend otherwise. What an executor 
 
 Everything required is already on the context: the execution's identifier, the workflow's `subject`, the event that caused this delivery. An executor can assemble a key from them, and three things then go wrong.
 
-It has to know which parts are stable. `execution_id` is stable across deliveries and retries; an event's `id` is stable across redeliveries of that event; **the attempt number is not stable at all**, and it is the one an author is most likely to reach for, because a retry is exactly what they are thinking about. A key containing the attempt is a different key on every attempt, which is the double write again with more code.
+It has to know which parts are stable. `execution_id` is stable across deliveries and retries; an event's `id` is stable across redeliveries of that event; **the attempt number is not stable at all**, and it is the one an author is most likely to reach for, because a retry is exactly what they are thinking about. A key containing the attempt is a different key on every attempt, which is the effect made twice again, with more code to get there.
 
 It has to be assembled identically everywhere. Two handlers in one deployment composing the same key two ways is a bug nothing catches; two *languages* composing it two ways is the same bug across a conformance boundary.
 
@@ -66,40 +66,31 @@ All three are functions of the record and the delivered event alone. Nothing is 
 
 ### Choosing between them
 
-The table above is exact and still leaves the choice harder than it needs to be, so here is one run with the three keys in it.
+The table above is exact and still leaves the choice harder than it needs to be, because the three differ in what they are constant across rather than in what they are made of.
 
-An order is placed. It asks for two inventory checks, a payment charge, a fraud check and a review, then answers its caller once all five have answered. Each of those is an execution of its own, and a recursive walk under it has more.
+**The workflow key is constant across the whole of one workflow.** Every execution belonging to it, at every depth, composes the same one, because `subject` is constant across a workflow by definition (ADR-001). So it is the key for an effect that must happen once per workflow, wherever in the workflow it is decided. Two versions that both decide to make that effect compose the same key without knowing about each other, which is the property worth having: it does not depend on only one of them being written.
 
-**The workflow key is one string for all of them.** The order, both checks, the payment, the fraud check, every walk node, at every depth. It comes from `subject`, which is constant across a workflow by definition. So it is the key for something that must happen once per order wherever in the run it is decided — one confirmation to the customer, one audit entry. If the order handler sends the confirmation, and a year later a second handler is added that also sends one, both compose the same key and the customer gets one message.
+**The execution key is constant across one execution and held by nothing else.** Not by another execution at another depth, and — the part worth stating, because it is where an author's intuition tends to go wrong — not by another execution of the *same contract at the same version*. Two executions running identical code are two executions, and they compose two keys. That is correct whenever those two executions are acting on different things, which is the ordinary reason a version fans out at all.
 
-**The execution key is one string per execution, and nothing outside that execution shares it.** Not another handler, and not another execution of the *same* handler: the two inventory checks run the same code and get two different execution keys, which is right, because they are reserving different items.
+What it is constant across is the whole of one execution: the event that opened it, everything it emitted, every answer it took in, every attempt of each delivery, and the answer that brought it to a terminal lifecycle. **Suspension included, of any length.** An execution resting at `waiting` on something outside the lattice — which ADR-006 permits indefinitely — composes the same key before and after. That is what makes the scope usable for an effect that must happen once however long an execution lasts and however many events pass through it.
 
-What it spans is the whole of one execution — from the event that opened it, through everything it emitted, through every answer it took in, through every retry of each, to the answer that finished it. **Including the waiting.** An order resting at `waiting` for a week while a person reviews it has the same execution key before and after. That is what makes it usable for *charge the card once*: the charge and the eventual completion belong to one execution however much time and however many events pass between them.
+**The delivery key is constant across one delivery and the attempts of it.** One per event an execution receives, so an execution entered once has one and an execution entered *n* times has *n*. It is also constant where the event that caused a delivery is delivered again, which is the case it exists for: a redelivery is the same work, and a further attempt of a delivery is the same work, and both must present the same key.
 
-**The delivery key is one string per event an execution receives.** The order is entered six times — once to open it and once per answer — and the two keys part company there:
+So: *once per workflow* is the workflow key, *once by this execution* is the execution key, *once per event received* is the delivery key.
 
-| the order was entered by | its execution key | its delivery key |
-|---|---|---|
-| the order request | the same one | one of its own |
-| the first inventory answer | the same one | one of its own |
-| the second inventory answer | the same one | one of its own |
-| the payment answer | the same one | one of its own |
-| the fraud answer | the same one | one of its own |
-| the review answer | the same one | one of its own |
+#### Where two of them are interchangeable, and where they are not
 
-So: *once per run* is the workflow key. *Once ever, by this execution* is the execution key. *Once for each thing that arrives* is the delivery key.
+An execution that receives one event in its life has one delivery, so the execution key and the delivery key are each constant across everything that happens to it and either will do. They are never the same string — the scope name is inside the hash so that they cannot be — but they are equally correct.
 
-#### Where the two are interchangeable, and where they are not
+They part company for an execution that is entered more than once, and that is where choosing wrongly is silent rather than loud.
 
-An execution that receives one event in its life — an inventory check, a payment charge, a fraud check: asked, answers, done — has one delivery, so both keys are constant across everything that happens to it and either will do. They are never the same string, because the scope name is inside the hash, but they are equally correct.
+**At the execution scope, *n* per-delivery effects collapse into one.** A version that makes an effect each time it takes in an answer, keyed on its execution, presents one key for all of them. The first is made; every later one is recognised by whatever is honouring the key as a repeat of it and is not. The effects are lost, nothing reports a failure, and the execution reaches `success`.
 
-They part company for an execution that waits and is entered again, which is exactly where choosing wrongly is silent.
+**At the delivery scope, one once-only effect becomes *n*.** A version that makes an effect once, keyed on its delivery, is correct for as long as it is entered once — and stops being correct when it is entered twice, because it then composes two keys and the effect is made twice. The change that breaks it is a version gaining a service call and a wait, which is not a change anyone thinks of as touching idempotency.
 
-**Choosing the execution key for per-event work loses work.** If the order reserves stock each time a supplier answers and keys on the execution, all six deliveries present the same key. The first reservation is made and the service recognises the next five as repeats of it. Five reservations gone, no error anywhere, and the run reports success.
+The two failures are not symmetrical in how they are found, either. The first is invisible: the effects that did not happen leave nothing behind. The second is at least countable afterwards, because the effects that did happen are there to find.
 
-**Choosing the delivery key for once-ever work duplicates it.** A payment charge keyed on the delivery is correct while the payment has one delivery — and stops being correct the day someone adds a step that waits for an answer, because the execution is then entered twice, composes two delivery keys, and charges twice. Nothing about that change looks risky.
-
-Which makes the execution key the safer default for *once ever*: it is the one that survives a handler later becoming one that waits.
+Which makes the execution scope the safer default for *once by this execution*: it is the one that survives a version later becoming one that waits.
 
 ### The composition is pinned
 
@@ -119,7 +110,7 @@ hex    is 64 lowercase hexadecimal characters, no prefix and no separator
 
 `delivered_event_id` is the `id` of the event that caused this delivery — `triggering_event` on the record, which on an opening delivery is the init event itself.
 
-Every part of that is fixed. The literals, their order, the separator byte, the hash, the case of the hex, the prefix: an implementation differing on any of them is non-conformant, and the failure it produces is a duplicate write at a third party.
+Every part of that is fixed. The literals, their order, the separator byte, the hash, the case of the hex, the prefix: an implementation differing on any of them is non-conformant, and the failure it produces is an effect made twice at a third party.
 
 ### Why it is composed that way
 
@@ -127,9 +118,9 @@ Every part of that is fixed. The literals, their order, the separator byte, the 
 
 **`0x00` is the separator.** [ADR-002](./002-arvoevent-field-domain-constraints.md) excludes U+0000 from `subject` and `id`, and `execution_id` is hexadecimal, so the byte cannot occur inside any part. Without that, `a` ‖ `bc` and `ab` ‖ `c` are one string and two different deliveries can share a key. It is the same choice, for the same reason, as the `execution_id` derivation.
 
-**The output is hashed rather than readable.** Two reasons. A `subject` is chosen by whoever started the run and may be any length and may carry something an application would not choose to send to a payment gateway; a hash is fixed-length and reveals neither. And many services that accept an idempotency key bound its length, so a key that is sometimes short and sometimes very long is a key that sometimes fails.
+**The output is hashed rather than readable.** Two reasons. A `subject` is chosen by whoever started the workflow and may be any length and may carry something an application would not choose to disclose to a third party; a hash is fixed-length and reveals neither. And many services that accept an idempotency key bound its length, so a key that is sometimes short and sometimes very long is a key that sometimes fails.
 
-**The prefix is readable.** `arvo1-execution-` in a third party's dashboard says what the key is and where it came from, which a bare hash does not. The `1` is this composition's version: a superseding ADR changing any part of the input would change it, so a reader can tell two compositions apart rather than discovering the difference through a duplicate charge.
+**The prefix is readable.** `arvo1-execution-` in a third party's dashboard says what the key is and where it came from, which a bare hash does not. The `1` is this composition's version: a superseding ADR changing any part of the input would change it, so a reader can tell two compositions apart rather than discovering the difference through an effect made twice.
 
 ### What it does not do
 
@@ -166,7 +157,7 @@ Considered: `arvo1-execution-<execution_id>` is debuggable and needs no hashing.
 
 ### One key instead of three
 
-Considered, at the `execution` scope alone. Rejected: once per received event is a real and common need — an orchestrator reserving stock each time a supplier answers — and an executor forced to compose that one by hand is back where it started, with the attempt number within reach.
+Considered, at the `execution` scope alone. Rejected: once per received event is a real and common need, since a version that waits is entered once per answer it takes in, and an executor forced to compose that key by hand is back where it started, with the attempt number within reach.
 
 ### A scope keyed on the attempt
 
