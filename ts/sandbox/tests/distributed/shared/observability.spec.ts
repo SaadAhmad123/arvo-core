@@ -17,6 +17,8 @@ import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { inventoryCheckV1 } from '../../../src/distributed/handler/com_inventory_check/contract.js';
 import { inventoryCheckHandler } from '../../../src/distributed/handler/com_inventory_check/index.js';
+import { orderFulfilV1 } from '../../../src/distributed/handler/com_order_fulfil/contract.js';
+import { orderFulfilHandler } from '../../../src/distributed/handler/com_order_fulfil/index.js';
 import { withDeliveryIdentity } from '../../../src/distributed/handler/log-context.js';
 import { PostgresCatalogue } from '../../../src/distributed/shared/catalogue.js';
 import { readConfig } from '../../../src/distributed/shared/config.js';
@@ -145,11 +147,67 @@ describe('what one delivery records', () => {
   it('publishes the protocol-level metrics ADR-006 names', () => {
     const names = published();
 
-    // deliveries by outcome, and executor duration. Prefixed by the
-    // package, which namespaces every instrument it publishes.
+    // Prefixed by the package, which namespaces every instrument it
+    // publishes. Collection size appears only where there is a
+    // collection, so it is asserted by the followup below rather than
+    // here: an execution that opened one has asked for nothing yet.
     expect(names).toContain('arvo.executions');
     expect(names).toContain('arvo.executor.duration');
   });
+
+  it('publishes how wide a collection got, once there is one', async () => {
+    // A real collection: an orchestrator asks for everything at once,
+    // and one answer comes back. The fourth of ADR-006's metrics is
+    // about how wide collections get, so it exists only from the moment
+    // an execution has something to collect.
+    const orderRef = `observed-collecting-${Date.now()}`;
+    const opening = createArvoEventFactory(orderFulfilV1).createInput({
+      source: 'com.test.observability',
+      subject: orderRef,
+      to: orderFulfilV1.type,
+      data: { orderRef, category: 'orders', width: 1, depth: 0 },
+    });
+
+    const store = storeFor(pool);
+    const asking = await orderFulfilHandler.execute({
+      event: opening,
+      state: ({ executionId }) => store.readRecord(executionId),
+      attempt: 0,
+      dependencies: new PostgresCatalogue(pool),
+    });
+    if (asking.kind !== 'produced') throw new Error('it asked for nothing');
+    await store.commit({ record: asking.state, events: asking.events });
+
+    // One of the things it asked for, answered as that service answers.
+    const request = asking.events.find(
+      (one) => one.to === inventoryCheckV1.type,
+    );
+    if (request === undefined) throw new Error('it asked for no check');
+
+    const answer = createArvoEventFactory(inventoryCheckV1).createOutput({
+      type: 'evt_inventory_checked',
+      source: inventoryCheckV1.type,
+      subject: orderRef,
+      to: orderFulfilV1.type,
+      executionid: String(asking.state.executionId),
+      // Both the request's own id: it is what opened the execution that
+      // is answering, and it is what the asking execution matches its
+      // collection against.
+      initid: request.id,
+      parentid: request.id,
+      data: { sku: KNOWN_SKU, held: 5, sufficient: true },
+    });
+
+    await orderFulfilHandler.execute({
+      event: answer,
+      state: ({ executionId }) => store.readRecord(executionId),
+      attempt: 0,
+      dependencies: new PostgresCatalogue(pool),
+    });
+
+    await metricReader.forceFlush();
+    expect(published()).toContain('arvo.collection.size');
+  }, 120_000);
 
   it('counts the delivery under the outcome it came to', () => {
     const executions = exportedMetrics

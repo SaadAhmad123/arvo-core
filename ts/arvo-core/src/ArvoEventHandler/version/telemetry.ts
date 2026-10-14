@@ -104,6 +104,31 @@ export const markExecutorRan = (
 };
 
 /**
+ * Records how many things this execution is collecting.
+ *
+ * A distribution rather than a count, because what is worth knowing is
+ * how wide collections get: an execution awaiting five hundred answers
+ * and one awaiting two are the same number of executions and nothing
+ * like the same load.
+ *
+ * One observation per delivery that has a collection, which is every
+ * followup — including those whose collection is not complete, since an
+ * execution waiting on a wide collection is the one worth seeing and
+ * measuring only the completed ones would leave it out.
+ *
+ * @param telemetry - Where this execution records.
+ * @param self - The version of the contract collecting.
+ * @param size - How many requests the collection holds.
+ */
+export const markCollection = (
+  telemetry: ArvoExecutionContextTelemetry,
+  self: VersionedArvoContract,
+  size: number,
+): void => {
+  telemetry.metric.record('collection.size', size, versionAttributes(self));
+};
+
+/**
  * Records what an execution came to, across all three signals.
  *
  * On the span, for whoever has the trace open. On a counter, so outcomes

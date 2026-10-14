@@ -52,6 +52,7 @@ import {
 } from './returns.js';
 import {
   describeExecution,
+  markCollection,
   markExecutorRan,
   markOutcome,
   markStage,
@@ -277,6 +278,19 @@ export class ArvoEventHandlerVersion<
       param.entry === 'followup'
         ? collectResponse(record, param.event)
         : record;
+
+    // Every followup, whether or not the collection is complete. An
+    // execution opening one has asked for nothing yet and has no
+    // collection to measure; one still waiting has the collection that
+    // matters most, and measuring only the completed ones would leave
+    // every execution stuck on a wide collection out of the figure.
+    if (param.entry === 'followup') {
+      markCollection(
+        param.telemetry,
+        this.contracts.self,
+        collected.inFlightEventMap.size,
+      );
+    }
 
     if (param.entry === 'followup' && !this.#isJoined(collected)) {
       markStage(param.telemetry, 'collection_partial', {

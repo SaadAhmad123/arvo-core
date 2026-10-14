@@ -2,6 +2,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { describe, expect, it, vi } from 'vitest';
 import {
   describeExecution,
+  markCollection,
   markExecutorRan,
   markOutcome,
   markStage,
@@ -169,6 +170,41 @@ describe('what the span says about a failure nothing acts on', () => {
     expect(written.events).toHaveBeenCalledWith(
       'arvo.swallowed.dependencies_not_closed',
       { message: 'just a string' },
+    );
+  });
+});
+
+describe('what the span says about the collection', () => {
+  /**
+   * ADR-006 asks for collection size among the protocol-level metrics
+   * an implementation publishes. What makes it worth publishing is the
+   * distribution — how wide do collections get — so it is a histogram
+   * rather than a counter, and one observation per entry rather than one
+   * per answer, which would record a collection of five hundred five
+   * hundred times.
+   */
+  it('records how many things the execution is collecting', () => {
+    const written = recorded();
+    markCollection(written.telemetry, orderVersion, 3);
+
+    expect(written.measured).toHaveBeenCalledWith(
+      'collection.size',
+      3,
+      expect.objectContaining({
+        'contract.type': orderVersion.type,
+        'contract.version': '1.0.0',
+      }),
+    );
+  });
+
+  it('records a collection of none, an execution awaiting nothing being a real size', () => {
+    const written = recorded();
+    markCollection(written.telemetry, orderVersion, 0);
+
+    expect(written.measured).toHaveBeenCalledWith(
+      'collection.size',
+      0,
+      expect.anything(),
     );
   });
 });
