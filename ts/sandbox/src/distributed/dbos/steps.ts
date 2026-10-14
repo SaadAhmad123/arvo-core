@@ -163,9 +163,23 @@ const giveUp = async (
       ? null
       : await WIRE.deserialize(fault.abandonmentEvent);
 
-  // Neither half. The execution answered its caller already and rests
-  // where it rests, so there is nothing to commit and nobody to tell.
+  // Neither half. There is nothing to commit and nobody to tell — the
+  // execution either answered its caller already or never had a record
+  // to carry one.
+  //
+  // Nothing to tell is not nothing to record. A fault no attempt will
+  // fix has to land where a person can find it rather than in a log, so
+  // the event that caused it goes to the table with the reason. This is
+  // the only contingency where that is all there is to keep, which is
+  // exactly why it is the one most easily dropped.
   if (fault.abandonmentState === null && abandonmentEvent === null) {
+    await needsAPerson(scope.pool, {
+      event: triggeringEvent,
+      payload: await WIRE.serialize(triggeringEvent),
+      why: 'nothing_will_retry',
+      executionId: fault.executionId,
+      message: note,
+    });
     return nothingToDo(note);
   }
 

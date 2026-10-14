@@ -2,7 +2,7 @@ import { DBOS } from '@dbos-inc/dbos-sdk';
 import { Pool } from 'pg';
 import type { DistributedConfig } from '../shared/config.js';
 import { storeFor } from '../shared/record-store.js';
-import { createParkStep, createSteps } from './steps.js';
+import { createParkStep, createSteps, type Steps } from './steps.js';
 import { createWorkflows, type Workflows } from './workflows.js';
 
 /**
@@ -31,6 +31,16 @@ const DBOS_APPLICATION = 'arvo';
 export type DbosRuntime = {
   /** The workflows a caller may start. */
   readonly workflows: Workflows;
+  /**
+   * The steps those workflows call, one per handler.
+   *
+   * Exposed because a step called outside a workflow is an ordinary
+   * function call, which is how one delivery is exercised without a run
+   * around it. Registered once and handed out: DBOS keys a step by its
+   * name, so registering a second set under the same names would be two
+   * things claiming one durable identity.
+   */
+  readonly steps: Steps;
   /** The handlers' own data, for a caller that wants to look at it. */
   readonly pool: Pool;
   /** Stops DBOS, finishes what is in flight, and lets go. */
@@ -73,8 +83,9 @@ export const startDbos = async (
   });
 
   const scope = { store: storeFor(pool), pool };
+  const steps = createSteps(scope);
   const workflows = createWorkflows({
-    steps: createSteps(scope),
+    steps,
     park: createParkStep(scope),
   });
 
@@ -82,6 +93,7 @@ export const startDbos = async (
 
   return {
     workflows,
+    steps,
     pool,
     stop: async () => {
       await DBOS.shutdown();

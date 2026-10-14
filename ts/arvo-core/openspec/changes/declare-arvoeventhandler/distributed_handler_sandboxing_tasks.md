@@ -209,7 +209,7 @@ A handler that comes out somewhere else on a replay is a handler whose record wa
 - [x] 12.3 Replay it **shuffled and repeated**. Terminal states must match, repeats must be discarded rather than faulted, and the outbox must hold throughout.
 - [x] 12.4 Replay a run that was **abandoned** part way, and assert the pair is committed together on the replay exactly as on the first run, with nothing of the mechanism's own added.
 - [x] 12.5 Replay **Temporal's own history** through its replay checker, against a history captured from the real cluster. Handler results come from history rather than being re-executed, so what is judged is our adapter's workflow code: a replay that fails means the adapter is non-conformant as Temporal defines it. This is also §13.5's determinism check.
-- [ ] 12.6 Replay through the *other* framework's store, so a run taken under Temporal is resumed under DBOS against its own Postgres. If the record is the memory, the mechanism it was written by cannot matter — and this is the one test that proves it. **Blocked**: the DBOS mechanism does not exist yet. The halves that do not need it are done — the Postgres record store is built and proven, and the tape mechanism replays through it — so what is missing is a DBOS adapter rather than anything about replay.
+- [ ] 12.6 Replay through the *other* framework's store, so a run taken under Temporal is resumed under DBOS against its own Postgres. If the record is the memory, the mechanism it was written by cannot matter — and this is the one test that proves it. **No longer blocked**: the DBOS mechanism now exists and all five obligations are asserted of it.
 
 ## 13. Written as production code
 
@@ -226,7 +226,7 @@ What the standard means concretely, so it can be checked rather than claimed.
 - [ ] 13.9 **Metrics**: the four ADR-006 names, plus whatever each framework publishes of its own.
 - [x] 13.10 **Health and readiness**, distinguishing a worker that is alive from one that can take work.
 - [x] 13.11 **Back-pressure**: bounded concurrency per worker, and a run that slows rather than falls over.
-- [x] 13.12 **Poison handling**: somewhere for a delivery that will never succeed to go, which is where §9's abandonment pair lands.
+- [x] 13.12 **Poison handling**: somewhere for a delivery that will never succeed to go, which is where §9's abandonment pair lands. **Somewhere is not one place, and the distinction matters.** Where a fault carries a record, the record is where a person finds it: committed at `failure` with the reason on it, and the caller told by the event committed alongside. A table is for the other case — an event that reaches nobody — and conflating the two fills a queue of things to look at with things already accounted for. DBOS writes that table; the Temporal adapter does not, and relies on the run workflow's own result and history, which is its native equivalent and is durable. Worth recording as a difference rather than a gap.
 - [ ] 13.13 **No `any`, no silent catch, no sleep-based synchronisation.** Lint and typecheck clean under the same rules the package holds itself to.
 
 ## 14. Chaos, against the real stack
