@@ -17,6 +17,15 @@ const configSchema = z.object({
 
   /** Where the execution records are kept. */
   recordsUrl: z.string().min(1),
+  /**
+   * Where DBOS keeps its own state.
+   *
+   * Its own database on the same server as the records, not the same
+   * database: a mechanism's state and an application's records are
+   * different things, and one migration tool owning both would make
+   * DBOS's schema something this repository thinks it controls.
+   */
+  dbosSystemUrl: z.string().min(1),
   /** How many connections one worker may hold, so a leak shows as exhaustion. */
   recordsPoolSize: z.coerce.number().int().positive(),
 
@@ -48,6 +57,7 @@ const DEFAULTS = {
   TEMPORAL_ADDRESS: 'localhost:7233',
   TEMPORAL_NAMESPACE: 'arvo',
   RECORDS_URL: 'postgresql://arvo:arvo@localhost:5433/arvo_records',
+  DBOS_SYSTEM_URL: 'postgresql://arvo:arvo@localhost:5433/arvo_dbos',
   RECORDS_POOL_SIZE: '16',
   OTLP_ENDPOINT: 'http://localhost:4317',
   SERVICE_VERSION: '0.0.0-sandbox',
@@ -70,6 +80,7 @@ export const readConfig = (serviceName: string): DistributedConfig => {
     temporalNamespace:
       process.env.TEMPORAL_NAMESPACE ?? DEFAULTS.TEMPORAL_NAMESPACE,
     recordsUrl: process.env.RECORDS_URL ?? DEFAULTS.RECORDS_URL,
+    dbosSystemUrl: process.env.DBOS_SYSTEM_URL ?? DEFAULTS.DBOS_SYSTEM_URL,
     recordsPoolSize:
       process.env.RECORDS_POOL_SIZE ?? DEFAULTS.RECORDS_POOL_SIZE,
     otlpEndpoint: process.env.OTLP_ENDPOINT ?? DEFAULTS.OTLP_ENDPOINT,

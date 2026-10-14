@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { runner } from 'node-pg-migrate';
+import { Client } from 'pg';
 import { readConfig } from './config.js';
 
 /**
@@ -24,6 +25,52 @@ const MIGRATIONS = fileURLToPath(
 
 /** Where the record of what has been run is kept. */
 const LEDGER = 'schema_migrations';
+
+/** The database name at the end of a connection string. */
+const databaseIn = (url: string): string =>
+  new URL(url).pathname.replace(/^\//, '');
+
+/**
+ * Creates DBOS's system database if it is not there yet.
+ *
+ * Only the database, never anything in it. DBOS owns its own schema and
+ * migrates it at launch; what it will not do is create the database to
+ * put that schema in, and a worker pointed at one that does not exist
+ * waits rather than failing — which looks exactly like a worker that
+ * cannot reach its store.
+ *
+ * So this belongs to bringing the stack up, beside the migrations and
+ * for the same reason: a thing a process needs before it can start is
+ * not a thing it should create while starting.
+ *
+ * @returns Whether it had to be created.
+ */
+export const ensureDbosDatabase = async (): Promise<boolean> => {
+  const config = readConfig('arvo-migrate');
+  const wanted = databaseIn(config.dbosSystemUrl);
+
+  // Connected to `postgres`, since a database cannot be created from
+  // inside itself.
+  const admin = new Client({
+    connectionString: new URL('/postgres', config.dbosSystemUrl).toString(),
+  });
+  await admin.connect();
+  try {
+    const found = await admin.query(
+      'SELECT 1 FROM pg_database WHERE datname = $1',
+      [wanted],
+    );
+    if ((found.rowCount ?? 0) > 0) return false;
+
+    // Not parameterizable: an identifier is not a value. Quoted rather
+    // than interpolated bare, and the name comes from configuration this
+    // process already validated.
+    await admin.query(`CREATE DATABASE "${wanted.replace(/"/g, '""')}"`);
+    return true;
+  } finally {
+    await admin.end();
+  }
+};
 
 /**
  * Runs every migration not yet run, in order.
@@ -57,7 +104,11 @@ const runDirectly =
   fileURLToPath(import.meta.url) === process.argv[1];
 
 if (runDirectly) {
-  migrateRecords()
+  ensureDbosDatabase()
+    .then(async (created) => {
+      if (created) console.log('  created the DBOS system database');
+      return migrateRecords();
+    })
     .then((applied) => {
       for (const name of applied) console.log(`  ran ${name}`);
       console.log(

@@ -12,7 +12,8 @@ import {
   cloneArvoEvent,
   traceContextFromSpan,
 } from 'arvo-core';
-import { destinationFor, handlerFor } from '../shared/routing.js';
+import { checkSource, continuing } from '../shared/entering.js';
+import { destinationFor } from '../shared/routing.js';
 import type { RunOutcome } from './protocol.js';
 import { RUN_QUEUE } from './queues.js';
 import type { arvoRun } from './workflows.js';
@@ -57,38 +58,6 @@ export const reachTemporal = async (param: {
   });
 
   return { client, close: () => connection.close() };
-};
-
-/**
- * Refuses a sender that has named itself after a handler.
- *
- * An event addressed back to such a source would be indistinguishable
- * from work addressed to that handler, and the run would deliver its own
- * answer to a handler instead of to its caller.
- */
-const checkSource = (source: string): void => {
-  if (handlerFor(source) !== null) {
-    throw new Error(
-      `${source} is a handler in this lattice, so it cannot also be the source of an event entering it — an answer addressed there would be indistinguishable from work`,
-    );
-  }
-};
-
-/**
- * Stamps an event with a span's trace context, so what it causes belongs
- * to the trace that caused it.
- *
- * An event entering the lattice with no trace context of its own starts
- * a trace of its own, and everything the run does hangs off that instead
- * of off the caller.
- */
-const continuing = (event: ArvoEvent, span?: Span | SpanContext): ArvoEvent => {
-  if (span === undefined) return event;
-  const trace = traceContextFromSpan(span);
-  return cloneArvoEvent(event, {
-    traceparent: trace.traceparent,
-    tracestate: trace.tracestate ?? undefined,
-  });
 };
 
 /**

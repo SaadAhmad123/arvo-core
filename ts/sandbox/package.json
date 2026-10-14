@@ -20,7 +20,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "distributed:temporal:record-history": "tsx src/distributed/temporal/record-history.ts"
+    "distributed:temporal:record-history": "tsx src/distributed/temporal/record-history.ts",
+    "distributed:dbos:worker": "tsx src/distributed/dbos/worker.ts",
+    "distributed:dbos": "vitest run tests/distributed/dbos",
+    "distributed:dbos:run": "tsx src/distributed/dbos/run-once.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
@@ -55,6 +58,8 @@
     "pg": "8.16.3",
     "tsx": "^4.19.0",
     "typescript": "7.0.2",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "winston": "3.19.0",
+    "winston-transport": "4.9.0"
   }
 }

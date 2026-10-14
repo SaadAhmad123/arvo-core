@@ -1,7 +1,7 @@
-import { createServer, type Server } from 'node:http';
 import { NativeConnection } from '@temporalio/worker';
 import { Pool } from 'pg';
 import { readConfig } from '../shared/config.js';
+import { type Health, healthServer } from '../shared/health.js';
 import { startTelemetry, type Telemetry } from '../shared/telemetry.js';
 import { reachTemporal } from './client.js';
 import { QUEUES } from './queues.js';
@@ -17,33 +17,6 @@ import { createWorkers } from './workers.js';
  *
  * Run with `pnpm run distributed:temporal:worker`.
  */
-
-/** What a worker answers, so a deployment can tell two states apart. */
-type Health = {
-  /** Running, and not asked to stop. */
-  alive: boolean;
-  /** Connected and listening, so work given to it will be done. */
-  ready: boolean;
-};
-
-/** The endpoint saying whether this process is alive and whether it can work. */
-const healthServer = (port: number, health: Health): Server => {
-  const server = createServer((asked, answer) => {
-    // different questions: one shutting down is alive and must get no work
-    const answering =
-      asked.url === '/ready'
-        ? { ok: health.ready, body: health }
-        : { ok: health.alive, body: health };
-
-    answer.writeHead(answering.ok ? 200 : 503, {
-      'content-type': 'application/json',
-    });
-    answer.end(JSON.stringify(answering.body));
-  });
-
-  server.listen(port);
-  return server;
-};
 
 /** Starts this process and runs until it is asked to stop. */
 const main = async (): Promise<void> => {
