@@ -13,6 +13,7 @@ import {
 } from 'arvo-core';
 import type { Pool } from 'pg';
 import { HANDLERS } from '../handler/index.js';
+import { withDeliveryIdentity } from '../handler/log-context.js';
 import { PostgresCatalogue } from '../shared/catalogue.js';
 import { destinationFor } from '../shared/routing.js';
 import type { DeliveryReport, EmittedEvent } from './protocol.js';
@@ -238,17 +239,29 @@ const deliver = async (
   const attempt = activityInfo().attempt - 1;
   heartbeat({ eventId: triggeringEvent.id, attempt });
 
-  const executed = await destination.handler.tryExecute({
-    event: triggeringEvent,
-    // The handler says which execution to read; nothing here works
-    // one out. Read on every invocation, so a retry sees what is
-    // stored now rather than what an earlier attempt read.
-    state: ({ executionId }) => stateOf(scope.client, executionId),
-    attempt,
-    // Opened before the executor and closed after it, by the handler,
-    // so nothing here holds a connection to remember to give back.
-    dependencies: new PostgresCatalogue(scope.pool),
-  });
+  // Every line this delivery logs carries which delivery it was, so one
+  // execution can be followed in a log store without joining to a trace.
+  const executed = await withDeliveryIdentity(
+    {
+      subject: triggeringEvent.subject,
+      handler: destination.handler.contracts.self.type,
+      triggeringEventId: triggeringEvent.id,
+      attempt,
+    },
+    () =>
+      destination.handler.tryExecute({
+        event: triggeringEvent,
+        // The handler says which execution to read; nothing here works
+        // one out. Read on every invocation, so a retry sees what is
+        // stored now rather than what an earlier attempt read.
+        state: ({ executionId }) => stateOf(scope.client, executionId),
+        attempt,
+        // Opened before the executor and closed after it, by the
+        // handler, so nothing here holds a connection to remember to
+        // give back.
+        dependencies: new PostgresCatalogue(scope.pool),
+      }),
+  );
 
   if (!executed.ok) {
     const fault = executed.error;

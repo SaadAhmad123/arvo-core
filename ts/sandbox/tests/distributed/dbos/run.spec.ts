@@ -12,6 +12,7 @@ import {
   orderFulfilV1,
 } from '../../../src/distributed/handler/com_order_fulfil/contract.js';
 import { decisionFor } from '../../../src/distributed/shared/from-outside.js';
+import { until } from '../shared/backends.js';
 import { type DbosHarness, startDbosHarness } from './harness.js';
 
 /**
@@ -178,12 +179,13 @@ describe('one run under DBOS', () => {
 /**
  * The review request this run left for a person, once it is there.
  *
- * Polled from the table rather than awaited, because the point of a
- * domained event is that nothing running is told about it: a person
- * finds it by looking, and so does this.
+ * Looked for rather than awaited, because the point of a domained event
+ * is that nothing running is told about it: a person finds it by
+ * looking, and so does this. Waiting on the condition rather than on a
+ * clock, so a slow run is slow rather than a failure.
  */
-const theReviewItAskedFor = async (harness: DbosHarness, subject: string) => {
-  for (let looked = 0; looked < 240; looked += 1) {
+const theReviewItAskedFor = async (harness: DbosHarness, subject: string) =>
+  until(`the review ${subject} asks for`, async () => {
     const found = await harness.pool.query<{ payload: string }>(
       `SELECT payload FROM needs_a_person
         WHERE subject = $1 AND event_type = $2
@@ -191,8 +193,5 @@ const theReviewItAskedFor = async (harness: DbosHarness, subject: string) => {
       [subject, manualReviewV1.type],
     );
     const payload = found.rows[0]?.payload;
-    if (payload !== undefined) return WIRE.deserialize(payload);
-    await new Promise((wake) => setTimeout(wake, 500));
-  }
-  throw new Error('the run never asked for a review');
-};
+    return payload === undefined ? null : WIRE.deserialize(payload);
+  });
