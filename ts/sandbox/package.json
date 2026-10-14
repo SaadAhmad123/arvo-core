@@ -19,7 +19,8 @@
     "play": "tsx src/playground.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "distributed:temporal:record-history": "tsx src/distributed/temporal/record-history.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
@@ -44,6 +45,7 @@
     "@opentelemetry/semantic-conventions": "1.43.0",
     "@temporalio/activity": "1.24.0",
     "@temporalio/client": "1.24.0",
+    "@temporalio/common": "1.24.0",
     "@temporalio/interceptors-opentelemetry": "1.24.0",
     "@temporalio/testing": "1.24.0",
     "@temporalio/worker": "1.24.0",

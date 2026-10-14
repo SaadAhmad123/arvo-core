@@ -69,6 +69,9 @@ importers:
       '@temporalio/client':
         specifier: 1.24.0
         version: 1.24.0
+      '@temporalio/common':
+        specifier: 1.24.0
+        version: 1.24.0
       '@temporalio/interceptors-opentelemetry':
         specifier: 1.24.0
         version: 1.24.0(@temporalio/common@1.24.0)(@temporalio/workflow@1.24.0)

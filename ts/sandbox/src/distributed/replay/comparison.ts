@@ -1,0 +1,97 @@
+import type { JSONObject } from 'arvo-core';
+
+/**
+ * What two runs of the same events must agree on, and what they need
+ * not.
+ *
+ * The protocol never asks a handler to be deterministic — that is why a
+ * recovered delivery republishes the bytes it committed rather than
+ * asking an executor to produce them again
+ * (`docs/adr/006-arvoeventhandler-protocol.md`). So a replay cannot be
+ * held to producing the same event identifiers, and holding it to that
+ * would be testing a promise nothing made.
+ *
+ * What it can be held to is every decision: where each execution came to
+ * rest, what it remembered, and what it emitted to whom. That is the
+ * claim worth proving, because it is the claim the record being the
+ * memory actually makes.
+ *
+ * Three things are therefore set aside, each for a stated reason:
+ *
+ * - an event's `id` and `time`, minted per event by whoever built it
+ * - the trace it was carried on, which belongs to the run and not the
+ *   decision
+ * - the identifiers of events a record *emitted*, which are the same
+ *   minted values seen from the record's side
+ *
+ * Nothing else is. The identifiers of events a record *received* are
+ * compared, because a replay is delivered the very events the run was:
+ * if those drifted, the replay would not be a replay.
+ */
+
+/** What is minted per event rather than decided. */
+const MINTED = ['id', 'time', 'traceparent', 'tracestate'] as const;
+
+/** One event, with what was minted for it set aside. */
+const comparableEvent = (event: unknown): unknown => {
+  if (event === null || typeof event !== 'object') return event;
+
+  const fields = { ...(event as Record<string, unknown>) };
+  for (const minted of MINTED) delete fields[minted];
+  return fields;
+};
+
+/**
+ * What a record touched, with emitted identifiers set aside and
+ * received ones kept.
+ *
+ * Positions are kept, so an execution that emitted two events and then
+ * received one is not equal to one that received first.
+ */
+const comparableTouched = (touched: unknown): unknown => {
+  if (!Array.isArray(touched)) return touched;
+
+  return touched.map((one) => {
+    const entry = one as { id?: unknown; direction?: unknown };
+    return entry.direction === 'emitted'
+      ? { direction: 'emitted' }
+      : { direction: entry.direction, id: entry.id };
+  });
+};
+
+/**
+ * What a record is waiting on, keyed by position rather than by the
+ * identifier of the event it emitted to ask.
+ *
+ * The answers themselves are compared in full: those arrived rather
+ * than being minted here.
+ */
+const comparableInFlight = (inFlight: unknown): unknown => {
+  if (!Array.isArray(inFlight)) return inFlight;
+
+  return inFlight.map((pair, position) => {
+    const [, answer] = pair as [unknown, unknown];
+    return [position, comparableEvent(answer)];
+  });
+};
+
+/**
+ * One record as two runs of it can be compared.
+ *
+ * @param document - The record exactly as it was committed.
+ */
+export const comparableRecord = (document: JSONObject): JSONObject => ({
+  ...document,
+  initEvent: comparableEvent(document.initEvent) as JSONObject,
+  triggeringEvent: comparableEvent(document.triggeringEvent) as JSONObject,
+  eventIds: comparableTouched(document.eventIds) as JSONObject,
+  inFlightEventMap: comparableInFlight(document.inFlightEventMap) as JSONObject,
+});
+
+/**
+ * One event as two runs of it can be compared.
+ *
+ * @param payload - The event in the event's own format.
+ */
+export const comparablePayload = (payload: string): unknown =>
+  comparableEvent(JSON.parse(payload));

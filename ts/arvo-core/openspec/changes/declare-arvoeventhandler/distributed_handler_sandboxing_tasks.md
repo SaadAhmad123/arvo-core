@@ -204,12 +204,12 @@ The handlers' own data is Postgres under both, through the dependency, and is no
 
 A handler that comes out somewhere else on a replay is a handler whose record was not its memory. The mechanism that tests this is the simplest in the exercise and needs no framework: a tape recorder, committing under the outbox like any other.
 
-- [ ] 12.1 Record a finished run as a transcript, read from the database rather than from memory: every event delivered, the record as it was read, and what was committed.
-- [ ] 12.2 Replay it through a **fresh** handler, in order, into an empty database, with nothing of the first run alive. Every record committed and every event published must equal the first run's. This is the strongest form of *resumable from the record alone* the protocol has.
-- [ ] 12.3 Replay it **shuffled and repeated**. Terminal states must match, repeats must be discarded rather than faulted, and the outbox must hold throughout.
-- [ ] 12.4 Replay a run that was **abandoned** part way, and assert the pair is committed together on the replay exactly as on the first run, with nothing of the mechanism's own added.
-- [ ] 12.5 Replay **Temporal's own history** through its replay checker, against a history captured from the real cluster. Handler results come from history rather than being re-executed, so what is judged is our adapter's workflow code: a replay that fails means the adapter is non-conformant as Temporal defines it. This is also §13.5's determinism check.
-- [ ] 12.6 Replay through the *other* framework's store, so a run taken under Temporal is resumed under DBOS against its own Postgres. If the record is the memory, the mechanism it was written by cannot matter — and this is the one test that proves it.
+- [x] 12.1 Record a finished run as a transcript, read from the database rather than from memory: every event delivered, the record as it was read, and what was committed.
+- [x] 12.2 Replay it through a **fresh** handler, in order, into an empty database, with nothing of the first run alive. Every record committed and every event published must equal the first run's. This is the strongest form of *resumable from the record alone* the protocol has.
+- [x] 12.3 Replay it **shuffled and repeated**. Terminal states must match, repeats must be discarded rather than faulted, and the outbox must hold throughout.
+- [x] 12.4 Replay a run that was **abandoned** part way, and assert the pair is committed together on the replay exactly as on the first run, with nothing of the mechanism's own added.
+- [x] 12.5 Replay **Temporal's own history** through its replay checker, against a history captured from the real cluster. Handler results come from history rather than being re-executed, so what is judged is our adapter's workflow code: a replay that fails means the adapter is non-conformant as Temporal defines it. This is also §13.5's determinism check.
+- [ ] 12.6 Replay through the *other* framework's store, so a run taken under Temporal is resumed under DBOS against its own Postgres. If the record is the memory, the mechanism it was written by cannot matter — and this is the one test that proves it. **Blocked**: the DBOS mechanism does not exist yet. The halves that do not need it are done — the Postgres record store is built and proven, and the tape mechanism replays through it — so what is missing is a DBOS adapter rather than anything about replay.
 
 ## 13. Written as production code
 
@@ -219,7 +219,7 @@ What the standard means concretely, so it can be checked rather than claimed.
 - [x] 13.2 **Worker lifecycle**: a real worker process per framework, with graceful shutdown on signal — stop accepting work, finish what is in flight, flush telemetry, close pools, exit non-zero only on genuine failure.
 - [x] 13.3 **Task queues** designed rather than defaulted: separate queues for the orchestrator and the leaves, so a five-hundred-wide fan-out cannot starve the thing waiting for it.
 - [x] 13.4 **Retry policies declared**, never inherited — and declared to agree with what the fault says, which is the whole of §9.
-- [ ] 13.5 **Workflow versioning**: patched or versioned workflow code, with the determinism check of §12.5 run against a recorded history, so a change that would break running executions fails before it ships.
+- [x] 13.5 **Workflow versioning**: patched or versioned workflow code, with the determinism check of §12.5 run against a recorded history, so a change that would break running executions fails before it ships.
 - [x] 13.6 **Migrations** rather than schema created on the fly, run as a step of bringing the stack up.
 - [x] 13.7 **Connection pooling** with bounded size, and a store that surfaces exhaustion as a failure the handler can see rather than as a hang.
 - [ ] 13.8 **Structured logs** carrying the execution's identity on every line, so one execution can be followed across both frameworks.

@@ -6,15 +6,15 @@ import {
 } from 'arvo-core';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import {
-  type CommittedEvent,
-  type RecordStore,
-  storeFor,
-} from '../../../src/distributed/dbos/store.js';
 import { inventoryCheckV1 } from '../../../src/distributed/handler/com_inventory_check/contract.js';
 import { inventoryCheckHandler } from '../../../src/distributed/handler/com_inventory_check/index.js';
 import { PostgresCatalogue } from '../../../src/distributed/shared/catalogue.js';
 import { readConfig } from '../../../src/distributed/shared/config.js';
+import {
+  type CommittedEvent,
+  type RecordStore,
+  storeFor,
+} from '../../../src/distributed/shared/record-store.js';
 
 /**
  * Obligation 1 and obligation 5, against the database that is supposed

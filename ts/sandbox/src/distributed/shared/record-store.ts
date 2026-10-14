@@ -1,4 +1,4 @@
-import type { ArvoEvent } from 'arvo-core';
+import type { ArvoEvent, JSONObject } from 'arvo-core';
 import { ArvoEventSerializer } from 'arvo-core';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
@@ -102,7 +102,7 @@ export type RecordStore = {
    * It reads on every call and answers with the document and nothing
    * else: no classifying, no deriving, no filtering, and no validating.
    */
-  readRecord(executionId: string): Promise<Record<string, unknown> | null>;
+  readRecord(executionId: string): Promise<JSONObject | null>;
 
   /**
    * One record and the events produced with it, committed together.
@@ -113,7 +113,7 @@ export type RecordStore = {
    * execution again to produce it.
    */
   commit(param: {
-    record: Record<string, unknown>;
+    record: JSONObject;
     events: readonly ArvoEvent[];
   }): Promise<CommitOutcome>;
 
@@ -172,7 +172,9 @@ export type RecordStore = {
 /** How an outbox row is read back, named as the type names it. */
 const OUTBOX_COLUMNS = `event_id      AS "eventId",
           execution_id  AS "executionId",
-          cas_version   AS "casVersion",
+          -- cast, because a BIGINT is read back as a string and
+          -- every reader of this is typed for a number
+          cas_version::int AS "casVersion",
           subject,
           event_type    AS "eventType",
           addressed_to  AS "addressedTo",
@@ -216,7 +218,7 @@ const DRAIN_BATCH = 64;
  */
 export const storeFor = (pool: Pool): RecordStore => ({
   readRecord: async (executionId) => {
-    const latest = await pool.query<{ document: Record<string, unknown> }>(
+    const latest = await pool.query<{ document: JSONObject }>(
       `SELECT document FROM execution_record
        WHERE execution_id = $1
        ORDER BY cas_version DESC
