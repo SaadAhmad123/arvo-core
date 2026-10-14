@@ -168,7 +168,7 @@ Each requires a dedicated ADR:
 - Handler concurrency and event-waiting patterns
 - Cancellation, interruption, and compensation semantics
 - Timers, deadlines, scheduling, and time semantics
-- Delivery ordering scope and concurrent event handling
+- Delivery ordering scope and concurrent event handling — the ordering half is settled by [ADR-015](./015-no-ordering-guarantee.md); concurrent event handling remains deferred
 - Handler execution capability profiles
 - Formal definition and boundaries of an Arvo application
 - Observability fields and propagation

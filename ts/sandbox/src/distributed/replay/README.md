@@ -81,10 +81,16 @@ Three things are set aside, each because nothing promised them:
 The identifiers of events a record **received** are compared, because a
 replay is delivered the very events the run was.
 
-Order within one commit is also set aside: the outbox has no ordinal, so
-events committed together come back ordered by identifier, and no
-mechanism is obliged to publish them in any order. Which revision an
-event belongs to **is** compared, that being a decision.
+Order is set aside wherever it appears, because
+[ADR-015](../../../../docs/adr/015-no-ordering-guarantee.md) says the
+protocol guarantees none. Events committed together come back from the
+outbox ordered by identifier, and no mechanism is obliged to publish them
+in any order. The record's trail is the same: it says which events an
+execution touched and in which direction, and nothing may read a sequence
+out of where each entry sits.
+
+Which revision an event belongs to **is** compared, that being a
+decision rather than an order.
 
 ## Running it
 

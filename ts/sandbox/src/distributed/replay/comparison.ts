@@ -23,6 +23,9 @@ import type { JSONObject } from 'arvo-core';
  *   decision
  * - the identifiers of events a record *emitted*, which are the same
  *   minted values seen from the record's side
+ * - the position of every entry in the record's trail, which
+ *   [ADR-015](../../../../../docs/adr/015-no-ordering-guarantee.md)
+ *   forbids reading an order out of
  *
  * Nothing else is. The identifiers of events a record *received* are
  * compared, because a replay is delivered the very events the run was:
@@ -42,37 +45,49 @@ const comparableEvent = (event: unknown): unknown => {
 };
 
 /**
- * What a record touched, with emitted identifiers set aside and
- * received ones kept.
+ * What a record touched, as an unordered collection.
  *
- * Positions are kept, so an execution that emitted two events and then
- * received one is not equal to one that received first.
+ * Sorted, because position carries nothing. The trail says which events
+ * an execution touched and in which direction; ADR-007 promises nothing
+ * about where in the list each sits, and ADR-015 forbids reading an
+ * order out of it. An implementation whose list happens to be in the
+ * order things occurred has not made that an interface, and a spec
+ * comparing positions would be turning it into one.
+ *
+ * Emitted identifiers are set aside with the rest of what is minted, so
+ * what is compared is how many events were emitted and which ones were
+ * received.
  */
 const comparableTouched = (touched: unknown): unknown => {
   if (!Array.isArray(touched)) return touched;
 
-  return touched.map((one) => {
-    const entry = one as { id?: unknown; direction?: unknown };
-    return entry.direction === 'emitted'
-      ? { direction: 'emitted' }
-      : { direction: entry.direction, id: entry.id };
-  });
+  return touched
+    .map((one) => {
+      const entry = one as { id?: unknown; direction?: unknown };
+      return entry.direction === 'emitted'
+        ? JSON.stringify({ direction: 'emitted' })
+        : JSON.stringify({ direction: entry.direction, id: entry.id });
+    })
+    .sort();
 };
 
 /**
- * What a record is waiting on, keyed by position rather than by the
- * identifier of the event it emitted to ask.
+ * What a record is waiting on, as an unordered collection with the
+ * identifier of the event it emitted to ask set aside.
  *
  * The answers themselves are compared in full: those arrived rather
- * than being minted here.
+ * than being minted here. Which questions are still outstanding is a
+ * decision; which order they sit in is not.
  */
 const comparableInFlight = (inFlight: unknown): unknown => {
   if (!Array.isArray(inFlight)) return inFlight;
 
-  return inFlight.map((pair, position) => {
-    const [, answer] = pair as [unknown, unknown];
-    return [position, comparableEvent(answer)];
-  });
+  return inFlight
+    .map((pair) => {
+      const [, answer] = pair as [unknown, unknown];
+      return JSON.stringify(comparableEvent(answer) ?? null);
+    })
+    .sort();
 };
 
 /**

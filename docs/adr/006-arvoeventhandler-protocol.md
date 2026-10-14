@@ -9,7 +9,7 @@
 - **Companions:** this ADR is the core of five that together specify the protocol. [ADR-007](./007-execution-record.md) defines the execution record, [ADR-008](./008-execution-faults-and-abandonment.md) the failure categories, the fault object and abandonment, [ADR-009](./009-execution-bounds.md) depth, retry, timeouts and collection, and [ADR-010](./010-delivery-classification-and-entry-validation.md) classification and the entry gate. They were written as one and split for size; where this ADR refers to a heading in one of them, the reference names the ADR
 - **Supplies:** the `executionid` derivation that [ADR-001](./001-arvoevent-structure.md) leaves to "the handler protocol ADR" (the incoming-event classification it also leaves there is supplied by [ADR-010](./010-delivery-classification-and-entry-validation.md)); the conditions for routing a failure to the workflow root remain deferred (see **Left deferred**)
 - **Addresses, in part:** ADR-000 Deferred Decisions — "ArvoEventHandler execution semantics" (settled here); "Handler state serialization, persistence, migration, and recovery" (settled in ADR-007); "Handler concurrency and event-waiting patterns" (settled in ADR-009); "Cancellation, interruption, and compensation semantics" (decided here by splitting it — see **Conformance to ADR-000**). [ADR-005](./005-arvocontract-structure.md) **Left deferred** — "dependency declaration, capability resolution, and binding", "a handler's own runtime decision of which permitted event to emit and when", and "domain resolution, inheritance, and any orchestration-context-dependent routing strategy" (all settled here)
-- **Left deferred:** execution capability profiles as a format; domain sources beyond the minimum; derived emitted-event identifiers; delivery ordering across executions. The full list is under **Conformance to ADR-000**; each companion carries its own
+- **Left deferred:** execution capability profiles as a format; domain sources beyond the minimum; derived emitted-event identifiers; delivery ordering across executions (since settled by [ADR-015](./015-no-ordering-guarantee.md)). The full list is under **Conformance to ADR-000**; each companion carries its own
 
 Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-architectural-principles.md).
 
@@ -702,7 +702,7 @@ Beside the five, a mechanism supplies three inputs this ADR defines the shape of
 - **Execution capability profiles as a format**, including how a handler would declare the five obligations above rather than have an ADR assert them.
 - **Domain sources beyond the minimum.** **Domain** fixes the sources an implementation MUST offer; whether the set should be closed, extended, or made pluggable is left open.
 - **Whether emitted event identifiers should be derived** rather than freshly generated — unnecessary given obligation 1, and available as defence in depth if a later decision wants it.
-- **Delivery ordering and concurrent event handling** across executions. Obligation 5 serializes writes to one record and says nothing about order across records.
+- **Delivery ordering and concurrent event handling** across executions. Obligation 5 serializes writes to one record and says nothing about order across records. The ordering half is settled by [ADR-015](./015-no-ordering-guarantee.md); concurrent event handling remains deferred.
 
 ## Appendix: An illustrative handler surface
 

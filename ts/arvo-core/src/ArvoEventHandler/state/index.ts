@@ -78,7 +78,13 @@ export class ArvoExecutionState<
   /** The event that caused the execution being processed. */
   readonly triggeringEvent: TTriggeringEvent;
 
-  /** Every event this execution has handled, in the order it handled them. */
+  /**
+   * Every event this execution has handled, each with the direction it
+   * went. Position carries nothing: an implementation may append in the
+   * order things happened and this one does, but the protocol expects no
+   * order here and nothing may read one out of it
+   * (`docs/adr/015-no-ordering-guarantee.md`).
+   */
   readonly eventIds: readonly ArvoTouchedEvent[];
 
   /**
