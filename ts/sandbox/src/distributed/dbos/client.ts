@@ -89,3 +89,38 @@ export const answerFromOutside = async (
     answer.id,
   );
 };
+
+/**
+ * Carries on a run that began somewhere else.
+ *
+ * For a run whose records were written by another mechanism and moved
+ * here. There is no run workflow to answer, so the event that carries it
+ * forward enters as a run of its own, and is told where the original run
+ * answers.
+ *
+ * Told rather than derived, and the difference is worth stating: the
+ * records do carry it. The root execution's record holds the event that
+ * opened the run, and that event's `source` is the caller — so a resume
+ * could walk `parent_execution_id` to the root and read it. This takes
+ * it as an argument instead, which is a simplification in this adapter
+ * and not a limit of the model.
+ *
+ * @param workflows - What this worker registered.
+ * @param event - The event that carries the run forward.
+ * @param answersTo - Where the original run answers.
+ * @returns What this part of the run came to.
+ */
+export const resumeRun = async (
+  workflows: Workflows,
+  event: ArvoEvent,
+  answersTo: string,
+): Promise<RunOutcome> => {
+  const started = await DBOS.startWorkflow(workflows.arvoRun, {
+    workflowID: `resumed-${event.id}`,
+  })({
+    payload: await WIRE.serialize(event),
+    answersTo,
+  });
+
+  return started.getResult();
+};
