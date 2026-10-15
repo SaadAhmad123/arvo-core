@@ -7,6 +7,7 @@ import type { ArvoEventHandlerExecuteResponse } from '../../../../src/ArvoEventH
 import { ArvoEventSerializer } from '../../../../src/serializers/ArvoEventSerializer/index.js';
 import type { JSONObject } from '../../../../src/types.js';
 import { heldDependencies } from '../../dependency.js';
+import { chanceFrom } from './chance.js';
 import type { ArvoBehaviour, ArvoVersionsUnderTest } from './fixture.js';
 
 /** How a lattice may misbehave, every one of them off by default. */
@@ -128,15 +129,7 @@ export type ArvoLatticeParam = {
 };
 
 /** A deterministic source of chance, so a failing run can be repeated. */
-export const chanceFrom = (seed: number) => {
-  let held = seed >>> 0;
-  return () => {
-    held = (held + 0x6d2b79f5) >>> 0;
-    let drawn = Math.imul(held ^ (held >>> 15), 1 | held);
-    drawn = (drawn + Math.imul(drawn ^ (drawn >>> 7), 61 | drawn)) ^ drawn;
-    return ((drawn ^ (drawn >>> 14)) >>> 0) / 4294967296;
-  };
-};
+export { chanceFrom } from './chance.js';
 
 /** The contract and version an event's `dataschema` names. */
 const named = (event: ArvoEvent) => {

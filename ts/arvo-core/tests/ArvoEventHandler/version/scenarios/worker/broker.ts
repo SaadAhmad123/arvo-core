@@ -1,6 +1,7 @@
 import { Worker } from 'node:worker_threads';
 import { deriveArvoExecutionId } from '../../../../../dist/ArvoEventHandler/helpers/execution-id.js';
 import { ArvoEventSerializer } from '../../../../../dist/serializers/ArvoEventSerializer/index.js';
+import { chanceFrom } from '../chance.js';
 import {
   type ChargeBehaviour,
   chargeContract,
@@ -67,9 +68,14 @@ export type ArvoThreadedBrokerOptions = {
   readonly duplicate?: boolean;
   /** Whether the queue is taken from out of order. */
   readonly shuffle?: boolean;
+  /** What the shuffle is drawn from, so a failure is a seed rather than a story. */
+  readonly seed?: number;
 };
 
 const CONTRACTS = [orderContract, chargeContract];
+
+/** What a shuffle draws from where a caller named no seed. */
+const DEFAULT_SEED = 1;
 
 export class ArvoThreadedBroker {
   readonly store = new Map<string, Record<string, unknown>>();
@@ -94,6 +100,7 @@ export class ArvoThreadedBroker {
   readonly #slowly: number;
   readonly #duplicate: boolean;
   readonly #shuffle: boolean;
+  readonly #draw: () => number;
 
   constructor(howMany: number, options: ArvoThreadedBrokerOptions = {}) {
     this.#howMany = howMany;
@@ -101,6 +108,7 @@ export class ArvoThreadedBroker {
     this.#slowly = options.slowly ?? 0;
     this.#duplicate = options.duplicate === true;
     this.#shuffle = options.shuffle === true;
+    this.#draw = chanceFrom(options.seed ?? DEFAULT_SEED);
   }
 
   /** Starts every thread, each loading the built package for itself. */
@@ -186,8 +194,8 @@ export class ArvoThreadedBroker {
   /** The next event off the queue, in order or out of it. */
   #take(): Carried | undefined {
     if (!this.#shuffle) return this.#queue.shift();
-    const at = Math.floor(Math.random() * this.#queue.length);
-    return this.#queue.splice(at, 1)[0];
+    const position = Math.floor(this.#draw() * this.#queue.length);
+    return this.#queue.splice(position, 1)[0];
   }
 
   #live(): Lane[] {
