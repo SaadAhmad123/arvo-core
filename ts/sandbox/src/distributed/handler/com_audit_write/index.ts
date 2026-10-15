@@ -22,7 +22,7 @@ export const auditWriteHandler = setupArvoEventHandler({
   telemetry: HANDLER_TELEMETRY,
   options: { runTimeout: 5_000 },
 })
-  .handler('1.0.0', async (ctx) => {
+  .handler('1.0.0', (ctx) => {
     const requested = ctx.state.initEvent.data;
     ctx.telemetry.logger.info('audited', {
       orderRef: requested.orderRef,

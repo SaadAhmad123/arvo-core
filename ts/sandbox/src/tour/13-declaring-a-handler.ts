@@ -76,7 +76,7 @@ const theChain = (): void => {
     })
     // the executor alone, for a version that remembers nothing and
     // inherits every option
-    .handler('2.0.0', async (ctx) =>
+    .handler('2.0.0', (ctx) =>
       ctx.build({
         type: 'evt_order_shipped',
         data: { tracking: `t-${ctx.state.subject}` },
