@@ -7,6 +7,7 @@ import type { AsyncResult, JSONObject } from '../../types.js';
 import { resolveEmissionTarget } from '../emission/target.js';
 import type { ArvoExecutionState } from '../state/index.js';
 import { ArvoExecutionStateSerializer } from '../state/serializer/index.js';
+import type { ArvoExecutionLifecycle } from '../state/types.js';
 import { mutateState } from '../state/utils.js';
 import type { ArvoExecutorEmission } from '../types/execute.js';
 import type { ArvoServiceMap } from '../types/services.js';
@@ -149,14 +150,13 @@ export const settleRecord = <
     Object.keys(services).length === 0;
   const outstanding = [...awaiting.values()].includes(null);
 
-  const lifecycle =
-    state.lifecycle === 'cancelled'
-      ? 'cancelled'
-      : answered || (batch.length === 0 && isSink)
-        ? 'success'
-        : requests.length > 0 || outstanding
-          ? 'waiting'
-          : 'idle';
+  const lifecycleReached = (): ArvoExecutionLifecycle => {
+    if (state.lifecycle === 'cancelled') return 'cancelled';
+    if (answered || (batch.length === 0 && isSink)) return 'success';
+    if (requests.length > 0 || outstanding) return 'waiting';
+    return 'idle';
+  };
+  const lifecycle = lifecycleReached();
 
   return mutateState(state, {
     lifecycle,

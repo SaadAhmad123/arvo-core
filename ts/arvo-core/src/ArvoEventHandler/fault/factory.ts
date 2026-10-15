@@ -141,6 +141,10 @@ export const createArvoHandlerFault = async (
           published,
         );
 
+  // An execution with no record was opening one, whatever it was
+  // classified as on the way in.
+  const entry = param.state === null ? 'init' : param.entry;
+
   const fault = new ArvoHandlerFault({
     faultKind: param.faultKind,
     message: param.message,
@@ -162,12 +166,7 @@ export const createArvoHandlerFault = async (
     }),
     abandonmentEvent: written?.ok ? written.value : null,
     abandonmentState: carriesAbandonment
-      ? await abandonmentStateFor(
-          param.state,
-          param.state === null ? 'init' : param.entry,
-          published,
-          param.message,
-        )
+      ? await abandonmentStateFor(param.state, entry, published, param.message)
       : null,
   });
 
