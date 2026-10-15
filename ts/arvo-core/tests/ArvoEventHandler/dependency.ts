@@ -130,8 +130,10 @@ export const failingToClose = <TAttributes extends ArvoDependencies>(
     calls: held.calls,
     dependency: {
       open: held.dependency.open,
-      close: (scope: ArvoDependencyScope) => {
-        held.dependency.close(scope);
+      close: async (scope: ArvoDependencyScope) => {
+        // awaited before the throw, so the recorded close cannot be
+        // outrun by the failure it is supposed to precede
+        await held.dependency.close(scope);
         throw raised;
       },
       get attributes() {
