@@ -35,6 +35,16 @@ import type { JSONObject } from 'arvo-core';
 /** What is minted per event rather than decided. */
 const MINTED = ['id', 'time', 'traceparent', 'tracestate'] as const;
 
+/**
+ * Orders two encoded entries, by code point and by nothing else.
+ *
+ * Deliberately not `localeCompare`: this puts a collection into a
+ * canonical order so two runs of it can be compared, and a locale-aware
+ * order would make that comparison depend on the machine it ran on.
+ */
+const byCodePoint = (one: string, two: string): number =>
+  one < two ? -1 : one > two ? 1 : 0;
+
 /** One event, with what was minted for it set aside. */
 const comparableEvent = (event: unknown): unknown => {
   if (event === null || typeof event !== 'object') return event;
@@ -68,7 +78,7 @@ const comparableTouched = (touched: unknown): unknown => {
         ? JSON.stringify({ direction: 'emitted' })
         : JSON.stringify({ direction: entry.direction, id: entry.id });
     })
-    .sort();
+    .sort(byCodePoint);
 };
 
 /**
@@ -87,7 +97,7 @@ const comparableInFlight = (inFlight: unknown): unknown => {
       const [, answer] = pair as [unknown, unknown];
       return JSON.stringify(comparableEvent(answer) ?? null);
     })
-    .sort();
+    .sort(byCodePoint);
 };
 
 /**

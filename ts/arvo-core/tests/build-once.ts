@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -20,6 +20,9 @@ const BUILT = join(ROOT, 'dist', 'ArvoEventHandler', 'index.js');
 const SOURCE = join(ROOT, 'src');
 const LOCK = join(ROOT, 'node_modules', '.arvo-build-lock');
 
+/** The compiler, named by path so nothing resolves through `PATH`. */
+const COMPILER = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
+
 /** When anything under a directory was last written. */
 const newestUnder = (where: string): number => {
   let newest = 0;
@@ -35,13 +38,16 @@ const newestUnder = (where: string): number => {
 const stale = (): boolean =>
   !existsSync(BUILT) || statSync(BUILT).mtimeMs < newestUnder(SOURCE);
 
+/** Blocks this thread, the only synchronous wait the language has. */
+const pauseFor = (ms: number): void => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+};
+
 /** Blocks until nothing else is building. */
 const waitForTheOther = (): void => {
   const until = Date.now() + 180_000;
   while (existsSync(LOCK) && Date.now() < until) {
-    // a busy wait, because this runs before any test and there is
-    // nothing else for this process to be doing
-    execSync('sleep 0.2');
+    pauseFor(200);
   }
 };
 
@@ -59,7 +65,12 @@ export const buildOnce = (): void => {
 
   mkdirSync(LOCK, { recursive: true });
   try {
-    if (stale()) execSync('pnpm build', { cwd: ROOT, stdio: 'ignore' });
+    if (stale()) {
+      execFileSync(process.execPath, [COMPILER], {
+        cwd: ROOT,
+        stdio: 'ignore',
+      });
+    }
   } finally {
     rmSync(LOCK, { recursive: true, force: true });
   }
