@@ -93,13 +93,15 @@ describe("the adapter's workflow code", () => {
 
     // Throws on a determinism violation and returns otherwise. Nothing
     // of the lattice runs: the activity results come from the history.
-    await Worker.runReplayHistory(
-      {
-        workflowsPath: WORKFLOWS,
-        interceptors: { workflowModules: WORKFLOW_MODULES },
-      },
-      history,
-    );
+    await expect(
+      Worker.runReplayHistory(
+        {
+          workflowsPath: WORKFLOWS,
+          interceptors: { workflowModules: WORKFLOW_MODULES },
+        },
+        history,
+      ),
+    ).resolves.toBeUndefined();
   }, 240_000);
 
   it('replays the history committed to this repository, so a change that would break one fails here', async () => {
@@ -110,13 +112,15 @@ describe("the adapter's workflow code", () => {
       );
     }
 
-    await Worker.runReplayHistory(
-      {
-        workflowsPath: WORKFLOWS,
-        interceptors: { workflowModules: WORKFLOW_MODULES },
-      },
-      historyFromJSON(JSON.parse(recorded)),
-    );
+    await expect(
+      Worker.runReplayHistory(
+        {
+          workflowsPath: WORKFLOWS,
+          interceptors: { workflowModules: WORKFLOW_MODULES },
+        },
+        historyFromJSON(JSON.parse(recorded)),
+      ),
+    ).resolves.toBeUndefined();
   }, 240_000);
 
   it('fails a history whose workflow made commands this code would not', async () => {

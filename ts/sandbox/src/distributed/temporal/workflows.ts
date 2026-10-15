@@ -83,10 +83,7 @@ export async function executionRecord(param: RecordParam): Promise<{
 }> {
   const revisions: Revision[] = [];
 
-  const latest = (): JSONObject | null =>
-    revisions.length === 0
-      ? null
-      : (revisions[revisions.length - 1]?.state ?? null);
+  const latest = (): JSONObject | null => revisions.at(-1)?.state ?? null;
 
   setHandler(stateHeld, latest);
   setHandler(revisionsHeld, () => revisions);

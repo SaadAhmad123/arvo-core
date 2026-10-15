@@ -42,9 +42,8 @@ export const until = async <TFound>(
     await new Promise((settle) => setTimeout(settle, 500));
   }
 
-  throw new Error(
-    `${description} never arrived within ${within}ms${lastFailure === null ? '' : `: ${String(lastFailure)}`}`,
-  );
+  const because = lastFailure === null ? '' : `: ${String(lastFailure)}`;
+  throw new Error(`${description} never arrived within ${within}ms${because}`);
 };
 
 /** What Tempo returns for one trace: batches of spans, as it stores them. */
