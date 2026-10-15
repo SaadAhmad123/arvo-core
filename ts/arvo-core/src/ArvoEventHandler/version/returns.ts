@@ -147,7 +147,7 @@ export const settleRecord = <
   const isSink =
     Object.keys(self.outputs).length === 0 &&
     Object.keys(services).length === 0;
-  const outstanding = [...awaiting.values()].some((answer) => answer === null);
+  const outstanding = [...awaiting.values()].includes(null);
 
   const lifecycle =
     state.lifecycle === 'cancelled'

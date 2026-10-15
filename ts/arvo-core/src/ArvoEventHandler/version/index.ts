@@ -522,7 +522,7 @@ export class ArvoEventHandlerVersion<
 
     const dataAloneFailed =
       issues.length > 0 &&
-      issues.every((issue) => /^data/.test(String(issue.path)));
+      issues.every((issue) => String(issue.path).startsWith('data'));
     if (!dataAloneFailed || param.state === null) {
       return this.#unreadableRecordFault(param, refusal);
     }

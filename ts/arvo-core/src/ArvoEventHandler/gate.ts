@@ -29,10 +29,10 @@ const CATEGORY_FOR: Record<ArvoEntryKind, string> = {
 };
 
 /** Every category that carries a meaning, so an unknown one is ignorable. */
-const RESERVED_CATEGORIES: readonly string[] = [
+const RESERVED_CATEGORIES: ReadonlySet<string> = new Set([
   ARVO_CATEGORY_INIT,
   ARVO_CATEGORY_COMPLETE,
-];
+]);
 
 /**
  * Why an event's own statement of its role contradicts what it was
@@ -55,7 +55,7 @@ export const refuseMiscategorised = (
   event: ArvoEvent,
 ): ArvoGateRefusal | null => {
   const stated = event.category;
-  if (stated === null || !RESERVED_CATEGORIES.includes(stated)) return null;
+  if (stated === null || !RESERVED_CATEGORIES.has(stated)) return null;
 
   const expected = CATEGORY_FOR[resolved.entry];
   if (stated === expected) return null;
