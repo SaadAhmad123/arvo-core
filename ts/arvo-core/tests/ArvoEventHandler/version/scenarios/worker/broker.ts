@@ -112,7 +112,7 @@ export class ArvoThreadedBroker {
   }
 
   /** Starts every thread, each loading the built package for itself. */
-  async start(): Promise<this> {
+  start(): Promise<this> {
     const at = new URL('./runner.mts', import.meta.url);
     for (let which = 0; which < this.#howMany; which += 1) {
       const worker = new Worker(at, {
@@ -124,7 +124,7 @@ export class ArvoThreadedBroker {
       worker.unref();
       this.#lanes.push(lane);
     }
-    return this;
+    return Promise.resolve(this);
   }
 
   /** Stops every thread, whatever each was doing. */

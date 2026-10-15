@@ -76,7 +76,7 @@ export const replayTranscript = async (
       // not keep, so a handler that had to fail twice before it could
       // succeed has to be allowed to do that again.
       report: await deliverWithRetries(
-        { ...scope, readRecord: async () => step.recordAsRead },
+        { ...scope, readRecord: () => Promise.resolve(step.recordAsRead) },
         await WIRE.deserialize(step.delivered),
       ),
     });

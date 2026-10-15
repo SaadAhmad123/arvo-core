@@ -90,7 +90,7 @@ export const revisionsOf = async (
  * @param client - The cluster.
  * @param param - The execution, and the revision to commit.
  */
-export const commitTo = async (
+export const commitTo = (
   client: Client,
   param: { executionId: string; revision: Revision },
 ): Promise<CommitOutcome> =>

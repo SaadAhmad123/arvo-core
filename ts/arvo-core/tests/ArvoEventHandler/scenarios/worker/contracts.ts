@@ -69,7 +69,7 @@ export const declareThreadedHandlers = (
       },
     })
     // remembers nothing, and answers at once
-    .handler('2.0.0', async (ctx) =>
+    .handler('2.0.0', (ctx) =>
       ctx.build({
         type: 'evt_threaded_order_shipped',
         data: { at: ctx.state.subject },

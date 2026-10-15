@@ -65,7 +65,7 @@ export const ensureDbosDatabase = async (): Promise<boolean> => {
     // Not parameterizable: an identifier is not a value. Quoted rather
     // than interpolated bare, and the name comes from configuration this
     // process already validated.
-    await admin.query(`CREATE DATABASE "${wanted.replace(/"/g, '""')}"`);
+    await admin.query(`CREATE DATABASE "${wanted.replaceAll('"', '""')}"`);
     return true;
   } finally {
     await admin.end();

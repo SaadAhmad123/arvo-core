@@ -144,10 +144,11 @@ export class PostgresCatalogue
   }
 
   /** Gives the connection back. Safe where none was ever taken. */
-  async close(): Promise<void> {
+  close(): Promise<void> {
     this.#client?.release();
     this.#client = null;
     this.#scope = null;
+    return Promise.resolve();
   }
 
   get attributes(): DistributedDependencies {
