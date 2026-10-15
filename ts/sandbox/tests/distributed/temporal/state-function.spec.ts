@@ -84,7 +84,7 @@ describe('how the mechanism answers for the record', () => {
     // the cluster to read it from. There is nowhere to put the event,
     // the entry kind, or anything else that would let this decide
     // something the handler decides.
-    expect(stateOf.length).toBe(2);
+    expect(stateOf).toHaveLength(2);
 
     const neverOpened = 'f'.repeat(64);
     expect(await stateOf(harness.client, neverOpened)).toBeNull();
@@ -143,7 +143,7 @@ describe('how the mechanism answers for the record', () => {
     expect(report.note).toContain('already been executed');
 
     // and the stored thing is untouched: a refusal writes nothing
-    expect((await revisionsOf(harness.client, executionId)).length).toBe(1);
+    expect((await revisionsOf(harness.client, executionId))).toHaveLength(1);
   }, 120_000);
 
   it('answers with what is stored now, not what it answered before', async () => {

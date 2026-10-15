@@ -282,7 +282,7 @@ describe('a crash between committing and publishing', () => {
     for (const again of answers) lattice.inject(again);
     await lattice.settle();
 
-    expect(lattice.transcript.discarded.length).toBe(answers.length);
+    expect(lattice.transcript.discarded).toHaveLength(answers.length);
     expect(lattice.transcript.faults).toEqual([]);
   });
 

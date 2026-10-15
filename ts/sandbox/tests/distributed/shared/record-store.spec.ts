@@ -153,7 +153,7 @@ describe('the record store', () => {
     ]);
 
     const committed = [first, second].filter((one) => one.committed);
-    expect(committed.length).toBe(1);
+    expect(committed).toHaveLength(1);
 
     const records = await pool.query('SELECT count(*) FROM execution_record');
     expect(records.rows[0].count).toBe('1');

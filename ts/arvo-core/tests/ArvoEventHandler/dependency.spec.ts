@@ -43,8 +43,8 @@ describe('a dependency that holds nothing', () => {
     dependency.close(aScope());
     dependency.close(aScope());
 
-    expect(calls.opened.length).toBe(2);
-    expect(calls.closed.length).toBe(2);
+    expect(calls.opened).toHaveLength(2);
+    expect(calls.closed).toHaveLength(2);
     expect(dependency.attributes).toEqual({ note: 'given' });
   });
 

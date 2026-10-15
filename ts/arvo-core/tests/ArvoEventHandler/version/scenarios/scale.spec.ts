@@ -92,10 +92,10 @@ describe('one execution asking two hundred at once', () => {
     ) as Record<string, unknown[]>;
 
     // what it waits for is rebuilt from what it asked, not merged into
-    expect(order.inFlightEventMap.length).toBe(200);
+    expect(order.inFlightEventMap).toHaveLength(200);
     // and its trail holds the event that opened it, what it asked, what
     // answered, and the one it sent its caller: nothing counted twice
-    expect(order.eventIds.length).toBe(1 + 200 + 200 + 1);
+    expect(order.eventIds).toHaveLength(1 + 200 + 200 + 1);
   });
 
   it('commits once per answer, however wide the round was', async () => {
@@ -107,7 +107,7 @@ describe('one execution asking two hundred at once', () => {
     // design — ADR-007 names that cost and accepts it. What must not
     // also rise is the number of rounds: one per worker, one per
     // answer, and one more for the order itself.
-    expect(lattice.transcript.committed.length).toBe(200 + 200 + 1);
+    expect(lattice.transcript.committed).toHaveLength(200 + 200 + 1);
   });
 });
 

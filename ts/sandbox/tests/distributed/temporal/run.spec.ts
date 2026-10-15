@@ -130,7 +130,7 @@ describe('one run under Temporal', () => {
     const orders = await handlerStates('com_order_fulfil');
     const thisRun = orders.filter((state) => state.subject === subject);
 
-    expect(thisRun.length).toBe(1);
+    expect(thisRun).toHaveLength(1);
     expect(thisRun[0]?.lifecycle).toBe('success');
     // one revision for the opening delivery and one for each answer
     expect(thisRun[0]?.casVersion).toBeGreaterThan(WIDTH);

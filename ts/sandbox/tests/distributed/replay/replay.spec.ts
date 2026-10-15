@@ -168,7 +168,7 @@ describe('a run replayed from its record alone', () => {
     await anEmptyWorld();
 
     const played = await replayTranscript(scope, tape);
-    expect(played.length).toBe(tape.steps.length);
+    expect(played).toHaveLength(tape.steps.length);
 
     const again = await transcriptOf(pool, orderRef);
     expect(recordsOf(again)).toEqual(recordsOf(tape));
@@ -215,7 +215,7 @@ describe('a run replayed from its record alone', () => {
 
     // and the store holds one run, not two
     const again = await transcriptOf(pool, orderRef);
-    expect(again.steps.length).toBe(tape.steps.length);
+    expect(again.steps).toHaveLength(tape.steps.length);
     expect(recordsOf(again)).toEqual(recordsOf(tape));
   }, 180_000);
 
@@ -280,10 +280,10 @@ describe('a run replayed from its record alone', () => {
     const tape = await transcriptOf(pool, orderRef);
 
     // one revision, holding the record and the event together
-    expect(tape.steps.length).toBe(1);
+    expect(tape.steps).toHaveLength(1);
     const only = tape.steps[0] as (typeof tape.steps)[number];
     expect((only.committed as JSONObject).lifecycle).toBe('failure');
-    expect(only.emitted.length).toBe(1);
+    expect(only.emitted).toHaveLength(1);
     expect(outcome.kind).toBe('answered');
 
     await anEmptyWorld();

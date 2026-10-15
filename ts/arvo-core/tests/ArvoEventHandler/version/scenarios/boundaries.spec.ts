@@ -241,7 +241,7 @@ describe('a collection of exactly one, and of none', () => {
     const outcome = await run({ behave: asking });
     const made = produced(outcome);
     expect(made.state.lifecycle).toBe('waiting');
-    expect((made.state.inFlightEventMap as unknown[]).length).toBe(1);
+    expect(made.state.inFlightEventMap as unknown[]).toHaveLength(1);
   });
 
   it('rests idle on none, having asked for nothing and answered nobody', async () => {
@@ -304,9 +304,9 @@ describe('payloads nobody writes on purpose', () => {
 
   it('remembers a megabyte, where that is what a version remembers', async () => {
     const outcome = await remembering({ blob: 'x'.repeat(1_000_000) });
-    expect((produced(outcome).state.data as { blob: string }).blob.length).toBe(
-      1_000_000,
-    );
+    expect(
+      (produced(outcome).state.data as { blob: string }).blob,
+    ).toHaveLength(1_000_000);
   });
 
   it('remembers two hundred levels of nesting', async () => {

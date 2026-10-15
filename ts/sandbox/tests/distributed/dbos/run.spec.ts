@@ -158,7 +158,7 @@ describe('one run under DBOS', () => {
     // waiting until the last of them, then success: `collect: all` means
     // the executor is entered once with everything in
     expect(revisions.at(-1)?.lifecycle).toBe('success');
-    expect(revisions.filter((one) => one.lifecycle === 'waiting').length).toBe(
+    expect(revisions.filter((one) => one.lifecycle === 'waiting')).toHaveLength(
       revisions.length - 1,
     );
     // and every revision follows the one before it

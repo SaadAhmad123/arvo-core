@@ -86,7 +86,7 @@ describe('what is committed and what is published', () => {
     await deliver(await WIRE.serialize(event));
 
     const revisions = await revisionsOf(harness.client, executionId);
-    expect(revisions.length).toBe(1);
+    expect(revisions).toHaveLength(1);
 
     const only = revisions[0] as Revision;
     // the record, and the events, in the same thing
@@ -171,7 +171,7 @@ describe('what is committed and what is published', () => {
 
     // three deliveries, one revision: the repeats were discarded rather
     // than processed, which is what makes an event's id matter
-    expect((await revisionsOf(harness.client, executionId)).length).toBe(1);
+    expect((await revisionsOf(harness.client, executionId))).toHaveLength(1);
   }, 180_000);
 
   it('never holds an event that no revision accounts for', async () => {

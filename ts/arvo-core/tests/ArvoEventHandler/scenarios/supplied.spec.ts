@@ -256,7 +256,7 @@ describe('what an executor is given to work with', () => {
       dependencies: dependency,
     });
 
-    expect(calls.opened.length).toBe(1);
+    expect(calls.opened).toHaveLength(1);
     // the executor read it, so it was open by the time it ran
     expect(seen.dependencies[0]).toEqual({ note: 'built' });
   });
@@ -276,7 +276,7 @@ describe('what an executor is given to work with', () => {
     });
 
     expect(produced.kind).toBe('produced');
-    expect(calls.closed.length).toBe(1);
+    expect(calls.closed).toHaveLength(1);
   });
 
   it('costs the execution nothing where it cannot be let go of', async () => {
@@ -299,7 +299,7 @@ describe('what an executor is given to work with', () => {
     });
 
     expect(produced.ok && produced.value.kind).toBe('produced');
-    expect(calls.closed.length).toBe(1);
+    expect(calls.closed).toHaveLength(1);
   });
 
   it('is opened again for the next execution, never kept from the last', async () => {

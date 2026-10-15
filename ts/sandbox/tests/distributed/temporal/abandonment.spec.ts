@@ -86,7 +86,7 @@ describe('giving up on an execution', () => {
     expect(report.note).toContain('no fraud model is deployed');
 
     const revisions = await revisionsOf(harness.client, executionId);
-    expect(revisions.length).toBe(1);
+    expect(revisions).toHaveLength(1);
 
     const only = revisions[0];
     if (only === undefined) throw new Error('nothing was committed');
@@ -238,7 +238,7 @@ describe('giving up on an execution', () => {
     expect(report.note).toContain('lifecycle_terminal');
     // nothing was written, so how it ended still stands
     const revisions = await revisionsOf(harness.client, executionId);
-    expect(revisions.length).toBe(1);
+    expect(revisions).toHaveLength(1);
     expect(revisions[0]?.state.lifecycle).toBe('success');
   }, 180_000);
 });

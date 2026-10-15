@@ -173,7 +173,7 @@ describe('a store that fails and then does not', () => {
       state: from.store.resolver,
       attempt: 1,
     });
-    expect(from.store.reads.length).toBe(asked + 1);
+    expect(from.store.reads).toHaveLength(asked + 1);
   });
 
   it('asks for one execution and no other', async () => {
