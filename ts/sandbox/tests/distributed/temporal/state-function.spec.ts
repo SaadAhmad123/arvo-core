@@ -143,7 +143,7 @@ describe('how the mechanism answers for the record', () => {
     expect(report.note).toContain('already been executed');
 
     // and the stored thing is untouched: a refusal writes nothing
-    expect((await revisionsOf(harness.client, executionId))).toHaveLength(1);
+    expect(await revisionsOf(harness.client, executionId)).toHaveLength(1);
   }, 120_000);
 
   it('answers with what is stored now, not what it answered before', async () => {

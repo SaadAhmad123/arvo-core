@@ -112,7 +112,7 @@ describe('writes to one record', () => {
     ]);
 
     expect([one.committed, two.committed].filter(Boolean)).toHaveLength(1);
-    expect((await revisionsOf(harness.client, executionId))).toHaveLength(1);
+    expect(await revisionsOf(harness.client, executionId)).toHaveLength(1);
   }, 120_000);
 
   it('refuses a revision that does not follow the one before it', async () => {
@@ -159,7 +159,7 @@ describe('writes to one record', () => {
 
     // Refused by the store: nothing in the activity decided this, and
     // the record is as it was.
-    expect((await revisionsOf(harness.client, executionId))).toHaveLength(1);
+    expect(await revisionsOf(harness.client, executionId)).toHaveLength(1);
   }, 120_000);
 
   it('makes the loser converge rather than publish', async () => {
@@ -204,7 +204,7 @@ describe('writes to one record', () => {
     // dropping the event.
     expect(loser.alreadyCommitted).toBeNull();
 
-    expect((await revisionsOf(harness.client, executionId))).toHaveLength(2);
+    expect(await revisionsOf(harness.client, executionId)).toHaveLength(2);
   }, 120_000);
 
   it('makes a losing delivery retry rather than lose its event', async () => {
@@ -256,7 +256,7 @@ describe('writes to one record', () => {
     expect((loser as ApplicationFailure).nonRetryable).toBe(false);
 
     // one answer recorded, so the other is still owed
-    expect((await revisionsOf(harness.client, parent))).toHaveLength(2);
+    expect(await revisionsOf(harness.client, parent)).toHaveLength(2);
 
     // Made again, both of them, because which one lost is not something
     // a mechanism is told. The winner's repeat is already carried out
@@ -265,7 +265,7 @@ describe('writes to one record', () => {
     for (const answer of answers) {
       await walk(answer).catch(() => undefined);
     }
-    expect((await revisionsOf(harness.client, parent))).toHaveLength(3);
+    expect(await revisionsOf(harness.client, parent)).toHaveLength(3);
   }, 300_000);
 
   it('does not stop both racing executors from running, and says so', async () => {
@@ -295,7 +295,7 @@ describe('writes to one record', () => {
     ]);
 
     // exactly one record, as obligation 5 requires
-    expect((await revisionsOf(harness.client, executionId))).toHaveLength(1);
+    expect(await revisionsOf(harness.client, executionId)).toHaveLength(1);
     expect(
       [one, two].filter(
         (settled) =>
