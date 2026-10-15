@@ -8,6 +8,11 @@
 # the collector is the real collector, and the three backends are the
 # ones a deployment would use.
 
+# Both passwords default to the value they had when they were literals, so
+# nothing about bringing this up changes. They are overridable because a
+# literal is a literal wherever it sits, and this file is read by people
+# who may run it somewhere less private than a laptop.
+
 name: arvo-distributed
 
 services:
@@ -18,7 +23,7 @@ services:
     container_name: arvo-temporal-postgres
     environment:
       POSTGRES_USER: temporal
-      POSTGRES_PASSWORD: temporal
+      POSTGRES_PASSWORD: ${TEMPORAL_POSTGRES_PASSWORD:-temporal}
       POSTGRES_DB: temporal
     volumes:
       - temporal-postgres:/var/lib/postgresql/data
@@ -39,7 +44,7 @@ services:
       DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: temporal
-      POSTGRES_PWD: temporal
+      POSTGRES_PWD: ${TEMPORAL_POSTGRES_PASSWORD:-temporal}
       POSTGRES_SEEDS: temporal-postgres
       DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
       # the namespace the run uses, created as the cluster comes up
@@ -80,7 +85,7 @@ services:
     container_name: arvo-records-postgres
     environment:
       POSTGRES_USER: arvo
-      POSTGRES_PASSWORD: arvo
+      POSTGRES_PASSWORD: ${RECORDS_POSTGRES_PASSWORD:-arvo}
       POSTGRES_DB: arvo_records
     volumes:
       - records-postgres:/var/lib/postgresql/data
