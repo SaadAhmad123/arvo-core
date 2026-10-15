@@ -1,0 +1,12 @@
+# What must never enter a worker image.
+#
+# `node_modules` above all: the host's are built for the host, and a
+# Linux image receiving macOS binaries is an image whose install pnpm
+# then wants to undo. Everything else here is generated, and a build
+# that copied it in would be a build that could disagree with its own
+# sources.
+
+**/node_modules
+**/dist
+**/coverage
+**/.git

@@ -231,36 +231,36 @@ What the standard means concretely, so it can be checked rather than claimed.
 
 ## 14. Chaos, against the real stack
 
-- [ ] 14.1 Worker containers killed mid-activity, repeatedly, mid-run — `docker kill`, not a thrown error.
-- [ ] 14.2 The database stopped for a window and restarted, with connections dropped underneath the pool.
-- [ ] 14.3 The Temporal cluster restarted mid-run.
-- [ ] 14.4 The network partitioned between worker and server, then healed.
-- [ ] 14.5 Signals and events delivered twice, and out of order.
-- [ ] 14.6 A run interrupted and resumed by a **different** worker process, nothing of the first still alive.
-- [ ] 14.7 The same invariants the in-process suites assert, asserted here against the store: one terminal state per execution, every request answered exactly once, revisions advancing one at a time from zero, every execution on one version for its whole life.
-- [ ] 14.8 The outbox holding under every one of these, as §7.5 requires.
-- [ ] 14.9 Every one of these visible in Grafana afterwards, because a failure nobody can see in telemetry is a failure a deployment will meet blind.
+- [ ] 14.1 Worker containers killed mid-activity, repeatedly, mid-run — `docker kill`, not a thrown error. **Half done.** The worker is packaged as a container (`infra/worker.Dockerfile`, `pnpm distributed:worker:build`), which was the part that needed doing: a worker running as a process on the host can only be sent a signal, and a signal is the one kind of stopping this already handles gracefully. The specs that kill it are not written. Two environment notes for whoever does: Alpine's package CDN is TLS-intercepted here so nothing can be `apk add`ed — Compose's `init: true` supplies an init process instead — and the host's `node_modules` must stay out of the build context.
+- [ ] 14.2 **Not started.** The database stopped for a window and restarted, with connections dropped underneath the pool.
+- [ ] 14.3 **Not started.** The Temporal cluster restarted mid-run.
+- [ ] 14.4 **Not started.** The network partitioned between worker and server, then healed.
+- [ ] 14.5 **Not started.** Signals and events delivered twice, and out of order.
+- [ ] 14.6 **Not started.** A run interrupted and resumed by a **different** worker process, nothing of the first still alive.
+- [ ] 14.7 **Not started.** The same invariants the in-process suites assert, asserted here against the store: one terminal state per execution, every request answered exactly once, revisions advancing one at a time from zero, every execution on one version for its whole life.
+- [ ] 14.8 **Not started.** The outbox holding under every one of these, as §7.5 requires.
+- [ ] 14.9 **Not started.** Every one of these visible in Grafana afterwards, because a failure nobody can see in telemetry is a failure a deployment will meet blind.
 
 ## 15. Where it breaks, and what Shape B costs
 
 Not failure conditions — measurements. Two things grow with a fan-out: Arvo's record, rehydrated whole on every delivery, and the framework's own history. A wide execution pays both.
 
-- [ ] 15.1 Find the fan-out at which each mechanism stops being able to carry one execution, and say which cost bound it — record size, history size, payload limit, or transaction time.
-- [ ] 15.2 Find the depth at which a chain of child executions stops working, and why.
-- [ ] 15.3 Report both as numbers with reasons, measured against the real stack, not as a verdict.
-- [ ] 15.4 Write the same orchestrator as workflow code awaiting each service call inline, outside the protocol, to the same production standard, so the comparison is fair.
-- [ ] 15.5 Then try to do with it what §12.6 does with the record: hand the execution to the other mechanism. Name what is no longer possible.
-- [ ] 15.6 Name what else it costs: an executor that must be deterministic, and an execution no other language can resume.
-- [ ] 15.7 Name what survives either way — contracts, the closed emittable set, identity, the fault vocabulary — because that is the part of Arvo doing work no framework does.
+- [ ] 15.1 **Not started.** Find the fan-out at which each mechanism stops being able to carry one execution, and say which cost bound it — record size, history size, payload limit, or transaction time.
+- [ ] 15.2 **Not started.** Find the depth at which a chain of child executions stops working, and why.
+- [ ] 15.3 **Not started.** Report both as numbers with reasons, measured against the real stack, not as a verdict.
+- [ ] 15.4 **Not started.** Write the same orchestrator as workflow code awaiting each service call inline, outside the protocol, to the same production standard, so the comparison is fair.
+- [ ] 15.5 **Not started.** Then try to do with it what §12.6 does with the record: hand the execution to the other mechanism. Name what is no longer possible.
+- [ ] 15.6 **Not started.** Name what else it costs: an executor that must be deterministic, and an execution no other language can resume.
+- [ ] 15.7 **Not started.** Name what survives either way — contracts, the closed emittable set, identity, the fault vocabulary — because that is the part of Arvo doing work no framework does.
 
 ## 16. Running it
 
-- [ ] 16.1 `distributed:up` brings the stack up and waits for health; `:down` tears it down; `:reset` returns it to nothing.
-- [ ] 16.2 `distributed:temporal` and `:dbos` run each conformance suite against the running stack.
-- [ ] 16.3 `distributed` runs everything in order and reports per obligation.
-- [ ] 16.4 The tour stays runnable with nothing but Node. None of this is on its path.
-- [ ] 16.5 A run says plainly what it needs and what is missing, and **fails rather than silently skipping** — a skipped conformance test proves nothing.
-- [ ] 16.6 One README under `src/distributed/` holding the prerequisites, the commands, where Grafana is, and the findings.
+- [x] 16.1 `distributed:up` brings the stack up and waits for health; `:down` tears it down; `:reset` returns it to nothing.
+- [x] 16.2 `distributed:temporal` and `:dbos` run each conformance suite against the running stack, and `:replay` the third mechanism.
+- [x] 16.3 `distributed` runs everything in order and reports per obligation — one file per obligation per mechanism, so the report is read by file. Files run one at a time: two of them reset the record store, and a record may not be deleted so clearing it means TRUNCATE, which takes the whole table.
+- [x] 16.4 The tour stays runnable with nothing but Node. None of this is on its path.
+- [x] 16.5 A run says plainly what it needs and what is missing, and **fails rather than silently skipping** — a skipped conformance test proves nothing. Nothing here is guarded by a reachability check.
+- [x] 16.6 One README under `src/distributed/` holding the prerequisites, the commands, where Grafana is, and the findings.
 
 ## 17. What this found
 
