@@ -1,2 +1,8 @@
 allowBuilds:
   esbuild: true
+  # Temporal's worker ships a native Rust bridge, and both it and the
+  # bundler build on install. Without these the SDK imports but cannot
+  # start a worker, which fails later and a long way from the cause.
+  '@temporalio/core-bridge': true
+  '@swc/core': true
+  protobufjs: true

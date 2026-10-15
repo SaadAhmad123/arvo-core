@@ -68,16 +68,16 @@ describe('what an expectation narrows', () => {
   });
 
   it('refuses a type the version does not declare', () => {
-    // @ts-expect-error not a type this version declares
     expect(() =>
+      // @ts-expect-error not a type this version declares
       v1.assert(event('com_order_create', { items: [] }), 'com_nope'),
     ).toThrow();
   });
 
   it('refuses a plain string where a literal is wanted', () => {
     const loose: string = 'com_order_create';
-    // @ts-expect-error a string variable is not an assertable literal
     expect(() =>
+      // @ts-expect-error a string variable is not an assertable literal
       v1.assert(event('com_order_create', { items: [] }), loose),
     ).not.toThrow();
   });

@@ -4,7 +4,8 @@
  *
  * Roughly: events, then how the package reports failure, then getting events
  * on and off a wire, then contracts, then the two things a contract does
- * (judge an event, build one).
+ * (judge an event, build one), then the handler that implements one and what
+ * happens when an event reaches it.
  */
 
 import type { Chapter } from '../display.js';
@@ -20,6 +21,8 @@ import { chapter as assertingEvents } from './09-asserting-events.js';
 import { chapter as buildingFromAContract } from './10-building-events-from-a-contract.js';
 import { chapter as domains } from './11-domains.js';
 import { chapter as clones } from './12-standalone-events-and-clones.js';
+import { chapter as declaringHandlers } from './13-declaring-a-handler.js';
+import { chapter as runningAnEvent } from './14-running-an-event.js';
 
 export const chapters: readonly Chapter[] = [
   events,
@@ -34,4 +37,6 @@ export const chapters: readonly Chapter[] = [
   buildingFromAContract,
   domains,
   clones,
+  declaringHandlers,
+  runningAnEvent,
 ];

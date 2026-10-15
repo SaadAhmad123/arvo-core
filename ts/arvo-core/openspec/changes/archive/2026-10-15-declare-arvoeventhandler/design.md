@@ -1,0 +1,355 @@
+## Context
+
+See `proposal.md` — Why and The plan. The constraints that shape this slice:
+
+- **The declaration is where ADR-006 puts its refusals.** Six rules, all of them "rejected at declaration time", none needing an event, a record or a store. That is what makes declaration a slice rather than an arbitrary cut.
+- **A handler is inert until change 6.** Nothing calls an executor, nothing builds a context, nothing reads a record. Whatever this change ships must be honest about that rather than implying a delivery path.
+- **`ArvoContract` already holds everything the rules compare.** `type`, `versions`, each version's `outputs`, and `error.type`. Every collision check reads fields that exist.
+- **`ArvoDomain` already ships the four domain sources** ADR-006 names. The error-domain option consumes them rather than introducing a second vocabulary.
+- **Options carry a rule the package's own conventions do not anticipate.** ADR-006 requires `unset` and a written `null` to mean different things for the two timeouts, and `project.md` — *Optional inputs* forbids exactly the type that expresses it. One of them gives; the reasoning is below.
+
+## Goals / Non-Goals
+
+**Goals**
+
+- A declaration that either constructs or names every rule it broke.
+- Every rule read off the contract rather than re-derived.
+- One internal place that answers "what option is in force for this version", so no later change re-implements the resolution and no consumer depends on it.
+- Compile-time completeness where TypeScript can give it, and a runtime check anyway for JavaScript callers.
+- Nothing shipped that implies something runs.
+
+**Non-Goals**
+
+- Anything in `proposal.md` — Out of Scope.
+- Building the execution context. Sketched in `proposal.md` when this change was scoped to declaration alone; it is built here now, for the reason `proposal.md` — The plan gives.
+- Guarding a declaration ADR-006 permits. Recursion is legal; a version declaring no state is legal; a handler with no services is legal.
+
+## Decisions
+
+### A declaration is a chain, because a version's executor must be typed by that version's schema
+
+An earlier draft declared versions as one object keyed by version, each entry carrying a `state` schema and an `execute`. It does not work, and the probes under **What the probes established** are where that surfaced: TypeScript will not read one key of an object literal to type another key of the same literal, so `execute` received an untyped context and a version's own state schema governed nothing. The step 1 probe had stubbed that position as `any` and so missed it.
+
+Three shapes were tried against a compiler, and all three fix it:
+
+| | what it costs |
+|---|---|
+| a generic wrapper per stateful version | a wrapper call, and the version named twice |
+| state schemas hoisted into their own map | a version's schema and its executor declared apart |
+| **a chain of `handler` calls** | **a terminal `build`, and completeness no longer free** |
+
+The chain wins because each call is its own inference, so the schema is settled before the executor is checked, and the version is named once as an argument rather than twice. Neither of the other two manages both.
+
+*What it costs, named rather than discovered.* The constructor no longer sees the versions, so it cannot validate a declaration, and every rule moves to `build`. And the mapped type over `keyof M` that made a missing version a compile error is gone with the map.
+
+### Completeness is checked at build, and not by the compiler
+
+A type-level accumulator could gate `build` so that it will not compile until every declared version has one. It was considered and rejected for this change.
+
+It is the fiddliest type in the design and it buys the least: a missing version is caught either way, and caught before any event exists either way, because `build` runs at module load in every real declaration. What it would cost is a `build` whose error message, when a version is missing, is whatever TypeScript makes of an unsatisfied conditional — reliably worse than an `ArvoEventHandlerValidationError` naming the version.
+
+*Left open rather than closed.* Adding the gate later is additive, since it only narrows what already compiles.
+
+### One entry point, and the chain reads as one sentence
+
+**`setupArvoEventHandler(...).handler(...).build()`** is the whole of how a handler is declared, and it is the only way in.
+
+An earlier draft paired it with a static `ArvoEventHandler.setup(...)`, matching `new ArvoContract(...)` beside `createArvoContract(...)`. That pairing was dropped. It is the right shape where both forms *finish* the thing — a contract is complete the moment it is constructed, so a caller may reasonably reach for either. A handler is not: the entry point begins a declaration that something else terminates, so a static named `setup` would sit on the class that is the chain's *output*, inviting a reader to think the class is what they are configuring. One function that begins it, one method that ends it, and the class only ever appears as the result.
+
+*And neither constructor is public.* `new ArvoEventHandlerSetup(...)` is how `setupArvoEventHandler` and `handler` build their links, and `new ArvoEventHandler(...)` is where the validation lives, called by `tryBuild` — the direction `project.md` — *Result types* requires for a class. Exposing either would be a second way to declare: the setup's would skip the entry point, and the handler's could validate nothing, since a constructor taking only the setup has no versions to check.
+
+### Writing a version away from the chain is a function, not a type
+
+`createArvoEventHandlerVersion(setup, version, declaration)` takes the setup, the version, and exactly what `handler` takes inline. It is a function call, so the state schema is settled within the call before the executor is checked, which is the same reason the chain works at all.
+
+*An annotation was tried first and is worse.* `InferArvoHandlerVersion<typeof setup, V, S>` also types `ctx` correctly, because an annotation is resolved before the value it types. But its schema argument is a type, so the schema has to be named twice — once in the annotation, once as the property — and forgetting the argument silently leaves the executor untyped, which then needs a `never` guard to make safe. The function has none of that: one argument list, the schema written once inside it, and nothing to forget.
+
+*Which is why only one ships.* Both forms working would be two ways to declare one thing, and the function is better in every case found.
+
+*No `tryCreate` twin.* Creating a version cannot fail. Nothing is validated until `build`, so there is no failure channel to report, and `project.md` — *Result types* asks which of the two a function is before it is written rather than pairing everything by reflex.
+
+*And `handler` takes two shapes.* A version and a declaration, or a created version alone. The second carries the version it was created with, so assembly names it once overall. Two overloads of one method rather than two methods, because they are the same declaration reached two ways.
+
+### Built inward out: the context, then the version, then the handler
+
+The context is the innermost thing and everything above it is shaped by what it needs, so it is written first. The version's `execute` takes one, and the handler holds versions.
+
+*Why not the other way, which is what an earlier draft did.* Writing the shells first means guessing the inner interface and then bending the inner thing to fit the guess. The tell was in the version's own spec: it called `version.execute({} as never)`, testing a seam there was nothing to fill. A layer written against a placeholder is a layer nothing has checked.
+
+*What that cost, stated rather than hidden.* This change was scoped to declaration alone, and building the context here pulled most of four later changes into it. The plan's boundaries moved, and `proposal.md` — The plan says so and says why. The alternative was to keep the boundary and ship a version whose only argument is untestable.
+
+*What the context still does not have.* Five members need machinery that does not exist: `fault`, `build`, `atMaxDepth`, `timeRemaining`, and `identity`, `collected` and `cancel`. It is a class from the start so each of those is an addition rather than a reshaping, which is the whole reason for building it now rather than describing it as a type.
+
+### `ctx.state` is the execution record, and a write mints a new one
+
+An executor reads the whole record — its subject, its identity, its lifecycle, what it has emitted, what it is waiting on — and writes exactly one field of it. `setState({ data })` produces a fresh `ArvoExecutionState` with the new data and everything else carried across unchanged.
+
+*Why the record and not a bare payload.* An executor deciding what to do next often needs to know where it is: how deep it sits, what it is still awaiting, what opened it. Handing it only its own data means every one of those has to be threaded onto the context separately, and the context becomes a second, partial copy of a record that already exists.
+
+*Why a new one per write rather than mutation.* Three things follow and each is the reason rather than a side effect. An executor cannot change the lifecycle, the identity or the event log even by accident, because they are carried rather than writable. A value read before a write is still that value after one, so nothing captured goes stale underneath. And a delivery keeps the last state produced, with no merge step and no question of which copy is current.
+
+*Why the record carries no schema.* A draft put `dataschema` on the state so a write could be checked without consulting anything else. That made a record carry a rule, and a record is data while a schema is code: the two have different lifetimes, and a stored record holding a serialized schema could be checked against a copy the code has since changed. The schema is a type parameter and nothing more. Whoever acts on a record supplies it — the context on a write, the serializer on a read — and both already know which version they are dealing with.
+
+### Changing data is a function, not a method
+
+`tryMutateState(current, next)`, and `mutateState` as the thin unwrap over it, return a new state with the fields `next` names replaced and every other one carried across. It is generic in the state it is given, so what comes back is the same kind of state rather than a widened one.
+
+*Why the whole record and not only data.* A record is immutable, so every advance of an execution mints the next one — data, but also the lifecycle reaching terminal, the revision a store writes against, an awaited answer arriving. One function that knows the field set serves all of them, and the alternative is a family of near-identical functions or a spread at each call site. That an executor may change only its data is enforced where an executor is, which is `setState`, not here.
+
+*Why not a method.* The record is fields and no behaviour, which is what lets it be serialized, stored, read back and compared without anything travelling alongside it. A method invites the next one, and the one after that is `withLifecycle`, which an executor must never have.
+
+*Why not just spreading.* `new ArvoExecutionState({ ...previous, data })` works today because the constructor's param and the field set are identical. The moment they diverge the spread silently produces a wrong record, where one function that knows the record's shape does not. The knowledge of what a record is made of stays in the module that defines it.
+
+### A record validates itself as it is built, like an event does
+
+The constructor checks the whole envelope and throws `ArvoExecutionStateValidationError`, and `tryBuild` is the reporting form for something that is not yet a record. This is exactly `ArvoEvent`'s shape, down to the pair of statics, because it is exactly the same problem.
+
+*Why at construction rather than only at the boundary.* A record that exists is then a record that was valid, so nothing downstream re-checks it and nothing carries a "has this been validated" flag. The serializer becomes thin: parse the string, restore the events, hand the rest to `tryBuild`.
+
+*What the envelope check covers, and what it does not.* Shapes and domains — the identifiers are strings, `depth` and `casVersion` are non-negative integers, `lifecycle` is one of six values, `recordFormatVersion` is a semantic version, and the two events are events. It does not check that the record agrees with the contract it names, or that its events still belong to it. Those need contracts a record does not hold, and they belong to the gate.
+
+*Two errors, not one.* `ArvoExecutionStateValidationError` says the record is wrong. `ArvoExecutionStateSerializerError` says the boundary failed — a string that is not JSON, a value that will not stringify. An event already keeps those apart for the same reason, and collapsing them would make "your stored record is corrupt" indistinguishable from "this is not JSON".
+
+### The record is generic in the events it holds, and the context stops holding them
+
+`ArvoExecutionState<TDataSchema, TInitEvent, TTriggeringEvent>`. Three parameters, each typing one field the record actually has.
+
+*Why nothing an executor can read from the state is also on the context.* Two ways to read one value is two things to keep in step, and the second one drifts. ADR-007 already puts the init event and the triggering event on the record, so that is where they are read: `ctx.state.initEvent` and `ctx.state.triggeringEvent`.
+
+*What stays on the context, and why it is not duplication.* The attempt and the entry kind describe the delivery rather than the execution, and ADR-006 is explicit that the attempt is not part of the record. Dependencies and hooks come from the mechanism. And `contracts` differs in kind: the context holds live contracts to resolve against, while the record holds the canonical-form snapshot ADR-007 says nothing may resolve or validate against. Same word, different jobs, and the record's own TSDoc says so.
+
+*Why generic in the events and not in the contracts.* An earlier suggestion of mine was to make the record generic in the self contract, the services and the entry kind, so it could compute its own event types. That puts most of the handler's type surface onto a thing that is meant to be data, and the record neither resolves a contract nor routes against one. It holds events, so it is generic in events, and the context — which does hold contracts — computes what to pass.
+
+*`initEventId` and `initEventSource` went with them.* They were the caller's address read off the init event, and the init event is on the record. One value, one place.
+
+### A record reaches a store through a serializer, not through itself
+
+`ArvoExecutionStateSerializer` sits beside `ArvoEventSerializer` and works the same way: `trySerialize`/`serialize`, `tryDeserialize`/`deserialize`, and its own error carrying the original cause.
+
+*Why a separate class rather than methods on the state.* An event does not serialize itself either, and for the same reason: turning a value into a wire string is a boundary concern with its own failure modes, and putting it on the value makes every reader of the value carry them. It lives under `state/` rather than beside `ArvoEventSerializer`, because everything about what an execution remembers belongs in one place and a reader looking for it will look there.
+
+*Why reading back is where hydration happens.* A stored record is JSON, so its events are plain objects and its collection is an object rather than a map. Deserializing restores each event, rebuilds the map, and checks `data`. There is no useful half-way point: a record whose events are still objects is not a record anything can run against, so it is reported rather than returned.
+
+*Why the serializer is bound to a schema rather than given one per call.* A record carries the shape of its data but not the schema governing it, because a schema is code and a record is data. Whoever reads records back is reading records of one version, so the schema belongs on the serializer, named once. That also makes the return type exact — `deserialize` gives back a state typed by that schema — where a per-call argument would leave a caller asserting. Storing a serialized schema in the record instead would mean one that could be checked against a copy the code has since changed.
+
+*Why synchronous, where the event serializer is not.* That one is asynchronous because a CloudEvent converter may be and a caller may supply their own. A record has one format and no converter, so there is nothing to await, and making it `async` for symmetry would cost every caller an `await` that never yields.
+
+### A rejected write raises the fault, at the line that made it
+
+`setState` checks against the schema the context holds, then mints the new state, and raises `ArvoHandlerFault` with `state_schema_rejected` where the value is refused.
+
+*Why not defer it.* ADR-008 places `state_schema_rejected` at return, and an earlier draft had `setState` store anything and let the handler check afterwards. That reports the failure with nothing to point at: the executor may have written three times and the stack is gone. Raising at the write keeps the diagnosis where the mistake is.
+
+*Why the fault and not a bare error.* An error escaping an executor becomes the handler error event, which tells a caller the work failed. A fault says the delivery could not be carried through, which is a different thing with different consequences for retry and abandonment. Throwing the fault means no conversion step, and nothing between the write and the mechanism has to know to perform one.
+
+*What that pulled forward.* ADR-007's record and ADR-008's fault object were both separate changes in the original plan. Keeping them there would have meant a context built against two placeholders. The plan's boundaries moved instead, and `proposal.md` — The plan says so.
+
+*Only `data` is nullable, and that is the whole of it.* An execution knows its subject, its identity, its depth, where it rests and what opened it from the moment it opens. What its business logic will remember is the one thing it cannot know, and a schema with a required field has no value to show before the first write. So a record is whole from the start with `data` alone `null`. The alternative — no record until something is written — would leave every other field unreachable on the delivery that most needs them.
+
+*And one default that is not a default.* `z.object({})` strips every key it does not declare, so a version declaring no schema must be given a loose one or its data would be silently emptied on every write.
+
+### One context class, and the event's own type narrows it
+
+`ArvoExecutionContext` is one class. `entry` is a plain `'init' | 'followup'` saying how the delivery was classified, and `event` is a union of precisely typed events: the one this version takes in, and everything each declared service may answer with.
+
+*Narrowing comes from the event, not from the entry.* Every member of that union carries a literal `type`, and no two can share one because the collision rule refuses that at declaration. So the union is discriminated by construction, and `if (ctx.event.type === 'evt_payment_charged')` reaches the exact payload in one step.
+
+*Two shapes were tried first and are worse.* A base class with an init subclass and a followup subclass narrows on `entry` but is three classes where one does. One class generic in the entry kind, with `event` conditional on it, also narrows and was probed working, but adds a type parameter to every signature that mentions a context to buy a narrowing the event already provides. ADR-006 asks that a payload be unreachable until the case is settled; narrowing on `type` settles it more precisely than narrowing on `entry` does.
+
+### A version is self-contained, and works out what it can
+
+`ArvoHandlerVersion` takes its own `VersionedArvoContract`, the services, its schema, its resolved options and its executor. From the first two it works out its own emittable types.
+
+*What that replaced.* An earlier draft passed the whole contract plus a version key, and had the handler compute the emittable set and the resolved options and inject them. That made the version a record the handler fills in rather than a thing that knows what it is, and tied it to the handler's construction order.
+
+*Its options are complete on the way in.* Resolution happens before a version is built, so there is never a moment where one exists holding a sparse set nothing has finished. That is the same rule that removed the hidden store: no half-resolved object, ever.
+
+### Running a delivery is one operation, and it is the `tryX`/`X` pair like everything else
+
+A handler does one thing and there is one operation for it, and that operation is the whole boundary: **the mechanism is whatever wraps it**, and nothing on either side of the call knows more about the other than the signature says. It takes the delivered event, a function that reads the store, an attempt number, dependencies, hooks and a telemetry context. Nothing in it names a broker, a store, a scheduler, a transport or a runtime, so the same handler runs under a queue consumer, a serverless invocation, a test, or a loop in a script. Adapting it is reading the result, not implementing an interface.
+
+`tryExecute` holds every branch and returns `AsyncResult<ArvoDelivered, ArvoHandlerFault>`. `execute` is the thin unwrap with no logic of its own, returning the value or throwing the fault. That is `project.md` — *Result types* applied without exception, and it is the package's first asynchronous `tryX`, so `fromNeverthrowAsync` in `src/result.ts` — written alongside the synchronous boundary and unused until now — is what converts. No `Result` is built as a literal anywhere in the path.
+
+*What lives behind it.* The whole protocol. ADR-010's *One delivery, in order* lists ten steps and every one of them runs inside `tryExecute`: classification, the gate, the record read and its validation, hydration, option and dependency resolution, the context, the executor, return validation, and building either the next record or a fault with its abandonment pair. Nothing is assembled by a caller and nothing is reachable halfway through, because a delivery that can be entered in the middle is a delivery whose invariants no longer hold.
+
+*And how it is decomposed.* Many modules, all internal, following the sequence rather than the class. The alternative — one long method — would be untestable at the step level, and `project.md` — *Testing* wants a case per rule, which means each rule has to be reachable on its own. What does not change is the boundary: two methods wide, however many files sit behind them, and nothing behind them is exported.
+
+*Why the fault is the error channel, having first been drafted as a third success outcome.* An earlier draft returned `produced | discarded | fault` and no `Result`, on the reasoning that ADR-008 makes a fault a value a mechanism reads rather than an error it catches. That confused *what a mechanism does with it* for *what it is*. A fault is precisely the expected failure of a delivery, which is what a `Result`'s error channel exists to carry, and ADR-008 has it extend the language's native error type for exactly this reason. The draft also invented a third mechanism for reporting failure in a package whose conventions already have one, which is the two-mechanisms problem *Dependencies and reuse* warns against arriving at the API-shape level.
+
+*What remains a value, and why.* `discarded` stays on the success side. ADR-010 step 9 discards a redelivered event, and that is a delivery carried through to a correct conclusion that happens to produce nothing — "nothing to do, nothing wrong". Reporting it as `Err` would claim a failure that did not occur.
+
+*What is not converted.* Only an `ArvoHandlerFault` becomes `Err`. Anything else escaping the handler is a defect in this package and propagates out of `tryExecute` unconverted, per *Result types*: a `Result`'s error type is a claim about what kind of failure occurred, and swallowing an arbitrary exception into it makes that claim false.
+
+*The fault extends `Error`, and that is what makes the pair work.* ADR-008 has it extend the language's native error type, so `execute` throws it, a `catch` can name it, and `tryExecute` reports it as `Err` without wrapping. Four of its members — `name`, `message`, `stack` and `cause` — are `Error`'s own, narrowed rather than added: `name` to the literal ADR-008 fixes, `cause` from `unknown` to `string | null` because the whole object must survive JSON. Its remaining field names are ADR-008's spelling and not this package's camel case, for the reason `ArvoEvent` carries ADR-001's: a durable format read across languages cannot have two spellings. Change 3 builds it; it is sketched in `proposal.md` because its shape decides what an adapter may branch on.
+
+*One naming collision, accepted.* The business code a version declares is also called `execute`. `handler.execute` runs a delivery; `versions['1.0.0'].execute` is the executor that delivery may enter. ADR-006 keeps the two apart as *handler* and *executor*, and the nesting makes the relationship read correctly at a call site. The TSDoc on each says which is which.
+
+### Dependencies and hooks are declared as types, through one witness field
+
+`types?: Partial<{ mechanismHooks: H; dependencies: D }>` carries no value and is never read at runtime. It exists so that TypeScript has a position from which to infer the two shapes a mechanism supplies at delivery.
+
+*Why it is needed at all.* Both are given to the handler per delivery, so neither appears anywhere else in a declaration. A generic that appears in no parameter cannot be inferred, so without this field a caller who wanted either typed would have to supply every type argument explicitly — the contract's type, its version map, the services map and the version declarations included. That is not an API anyone would use, and the alternative of leaving both `any` gives up the type safety the context sketch exists for.
+
+*Why a witness field rather than explicit type arguments.* One optional field a caller writes once, against six type arguments they would otherwise have to spell at every declaration. The cost is that a caller writes a value purely to carry a type, conventionally `{} as MyDeps`, which reads oddly the first time. The TSDoc says outright that nothing is stored.
+
+*Why both sit at the handler.* A mechanism runs a handler, not a version, so there is one dependency shape and one hook shape per handler. Both thread down into every version's executor. The state schema is the one of the three that is per version, because ADR-006 puts it on the executor's own declaration rather than on the handler's.
+
+*Both default to `Record<string, never>`* rather than `{}`. `{}` in TypeScript means "any non-nullish value" and would let an executor reach for a dependency that was never declared. The empty record makes the absence real: `ctx.dependencies.db` does not compile where no dependencies were declared, which is the honest answer.
+
+*The constraint, and its one trap.* Both are constrained to `Record<string, any>`, matching how the package already constrains an event's payload. TypeScript gives an object type alias an implicit index signature and does not give one to an `interface`, so a dependency bag declared as an interface will not satisfy the constraint while the identical `type` alias will. That is a TypeScript rule rather than a decision here, and the TSDoc names it where a caller meets it.
+
+### Services are a named record, and the name means nothing to the protocol
+
+`services: Record<string, VersionedArvoContract>`, the key chosen by the author. ADR-006 speaks of "the set of contract versions" and derives an emitted event's destination from its `type`, never from a name, so the key is API shape and ADR-004 leaves it to each language. ADR-006's own appendix sketches services with names, which is the precedent followed.
+
+An array would match the ADR's wording more literally. The record wins on two counts: a name is how an author refers to a dependency when reading their own declaration back, and the context surfaces `services.payments.type` to an executor without inventing a lookup. Nothing in the protocol reads the key, and the spec says so, so an implementation in another language declining to offer names is still conformant.
+
+### Completeness is a runtime rule, and the widening trap is why that is no loss
+
+A handler declaring fewer versions than its contract does is refused at `build`, naming each version with no handler, and one declaring a version the contract does not know is refused the same way.
+
+An earlier draft had the compiler catch the first through a mapped type over `keyof M`, and the probes showed what that was actually worth: a contract whose versions map was annotated `ArvoContractVersionMapParam` widens its keys, so a handler built from it accepted *no versions at all* and compiled. The compile-time half was already unreliable in exactly the case a large codebase reaches first. The runtime rule has no such hole, runs at module load in every real declaration, and reports a version by name.
+
+### `unset` inherits, a written `null` is a value, and this departs from *Optional inputs*
+
+ADR-006 requires an implementation to distinguish an option that was not written from one written as `null`, and MUST NOT collapse the two: for the two timeouts, omission inherits the handler's value and `null` means unbounded. So `runTimeout?: number | null` and `executionTimeout?: number | null`.
+
+`project.md` — *Optional inputs* says an optional input is `T | undefined`, "written `field?: T`, never `field?: T | null`", even where the stored field is nullable. This breaks the letter of that rule and keeps its reason. The rule exists to stop one meaning having two spellings; here there are two meanings — *inherit* and *unbounded* — and collapsing them would make one of them unsayable. The other five options take no `null` and follow the rule unchanged.
+
+*Consequence worth pinning:* `{ runTimeout: undefined }` written explicitly must behave as omission, because TypeScript cannot tell an absent key from a present undefined one at a call site. Resolution therefore keys off `value === undefined`, not on key presence, and a test covers the explicit-undefined spelling alongside the absent one.
+
+### Every generic in the module is named, and the handler's four are defaulted
+
+No single letters anywhere in `ArvoEventHandler`. Every type parameter carries a `T` prefix and says what it is — `TSelf`, `TServices`, `TDependencies`, `TMechanismHooks`, `TVersion`, `TState`, `TSchema` — and the four the handler is generic in appear in that order wherever they appear together. Lettered parameters are a lookup table a reader has to hold in their head, and these recur across the executor, the context, the version, the version map and the setup, so the cost is paid at every signature.
+
+*The handler's four each have a default,* so `ArvoEventHandler` with no arguments is a usable type — what a consumer writes when they hold a handler without caring which. `TServices` defaults to the service map rather than to nothing, because an unparameterised handler should mean "some services" and not "none".
+
+*The contract carries its own versions, so nothing threads a version map.* An earlier draft took `T extends string` and `M extends ArvoContractVersionMapParam` as a pair and passed both everywhere. `TSelf['type']` and `TSelf['versions']` are the same two things read off one parameter, and `keyof TSelf['versions']` is what makes `versions.get('9.9.9')` a compile error for free.
+
+*And no accumulator.* A draft carried a `Declared` parameter recording which versions had been chained and what schema each had. It bought one thing: typing `.state` on a version read back afterwards. The key being checked comes from the contract, the non-optional return comes from `build` having refused an incomplete declaration, and typing an executor happens inside each `handler` call. Nothing needed what it remembered, and it threaded through every signature to provide it.
+
+### The contracts are declared together
+
+`contracts: { self, services }` rather than two properties at the top of the setup. They are the same kind of thing — what this handler is bound to — and the one place a reader looks to answer "what does this talk to". Options and the type witnesses sit beside them because they are about the handler rather than about its contracts.
+
+### One accessor answers everything about a version, and it returns a class
+
+`handler.versions.get('1.0.0')` is the only way to read a version, and what comes back is an `ArvoHandlerVersion`: the version, the state schema it declared, the options in force, the event types it may emit, and the code that runs it.
+
+*Typed on both sides.* The map's key is the contract's declared versions, so `.get('9.9.9')` does not compile, and it returns a version rather than a version-or-nothing, because `build` has already refused a declaration missing one. Completeness being a runtime rule is what makes that safe: by the time a handler exists, every declared version has an entry.
+
+*A class rather than a record, because a version is the unit that runs.* Holding the schema, the resolved options and the emittable set beside the executor puts everything a delivery needs about one version in one place, and gives change 2 somewhere to add validating what the executor returned rather than restructuring to make room for it.
+
+*One `options`, always complete.* Inheritance is applied before a consumer sees it. There is deliberately no second property holding what was declared: they wrote that and it is in their source, so reading it back answers no question. The TSDoc says the set is in force rather than as-written, which is the one thing a reader could otherwise get wrong.
+
+*What this replaced, and why that was wrong.* An earlier draft kept the resolved options and the emittable sets in a lookup outside the handler, so that a consumer could not read them at all. Two things were confused there. Freezing stops a value being changed, and these were already frozen; hiding stops it being read, and the case for hiding a frozen value derived from a declaration the consumer wrote turns out to be thin. The hiding also needed a whole mechanism — a keyed store and an accessor module — to achieve something never clearly worth achieving. One typed accessor is less code and a better answer.
+
+*The same rule applied to the execution context, and it is a class now.* Anything that owns behaviour is a class in its own file, and `types/` keeps only what is genuinely type-level. The placeholder types that once stood in for it are gone.
+
+### The error-domain option takes `ArvoDomainInput`
+
+ADR-006 pins four domain sources and gives each an identifier for a purpose that no longer exists — the identifiers were fixed so a version hash would agree across languages, and version hashing was removed from the ADRs before they were accepted. What remains is a fixed set of four, and `ArvoDomain` already is that set: `LOCAL`, `FROM_EVENT_CONTRACT`, `FROM_SELF_CONTRACT`, `FROM_TRIGGERING_EVENT`.
+
+So the option is `ArvoDomainInput` — a literal string, or one of those symbols — and no second vocabulary is introduced. ADR-004 makes the spelling each language's own; the set is what the ADR fixes, and the set matches.
+
+*What this change does not do:* resolve one. A symbol is held as declared. Resolution needs the sources a symbol reads from, which is change 2's.
+
+### The timeout relation is checked on the resolved pair
+
+`executionTimeout` must not be below `runTimeout`, and must be `null` where `runTimeout` is `null`. ADR-006 requires this "on each version's resolved pair, after the rule above has been applied", which matters because the two halves can be written at different levels: a handler-level `runTimeout` of 30 seconds and a version-level `executionTimeout` of 5 seconds are individually reasonable and jointly impossible.
+
+So the check runs once per declared version, after resolution, and reports the version it failed for. Checking the written values instead would pass that declaration and leave a version that can never succeed.
+
+### A declaration error is its own error, and is not a fault
+
+`ArvoEventHandlerValidationError`, alongside `ArvoContractValidationError` and `ArvoEventValidationError`, carrying `ErrorIssue[]` and reporting every rule broken rather than the first.
+
+It is deliberately not `ArvoHandlerFault`. ADR-008 defines a fault as something a *delivery* produces, and ADR-006 is explicit that a declaration defect has no fault defined for it "because it is a defect in code, visible before any event exists, so no backstop at delivery is needed". Reusing the fault would put a runtime vocabulary — `retry`, `fault_kind`, an abandonment pair — on a failure that has no delivery, no attempt and no caller.
+
+*One rule is blocking, and only one.* If `contract` is not an `ArvoContract`, every other rule is unanswerable: completeness, collisions and the per-version timeout check all read it. Per `project.md` — *Validation*, that issue carries a `blockingReason` and the rest are not attempted. Everything else collects: a missing executor, a colliding type, a bad option and an impossible timeout pair are all reported together.
+
+## What the probes established
+
+Written as one file under `src/`, typechecked, and deleted. `tsc --noEmit` reported nothing, which means every positive case compiled and every `@ts-expect-error` fired.
+
+- **Completeness works in both directions.** A mapped type over `keyof M & ArvoSemanticVersion` rejects a handler declaring fewer versions than the contract and rejects one naming a version the contract does not declare. Neither needs a runtime check to be a compile error.
+- **The widening trap is real and silent.** A contract whose versions map was annotated `ArvoContractVersionMapParam` accepts a handler declaring *no* versions at all, because `keyof M` has widened to every semantic version. The runtime check is what catches it, which is why both halves exist.
+- **`in` cannot be trusted for `unset`.** `Partial<T>` over `number | null` gives an omitted key, a written `null` and an explicit `undefined` the same property type, and an explicit `undefined` is a present key at runtime. Resolution keys off `value === undefined`, as §3.2 and §3.3 require.
+- **A bare `VersionedArvoContract` exposes what the rules need** — `uri`, `type`, `version`, `outputs` and `error.type` — with no cast.
+- **Every generic the context needs survives inference from one call.** The services map infers as written rather than widening, so `services.payments.type` is the literal `'com_payment_charge'`. A version's own `state` schema is readable back out of the same object literal that declares it. A version written as the executor alone infers as stateless. `D` and `H` infer off the `types` witness field and fall to the empty record when it is omitted.
+- **The union must be written as a union of intersections.** `(Base & InitArm) | (Base & FollowArm)` narrows on `entry`; `Omit<Base & (InitArm | FollowArm), never>` does not. This is the collapse the factories change hit with `span`, confirmed again here.
+- **All of it holds against `zod/v4/core`.** A schema written with full zod satisfies `$ZodObject`, and `zc.infer` reads it, so the shipped types use core throughout with no loss.
+
+One thing the probes found that no task anticipated. **`z.infer<M[V]['input']>` does not satisfy `ArvoEvent`'s own `D extends Record<string, any>` constraint generically**, because TypeScript cannot prove a payload inferred from an unresolved schema is an object. A conditional helper that re-establishes it is needed wherever a version's payload types an event, and §2.1 carries it as `PayloadOf`. Without it the context's `event` member does not compile at all, which would have surfaced later with this change already shipped.
+
+One thing the second round of probes established, against the shipped types rather than a sketch. **The chain infers everything the design claimed.** A version created by `createArvoEventHandlerVersion` types its context exactly as the inline form does; a state schema declared inline types `ctx.state` and `ctx.setState`, and a wrong read is caught; a version with no schema reaches `state` as a JSON object; dependencies and hooks infer off `types` and are unreachable when it is omitted; narrowing on `entry` narrows the event both ways; and a version the contract does not declare is a compile error at the `handler` call rather than a surprise at `build`.
+
+## Risks / Trade-offs
+
+- **A typed hole for one release.** An executor written against this change's signature may not typecheck against change 2's. Accepted: nothing is published, and an executor that cannot be called has no behaviour to preserve.
+- **Named services are a concept the ADR does not have.** A reader moving between the ADR and this package meets a key the protocol never mentions. Mitigated by saying plainly, in the spec and the TSDoc, that the name is local and nothing reads it.
+- **The widening trap is inherited, not introduced.** A contract annotated with `ArvoContractVersionMapParam` degrades the handler's compile-time completeness check silently. The runtime check still catches it, so the failure mode is a later error rather than a wrong handler, and the TSDoc names it.
+- **Seven defaults are now stated in two places** — ADR-006's options table and `src/ArvoEventHandler/options.ts`. That is unavoidable for any implementation of a specification, and the mitigation is the usual one: the defaults live in exactly one module, the tests assert each against the ADR's stated value, and nothing else spells a default.
+- **A declared handler does nothing.** Someone reading the export list after this change will find a primitive that cannot process an event. That is the cost of shipping in slices, and the alternative — one change implementing five ADRs — is worse by every measure `project.md` — *Git* gives for keeping commits reviewable.
+
+## The version is where execution lives
+
+`ArvoEventHandlerVersion` owns everything the protocol can decide once the version is known, and nothing before. The handler classifies the delivery, calls the state function, judges whether what came back is a record, reads the version off it, and hands over. From that point the version owns the depth check, the lifecycle check, both clocks, addressing, the type and payload checks, whether a response was awaited, the collection decision, resolving dependencies, building the context, entering the executor, judging the batch, rebuilding the awaited collection, and writing the record out.
+
+*Why the split falls there.* Every check after the version is known reads the version's resolved options, its state schema, or its emittable set. Those live on the version, so a handler doing the checking would have to reach into it for all three. Every check before reads nothing but the event and the row.
+
+### Resolving the record is the handler's, not the version's
+
+`state_resolution_failed` is raised before the version is known: on a followup the version is inside the record the read failed to produce. ADR-009 makes the consequence explicit, calling it the one fault for which a version's own retry options are never consulted, because no version can be known, so the handler's resolved options apply. A fault whose own definition says the version is unknowable cannot be raised by the version.
+
+So the handler holds the state function, and obligation 2 fixes its whole shape:
+
+```ts
+/** How a mechanism answers "what is stored under this execution". */
+type ArvoStateResolver = (param: {
+  /** The execution to read. The only thing it may branch on. */
+  executionId: string;
+  /** This execution's telemetry, so the read appears inside its trace. */
+  telemetry: ArvoExecutionContextTelemetry;
+  /** Which attempt this is, counting from 0. */
+  attempt: number;
+}) => Promise<JSONObject | null> | JSONObject | null;
+```
+
+Four obligations ride on that signature, and each is a rule about the mechanism rather than about the type. It reads the store on every call rather than returning something captured earlier, which is what makes every retry a fresh delivery. It is given neither the event nor the classification, and branches on nothing but the key. It validates nothing beyond parsing: whether what comes back is a record, belongs to this event, or is still resumable is the handler's to judge. And a mechanism that classifies, derives or filters on the handler's behalf is non-conformant even where it happens to be right.
+
+*Why telemetry is a parameter at all.* The read is a store call on the execution's critical path, and a trace missing it cannot show time spent waiting on a store against time spent in business code. Passing the execution's telemetry is what lets a mechanism put a child span around its own read without threading context by hand.
+
+### One `ArvoExecutionContextTelemetry` per execution, built first
+
+`ArvoEventHandler.execute` builds it before anything else happens: it starts the span by continuing the trace the arriving event carries, and pairs it with the meter and logger it was given. That one object is then used for the state read, handed to the version, and held by the context.
+
+*Which settles two things that would otherwise each need deciding.* A fault raised before the version is known — `state_resolution_failed`, `event_unclassifiable`, `record_invalid` — has somewhere to be recorded, because the telemetry exists before the record does. And `ArvoEventHandlerVersion.tryExecute` takes that one object rather than a span, a meter and a logger separately, so there is no way to hand the version a span other than the one the state read used.
+
+*What reaches the version is therefore the parsed row, not a string.* The mechanism parses and the version hydrates against its own schema, so `state` is `JSONObject | null`. The two failures then sit where each belongs: failing to *read* a record is the handler's, before a version exists; failing to *hydrate* one is `record_invalid` and the version's, after it does. It also removes a round trip, since serializing to a string only to parse it again on the way in is work for nobody.
+
+*What that means for an init.* The version is knowable from the event's `dataschema` before the read, so the read could happen after the version is picked. It does not. One read, one place, one fault, rather than a resolution that lives in two different objects depending on how the delivery was classified.
+
+### What a delivery produces has three shapes, not one
+
+`{ events, state }` says something was produced. A delivery can also end with nothing to commit, and a mechanism must be able to tell that from a bug:
+
+- **produced** — the events to publish and the record to commit, together under obligation 1. An empty event list is this shape, not another: the executor returned nothing and the record still moves.
+- **discarded** — nothing happened and nothing is to be committed. A duplicate event, recognised by its `id` already in the event log, is quietly discarded at gate step 9.
+- **faulted** — reported as the `Result`'s error rather than as a third success shape, because a fault is not an outcome a delivery produced but the delivery failing to produce one.
+
+So the success side is discriminated on `kind`, and `tryExecute` reports `Result<ArvoEventHandlerVersionDelivered, ArvoHandlerFault>` where the value is the produced-or-discarded union. Without the discriminant a mechanism cannot distinguish "commit nothing because nothing happened" from "commit nothing because something was forgotten", and the first is correct while the second loses an execution.
+
+### The span is the handler's to create, per delivery
+
+The version takes no tracer, logger or meter at construction. All three arrive on `tryExecute` alongside the event, because all three are per-delivery: a span is one delivery's, and a mechanism that scopes its meter or logger per deployment can still hand the same instance every time.
+
+`ArvoEventHandler.execute` creates the delivery span, continuing the trace the arriving event carries through `continueTraceFromEvent`. That is mandated rather than optional, because a handler that lets a caller supply the span cannot guarantee the chain joins through it, and ADR-006 requires a handler to continue an existing trace wherever it can.
+
+### The record no longer carries a contracts snapshot
+
+ADR-007 gives the record a `contracts` field holding the contracts as they stood when the execution opened, informational and read by nothing. It is dropped.
+
+*Why.* Nothing in the protocol reads it. It is derivable from the declaration at any time, so storing it duplicates what the handler already holds. And it is the only field a record carries that no delivery can check, so a stale or wrong one would never be caught. Storing a copy of a declaration inside every record of every execution is a cost paid on every write for a reader who can get the same answer from the handler.
+
+**This requires an addendum to ADR-007**, since a record field is one of the two things that ADR pins most tightly, on the grounds that changing it reinterprets data already in a store. Nothing is published, so no stored record exists to reinterpret, but the addendum is owed before this change archives.

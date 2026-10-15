@@ -1,12 +1,13 @@
 # ADR-007: Execution Record
 
-- **Status:** Accepted
+- **Status:** Partially Superseded
 - **Date:** 2026-09-28
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000) — places the execution record's field names inside the model as a durable format
 - **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), which defines the handler this record belongs to, the gate that validates it, and the mechanism obligations that preserve it
 - **Addresses, in part:** ADR-000 Deferred Decisions — "Handler state serialization, persistence, migration, and recovery" (settled here, migration by prohibiting it)
-- **Left deferred:** a bound on fan-out; comparison of the `contracts` snapshot against the live contract. See **Left deferred**
+- **Left deferred:** a bound on fan-out. See **Left deferred**
+- **Partially superseded by:** [ADR-013](./013-record-contracts-snapshot-removed.md), which removes the `contracts` field and withdraws the deferred question about it. Everything else here stands. The field table and **`contracts` is informational only** below describe the record as originally accepted; read them with that ADR, which argues against them.
 
 Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-architectural-principles.md).
 
@@ -62,7 +63,7 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 | `init_event` | ArvoEvent as JSON; materialized as an ArvoEvent during hydration | The event that began the execution. |
 | `triggering_event` | ArvoEvent as JSON; materialized as an ArvoEvent during hydration | The event that caused the most recent delivery. |
 | `in_flight_event_map` | object: emitted event `id` string → ArvoEvent as JSON \| `null`; each non-null value materialized as an ArvoEvent during hydration | Keyed by the `id` of each event emitted to a service in the current round. The value is the collected response, or `null` while outstanding — the key MUST be present either way, because the key set is what the execution is waiting for. |
-| `contracts` | object: `{ self: canonical contract, services: canonical contract[] }` | The handler's `self` and `services` contracts, in their canonical form (ADR-005). Carried for a reader's benefit only — nothing in execution consults it. |
+| ~~`contracts`~~ | ~~object: `{ self: canonical contract, services: canonical contract[] }`~~ | **Removed by [ADR-013](./013-record-contracts-snapshot-removed.md).** As accepted: the handler's `self` and `services` contracts, in their canonical form (ADR-005), carried for a reader's benefit only. |
 | `data` | JSON value \| `null`; validated against this version's declared schema during hydration | The executor's own business state, governed by the schema that executor declared, or `null` where none is declared or nothing has been written. |
 
 `execution_id` identifies a record uniquely and `subject` groups the records of one workflow; a mechanism MAY use them as its record and grouping keys, and both are inside the record so that it is self-describing.
@@ -72,6 +73,8 @@ An execution's entire memory is one record. It MUST be representable as JSON, so
 `direction` is `received` or `emitted` rather than `input` or `output`, deliberately. Those two words already name something else in this model — ADR-005's declared shapes, and a version's `outputs` — and a service's reply is `received` here while being that service's output. Two axes sharing a vocabulary is how a reader ends up confidently wrong.
 
 #### `contracts` is informational only
+
+**Withdrawn by [ADR-013](./013-record-contracts-snapshot-removed.md), which removes the field.** What follows is the reasoning as accepted, kept because ADR-013 argues against it.
 
 `contracts` is informational by construction, and an implementation MUST NOT resolve, bind, or validate against it. It exists so that a record found in a store years later can be understood without the code that wrote it, which is the same reason the identifying fields are inside the record rather than only in the keys. A reader should be aware it is a snapshot: a contract that has since changed will not match a live one, and that discrepancy carries no meaning at execution time. Whether it should be compared against the live contract as a drift warning is left deferred (**Left deferred**).
 
@@ -270,5 +273,4 @@ Nothing beyond ADR-006's five obligations, three of which concern this record di
 ### Left deferred
 
 - **A bound on fan-out**, given that hydration is eager and its cost scales with `in_flight_event_map` — a cap, lazy restoration, or something else (**Hydration**).
-- **Whether the `contracts` snapshot should be compared against the live contract** at entry as a drift warning. It is free to do and would surface "this execution began under a contract that has since changed", but nothing may enforce against the snapshot in the meantime (**`contracts` is informational only**).
-
+- ~~**Whether the `contracts` snapshot should be compared against the live contract**~~ — **withdrawn by [ADR-013](./013-record-contracts-snapshot-removed.md)**, which removes the snapshot. There is nothing left to compare.

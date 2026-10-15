@@ -119,7 +119,9 @@ describe('a clone of an event', () => {
 
     it('still clears a field given as null', () => {
       // `undefined` means "no replacement"; clearing is what null is for.
-      expect(cloneArvoEvent(source, { to: null }).to).toBeNull();
+      // The param type spells optional inputs as `T | undefined`, so this
+      // documented runtime behaviour is not expressible without a cast.
+      expect(cloneArvoEvent(source, { to: null as never }).to).toBeNull();
     });
   });
 

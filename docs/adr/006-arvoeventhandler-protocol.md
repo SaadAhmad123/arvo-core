@@ -1,13 +1,15 @@
 # ADR-006: ArvoEventHandler Protocol
 
-- **Status:** Accepted
+- **Status:** Partially Superseded
 - **Date:** 2026-09-28
+- **Amended by:** [ADR-014](./014-idempotency-keys.md), which adds one member to **The execution context**. Additive: nothing already there changes
+- **Partially superseded by:** [ADR-011](./011-dependency-lifetime.md), which replaces **The two forms: a value or a factory** and the sections elaborating it; and [ADR-012](./012-absent-dependencies-and-hooks.md), which replaces what an executor finds where no dependency or hooks were supplied. Everything else here stands. Replaced text is kept and annotated, because both argue against it
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000)
 - **Companions:** this ADR is the core of five that together specify the protocol. [ADR-007](./007-execution-record.md) defines the execution record, [ADR-008](./008-execution-faults-and-abandonment.md) the failure categories, the fault object and abandonment, [ADR-009](./009-execution-bounds.md) depth, retry, timeouts and collection, and [ADR-010](./010-delivery-classification-and-entry-validation.md) classification and the entry gate. They were written as one and split for size; where this ADR refers to a heading in one of them, the reference names the ADR
 - **Supplies:** the `executionid` derivation that [ADR-001](./001-arvoevent-structure.md) leaves to "the handler protocol ADR" (the incoming-event classification it also leaves there is supplied by [ADR-010](./010-delivery-classification-and-entry-validation.md)); the conditions for routing a failure to the workflow root remain deferred (see **Left deferred**)
 - **Addresses, in part:** ADR-000 Deferred Decisions — "ArvoEventHandler execution semantics" (settled here); "Handler state serialization, persistence, migration, and recovery" (settled in ADR-007); "Handler concurrency and event-waiting patterns" (settled in ADR-009); "Cancellation, interruption, and compensation semantics" (decided here by splitting it — see **Conformance to ADR-000**). [ADR-005](./005-arvocontract-structure.md) **Left deferred** — "dependency declaration, capability resolution, and binding", "a handler's own runtime decision of which permitted event to emit and when", and "domain resolution, inheritance, and any orchestration-context-dependent routing strategy" (all settled here)
-- **Left deferred:** execution capability profiles as a format; domain sources beyond the minimum; derived emitted-event identifiers; delivery ordering across executions. The full list is under **Conformance to ADR-000**; each companion carries its own
+- **Left deferred:** execution capability profiles as a format; domain sources beyond the minimum; derived emitted-event identifiers; delivery ordering across executions (since settled by [ADR-015](./015-no-ordering-guarantee.md)). The full list is under **Conformance to ADR-000**; each companion carries its own
 
 Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-architectural-principles.md).
 
@@ -179,14 +181,15 @@ The members below are normative in their existence and semantics. What each is c
 | **collected** | map: emitted event `id` → ArvoEvent \| `null` | The responses in hand for the current round, keyed as `in_flight_event_map` keys them, and which keys are still outstanding. Under the default join it is always complete when the executor is entered ([ADR-009](./009-execution-bounds.md), **Collection**). | read |
 | **state** | the declared schema's type \| `null`; absent where none declared | The executor's own business state, `state.data`. Present only where the version declared a schema. `null` on a new execution until written. Written through **set state** and no other way. | read, and write through `set state` |
 | **set state** | operation: (value) → nothing; faults on rejection | Replaces the business state whole. There is no partial write and no merge: an executor that keeps part of the old state copies it forward itself. Validated against the declared schema, and a value the schema rejects is a non-retryable execution fault, `state_schema_rejected` ([ADR-008](./008-execution-faults-and-abandonment.md), **Failure protocol**). | write |
-| **dependencies** | the executor's own type; empty object where none supplied | Whatever the dependency factory resolved for this delivery, or the value supplied (**Dependencies**). | read |
+| **idempotency keys** | object of three strings — **added by [ADR-014](./014-idempotency-keys.md)** | A key for each of three scopes: the workflow, the execution, and this delivery. Derived from the record and the delivered event, so a replay produces the same ones. For an executor to hand to something outside Arvo that accepts one. | read |
+| **dependencies** | ~~the executor's own type; empty object where none supplied~~ — **[ADR-012](./012-absent-dependencies-and-hooks.md): absence is stated, not substituted** | Whatever the dependency resolved for this delivery, or absence where none was supplied (**Dependencies**, [ADR-011](./011-dependency-lifetime.md)). | read |
 | **event builder** | operation: (`type`, `data`, options) → ArvoEvent | Constructs a fully addressed event from a `type` and a `data`, applying every default under **Addressing an emitted event**, and exposing the safe fields and the visibly unsafe group. The only member that produces an event. | produces an event |
 | **at max depth** | boolean | True when an event this execution emits to a service could no longer increment `depth` without reaching the version's maximum ([ADR-009](./009-execution-bounds.md), **Depth**). | read |
 | **time remaining** | object: `run` integer ms \| `null`, `execution` integer ms \| `null` | How many milliseconds remain on each of the version's two clocks at the moment the executor is entered: the run clock for this attempt, and the execution clock from the init event to the moment this execution's lifecycle becomes terminal ([ADR-009](./009-execution-bounds.md), **Timeouts**). `null` for a clock the version leaves unbounded. Read at entry and not updated: an executor that needs the live figure subtracts its own elapsed time. | read |
 | **cancel** | operation: (reason string) → nothing | Marks this execution `cancelled` with a reason, terminal ([ADR-007](./007-execution-record.md), **The execution record**). | write |
 | **fault** | operation: (reason string, retryable boolean = true) → ArvoHandlerFault | Builds an execution fault for the executor to raise deliberately, with a reason and whether a redelivery could fix it ([ADR-008](./008-execution-faults-and-abandonment.md), **Failure protocol**). | produces a fault |
 | **telemetry** | object: `span`, `logger`, `meter` — OpenTelemetry API objects | The delivery's OpenTelemetry objects: its **span**, a **logger** bound to that span's context, and a **meter** scoped to the handler (**Observability**). | read, and record |
-| **mechanism hooks** | object; empty where none supplied | Whatever the mechanism running this handler chooses to expose to an executor, supplied to the handler alongside the delivery. Which hooks exist is the mechanism's own scope and undefined here. Where none are supplied it is an empty object, never absent. | read, or stable mutation only — see below |
+| **mechanism hooks** | ~~object; empty where none supplied~~ — **[ADR-012](./012-absent-dependencies-and-hooks.md): absence is stated, not substituted** | Whatever the mechanism running this handler chooses to expose to an executor, supplied to the handler alongside the delivery. Which hooks exist is the mechanism's own scope and undefined here. ~~Where none are supplied it is an empty object, never absent.~~ | read, or stable mutation only — see below |
 
 #### What the context does not expose
 
@@ -203,7 +206,9 @@ A mechanism MAY hand the handler a set of hooks for the executor, and the handle
 
 This ADR places one constraint on them, because they cross into the executor's view of the protocol. A hook MUST be **read-only**, or it MUST permit only **stable mutation**: a change whose effect on this execution is the same however many times the delivery is attempted, and which alters nothing the protocol owns — not the record, not the events returned, not the lifecycle, not the outcome of any gate or guard. A hook that could change what this delivery concludes, or that a retry would apply twice with a different result, breaks the atomicity [ADR-010](./010-delivery-classification-and-entry-validation.md), **Entry validation** relies on and MUST NOT be exposed.
 
-Where a mechanism supplies no hooks, the member is present and empty, so an executor written against it never has to test for its absence.
+~~Where a mechanism supplies no hooks, the member is present and empty, so an executor written against it never has to test for its absence.~~
+
+**Replaced by [ADR-012](./012-absent-dependencies-and-hooks.md).** The sentence above is kept because ADR-012 argues against it: an executor written against something declared is exactly the party that has to test for its absence, and an empty object is what stops it being able to.
 
 #### The builder is help, not a gate
 
@@ -484,7 +489,9 @@ An executor's implementation dependencies — a database client, an HTTP client,
 
 Dependencies are distinct from **mechanism hooks** (**The execution context**). Dependencies are the executor's: things its business code needs and would need under any mechanism. Hooks are the mechanism's: things one particular runner chooses to expose. An executor that uses a dependency is coupled to nothing; one that uses a hook is coupled to that mechanism by its own choice.
 
-#### The two forms: a value or a factory
+#### ~~The two forms: a value or a factory~~
+
+**Replaced by [ADR-011](./011-dependency-lifetime.md), which admits one form only.** What follows is the requirement as accepted, kept because ADR-011 argues against it.
 
 An implementation MUST accept dependencies in either of two forms:
 
@@ -506,6 +513,8 @@ The factory receives the attempt number for the same reason the state function d
 
 #### Why the factory form matters for resumability
 
+**Superseded in part by [ADR-011](./011-dependency-lifetime.md).** The reasoning below stands, and is why ADR-011 keeps acquisition per delivery; what it misses is that acquiring a thing says nothing about releasing it.
+
 The factory form is what a resumable handler needs. A handler runs only when something delivers to it, and between deliveries there is no process to hold anything; ADR-000's rule that no live dependency survives a suspension is not a restriction the protocol imposes on an executor so much as a description of the executor's situation. The factory makes that situation the ordinary one: nothing live is constructed until a delivery needs it, it lives for that delivery, and nothing about it is captured anywhere the next delivery could see. An executor that stashes a client in module scope and reaches for it next time has stepped outside the protocol, and an implementation SHOULD make the factory the easy path so that it need not.
 
 Giving the factory the delivered event and the record lets a dependency be built *for this execution* rather than for the process: a client scoped to the tenant the init event names, a lock keyed on `execution_id`, a signal keyed on `subject`. That is what makes the cooperative pattern under **Cancellation** possible without adding anything to the model.
@@ -514,9 +523,11 @@ Three rules follow, and they are the whole of what the protocol asks:
 
 - a resolved dependency MUST NOT be retained by the handler across deliveries — it is built for one and discarded with it, exactly as the execution context is (**One object, built per delivery**);
 - a resolved dependency MUST NOT be written into the execution record — the record is JSON and a dependency is live, and `data` that will not survive a round trip is already a fault ([ADR-007](./007-execution-record.md), **Serializability of `data`**);
-- a factory MUST NOT be able to alter the outcome of any other gate step, the collection, the depth check or the timeouts — it runs after every other step has decided and before the executor, and it is given the record to read, not to write.
+- ~~a factory~~ **acquisition, under [ADR-011](./011-dependency-lifetime.md),** MUST NOT be able to alter the outcome of any other gate step, the collection, the depth check or the timeouts — it runs after every other step has decided and before the executor, and it is given the record to read, not to write.
 
 #### A failing factory is a retry-safe fault
+
+**Superseded in name only by [ADR-011](./011-dependency-lifetime.md): read "a factory that fails" as "acquisition that fails".** The fault, its verdict and its reasoning are unchanged, and ADR-011 adds the two cases this section does not cover — a surface that cannot be read, which is this same fault, and a failure to *release*, which is not a fault at all.
 
 **A factory that fails is an execution fault, `dependency_resolution_failed`, and it is retry safe.** However the language signals the failure, the handler MUST NOT catch and reinterpret it: it surfaces as a fault with the failure rendered into `cause`, and nothing is emitted or written. It is retry safe because constructing a dependency reaches outside the handler — a pool that is exhausted now, a service that is restarting — and what is outside may answer differently a moment later. It is, with the state function, one of the two gate faults with that verdict ([ADR-008](./008-execution-faults-and-abandonment.md), **The `fault_kind` vocabulary and retry verdicts**), and for the same reason. Like every retry-safe fault it is subject to exhaustion, and on a followup it carries the abandonment pair, so a mechanism facing a dependency that never comes back can end the execution at `failure` with the cause on record rather than leave it at `waiting` forever.
 
@@ -536,7 +547,7 @@ The absence is also honest about what a cancel event could not do. A response al
 
 What the model provides is enough for an execution to stop itself and say so, and nothing more:
 
-- **a way to notice.** The dependency factory receives the delivered event and the record (**Dependencies**), so it can consult whatever cancellation signal an application maintains — a flag in a store, a revoked token, a closed ticket — and hand the answer to the executor as part of its dependencies;
+- **a way to notice.** Dependency acquisition receives the delivered event and the record (**Dependencies**, and [ADR-011](./011-dependency-lifetime.md)), so it can consult whatever cancellation signal an application maintains — a flag in a store, a revoked token, a closed ticket — and hand the answer to the executor as part of its dependencies;
 - **a way to record it.** The **cancel** member of the execution context marks the execution `cancelled` with a reason, and `cancelled` is terminal ([ADR-007](./007-execution-record.md), **Marking an execution `cancelled`**);
 - **a way for the caller to be told.** An execution that marks itself cancelled and does not answer its caller raises `execution_cancelled`, non-retryable, carrying the abandonment pair, so a mechanism that abandons has the caller's answer ready and nothing to compose.
 
@@ -691,7 +702,7 @@ Beside the five, a mechanism supplies three inputs this ADR defines the shape of
 - **Execution capability profiles as a format**, including how a handler would declare the five obligations above rather than have an ADR assert them.
 - **Domain sources beyond the minimum.** **Domain** fixes the sources an implementation MUST offer; whether the set should be closed, extended, or made pluggable is left open.
 - **Whether emitted event identifiers should be derived** rather than freshly generated — unnecessary given obligation 1, and available as defence in depth if a later decision wants it.
-- **Delivery ordering and concurrent event handling** across executions. Obligation 5 serializes writes to one record and says nothing about order across records.
+- **Delivery ordering and concurrent event handling** across executions. Obligation 5 serializes writes to one record and says nothing about order across records. The ordering half is settled by [ADR-015](./015-no-ordering-guarantee.md); concurrent event handling remains deferred.
 
 ## Appendix: An illustrative handler surface
 
@@ -797,6 +808,8 @@ execute(ctx):
 
 ### What the mechanism calls
 
+**Superseded by [ADR-011](./011-dependency-lifetime.md): `dependencies` is one object, acquired and released by the handler, not a value or a factory.**
+
 The handler is entered once per delivery and holds nothing between them. It is given a way to reach the record, never the record itself.
 
 ```
@@ -805,7 +818,12 @@ execute(
     state           an operation: (execution_id, telemetry, attempt) → record | absence
                     reads the store on every call; parses and nothing more;
                     knows nothing of init or followup
-    dependencies    a value, or a factory (event, record | absence, attempt) → value
+    dependencies    optional; one object -- see ADR-011
+                      acquire (event, record | absence, execution_id, attempt)
+                      release (the same)
+                      a readable surface, which is what the executor is given
+                    as accepted: a value, or a factory (event, record | absence,
+                      attempt) → value
     attempt         which attempt this delivery is, from 0
     telemetry       the delivery's OpenTelemetry context
     hooks           optional; whatever this mechanism exposes to executors

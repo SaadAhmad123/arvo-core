@@ -43,4 +43,5 @@ export type AsyncResult<R, E> = Promise<Result<R, E>>;
 export type PartialExcept<T extends object, E extends keyof T> = Partial<T> &
   Required<Pick<T, E>>;
 
+/** A value, or a promise of one: what an input may be where either is accepted. */
 export type PromiseAble<T> = Promise<T> | T;

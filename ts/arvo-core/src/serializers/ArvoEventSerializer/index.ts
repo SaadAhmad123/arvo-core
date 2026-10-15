@@ -92,10 +92,6 @@ export class ArvoEventSerializer {
    *
    * A `converters` stage on a caller-supplied `CloudEventConverter` failing
    * during `convert` reports as `CloudEventTransformationError`, unwrapped.
-   * A stage that succeeds but hands back a value `JSON.stringify` itself
-   * rejects (a circular reference, a `BigInt`) reports as
-   * `ArvoEventSerializerError` instead — the default configuration in
-   * either mode cannot fail at all.
    */
   async trySerialize(
     event: ArvoEvent,
@@ -104,7 +100,13 @@ export class ArvoEventSerializer {
     CloudEventTransformationError | ArvoEventSerializerError
   > {
     if (this.mode.type === 'arvoevent') {
-      return fromNeverthrow(ok(JSON.stringify(event)));
+      try {
+        return fromNeverthrow(ok(JSON.stringify(event)));
+      } catch (cause) {
+        return fromNeverthrow(
+          err(new ArvoEventSerializerError(cause as Error)),
+        );
+      }
     }
     const converter = this.mode.converter;
     const result = await converter.tryConvert(event);

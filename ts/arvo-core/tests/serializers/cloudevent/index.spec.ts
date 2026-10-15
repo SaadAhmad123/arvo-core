@@ -212,7 +212,7 @@ describe('CloudEventConverter', () => {
     it('reports a revert-stage failure as kind: "stage", naming direction/stageIndex/cause', async () => {
       const stage = throwingStage('boom');
       const converter = new CloudEventConverter(undefined, [stage]);
-      const ce = new CloudEvent({
+      const ce = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
@@ -237,7 +237,7 @@ describe('CloudEventConverter', () => {
       const converter = new CloudEventConverter(undefined, [
         throwingStage('boom'),
       ]);
-      const ce = new CloudEvent({
+      const ce = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
@@ -259,7 +259,7 @@ describe('CloudEventConverter', () => {
 
     it('stops the revert pipeline at the first failing stage; a later (earlier-in-array) stage never runs', async () => {
       const earlierInArray = passthroughStage();
-      const ce = new CloudEvent({
+      const ce = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
@@ -287,7 +287,7 @@ describe('CloudEventConverter', () => {
     });
 
     it('numbers stageIndex correctly across multiple appended stages, for revert', async () => {
-      const ce = new CloudEvent({
+      const ce = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
@@ -341,7 +341,7 @@ describe('CloudEventConverter', () => {
   describe('CloudEventTransformationError passthrough (not double-wrapped)', () => {
     it('passes through a structural rejection from the base transformer as-is, not wrapped as kind: "stage"', async () => {
       const converter = new CloudEventConverter();
-      const ce = new CloudEvent({
+      const ce = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
@@ -396,7 +396,7 @@ describe('CloudEventConverter', () => {
         },
       };
       const converter = new CloudEventConverter(transformer);
-      const ce = new CloudEvent({
+      const ce = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
@@ -462,11 +462,10 @@ describe('CloudEventConverter', () => {
       };
       expectTypeOf<IArvoEventTransformer['revert']>().parameters.toEqualTypeOf<
         [
-          CloudEvent,
-          (
-            | import('../../../src/cloudevent/types.js').ForeignCloudEventFallback
-            | undefined
-          ),
+          data: CloudEvent,
+          foreignFallback?:
+            | import('../../../src/serializers/cloudevent/types.js').ForeignCloudEventFallback
+            | undefined,
         ]
       >();
     });

@@ -56,7 +56,10 @@ const looseCloudEvent = (fields: Record<string, unknown>): CloudEvent =>
 const wireRoundTrip = async (event: ArvoEvent): Promise<ArvoEvent> => {
   const ce = await converter().convert(event);
   const wireBody = JSON.stringify(ce);
-  const received = new CloudEvent(JSON.parse(wireBody), false);
+  const received = new CloudEvent<Record<string, unknown>>(
+    JSON.parse(wireBody),
+    false,
+  );
   return converter().revert(received);
 };
 
@@ -120,8 +123,12 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
 
     it('carries traceparent/tracestate as extensions when present', async () => {
       const ce = await converter().convert(new ArvoEvent(fullParam()));
-      expect(ce.traceparent).toBe(fullParam().traceparent);
-      expect(ce.tracestate).toBe(fullParam().tracestate);
+      const traced = fullParam() as {
+        traceparent: string;
+        tracestate: string;
+      };
+      expect(ce.traceparent).toBe(traced.traceparent);
+      expect(ce.tracestate).toBe(traced.tracestate);
     });
 
     it('omits traceparent/tracestate when null', async () => {

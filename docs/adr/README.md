@@ -10,7 +10,7 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 
 - **Proposed**: Under review and not yet binding.
 - **Accepted**: Governs the architecture until superseded.
-- **Partially Superseded**: Some rules within this ADR have been replaced by a later ADR; the rest remains governing. The record itself states which.
+- **Partially Superseded**: Some rules within this ADR have been replaced by a later ADR; the rest remains governing. The record itself states which, and keeps the replaced text annotated so a reader meets the superseding ADR where the old rule was.
 - **Superseded**: Replaced by a later ADR.
 - **Rejected**: Considered but not adopted.
 
@@ -24,8 +24,13 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | [ADR-003](./003-arvoevent-cloudevent-transformation.md) | ArvoEvent–CloudEvent Transformation | Accepted |
 | [ADR-004](./004-multi-language-implementation-governance.md) | Multi-Language Implementation Governance | Accepted |
 | [ADR-005](./005-arvocontract-structure.md) | ArvoContract Structure | Accepted |
-| [ADR-006](./006-arvoeventhandler-protocol.md) | ArvoEventHandler Protocol | Accepted |
-| [ADR-007](./007-execution-record.md) | Execution Record | Accepted |
+| [ADR-006](./006-arvoeventhandler-protocol.md) | ArvoEventHandler Protocol | Partially Superseded |
+| [ADR-007](./007-execution-record.md) | Execution Record | Partially Superseded |
 | [ADR-008](./008-execution-faults-and-abandonment.md) | Execution Faults and Abandonment | Accepted |
 | [ADR-009](./009-execution-bounds.md) | Execution Bounds | Accepted |
 | [ADR-010](./010-delivery-classification-and-entry-validation.md) | Delivery Classification and Entry Validation | Accepted |
+| [ADR-011](./011-dependency-lifetime.md) | Dependency Lifetime | Accepted |
+| [ADR-012](./012-absent-dependencies-and-hooks.md) | Absent Dependencies and Hooks | Accepted |
+| [ADR-013](./013-record-contracts-snapshot-removed.md) | The Record's Contracts Snapshot Is Removed | Accepted |
+| [ADR-014](./014-idempotency-keys.md) | Idempotency Keys | Accepted |
+| [ADR-015](./015-no-ordering-guarantee.md) | No Ordering Guarantee | Accepted |

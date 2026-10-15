@@ -1,0 +1,117 @@
+import type * as z from 'zod/v4/core';
+import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
+import type { ArvoExecutionState } from '../state/index.js';
+import type { ArvoEventHandlerOptions } from '../types/options.js';
+import type {
+  ArvoAnyServiceResponse,
+  ArvoInitEvent,
+  ArvoServiceMap,
+} from '../types/services.js';
+import type {
+  ArvoDependencies,
+  ArvoMechanismHooks,
+} from '../types/supplied.js';
+import type { ArvoIdempotencyKeys } from './idempotency.js';
+import type { ArvoExecutionContextTelemetry } from './telemetry/index.js';
+
+/**
+ * How an execution was classified before an executor was entered.
+ *
+ * `init` opened the execution; `followup` answers something it was waiting
+ * for. Which one it is decides what the execution can possibly carry, so it
+ * is a type parameter and not only a value.
+ */
+export type ArvoEntryKind = 'init' | 'followup';
+
+/**
+ * Anything that can trigger an execution of this version: the event it
+ * takes in, or whatever a declared service answered with, its handler
+ * error included.
+ *
+ * Narrow on `type` to reach the exact payload. No two members share one,
+ * the collision rule refusing that at declaration.
+ */
+export type ArvoTriggeringEvent<
+  TSelf extends VersionedArvoContract,
+  TServices extends ArvoServiceMap,
+> = ArvoInitEvent<TSelf> | ArvoAnyServiceResponse<TServices>;
+
+/**
+ * What an execution remembers, typed by the contracts this execution is
+ * bound to.
+ *
+ * The record's two events are the ones this version can actually hold: the
+ * event that opened the execution, and whatever this execution classified
+ * as.
+ */
+export type ArvoContextState<
+  TSelf extends VersionedArvoContract,
+  TServices extends ArvoServiceMap,
+  TDataSchema extends z.$ZodObject,
+> = ArvoExecutionState<
+  TDataSchema,
+  ArvoInitEvent<TSelf>,
+  ArvoTriggeringEvent<TSelf, TServices>
+>;
+
+/**
+ * What may be written as an execution's data: a value, or a function given
+ * what is there now.
+ *
+ * The function form exists so that building on what is remembered is not
+ * the caller's bookkeeping. It receives `null` where nothing has been
+ * written.
+ */
+export type ArvoDataWrite<TDataSchema extends z.$ZodObject> =
+  | z.input<TDataSchema>
+  | ((current: z.output<TDataSchema> | null) => z.input<TDataSchema>);
+
+/**
+ * Everything one execution hands an executor's context.
+ *
+ * No field is optional. A context is built once per execution, and anything
+ * it could default is something the execution already knows, so defaulting
+ * here would only hide a caller that forgot to say.
+ */
+export type ArvoExecutionContextParam<
+  TSelf extends VersionedArvoContract,
+  TServices extends ArvoServiceMap,
+  TDataSchema extends z.$ZodObject,
+  TDependencies extends ArvoDependencies,
+  TMechanismHooks extends ArvoMechanismHooks,
+> = {
+  /**
+   * What this execution is bound to: this version of the contract it
+   * implements, and every contract it may send events to.
+   *
+   * The self contract is a version rather than the whole contract, because
+   * an execution belongs to exactly one and needs only that one's input,
+   * outputs and handler error type.
+   */
+  contracts: {
+    self: TSelf;
+    services: TServices;
+  };
+  /** What this execution remembers, as it stood when this execution arrived. */
+  state: ArvoContextState<TSelf, TServices, TDataSchema>;
+  /** The schema this execution's data is checked against, on every write. */
+  dataSchema: TDataSchema;
+  /** The options in force for this version. */
+  options: ArvoEventHandlerOptions;
+  /** How this execution was classified. */
+  entry: ArvoEntryKind;
+  /** Which attempt this execution is, counting from 0. */
+  attempt: number;
+  /**
+   * This execution's telemetry, built once by whatever runs the handler
+   * and shared by everything the execution touches. Received, never
+   * assembled here.
+   */
+  telemetry: ArvoExecutionContextTelemetry;
+  /** A key per scope, for an effect outside Arvo that accepts one. */
+  idempotency: ArvoIdempotencyKeys;
+  /** What this execution's executor is given to work with. */
+  dependencies: Partial<TDependencies> | null;
+  /** What the mechanism running this handler exposes to an executor. */
+  hooks: Partial<TMechanismHooks> | null;
+};

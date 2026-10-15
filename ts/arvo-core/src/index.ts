@@ -17,16 +17,105 @@ export { VersionedArvoContract } from './ArvoContract/versioned/index.js';
 export type { VersionedArvoContractParam } from './ArvoContract/versioned/types.js';
 export { ArvoDomain } from './ArvoDomain/index.js';
 export type {
+  ArvoDomainContext,
   ArvoDomainInput,
   ArvoDomainSymbol,
 } from './ArvoDomain/types.js';
 export { ArvoEventValidationError } from './ArvoEvent/errors.js';
 export { ArvoEvent } from './ArvoEvent/index.js';
 export type {
+  ArvoEventTraceContext,
+  ArvoEventTraceContinuation,
+} from './ArvoEvent/opentelemetry.js';
+export {
+  continueTraceFromEvent,
+  traceContextFromSpan,
+} from './ArvoEvent/opentelemetry.js';
+export type {
   ArvoEventFields,
   ArvoEventParam,
   ArvoEventValidationOptions,
 } from './ArvoEvent/types.js';
+export type {
+  ArvoIdempotencyKeys,
+  ArvoIdempotencyParts,
+} from './ArvoEventHandler/context/idempotency.js';
+export { ArvoExecutionContext } from './ArvoEventHandler/context/index.js';
+export { ArvoExecutionContextTelemetry } from './ArvoEventHandler/context/telemetry/index.js';
+export type {
+  ArvoLogger,
+  ArvoLogRecord,
+  ArvoLogSeverity,
+} from './ArvoEventHandler/context/telemetry/types.js';
+export { ARVO_LOG_SEVERITY } from './ArvoEventHandler/context/telemetry/types.js';
+export type {
+  ArvoContextState,
+  ArvoDataWrite,
+  ArvoEntryKind,
+  ArvoTriggeringEvent,
+} from './ArvoEventHandler/context/types.js';
+export { ArvoEventHandlerValidationError } from './ArvoEventHandler/errors.js';
+export { ArvoHandlerFault } from './ArvoEventHandler/fault/index.js';
+export type {
+  ArvoFaultKind,
+  ArvoFaultRetry,
+} from './ArvoEventHandler/fault/types.js';
+export {
+  ARVO_CATEGORY_COMPLETE,
+  ARVO_CATEGORY_INIT,
+} from './ArvoEventHandler/helpers/defaults.js';
+export {
+  deriveArvoExecutionId,
+  isArvoExecutionId,
+} from './ArvoEventHandler/helpers/execution-id.js';
+export { ArvoEventHandler } from './ArvoEventHandler/index.js';
+export { ArvoEventHandlerSetup } from './ArvoEventHandler/setup.js';
+export { ArvoExecutionState } from './ArvoEventHandler/state/index.js';
+export type {
+  ArvoExecutionIdentity,
+  ArvoExecutionLifecycle,
+  ArvoTerminalLifecycle,
+  ArvoTouchedEvent,
+  ArvoTouchedEventDirection,
+} from './ArvoEventHandler/state/types.js';
+export {
+  ARVO_EXECUTION_LIFECYCLES,
+  ARVO_TERMINAL_LIFECYCLES,
+} from './ArvoEventHandler/state/types.js';
+export type {
+  ArvoCreatedVersion,
+  ArvoVersionDeclaration,
+  ArvoVersionInput,
+} from './ArvoEventHandler/types/declaration.js';
+export type {
+  ArvoDependencyScope,
+  IArvoEventHandlerDependency,
+} from './ArvoEventHandler/types/dependency.js';
+export type {
+  ArvoEventHandlerExecuteParam,
+  ArvoEventHandlerExecuteResponse,
+  ArvoEventHandlerExecutor,
+  ArvoExecutionStateResolver,
+  ArvoExecutorEmission,
+} from './ArvoEventHandler/types/execute.js';
+export type {
+  ArvoCollectMode,
+  ArvoEventHandlerOptions,
+  ArvoRetryDelayFn,
+} from './ArvoEventHandler/types/options.js';
+export type { ArvoServiceMap } from './ArvoEventHandler/types/services.js';
+export type { ArvoEventHandlerSetupParam } from './ArvoEventHandler/types/setup.js';
+export type {
+  ArvoDeclaredTypes,
+  ArvoDependencies,
+  ArvoMechanismHooks,
+  ArvoNone,
+} from './ArvoEventHandler/types/supplied.js';
+export type {
+  ArvoHandlerVersionOf,
+  ArvoVersionMap,
+} from './ArvoEventHandler/types/version-map.js';
+export { ArvoEventHandlerVersion } from './ArvoEventHandler/version/index.js';
 export {
   ArvoEventFactory,
   createArvoEventFactory,
@@ -49,6 +138,8 @@ export {
   createArvoEvent,
   tryCreateArvoEvent,
 } from './factories/createArvoEvent.js';
+export { createArvoEventHandlerVersion } from './factories/createArvoEventHandlerVersion.js';
+export { setupArvoEventHandler } from './factories/setupArvoEventHandler.js';
 export { ArvoSemanticVersionCheckError } from './semver/errors.js';
 export { ArvoSemanticVersion } from './semver/index.js';
 export { ArvoContractSerializerError } from './serializers/ArvoContractSerializer/errors.js';
