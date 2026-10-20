@@ -24,6 +24,42 @@ The identifier SHALL be a string and SHALL be unique among the layers of one exe
 - **WHEN** a layer declares neither part
 - **THEN** the execution is carried out as if the layer were not there
 
+### Requirement: A Layer, Or A Way To Make One
+
+Wherever layers are listed, each entry SHALL be accepted either as a layer or as an operation taking nothing and returning one. Before any layer runs, each such operation SHALL be invoked exactly once for the execution and what it returns SHALL take the entry's place; the identifier rule SHALL then be applied to the layers that result.
+
+An operation that fails, or returns something that is not a layer, SHALL be a non-retryable execution fault naming a failed instantiation, raised before any layer runs.
+
+A layer made by such an operation SHALL serve that execution only.
+
+#### Scenario: A declared factory
+- **WHEN** a handler declares an operation in place of a layer and an execution runs
+- **THEN** the operation was invoked once for that execution
+- **AND** the layer it returned ran as if it had been declared directly
+
+#### Scenario: A supplied factory
+- **WHEN** an execution is supplied an operation in place of a layer
+- **THEN** the operation was invoked once and the layer it returned ran
+
+#### Scenario: One instance per execution
+- **WHEN** two executions of one handler run with a declared operation
+- **THEN** the operation was invoked once per execution
+- **AND** the two executions ran different instances
+
+#### Scenario: An operation that throws
+- **WHEN** an operation listed in place of a layer throws
+- **THEN** the execution is a non-retryable fault naming a failed instantiation
+- **AND** no part of any layer ran
+- **AND** the executor did not run
+
+#### Scenario: An operation that returns something else
+- **WHEN** an operation listed in place of a layer returns a value with no identifier
+- **THEN** the execution is a non-retryable fault naming a failed instantiation
+
+#### Scenario: Duplicate identifiers after instantiation
+- **WHEN** an operation returns a layer whose identifier another layer already carries
+- **THEN** the execution is a non-retryable fault naming a middleware conflict
+
 ### Requirement: Supplying Layers Per Execution
 
 An execution SHALL accept layers supplied alongside the event, the state function, the attempt and the dependencies, and SHALL apply them to that execution only. Omitting them SHALL be the only way to say there are none, and an empty list SHALL be understood as none.

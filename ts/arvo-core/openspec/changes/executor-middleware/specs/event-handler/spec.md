@@ -12,7 +12,7 @@ A version needing neither a state schema nor options of its own SHALL be declara
 
 A declaration MAY state the shape of the dependencies and of the mechanism hooks its executors will be given. Both are supplied by whatever runs the handler and neither is part of what a handler holds, so stating either SHALL NOT change what is built and SHALL NOT be stored.
 
-A declaration MAY name layers. Omitting them SHALL be the only way to say there are none, and an empty list SHALL be understood as none. Layers named here SHALL apply to every version the handler declares. Two named layers carrying one identifier SHALL be a declaration error.
+A declaration MAY name layers, each as a layer or as an operation returning one. Omitting them SHALL be the only way to say there are none, and an empty list SHALL be understood as none. Layers named here SHALL apply to every version the handler declares. Two named layers carrying one identifier SHALL be a declaration error; an operation SHALL NOT be invoked at declaration, so its identifier is checked at execution instead.
 
 A declaration that breaks any rule of this capability SHALL be refused, and the handler SHALL NOT be built.
 
@@ -70,6 +70,11 @@ A handler built from a declaration SHALL process no event, read no record and ca
 - **WHEN** a handler is declared naming two layers carrying the same identifier
 - **THEN** the declaration is refused
 - **AND** the refusal names the identifier
+
+#### Scenario: A declared operation is not invoked at declaration
+- **WHEN** a handler is declared naming an operation in place of a layer
+- **THEN** the handler is built
+- **AND** the operation was not invoked
 
 ## ADDED Requirements
 

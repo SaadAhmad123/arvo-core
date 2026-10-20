@@ -49,9 +49,15 @@ See `proposal.md` — Why. What shapes the approach:
 
 *Why `null` for an empty list too.* An empty list and an omitted one mean the same thing — no layers — and two spellings for one meaning is what the rule exists to prevent. The version then has one branch: `null` → run the executor alone.
 
+### Factories are invoked in the version, before anything else about layers
+
+An entry is a layer or a zero-argument operation returning one. The version resolves every entry — declared and supplied — into instances at the start of its layer work, in one place, and faults `middleware_instantiation_failed` through `#faultFor` where an operation throws or returns a value without a string `id`. Only then does the identifier check run, over instances. Declared factories are not invoked at build: a factory per execution is the point, and invoking it once at build would produce an instance that then serves every execution, which is the other form.
+
+*Why not resolve in `#dispatch`.* Same reason as the duplicate check: `#dispatch` has nothing to build a fault against.
+
 ### Duplicate identifiers: one check at build, one at execution
 
-Declared duplicates are checked in `ArvoEventHandler`'s constructor alongside the other declaration rules, reporting an `ErrorIssue` per duplicate under `middleware[<index>].id`, so a declaration breaking several rules still reports them all (`project.md` — *Validation*). Supplied duplicates — against each other and against the declared set — are checked in the version before the first before part runs, as a `middleware_conflict` fault built through the version's own `#faultFor`, so it carries the abandonment pair like any fault raised after the gate.
+Declared duplicates among *instances* are checked in `ArvoEventHandler`'s constructor alongside the other declaration rules, reporting an `ErrorIssue` per duplicate under `middleware[<index>].id`; a declared factory contributes no id at build and is checked at execution with everything else, so a declaration breaking several rules still reports them all (`project.md` — *Validation*). Supplied duplicates — against each other and against the declared set — are checked in the version before the first before part runs, as a `middleware_conflict` fault built through the version's own `#faultFor`, so it carries the abandonment pair like any fault raised after the gate.
 
 *Why the version and not `#dispatch`.* `#dispatch` has no record and no telemetry scope to build a fault against; the version does, and it is already where every post-gate fault is built.
 
@@ -61,9 +67,9 @@ A private `#middleware: Record<string, unknown>`, a getter returning a frozen co
 
 *A frozen copy on read, not a live reference.* The ADR says the read member is not a way to write. Returning the private object would let `ctx.middleware.x = y` succeed silently; a frozen copy makes it throw in strict mode and makes the data readable while the write path stays the only write path. The copy is shallow — what a layer stores is its own, and the protocol does not deep-freeze a value it does not understand.
 
-### `middleware_conflict` is non-retryable by omission
+### Both new kinds are non-retryable by omission
 
-Added to `ArvoFaultKind`; not added to `ARVO_RETRY_SAFE_FAULT_KINDS`. That is the whole of the verdict table change, and it is how every non-retryable kind is already expressed.
+`middleware_conflict` and `middleware_instantiation_failed` are added to `ArvoFaultKind` and not to `ARVO_RETRY_SAFE_FAULT_KINDS`. That is the whole of the verdict table change, and it is how every non-retryable kind is already expressed.
 
 ### Span marks, not spans
 

@@ -6,13 +6,13 @@ Some of what an executor does belongs to no particular version: reading a flag b
 
 ## What Changes
 
-- A new public type, `IArvoEventHandlerMiddleware`: an identifier, an optional `before`, an optional `after`.
+- A new public type, `IArvoEventHandlerMiddleware`: an identifier, an optional `before`, an optional `after`. Wherever layers are listed, an entry may be an instance or a factory returning one; factories are invoked once per execution before any layer runs, and a layer so made lives for that execution and may hold per-execution state on itself.
 - `setupArvoEventHandler` accepts `middleware`, applying to every version. Two declared layers sharing an identifier are a declaration error.
 - `ArvoEventHandler.execute` and `tryExecute` accept `middleware` per execution, supplied by whatever runs the handler. A supplied identifier already in use is a fault.
 - The order is fixed: supplied layers' `before` parts, then declared layers' `before` parts, then the version's executor; `after` parts in exact reverse.
 - A `before` that fails stops everything and decides the outcome as the executor's own failure would. An `after` runs only where the executor returned, sees the emission and cannot alter it, and a failure in it is recorded on the span and discarded.
 - Two new members on `ArvoExecutionContext`: `middleware`, read, and `setMiddleware`, write — built fresh per execution, never on the record, each key written once.
-- One new fault kind, `middleware_conflict`, non-retryable: a duplicate identifier at execution, or a middleware-data key written twice.
+- Two new fault kinds, non-retryable: `middleware_conflict` — a duplicate identifier at execution, or a middleware-data key written twice; `middleware_instantiation_failed` — a factory that throws or returns something that is not a layer.
 - The run clock covers `before` parts, the executor and `after` parts. Expiry during an `after` leaves the result standing and cuts the remaining `after` parts.
 - Each part of each layer is marked on the delivery span by identifier; executor time and layer time are recorded apart. No span is opened per layer.
 
@@ -24,7 +24,7 @@ Nothing existing changes meaning. A handler declaring no layers and an execution
 - `event-handler-middleware`: layers around a version's executor — how they are declared and supplied, the order they run in, what each part may do and how it fails, the middleware data they hand inward, and what bounds them.
 
 ### Modified Capabilities
-- `event-handler`: the execution context gains two members, `middleware` and `setMiddleware`; the fault vocabulary gains `middleware_conflict`; the declaration gains `middleware` and one declaration rule; the run clock's coverage is stated where layers are present.
+- `event-handler`: the execution context gains two members, `middleware` and `setMiddleware`; the fault vocabulary gains `middleware_conflict` and `middleware_instantiation_failed`; the declaration gains `middleware` and one declaration rule; the run clock's coverage is stated where layers are present.
 
 ## The shape, in TypeScript
 
@@ -72,17 +72,23 @@ async setMiddleware(key: string, value: unknown): Promise<void>; // one key, one
 ### On the declaration and on the execution
 
 ```ts
+// src/ArvoEventHandler/types/middleware.ts — an entry is a layer or a way to make one
+export type ArvoEventHandlerMiddlewareEntry<…> =
+  | IArvoEventHandlerMiddleware<…>
+  | (() => PromiseAble<IArvoEventHandlerMiddleware<…>>);            // invoked once per execution, before any layer runs
+
 // src/ArvoEventHandler/types/setup.ts
-middleware?: readonly IArvoEventHandlerMiddleware<string, …>[];   // optional at the boundary; never null
+middleware?: readonly ArvoEventHandlerMiddlewareEntry<…>[];        // optional at the boundary; never null; factories not invoked here
 
 // src/ArvoEventHandler/index.ts
-readonly middleware: readonly IArvoEventHandlerMiddleware[] | null; // null where undefined or empty
+readonly middleware: readonly ArvoEventHandlerMiddlewareEntry[] | null; // null where undefined or empty
 
 // src/ArvoEventHandler/types/execute.ts
-middleware?: readonly IArvoEventHandlerMiddleware[];               // per execution; normalized to null in #dispatch
+middleware?: readonly ArvoEventHandlerMiddlewareEntry[];           // per execution; normalized to null in #dispatch
 
 // src/ArvoEventHandler/fault/types.ts
 | 'middleware_conflict'                                            // non-retryable: a duplicate id at execution, or a key written twice
+| 'middleware_instantiation_failed'                                // non-retryable: a factory threw, or returned something that is not a layer
 ```
 
 ### What a layer author writes
@@ -134,6 +140,17 @@ class RequireTenant implements IArvoEventHandlerMiddleware<
   // no after: a layer may have either part or both
 }
 
+// A layer made per execution: listed as a factory, so this instance serves one execution and may hold what it learns on itself.
+class Stopwatch implements IArvoEventHandlerMiddleware<'stopwatch'> {
+  readonly id = 'stopwatch' as const;
+  #startedAt = 0;                                                       // allowed here, and only here: one instance, one execution
+
+  async before(): Promise<void> { this.#startedAt = Date.now(); }
+  async after(ctx: ArvoExecutionContext): Promise<void> {
+    ctx.telemetry.metric.record('order.duration', Date.now() - this.#startedAt);
+  }
+}
+
 // An observe-only layer: after only.
 class AuditTrail implements IArvoEventHandlerMiddleware<'audit_trail'> {
   readonly id = 'audit_trail' as const;
@@ -146,7 +163,7 @@ class AuditTrail implements IArvoEventHandlerMiddleware<'audit_trail'> {
 }
 ```
 
-An object literal satisfies the same interface — the handler sees only the shape — but a class is the form the package documents and tests against, because it is where configuration naturally lives and where "nothing per delivery on `this`" is a rule a reader can check.
+An object literal satisfies the same interface — the handler sees only the shape — but a class is the form the package documents and tests against. Which way a class is **listed** decides what it may hold: an instance (`new RequireTenant()`) serves every execution of the handler and keeps nothing per delivery on `this`; a factory (`() => new Stopwatch()`) is invoked once per execution, and the instance it returns may hold what it learns, because nothing else will ever see it.
 
 ### What a handler author writes
 
@@ -154,7 +171,7 @@ An object literal satisfies the same interface — the handler sees only the sha
 const orderHandler = setupArvoEventHandler({
   contracts: { self: orderContract, services },
   types: {} as { dependencies: { directory: Directory } },
-  middleware: [new RequireTenant(), new MeasureDuration('order.duration')],   // declared: every version; before in this order, after in reverse
+  middleware: [new RequireTenant(), () => new Stopwatch()],   // declared: every version; a factory is invoked once per execution
 })
   .handler('1.0.0', {
     state: orderState,
@@ -195,10 +212,12 @@ const ran = await orderHandler.tryExecute({
 | `setMiddleware` on a key already present | `middleware_conflict` fault |
 | Same id twice, declared | `ArvoEventHandlerValidationError` at `build` |
 | Same id twice, supplied — or supplied equals declared | `middleware_conflict` fault before any layer runs |
+| A factory throws, or returns a non-layer | `middleware_instantiation_failed` fault before any layer runs |
+| A factory is listed | invoked once per execution; the instance lives for that execution |
 
 ## Impact
 
-- **Public surface:** `IArvoEventHandlerMiddleware` exported from `src/index.ts`; `middleware` on the setup param and the execute param; `middleware` and `setMiddleware` on `ArvoExecutionContext`; `middleware_conflict` on `ArvoFaultKind`. All additive.
+- **Public surface:** `IArvoEventHandlerMiddleware` exported from `src/index.ts`; `middleware` on the setup param and the execute param; `middleware` and `setMiddleware` on `ArvoExecutionContext`; `middleware_conflict` and `middleware_instantiation_failed` on `ArvoFaultKind`. All additive.
 - **`src/ArvoEventHandler`:** `setup.ts`, `index.ts`, `version/index.ts`, `version/types.ts`, `types/execute.ts`, `types/setup.ts`, `context/index.ts`, `fault/types.ts` (the verdict set in `fault/retry.ts` is unchanged), `version/telemetry.ts`; one new type file and one new internal file for running the chain.
 - **Tests:** new specs for the new capability; existing handler, context and fault specs extended for the new members and kind. Coverage stays at the package bar.
 - **Dependencies:** none added.

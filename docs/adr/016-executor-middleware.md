@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-20
 - **Scope:** Arvo ecosystem
-- **Amends:** [ADR-006](./006-arvoeventhandler-protocol.md), **One executor per version** — a version's business code MAY be surrounded by layers; **The execution context** — adds two members, **middleware data** and **set middleware data**, the pair *state* and *set state* already form; and **What the mechanism calls** and **Required of infrastructure adapters**, each by one additive sentence. [ADR-008](./008-execution-faults-and-abandonment.md), **The `fault_kind` vocabulary and retry verdicts** — adds one kind, `middleware_conflict`. [ADR-009](./009-execution-bounds.md), **The run clock: what it covers, and what it does not** — one additive paragraph on the layers it covers and what its expiry means in each. Everything is additive: nothing already there is replaced
+- **Amends:** [ADR-006](./006-arvoeventhandler-protocol.md), **One executor per version** — a version's business code MAY be surrounded by layers; **The execution context** — adds two members, **middleware data** and **set middleware data**, the pair *state* and *set state* already form; and **What the mechanism calls** and **Required of infrastructure adapters**, each by one additive sentence. [ADR-008](./008-execution-faults-and-abandonment.md), **The `fault_kind` vocabulary and retry verdicts** — adds two kinds, `middleware_conflict` and `middleware_instantiation_failed`. [ADR-009](./009-execution-bounds.md), **The run clock: what it covers, and what it does not** — one additive paragraph on the layers it covers and what its expiry means in each. Everything is additive: nothing already there is replaced
 - **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), which defines the executor, the execution context and the validation of what the executor returns; [ADR-008](./008-execution-faults-and-abandonment.md), which defines the two ways an executor fails; [ADR-009](./009-execution-bounds.md), which defines the run clock; [ADR-010](./010-delivery-classification-and-entry-validation.md), which fixes where in a delivery the executor is entered; [ADR-011](./011-dependency-lifetime.md) and [ADR-012](./012-absent-dependencies-and-hooks.md), which draw the line this ADR declines to cross
 - **Addresses:** nothing ADR-000 deferred. It refines what ADR-006 means by *the executor*
 - **Left deferred:** a per-version declaration site; a layer observing a failed execution. See **Left deferred**
@@ -56,6 +56,14 @@ ADR-006 says "one executor per version" and builds the context, the clock, the f
 The identifier names the layer wherever the protocol refers to it — on the span, in a fault's message — and it MUST be unique among the layers of one execution (**Where layers are declared**).
 
 A version with no layers is unchanged. Its executor is its business code, as before.
+
+### A layer, or a way to make one
+
+**Wherever layers are listed, each entry MAY be a layer or a way to make one** — an operation taking nothing and returning a layer. Before any layer runs, each such operation is invoked exactly once for the execution and what it returns takes the entry's place; the identifier check (**Where layers are declared**) then runs over the layers that result.
+
+**An operation that fails, or returns something that is not a layer, is a non-retryable execution fault, `middleware_instantiation_failed`**, raised before any layer runs. The same operation fails the same way on every attempt, which is the verdict ADR-008 gives every fault of that nature.
+
+A layer made this way lives for one execution. **It MAY therefore hold what it learns during that execution on itself**, because nothing else will ever see that instance — the rule under **A layer holds nothing of its own per delivery** is about a layer that serves many executions, and a layer made per execution serves one. An author who wants that holds it on the instance; one who passes a shared layer uses middleware data. Both are conformant, and which an author chose is visible from how the layer was listed.
 
 ### Where layers are declared
 
@@ -114,7 +122,7 @@ Four rules, and only these:
 
 ### A layer holds nothing of its own per delivery
 
-One layer serves every delivery of the handler it is declared on, and may serve several at once. **A layer MUST NOT keep anything about a delivery on itself**: what its before part learns and its after part needs travels through middleware data, and nothing else. This is the same property ADR-006 requires of the handler and the context, and the same one ADR-011 requires of a dependency object: a handle to a lifetime, not the lifetime.
+A layer listed as an instance serves every delivery of the handler it is declared on, and may serve several at once. **Such a layer MUST NOT keep anything about a delivery on itself**: what its before part learns and its after part needs travels through middleware data, and nothing else. A layer made per execution (**A layer, or a way to make one**) is exempt, because it serves one. This is the same property ADR-006 requires of the handler and the context, and the same one ADR-011 requires of a dependency object: a handle to a lifetime, not the lifetime.
 
 ### What bounds a layer
 
@@ -126,9 +134,9 @@ Both clocks are read at the moment the business code returns, so the execution-t
 
 **Entering a layer is entering the executor.** Where ADR-009's collection rule says the executor is not entered — a followup under the default join whose collection is incomplete — no layer is entered either. Layers run when business code would have run and at no other time.
 
-### `middleware_conflict`
+### `middleware_conflict` and `middleware_instantiation_failed`
 
-One fault kind is added to ADR-008's vocabulary, non-retryable, raised in two situations: a supplied layer whose identifier another layer in the same execution already carries, and a middleware-data key written a second time. Both are defects in how the execution was assembled, reproduced exactly by any redelivery, which is the verdict ADR-008 gives every fault of that nature. One kind for two conditions follows ADR-008's own precedent — `record_invalid` is raised at two gate steps — and the fault's `message` says which condition and names the identifier or key.
+Two fault kinds are added to ADR-008's vocabulary, both non-retryable. **`middleware_conflict`** is raised in two situations: a supplied layer whose identifier another layer in the same execution already carries, and a middleware-data key written a second time; one kind for two conditions follows ADR-008's own precedent — `record_invalid` is raised at two gate steps — and the fault's `message` says which condition and names the identifier or key. **`middleware_instantiation_failed`** is raised where an operation listed in place of a layer fails or returns something that is not one. All three conditions are defects in how the execution was assembled, reproduced exactly by any redelivery, which is the verdict ADR-008 gives every fault of that nature.
 
 ### Nothing of the kind exists outside the handler
 
@@ -165,7 +173,7 @@ Nothing else about observability changes. A layer records through the context's 
 - **No post-processing of the emission.** A layer cannot add to, redact, or re-address what the business code returned. Granting that later is additive; it is not granted now.
 - **An after part that fails is heard by nobody but the trace.** That is the rule's intent — an outcome already decided is not undone — and it means a layer that *must* record something and cannot has no way to say so except on the span.
 - **Middleware data is untyped by the protocol.** What a layer left is whatever it left, and the code inside checks what it reads. That is the price of a channel open enough for any layer to use, and it is paid where ADR-012 says such prices belong: by the party that knows what absence or the wrong shape means.
-- **One more fault kind**, carried by every language for two defects most deployments will never see. Accepted because the alternatives are a silent overwrite and a silent duplicate.
+- **Two more fault kinds**, carried by every language for defects most deployments will never see. Accepted because the alternatives are a silent overwrite, a silent duplicate, and a layer that quietly did not exist.
 - **Layer time is executor time.** One clock covers the before parts, the business code and the after parts, so a run clock sized for business code alone will fire on business code that is still fast if the before parts are slow, and will cut short an after part that the business code left little time for. An author sizes the clock for all three.
 
 ## Considered Alternatives
@@ -214,7 +222,7 @@ Considered. A layer that belongs to one version and not its neighbours is a real
 
 ### Effect on AAM
 
-None to the membership list. This ADR refines "handler interfaces and lifecycle semantics", which ADR-006 places inside the model, by stating what may surround the business code in the executor's seat. It adds two members to the execution context and one kind to the fault vocabulary, all additively, as ADR-014 added one member before it.
+None to the membership list. This ADR refines "handler interfaces and lifecycle semantics", which ADR-006 places inside the model, by stating what may surround the business code in the executor's seat. It adds two members to the execution context and two kinds to the fault vocabulary, all additively, as ADR-014 added one member before it.
 
 ### Invariants depended on
 
@@ -250,7 +258,10 @@ handler
                                                     before parts run in this order, inside anything
                                                     supplied per execution; after parts in reverse
         require_tenant                              a layer: an identifier, a before part, an after part
-        measure_duration                            another
+        () → measure_duration                       or a way to make one: invoked once per execution,
+                                                    before any layer runs; the layer it returns lives
+                                                    for this execution and may hold what it learns;
+                                                    failing → middleware_instantiation_failed
 
     version 1.0.0
         execute(ctx) → ...                          the business code; the only author of the emission
