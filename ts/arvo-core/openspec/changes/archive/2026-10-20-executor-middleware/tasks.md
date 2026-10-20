@@ -63,6 +63,6 @@ The sandbox is a proving ground, not authority: what it finds comes back here as
 ## 8. Scenarios, docs, and the bar
 
 - [x] 8.1 Extend `tests/ArvoEventHandler/scenarios/` with one scenario file exercising layers across the three-version fixture: a tenant layer writing middleware data the executors branch on, a duration layer, and a supplied layer from the harness.
-- [ ] 8.2 Confirm every scenario in both delta specs has a test that would fail without the implementation.
-- [ ] 8.3 Coverage, lint, typecheck, build: `pnpm test:coverage`, `pnpm lint`, `pnpm typecheck`, `pnpm build`. 100% on every new file; no regression elsewhere. Sandbox: `pnpm lint`, `pnpm typecheck`, `pnpm distributed:purity`.
-- [ ] 8.4 Sync the delta specs into `openspec/specs/` and archive the change.
+- [x] 8.2 Confirm every scenario in both delta specs has a test that would fail without the implementation.
+- [x] 8.3 Coverage, lint, typecheck, build: `pnpm test:coverage`, `pnpm lint`, `pnpm typecheck`, `pnpm build`. 100% on every new file; no regression elsewhere. Sandbox: `pnpm lint`, `pnpm typecheck`, `pnpm distributed:purity`.
+- [x] 8.4 Sync the delta specs into `openspec/specs/` and archive the change.
