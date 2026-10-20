@@ -87,47 +87,66 @@ middleware?: readonly IArvoEventHandlerMiddleware[];               // per execut
 
 ### What a layer author writes
 
+A layer is a class implementing the interface. Configuration lives on the instance; anything about one delivery lives in middleware data, never on `this`, because one instance serves every delivery of the handler it is declared on, several at once.
+
 ```ts
 // A layer for any handler: typed against the base context, so it reads only what every context has.
-const measureDuration: IArvoEventHandlerMiddleware<'measure_duration'> = {
-  id: 'measure_duration',
-  async before(ctx) {
-    await ctx.setMiddleware('measure_duration.started_at', Date.now());   // per-delivery state lives here, never on the layer
-  },
-  async after(ctx, emission) {
-    const started = ctx.middleware['measure_duration.started_at'];        // unknown — narrow before use
-    if (typeof started === 'number') {
-      ctx.telemetry.metric.record('executor.duration.with_layers', Date.now() - started);
-    }
-    ctx.telemetry.addEvent('emitted', { count: Array.isArray(emission) ? emission.length : emission ? 1 : 0 });
-  },
-};
+class MeasureDuration implements IArvoEventHandlerMiddleware<'measure_duration'> {
+  readonly id = 'measure_duration' as const;
+
+  constructor(private readonly metricName: string) {}
+
+  async before(ctx: ArvoExecutionContext): Promise<void> {
+    await ctx.setMiddleware(`${this.id}.started_at`, Date.now());       // per-delivery; never on this
+  }
+
+  async after(ctx: ArvoExecutionContext, emission: Readonly<ArvoExecutorEmission>): Promise<void> {
+    const started = ctx.middleware[`${this.id}.started_at`];            // unknown — narrow before use
+    if (typeof started !== 'number') return;
+    ctx.telemetry.metric.record(this.metricName, Date.now() - started);
+    ctx.telemetry.addEvent('emitted', {
+      count: Array.isArray(emission) ? emission.length : emission ? 1 : 0,
+    });
+  }
+}
 
 // A layer for one handler: names its dependencies, so ctx.dependencies is typed.
-const requireTenant: IArvoEventHandlerMiddleware<
-  'require_tenant', typeof orderVersion, typeof services, typeof orderState, { directory: Directory }
-> = {
-  id: 'require_tenant',
-  async before(ctx) {
+class RequireTenant implements IArvoEventHandlerMiddleware<
+  'require_tenant',
+  typeof orderVersion,
+  typeof services,
+  typeof orderState,
+  { directory: Directory }
+> {
+  readonly id = 'require_tenant' as const;
+
+  async before(ctx: ArvoExecutionContext<typeof orderVersion, typeof services, typeof orderState, { directory: Directory }>): Promise<void> {
     const tenant = await ctx.dependencies?.directory?.lookup(ctx.state.subject);
     if (!tenant) {
-      throw await ctx.fault({                                             // a fault: everything stops; the mechanism decides about a retry
+      throw await ctx.fault({                                           // a fault: everything stops; the mechanism decides about a retry
         faultKind: 'executor_raised',
         message: `no tenant for subject ${ctx.state.subject}`,
         retryable: false,
       });
     }
-    await ctx.setMiddleware('tenant', tenant);                            // the executor decides what a suspended tenant means
-  },
-};
+    await ctx.setMiddleware('tenant', tenant);                          // the executor decides what a suspended tenant means
+  }
+  // no after: a layer may have either part or both
+}
 
-// A class is equally fine — the handler sees only the shape. Hold configuration on it, never a delivery.
+// An observe-only layer: after only.
 class AuditTrail implements IArvoEventHandlerMiddleware<'audit_trail'> {
   readonly id = 'audit_trail' as const;
+
   constructor(private readonly sink: AuditSink) {}
-  async after(ctx, emission) { await this.sink.write(ctx.state.executionId, emission); }
+
+  async after(ctx: ArvoExecutionContext, emission: Readonly<ArvoExecutorEmission>): Promise<void> {
+    await this.sink.write(ctx.state.executionId, emission);             // throws here are recorded on the span and discarded
+  }
 }
 ```
+
+An object literal satisfies the same interface — the handler sees only the shape — but a class is the form the package documents and tests against, because it is where configuration naturally lives and where "nothing per delivery on `this`" is a rule a reader can check.
 
 ### What a handler author writes
 
@@ -135,7 +154,7 @@ class AuditTrail implements IArvoEventHandlerMiddleware<'audit_trail'> {
 const orderHandler = setupArvoEventHandler({
   contracts: { self: orderContract, services },
   types: {} as { dependencies: { directory: Directory } },
-  middleware: [requireTenant, measureDuration],        // declared: every version; before in this order, after in reverse
+  middleware: [new RequireTenant(), new MeasureDuration('order.duration')],   // declared: every version; before in this order, after in reverse
 })
   .handler('1.0.0', {
     state: orderState,
