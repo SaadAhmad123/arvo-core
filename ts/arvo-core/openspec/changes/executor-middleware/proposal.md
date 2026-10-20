@@ -32,4 +32,5 @@ Nothing existing changes meaning. A handler declaring no layers and an execution
 - **`src/ArvoEventHandler`:** `setup.ts`, `index.ts`, `version/index.ts`, `version/types.ts`, `types/execute.ts`, `types/setup.ts`, `context/index.ts`, `fault/types.ts`, `fault/retry-safe.ts` or wherever the verdict table lives, `version/telemetry.ts`; one new type file and one new internal file for running the chain.
 - **Tests:** new specs for the new capability; existing handler, context and fault specs extended for the new members and kind. Coverage stays at the package bar.
 - **Dependencies:** none added.
-- **Out of scope:** anything that runs several handlers or supplies layers to them from outside — a later change. The sandbox is untouched.
+- **Sandbox:** the distributed handlers gain layers and each mechanism supplies one, with a failure-injection layer, so the feature is proven under Temporal, DBOS and the plain loop before the change closes. The sandbox is a proving ground, not authority.
+- **Out of scope:** anything that runs several handlers or supplies layers to them from outside as a product surface — a later change.

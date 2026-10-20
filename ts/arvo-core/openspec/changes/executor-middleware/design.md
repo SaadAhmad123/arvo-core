@@ -7,7 +7,7 @@ See `proposal.md` — Why. What shapes the approach:
 - **The context already has the pair to mirror.** `state` / `setState`: a private field, a getter, a write member that validates and faults through `ctx.fault`. `middleware` / `setMiddleware` is the same shape with no schema and no persistence.
 - **The two spellings for nothing already meet in one place.** `ArvoEventHandler#dispatch` turns an omitted `dependencies` or `hooks` into `null`; `middleware` joins them there, and the version never sees `undefined`.
 - **The fault vocabulary is a union plus a set.** `ArvoFaultKind` is a string union; `ARVO_RETRY_SAFE_FAULT_KINDS` names the retryable ones and everything else is non-retryable by omission. `middleware_conflict` is one line in the first and nothing in the second.
-- **The sandbox is not authoritative** and is not touched.
+- **The sandbox is not authoritative.** It is used here as a proving ground — layers under three mechanisms with failures injected — and anything it finds comes back as a package test, never as a rule on its own.
 
 ## Goals / Non-Goals
 
