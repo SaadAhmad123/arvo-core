@@ -103,11 +103,13 @@ export type ArvoEventHandlerSetupParam<
    * concludes; it never decides what is emitted. No two may share an
    * identifier. See `IArvoEventHandlerMiddleware`.
    */
+  // Checked against what the handler declares, never used to infer it: a
+  // layer written for any handler would otherwise widen the declaration.
   middleware?: readonly ArvoEventHandlerMiddlewareEntry<
     VersionedArvoContract,
-    TServices,
+    NoInfer<TServices>,
     z.$ZodObject,
-    TDependencies,
-    TMechanismHooks
+    NoInfer<TDependencies>,
+    NoInfer<TMechanismHooks>
   >[];
 };

@@ -115,10 +115,42 @@ describe('where layers are listed', () => {
     > = { id: 'for_payments' };
     setupArvoEventHandler({
       contracts: { self: orderContract },
-      // @ts-expect-error the handler declares a db, and the layer listed expects a gateway
       types: {} as { dependencies: { db: { query: () => void } } },
+      // @ts-expect-error this layer expects a gateway the handler does not declare
       middleware: [forPayments],
     });
     expect(forPayments.id).toBe('for_payments');
+  });
+});
+
+describe('layers listed on a handler', () => {
+  it('leave the dependencies the handler declared as declared', () => {
+    const generic: IArvoEventHandlerMiddleware = { id: 'generic' };
+    setupArvoEventHandler({
+      contracts: { self: orderContract },
+      types: {} as {
+        dependencies: { db: { query: (sql: string) => string[] } };
+      },
+      middleware: [generic, () => generic],
+    }).handler('1.0.0', async (ctx) => {
+      expectTypeOf(ctx.dependencies?.db?.query).toEqualTypeOf<
+        ((sql: string) => string[]) | undefined
+      >();
+    });
+    expect(generic.id).toBe('generic');
+  });
+
+  it('leave the hooks the handler declared as declared', () => {
+    const generic: IArvoEventHandlerMiddleware = { id: 'generic' };
+    setupArvoEventHandler({
+      contracts: { self: orderContract },
+      types: {} as { mechanismHooks: { scheduler: { now: () => number } } },
+      middleware: [generic],
+    }).handler('1.0.0', async (ctx) => {
+      expectTypeOf(ctx.hooks?.scheduler?.now).toEqualTypeOf<
+        (() => number) | undefined
+      >();
+    });
+    expect(generic.id).toBe('generic');
   });
 });

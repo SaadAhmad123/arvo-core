@@ -4,6 +4,7 @@ import { ArvoExecutionContextTelemetry } from '../../../../src/ArvoEventHandler/
 import { ArvoHandlerFault } from '../../../../src/ArvoEventHandler/fault/index.js';
 import { deriveArvoExecutionId } from '../../../../src/ArvoEventHandler/helpers/execution-id.js';
 import type { ArvoEventHandlerExecuteResponse } from '../../../../src/ArvoEventHandler/types/execute.js';
+import type { ArvoEventHandlerMiddlewareEntry } from '../../../../src/ArvoEventHandler/types/middleware.js';
 import { ArvoEventSerializer } from '../../../../src/serializers/ArvoEventSerializer/index.js';
 import type { JSONObject } from '../../../../src/types.js';
 import { heldDependencies } from '../../dependency.js';
@@ -92,6 +93,7 @@ export type ArvoHandlerUnderTest = {
     attempt: number;
     dependencies?: unknown;
     hooks?: unknown;
+    middleware?: readonly ArvoEventHandlerMiddlewareEntry[];
   }): Promise<ArvoEventHandlerExecuteResponse>;
 };
 
@@ -126,6 +128,11 @@ export type ArvoLatticeParam = {
    * deployments.
    */
   abandons?: boolean;
+  /**
+   * Layers the lattice supplies with every delivery, as a mechanism
+   * would: outside whatever the handler declares.
+   */
+  middleware?: readonly ArvoEventHandlerMiddlewareEntry[];
 };
 
 /** A deterministic source of chance, so a failing run can be repeated. */
@@ -181,6 +188,7 @@ export class ArvoLattice {
   readonly parked = new Map<string, ArvoEvent[]>();
 
   readonly #versions: ArvoVersionsUnderTest;
+  readonly #middleware: readonly ArvoEventHandlerMiddlewareEntry[] | null;
   readonly #handlers: Record<string, ArvoHandlerUnderTest>;
   readonly #chaos: ArvoChaos;
   readonly #clock: { now: () => number };
@@ -201,6 +209,7 @@ export class ArvoLattice {
     this.#clock = param.clock ?? { now: () => Date.now() };
     this.#chance = chanceFrom(param.seed ?? 1);
     this.#abandons = param.abandons ?? true;
+    this.#middleware = param.middleware ?? null;
   }
 
   /**
@@ -427,6 +436,7 @@ export class ArvoLattice {
           behave: this.#behaviours.get(event.to as string),
         }).dependency,
         hooks: {},
+        ...(this.#middleware === null ? {} : { middleware: this.#middleware }),
       });
 
       if (response.kind === 'discarded') {

@@ -58,11 +58,11 @@ The sandbox is a proving ground, not authority: what it finds comes back here as
 - [ ] 7.2 Each of the three mechanisms supplies one layer per execution (`middleware` on `tryExecute`), so supplied-outside-declared is exercised under Temporal, DBOS and the plain loop.
 - [ ] 7.3 A failure-injection layer, switchable per run: throws in before on the Nth delivery; faults retryable in before; throws in after; hangs in after past the run clock; writes a duplicate key; is supplied with a duplicate id. Each run asserts the protocol's outcome under each mechanism — retried where retryable, dead-lettered where not, result standing where the after failed — and that §12's cross-mechanism replay still agrees byte for byte.
 - [ ] 7.4 Soak: the §scale scenario with layers on every handler for the full run; no growth in span count per delivery; no leak across concurrent deliveries; the tape replays identically.
-- [ ] 7.5 Anything the sandbox turns up that the package tests did not: write the package test first, then fix.
+- [x] 7.5 Anything the sandbox turns up that the package tests did not: write the package test first, then fix.
 
 ## 8. Scenarios, docs, and the bar
 
-- [ ] 8.1 Extend `tests/ArvoEventHandler/scenarios/` with one scenario file exercising layers across the three-version fixture: a tenant layer writing middleware data the executors branch on, a duration layer, and a supplied layer from the harness.
+- [x] 8.1 Extend `tests/ArvoEventHandler/scenarios/` with one scenario file exercising layers across the three-version fixture: a tenant layer writing middleware data the executors branch on, a duration layer, and a supplied layer from the harness.
 - [ ] 8.2 Confirm every scenario in both delta specs has a test that would fail without the implementation.
 - [ ] 8.3 Coverage, lint, typecheck, build: `pnpm test:coverage`, `pnpm lint`, `pnpm typecheck`, `pnpm build`. 100% on every new file; no regression elsewhere. Sandbox: `pnpm lint`, `pnpm typecheck`, `pnpm distributed:purity`.
 - [ ] 8.4 Sync the delta specs into `openspec/specs/` and archive the change.

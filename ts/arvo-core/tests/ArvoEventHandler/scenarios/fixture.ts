@@ -3,6 +3,7 @@ import { ArvoContract } from '../../../src/ArvoContract/index.js';
 import type { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/index.js';
 import type { ARVO_NO_STATE_SCHEMA } from '../../../src/ArvoEventHandler/helpers/defaults.js';
 import type { ArvoExecutorEmission } from '../../../src/ArvoEventHandler/types/execute.js';
+import type { ArvoEventHandlerMiddlewareEntry } from '../../../src/ArvoEventHandler/types/middleware.js';
 import type { ArvoEventHandlerOptions } from '../../../src/ArvoEventHandler/types/options.js';
 import { setupArvoEventHandler } from '../../../src/factories/setupArvoEventHandler.js';
 import type { PromiseAble } from '../../../src/types.js';
@@ -259,6 +260,8 @@ export type ScenarioShape = {
   versionOptions?: Partial<
     Record<'1.0.0' | '1.1.0' | '2.0.0', Partial<ArvoEventHandlerOptions>>
   >;
+  /** Layers the handler declares around every version. */
+  middleware?: readonly ArvoEventHandlerMiddlewareEntry[];
 };
 
 /** The handler under test, declared as a scenario asks for it. */
@@ -266,6 +269,7 @@ export const declareHandler = (shape: ScenarioShape = {}) =>
   setupArvoEventHandler({
     contracts: { self: fulfilContract, services: fulfilServices },
     ...(shape.options === undefined ? {} : { options: shape.options }),
+    ...(shape.middleware === undefined ? {} : { middleware: shape.middleware }),
     types: {} as { dependencies: ScenarioDependencies },
   })
     .handler('1.0.0', {
