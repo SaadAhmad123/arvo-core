@@ -71,6 +71,15 @@ export const resolveMiddleware = async (
   supplied: readonly ArvoEventHandlerMiddlewareEntry[] | null,
   declared: readonly ArvoEventHandlerMiddlewareEntry[] | null,
 ): Promise<readonly IArvoEventHandlerMiddleware[] | ArvoGateRefusal | null> => {
+  if (supplied !== null && supplied !== undefined && !Array.isArray(supplied)) {
+    return {
+      faultKind: 'middleware_instantiation_failed',
+      message:
+        'the layers supplied with this execution are not a list of layers, or ways to make one. No layer ran',
+      violations: ['supplied middleware: must be a list'],
+    };
+  }
+
   const listed = [
     ...(supplied ?? []).map((entry, index) => ({
       entry,

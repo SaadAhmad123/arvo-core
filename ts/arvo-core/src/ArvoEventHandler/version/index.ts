@@ -28,6 +28,7 @@ import type {
 import type {
   ArvoEventHandlerExecuteResponse,
   ArvoEventHandlerExecutor,
+  ArvoExecutorEmission,
 } from '../types/execute.js';
 import type {
   ArvoEventHandlerMiddlewareEntry,
@@ -368,7 +369,10 @@ export class ArvoEventHandlerVersion<
       awaiting: collected.inFlightEventMap.size,
     });
 
-    const { entered, progress } = await this.#enterExecutor(ctx, layers);
+    const { entered, progress, concluded } = await this.#enterExecutor(
+      ctx,
+      layers,
+    );
     const executorMs =
       progress.executorStartedAt === null
         ? 0
@@ -403,11 +407,17 @@ export class ArvoEventHandlerVersion<
 
     // Read at the moment the executor returned, which it has by now: what
     // the after parts took changes neither verdict.
-    await this.#refuseOnClocks(param, ctx, progress.returnedAt as number);
+    const atReturn = concluded();
+    await this.#refuseOnClocks(
+      param,
+      ctx,
+      atReturn,
+      progress.returnedAt as number,
+    );
 
     const batch = collectBatch(entered.returned);
     if (batch === null) {
-      throw await this.#faultFor(param, ctx.state, {
+      throw await this.#faultFor(param, atReturn, {
         faultKind: 'emission_not_permitted',
         message: `your executor for ${this.#contractAtVersion} returned something that is not an event: it must return an ArvoEvent, an array of them, or nothing at all. Build events with ctx.build()`,
         violations: [],
@@ -421,16 +431,16 @@ export class ArvoEventHandlerVersion<
       batch,
     );
     if (batchRefusal !== null) {
-      throw await this.#faultFor(param, ctx.state, batchRefusal);
+      throw await this.#faultFor(param, atReturn, batchRefusal);
     }
     markStage(param.telemetry, 'returns_judged', { emitted: batch.length });
 
-    const unanswered = this.#refuseSilentCancel(ctx.state, batch);
+    const unanswered = this.#refuseSilentCancel(atReturn, batch);
     if (unanswered !== null) {
-      throw await this.#faultFor(param, ctx.state, unanswered);
+      throw await this.#faultFor(param, atReturn, unanswered);
     }
 
-    return this.#produce(param, ctx.state, batch);
+    return this.#produce(param, atReturn, batch);
   }
 
   /** The record this execution runs against, built or restored. */
@@ -816,19 +826,43 @@ export class ArvoEventHandlerVersion<
       TMechanismHooks
     >,
     layers: readonly IArvoEventHandlerMiddleware[] | null,
-  ): Promise<{ entered: ArvoExecutorRun; progress: ArvoMiddlewareProgress }> {
+  ): Promise<{
+    entered: ArvoExecutorRun;
+    progress: ArvoMiddlewareProgress;
+    concluded: () => ArvoContextState<TSelf, TServices, TDataSchema>;
+  }> {
     const progress = createArvoMiddlewareProgress();
+    // What the execution had come to when the executor returned. After
+    // parts run on the same context, and nothing they write may reach
+    // what is produced: the outcome was decided at this moment.
+    let atReturn: ArvoContextState<TSelf, TServices, TDataSchema> | null = null;
+    // read only where the executor returned, which is where it was set
+    const concluded = () =>
+      atReturn as ArvoContextState<TSelf, TServices, TDataSchema>;
+    const executor = async (
+      entering: typeof ctx,
+    ): Promise<ArvoExecutorEmission> => {
+      const returned = await this.#executor(entering);
+      atReturn = entering.state;
+      return returned;
+    };
+
     // One clock over the before parts, the executor and the after parts.
     const running = runMiddleware({
       layers,
       ctx,
-      executor: this.#executor,
+      executor,
       telemetry: ctx.telemetry,
       progress,
+    }).then((entered) => {
+      if (atReturn !== null && ctx.state !== atReturn && !progress.abandoned) {
+        markStage(ctx.telemetry, 'middleware_after_write_discarded');
+      }
+      return entered;
     });
 
     if (this.options.runTimeout === null) {
-      return { entered: await running, progress };
+      return { entered: await running, progress, concluded };
     }
 
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -841,7 +875,7 @@ export class ArvoEventHandlerVersion<
 
     try {
       const entered = await Promise.race([running, clock]);
-      if (entered.kind !== 'outran') return { entered, progress };
+      if (entered.kind !== 'outran') return { entered, progress, concluded };
 
       progress.abandoned = true;
       // Run out in an after part: the executor's return is already
@@ -851,9 +885,10 @@ export class ArvoEventHandlerVersion<
         return {
           entered: { kind: 'returned', returned: progress.returned },
           progress,
+          concluded,
         };
       }
-      return { entered, progress };
+      return { entered, progress, concluded };
     } finally {
       clearTimeout(timer);
     }
@@ -911,23 +946,24 @@ export class ArvoEventHandlerVersion<
       TDependencies,
       TMechanismHooks
     >,
+    record: ArvoContextState<TSelf, TServices, TDataSchema>,
     returnedAt: number,
   ): Promise<void> {
     // The execution clock is read first so that where both have expired
     // the broader verdict is the one reported.
     const outlived = refuseOutlived(
       this.#contractAtVersion,
-      ctx.state.initEvent,
+      record.initEvent,
       this.options.executionTimeout,
       returnedAt,
     );
     if (outlived !== null) {
-      throw await this.#faultFor(param, ctx.state, outlived);
+      throw await this.#faultFor(param, record, outlived);
     }
 
     const ranFor = returnedAt - ctx.enteredAt;
     if (this.options.runTimeout !== null && ranFor >= this.options.runTimeout) {
-      throw await this.#faultFor(param, ctx.state, {
+      throw await this.#faultFor(param, record, {
         faultKind: 'run_timeout',
         message: `your executor for ${this.#contractAtVersion} returned after ${ranFor}ms, past the ${this.options.runTimeout}ms it is allowed (runTimeout), so what it returned was discarded. Code that blocks rather than awaits cannot be stopped partway`,
         violations: [],

@@ -564,8 +564,12 @@ export class ArvoEventHandler<
       // omits, everything below reads null.
       dependencies: param.dependencies ?? null,
       hooks: param.hooks ?? null,
+      // a null from a caller no compiler saw reads as none, and anything
+      // that is not a list is carried on to be refused as no layer
       middleware:
-        param.middleware === undefined || param.middleware.length === 0
+        param.middleware === undefined ||
+        param.middleware === null ||
+        (Array.isArray(param.middleware) && param.middleware.length === 0)
           ? null
           : param.middleware,
       telemetry,

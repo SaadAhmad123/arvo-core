@@ -30,6 +30,7 @@ export const ARVO_EXECUTION_STAGES = Object.freeze([
   'middleware_after_returned',
   'middleware_after_failed',
   'middleware_after_cut',
+  'middleware_after_write_discarded',
   'returns_judged',
   'record_written',
 ] as const);

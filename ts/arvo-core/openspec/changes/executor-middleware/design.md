@@ -83,6 +83,14 @@ The executor's return — an event, an array, or nothing — is frozen before an
 
 No new surface is built for a before part. It receives the same `ctx` the executor does, so `setState`, `setMiddleware`, `cancel`, `fault`, `build` all work as they do today, and a thrown value takes exactly the path a thrown value from the executor takes — `#enterExecutor` reports `raised`, and the version's existing branches handle it.
 
+### The record is the one the executor returned with
+
+After parts run on the same context the executor was given, so an after part calling `setState` or `cancel` would — left alone — change the record the version then produces. ADR-016 is explicit that nothing after the executor returned may undo what it concluded. The version therefore wraps the executor it hands the chain, captures `ctx.state` the moment it returns, and uses that record for return validation, the silent-cancel check, and `#produce`. Where the context's state has moved on by the time the after parts finish, `middleware_after_write_discarded` is marked on the span. Found by the adversarial suite (task 6.2) and closed test-first.
+
+### A caller no compiler saw
+
+`null` for `middleware` reads as none at both sites, matching how the package treats a `null` from an untyped caller elsewhere (`project.md` — *Optional inputs*). Something that is not a list is kept as given by the setup and refused at build with an issue at `middleware`; supplied per execution, it is `middleware_instantiation_failed`. A supplied entry that is an object but not a layer is also `middleware_instantiation_failed`: of the two kinds, it is the one that means "no layer could be had from this entry".
+
 ## Risks / Trade-offs
 
 - **[A before part that throws looks, in the fault, exactly like the executor throwing]** → intended by the ADR; the span marks name which layer was entered last, so a reader of the trace can tell.

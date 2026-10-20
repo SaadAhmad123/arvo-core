@@ -2,6 +2,7 @@ import type { Span, Tracer } from '@opentelemetry/api';
 import { z } from 'zod';
 import type { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/index.js';
 import type { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
+import type { IArvoEventHandlerDependency } from '../../../src/ArvoEventHandler/types/dependency.js';
 import type {
   ArvoEventHandlerExecuteResponse,
   ArvoExecutorEmission,
@@ -148,8 +149,12 @@ export const openOne = async (
   handler: ReturnType<typeof orderHandler>,
   param: {
     middleware?: readonly ArvoEventHandlerMiddlewareEntry[];
-    event?: ReturnType<typeof anOrder>;
+    event?: Parameters<
+      ReturnType<typeof orderHandler>['tryExecute']
+    >[0]['event'];
     store?: ReturnType<typeof storing>;
+    dependencies?: IArvoEventHandlerDependency;
+    attempt?: number;
   } = {},
 ): Promise<
   | { ok: true; value: ArvoEventHandlerExecuteResponse }
@@ -158,8 +163,11 @@ export const openOne = async (
   const ran = await handler.tryExecute({
     event: param.event ?? anOrder(),
     state: (param.store ?? storing()).read(),
-    attempt: 0,
+    attempt: param.attempt ?? 0,
     ...(param.middleware === undefined ? {} : { middleware: param.middleware }),
+    ...(param.dependencies === undefined
+      ? {}
+      : { dependencies: param.dependencies as never }),
   });
   return ran;
 };
@@ -188,3 +196,31 @@ export const logging = () => {
 /** Waits, so a clock can run out. */
 export const sleep = (ms: number) =>
   new Promise<void>((settle) => setTimeout(settle, ms));
+
+/** The executor that asks the payment service twice, then answers once both reply. */
+export const askingTwice: OrderExecutor = async (ctx) => {
+  if (ctx.state.triggeringEvent.type === 'com_order_create') {
+    await ctx.setState({ data: { stage: 'asking' } });
+    return [
+      await ctx.build({ type: 'com_payment_charge', data: { amount: 1 } }),
+      await ctx.build({ type: 'com_payment_charge', data: { amount: 2 } }),
+    ];
+  }
+  return answering(ctx);
+};
+
+/** What the payment service answers one request with. */
+export const answerTo = (
+  request: { id: string; subject: string },
+  executionId: string,
+) =>
+  createArvoEventFactory(paymentVersion).createOutput({
+    type: 'evt_payment_charged',
+    source: paymentVersion.type,
+    subject: request.subject,
+    to: orderVersion.type,
+    executionid: executionId,
+    initid: request.id,
+    parentid: request.id,
+    data: { receipt: `r-${request.id}` },
+  });

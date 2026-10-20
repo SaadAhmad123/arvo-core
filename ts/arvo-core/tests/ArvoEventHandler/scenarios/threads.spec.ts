@@ -48,6 +48,25 @@ const anOrder = async (subject: string, version: '1.0.0' | '2.0.0') => {
 const answers = (broker: ThreadedBroker) =>
   broker.transcript.published.filter((one) => one.to === 'com.web.checkout');
 
+describe('four threads with layers around the order handler', () => {
+  it('keeps what each execution learns with that execution, under real concurrency', async () => {
+    const broker = await broking(4, { layered: true });
+    for (let at = 0; at < 40; at += 1) {
+      await broker.publish(await anOrder(`order-${at}`, '1.0.0'));
+    }
+    await broker.settle();
+
+    const answered = answers(broker);
+    expect(answered).toHaveLength(40);
+    for (const one of answered) {
+      const orderId = (one as unknown as { data: { order_id: string } }).data
+        .order_id;
+      expect(orderId).toBe(`${one.subject}|${one.subject}`);
+    }
+    expect(broker.transcript.faults).toEqual([]);
+  }, 60_000);
+});
+
 describe('four threads, one store, and the handler deciding everything', () => {
   it('carries forty workflows through, each answered once', async () => {
     const broker = await broking(4);

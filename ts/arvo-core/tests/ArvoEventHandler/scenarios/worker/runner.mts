@@ -16,7 +16,10 @@ import { declareThreadedHandlers } from './contracts.ts';
  * live, however far away the answer lives.
  */
 
-const handlers = declareThreadedHandlers(workerData?.charges ?? 'succeeds');
+const handlers = declareThreadedHandlers(
+  workerData?.charges ?? 'succeeds',
+  workerData?.layered === true,
+);
 const events = new ArvoEventSerializer({ type: 'arvoevent' });
 
 /** Every read waiting on the thread that owns the store. */

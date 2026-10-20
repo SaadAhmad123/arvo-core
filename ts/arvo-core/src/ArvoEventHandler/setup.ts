@@ -129,10 +129,11 @@ export class ArvoEventHandlerSetup<
     });
     this.options = param.options ?? null;
     this.telemetry = param.telemetry;
-    this.middleware =
-      param.middleware === undefined
-        ? undefined
-        : Object.freeze([...param.middleware]);
+    // Copied where it is a list; anything else is kept as given for build
+    // to refuse, and a null from a caller no compiler saw reads as none.
+    this.middleware = Array.isArray(param.middleware)
+      ? Object.freeze([...param.middleware])
+      : (param.middleware ?? undefined);
     this.versions = Object.freeze([...versions]);
     Object.freeze(this);
   }

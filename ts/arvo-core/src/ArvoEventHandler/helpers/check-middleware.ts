@@ -73,6 +73,15 @@ export const describeUnlikeLayer = (
 export const checkMiddleware = (
   middleware: readonly ArvoEventHandlerMiddlewareEntry[],
 ): ErrorIssue[] => {
+  if (!Array.isArray(middleware)) {
+    return [
+      new ErrorIssue({
+        path: 'middleware',
+        message: 'must be a list of layers, or ways to make one',
+        received: middleware,
+      }),
+    ];
+  }
   const issues: ErrorIssue[] = [];
   const firstAt = new Map<string, number>();
 

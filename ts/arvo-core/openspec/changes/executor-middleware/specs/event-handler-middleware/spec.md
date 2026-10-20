@@ -62,7 +62,7 @@ A layer made by such an operation SHALL serve that execution only.
 
 ### Requirement: Supplying Layers Per Execution
 
-An execution SHALL accept layers supplied alongside the event, the state function, the attempt and the dependencies, and SHALL apply them to that execution only. Omitting them SHALL be the only way to say there are none, and an empty list SHALL be understood as none.
+An execution SHALL accept layers supplied alongside the event, the state function, the attempt and the dependencies, and SHALL apply them to that execution only. Omitting them SHALL be the only way to say there are none, and an empty list SHALL be understood as none. A caller no compiler saw passing nothing SHALL be understood as none, and one passing something that is not a list SHALL be refused as a non-retryable execution fault naming a failed instantiation.
 
 A supplied layer whose identifier another layer of the same execution already carries — whether that other layer was supplied or declared on the handler — SHALL be refused as a non-retryable execution fault naming a middleware conflict, before any layer runs.
 
@@ -147,7 +147,7 @@ Where a before part fails, no further before part SHALL run, the executor SHALL 
 
 An after part SHALL run only where the executor returned. Where the executor raised, or outran the run clock, no after part SHALL run.
 
-An after part SHALL return nothing and SHALL NOT be able to alter what the executor returned.
+An after part SHALL return nothing and SHALL NOT be able to alter what the executor returned, nor what the execution remembers: the record produced SHALL be the one the execution had come to at the moment the executor returned. A write an after part makes through the context — to the business state, or by marking the execution cancelled — SHALL be discarded and marked on the delivery span.
 
 Where an after part fails — a fault built through the context or anything else — the outcome SHALL be unchanged: what the executor returned SHALL stand, the failure SHALL be recorded on the delivery span and discarded, every remaining after part SHALL still run, and nothing of the failure SHALL reach the mechanism.
 
@@ -166,6 +166,15 @@ Where an after part fails — a fault built through the context or anything else
 - **THEN** the execution produces exactly what the executor returned
 - **AND** the failure is recorded on the delivery span
 - **AND** every other after part ran
+
+#### Scenario: An after part writes state
+- **WHEN** an after part replaces the business state
+- **THEN** the record produced carries the state the executor left
+- **AND** the discarded write is marked on the delivery span
+
+#### Scenario: An after part cancels
+- **WHEN** an after part marks an execution cancelled that the executor concluded otherwise
+- **THEN** the record rests where the executor's return put it
 
 #### Scenario: An after part raises a fault
 - **WHEN** an after part raises a fault built through the context

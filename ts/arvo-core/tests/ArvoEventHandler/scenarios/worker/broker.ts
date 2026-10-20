@@ -40,6 +40,8 @@ export type ThreadedBrokerOptions = {
   readonly slowly?: number;
   /** Whether every event is carried twice, as an at-least-once bus does. */
   readonly duplicate?: boolean;
+  /** Whether the order handler declares layers around its executor. */
+  readonly layered?: boolean;
 };
 
 export class ThreadedBroker {
@@ -64,12 +66,14 @@ export class ThreadedBroker {
   readonly #charges: ChargeBehaviour;
   readonly #slowly: number;
   readonly #duplicate: boolean;
+  readonly #layered: boolean;
 
   constructor(howMany: number, options: ThreadedBrokerOptions = {}) {
     this.#howMany = howMany;
     this.#charges = options.charges ?? 'succeeds';
     this.#slowly = options.slowly ?? 0;
     this.#duplicate = options.duplicate === true;
+    this.#layered = options.layered === true;
   }
 
   /** Starts every thread, each loading the built package for itself. */
@@ -77,7 +81,7 @@ export class ThreadedBroker {
     const at = new URL('./runner.mts', import.meta.url);
     for (let which = 0; which < this.#howMany; which += 1) {
       const worker = new Worker(at, {
-        workerData: { charges: this.#charges },
+        workerData: { charges: this.#charges, layered: this.#layered },
       });
       const lane: Lane = { worker, held: null, alive: true };
       worker.on('message', (said) => void this.#heard(lane, said));
