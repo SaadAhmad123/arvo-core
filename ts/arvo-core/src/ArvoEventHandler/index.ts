@@ -564,6 +564,10 @@ export class ArvoEventHandler<
       // omits, everything below reads null.
       dependencies: param.dependencies ?? null,
       hooks: param.hooks ?? null,
+      middleware:
+        param.middleware === undefined || param.middleware.length === 0
+          ? null
+          : param.middleware,
       telemetry,
       // Judged where the protocol puts it: after the record has had its
       // say about depth, lifecycle, time and addressing, so a late event

@@ -5,6 +5,7 @@ import type { JSONObject, PromiseAble } from '../../types.js';
 import type { ArvoExecutionContext } from '../context/index.js';
 import type { ArvoExecutionContextTelemetry } from '../context/telemetry/index.js';
 import type { IArvoEventHandlerDependency } from './dependency.js';
+import type { ArvoEventHandlerMiddlewareEntry } from './middleware.js';
 import type { ArvoServiceMap } from './services.js';
 import type { ArvoDependencies, ArvoMechanismHooks } from './supplied.js';
 
@@ -139,4 +140,20 @@ export type ArvoEventHandlerExecuteParam<
    * this execution concludes breaks the atomicity the protocol rests on.
    */
   hooks?: TMechanismHooks;
+
+  /**
+   * Layers around the executor for this execution only: each a layer, or
+   * a way to make one. They run outside any the handler declared — their
+   * before parts first, their after parts last — and no identifier may
+   * repeat one already in use.
+   *
+   * See `IArvoEventHandlerMiddleware` for what a layer may do.
+   */
+  middleware?: readonly ArvoEventHandlerMiddlewareEntry<
+    VersionedArvoContract,
+    ArvoServiceMap,
+    z.$ZodObject,
+    TDependencies,
+    TMechanismHooks
+  >[];
 };

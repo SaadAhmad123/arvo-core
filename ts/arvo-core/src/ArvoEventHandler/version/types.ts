@@ -121,6 +121,20 @@ type ArvoVersionExecuteCommon<
    * was never asked.
    */
   hooks: TMechanismHooks | null;
+  /**
+   * Layers supplied for this execution alone, or `null` where none were.
+   * Not yet judged: a way to make one is called, and every identifier
+   * checked, before any layer runs.
+   */
+  middleware:
+    | readonly ArvoEventHandlerMiddlewareEntry<
+        VersionedArvoContract,
+        ArvoServiceMap,
+        z.$ZodObject,
+        TDependencies,
+        TMechanismHooks
+      >[]
+    | null;
   /** This execution's telemetry, built by whatever runs the handler. */
   telemetry: ArvoExecutionContextTelemetry;
 

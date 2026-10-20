@@ -71,6 +71,7 @@ const open = (
     attempt: 0,
     dependencies: null,
     hooks: {},
+    middleware: null,
     telemetry: telemetry().telemetry,
     ...overrides,
   });
@@ -116,6 +117,7 @@ const resume = async (
     attempt: 0,
     dependencies: null,
     hooks: {},
+    middleware: null,
     telemetry: telemetry().telemetry,
     ...overrides,
   });
@@ -266,6 +268,7 @@ describe('answering something an execution awaited', () => {
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
   });
@@ -286,6 +289,7 @@ describe('answering something an execution awaited', () => {
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
     if (once.kind !== 'produced') throw new Error('expected it to produce');
@@ -298,6 +302,7 @@ describe('answering something an execution awaited', () => {
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
     expect(again.kind).toBe('discarded');
@@ -402,6 +407,7 @@ describe('whether an answer re-enters the executor', () => {
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
     if (response.kind !== 'produced') throw new Error('expected it to produce');
@@ -421,6 +427,7 @@ describe('whether an answer re-enters the executor', () => {
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
     if (response.kind !== 'produced') throw new Error('expected it to produce');
@@ -443,6 +450,7 @@ describe('whether an answer re-enters the executor', () => {
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
     if (response.kind !== 'produced') throw new Error('expected it to produce');
@@ -913,6 +921,7 @@ describe('what one execution records as it goes', () => {
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
     if (once.kind !== 'produced') throw new Error('expected it to produce');
@@ -925,6 +934,7 @@ describe('what one execution records as it goes', () => {
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: watch.telemetry,
     });
     expect(watch.attributes).toHaveBeenCalledWith(

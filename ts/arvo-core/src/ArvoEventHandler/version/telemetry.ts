@@ -21,9 +21,15 @@ export const ARVO_EXECUTION_STAGES = Object.freeze([
   'dependencies_resolved',
   'collection_partial',
   'executor_entered',
+  'middleware_before_entered',
+  'middleware_before_returned',
   'executor_returned',
   'executor_raised',
   'executor_outran',
+  'middleware_after_entered',
+  'middleware_after_returned',
+  'middleware_after_failed',
+  'middleware_after_cut',
   'returns_judged',
   'record_written',
 ] as const);
@@ -101,6 +107,22 @@ export const markExecutorRan = (
   ms: number,
 ): void => {
   telemetry.metric.record('executor.duration', ms, versionAttributes(self));
+};
+
+/**
+ * Records how long the layers around the executor ran, the executor's own
+ * time left out, so slow layers and slow business code are two charts.
+ *
+ * @param telemetry - Where this execution records.
+ * @param self - The version of the contract whose executor they surround.
+ * @param ms - How long the layers ran, all of them together.
+ */
+export const markMiddlewareRan = (
+  telemetry: ArvoExecutionContextTelemetry,
+  self: VersionedArvoContract,
+  ms: number,
+): void => {
+  telemetry.metric.record('middleware.duration', ms, versionAttributes(self));
 };
 
 /**

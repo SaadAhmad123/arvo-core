@@ -29,7 +29,10 @@ import type {
   ArvoEventHandlerExecuteResponse,
   ArvoEventHandlerExecutor,
 } from '../types/execute.js';
-import type { ArvoEventHandlerMiddlewareEntry } from '../types/middleware.js';
+import type {
+  ArvoEventHandlerMiddlewareEntry,
+  IArvoEventHandlerMiddleware,
+} from '../types/middleware.js';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
 import type { ArvoServiceMap } from '../types/services.js';
 import type {
@@ -45,6 +48,12 @@ import {
   refuseUnawaited,
 } from './gate.js';
 import {
+  type ArvoMiddlewareProgress,
+  createArvoMiddlewareProgress,
+  resolveMiddleware,
+  runMiddleware,
+} from './middleware.js';
+import {
   collectBatch,
   recordToCommit,
   refuseBatch,
@@ -55,6 +64,7 @@ import {
   describeExecution,
   markCollection,
   markExecutorRan,
+  markMiddlewareRan,
   markOutcome,
   markStage,
   markSwallowed,
@@ -325,6 +335,13 @@ export class ArvoEventHandlerVersion<
       deliveredEventId: collected.triggeringEvent.id,
     });
 
+    // Every layer this execution will run, judged before any runs, so a
+    // refusal here leaves nothing half-done.
+    const layers = await resolveMiddleware(param.middleware, this.#middleware);
+    if (layers !== null && 'faultKind' in layers) {
+      throw await this.#faultFor(param, collected, layers);
+    }
+
     const ctx = new ArvoExecutionContext<
       TSelf,
       TServices,
@@ -351,12 +368,19 @@ export class ArvoEventHandlerVersion<
       awaiting: collected.inFlightEventMap.size,
     });
 
-    const entered = await this.#enterExecutor(ctx);
-    markExecutorRan(
-      param.telemetry,
-      this.contracts.self,
-      Date.now() - ctx.enteredAt,
-    );
+    const { entered, progress } = await this.#enterExecutor(ctx, layers);
+    const executorMs =
+      progress.executorStartedAt === null
+        ? 0
+        : (progress.returnedAt ?? Date.now()) - progress.executorStartedAt;
+    markExecutorRan(param.telemetry, this.contracts.self, executorMs);
+    if (layers !== null) {
+      markMiddlewareRan(
+        param.telemetry,
+        this.contracts.self,
+        Date.now() - ctx.enteredAt - executorMs,
+      );
+    }
     markStage(param.telemetry, `executor_${entered.kind}`);
 
     if (entered.kind === 'outran') {
@@ -377,7 +401,9 @@ export class ArvoEventHandlerVersion<
       return this.#reportFailedWork(param, ctx.state, entered.raised);
     }
 
-    await this.#refuseOnClocks(param, ctx);
+    // Read at the moment the executor returned, which it has by now: what
+    // the after parts took changes neither verdict.
+    await this.#refuseOnClocks(param, ctx, progress.returnedAt as number);
 
     const batch = collectBatch(entered.returned);
     if (batch === null) {
@@ -789,16 +815,21 @@ export class ArvoEventHandlerVersion<
       TDependencies,
       TMechanismHooks
     >,
-  ): Promise<ArvoExecutorRun> {
-    const running: Promise<ArvoExecutorRun> = (async () => {
-      try {
-        return { kind: 'returned', returned: await this.#executor(ctx) };
-      } catch (raised) {
-        return { kind: 'raised', raised };
-      }
-    })();
+    layers: readonly IArvoEventHandlerMiddleware[] | null,
+  ): Promise<{ entered: ArvoExecutorRun; progress: ArvoMiddlewareProgress }> {
+    const progress = createArvoMiddlewareProgress();
+    // One clock over the before parts, the executor and the after parts.
+    const running = runMiddleware({
+      layers,
+      ctx,
+      executor: this.#executor,
+      telemetry: ctx.telemetry,
+      progress,
+    });
 
-    if (this.options.runTimeout === null) return running;
+    if (this.options.runTimeout === null) {
+      return { entered: await running, progress };
+    }
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const clock = new Promise<ArvoExecutorRun>((settle) => {
@@ -809,7 +840,20 @@ export class ArvoEventHandlerVersion<
     });
 
     try {
-      return await Promise.race([running, clock]);
+      const entered = await Promise.race([running, clock]);
+      if (entered.kind !== 'outran') return { entered, progress };
+
+      progress.abandoned = true;
+      // Run out in an after part: the executor's return is already
+      // decided, so it stands and the remaining after parts are skipped.
+      if (progress.returnedAt !== null) {
+        markStage(ctx.telemetry, 'middleware_after_cut');
+        return {
+          entered: { kind: 'returned', returned: progress.returned },
+          progress,
+        };
+      }
+      return { entered, progress };
     } finally {
       clearTimeout(timer);
     }
@@ -867,6 +911,7 @@ export class ArvoEventHandlerVersion<
       TDependencies,
       TMechanismHooks
     >,
+    returnedAt: number,
   ): Promise<void> {
     // The execution clock is read first so that where both have expired
     // the broader verdict is the one reported.
@@ -874,13 +919,13 @@ export class ArvoEventHandlerVersion<
       this.#contractAtVersion,
       ctx.state.initEvent,
       this.options.executionTimeout,
-      Date.now(),
+      returnedAt,
     );
     if (outlived !== null) {
       throw await this.#faultFor(param, ctx.state, outlived);
     }
 
-    const ranFor = Date.now() - ctx.enteredAt;
+    const ranFor = returnedAt - ctx.enteredAt;
     if (this.options.runTimeout !== null && ranFor >= this.options.runTimeout) {
       throw await this.#faultFor(param, ctx.state, {
         faultKind: 'run_timeout',
