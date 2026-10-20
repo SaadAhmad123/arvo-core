@@ -1,5 +1,6 @@
 import { type Meter, type Tracer, trace } from '@opentelemetry/api';
 import { err, ok } from 'neverthrow';
+import type * as z from 'zod/v4/core';
 import type { ArvoContract } from '../ArvoContract/index.js';
 import type { VersionedArvoContract } from '../ArvoContract/versioned/index.js';
 import type { ArvoEvent } from '../ArvoEvent/index.js';
@@ -23,6 +24,7 @@ import {
 } from './gate.js';
 import { checkCollisions } from './helpers/check-collisions.js';
 import { checkContract } from './helpers/check-contract.js';
+import { checkMiddleware } from './helpers/check-middleware.js';
 import { checkOptions } from './helpers/check-options.js';
 import { checkServices } from './helpers/check-services.js';
 import { checkTimeouts } from './helpers/check-timeouts.js';
@@ -43,6 +45,7 @@ import type {
   ArvoEventHandlerExecuteParam,
   ArvoEventHandlerExecuteResponse,
 } from './types/execute.js';
+import type { ArvoEventHandlerMiddlewareEntry } from './types/middleware.js';
 import type { ArvoEventHandlerOptions } from './types/options.js';
 import type { ArvoServiceMap } from './types/services.js';
 import type {
@@ -122,6 +125,20 @@ export class ArvoEventHandler<
     readonly logger: ArvoLogger | null;
   };
 
+  /**
+   * The layers around every version's executor, in the order declared, or
+   * `null` where none were.
+   */
+  readonly middleware:
+    | readonly ArvoEventHandlerMiddlewareEntry<
+        VersionedArvoContract,
+        TServices,
+        z.$ZodObject,
+        TDependencies,
+        TMechanismHooks
+      >[]
+    | null;
+
   /** What judges an arriving event against the contracts declared. */
   readonly #events: ArvoEventValidator<TSelf, TServices>;
 
@@ -164,6 +181,7 @@ export class ArvoEventHandler<
       ),
       ...checkServices(services),
       ...checkCollisions(contract, services),
+      ...checkMiddleware(setup.middleware ?? []),
     ];
 
     const optionsByVersion = new Map<string, ArvoEventHandlerOptions>();
@@ -177,6 +195,13 @@ export class ArvoEventHandler<
     }
 
     if (issues.length > 0) throw new ArvoEventHandlerValidationError(issues);
+
+    // The one place an omitted list and an empty one meet: everything
+    // below reads null for no layers.
+    const middleware =
+      setup.middleware === undefined || setup.middleware.length === 0
+        ? null
+        : Object.freeze([...setup.middleware]);
 
     const versions = new Map<string, ArvoEventHandlerVersion>();
     for (const declared of setup.versions) {
@@ -196,6 +221,11 @@ export class ArvoEventHandler<
           state: declared.state,
           declaresState: declared.declaresState,
           execute: declared.execute,
+          // held at the handler's own types; a version is held at the
+          // map's, as its executor already is
+          middleware: middleware as
+            | readonly ArvoEventHandlerMiddlewareEntry[]
+            | null,
         }),
       );
     }
@@ -205,6 +235,7 @@ export class ArvoEventHandler<
       services: Object.freeze({ ...services }),
     });
     this.options = Object.freeze(handlerOptions);
+    this.middleware = middleware;
     this.telemetry = Object.freeze({
       tracer:
         setup.telemetry?.tracer ??

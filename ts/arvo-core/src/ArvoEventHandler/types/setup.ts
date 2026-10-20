@@ -1,6 +1,9 @@
 import type { Meter, Tracer } from '@opentelemetry/api';
+import type * as z from 'zod/v4/core';
 import type { ArvoContract } from '../../ArvoContract/index.js';
+import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
 import type { ArvoLogger } from '../context/telemetry/types.js';
+import type { ArvoEventHandlerMiddlewareEntry } from './middleware.js';
 import type { ArvoEventHandlerOptions } from './options.js';
 import type { ArvoServiceMap } from './services.js';
 import type {
@@ -90,4 +93,21 @@ export type ArvoEventHandlerSetupParam<
    * naming them here is what makes them anything but `any`.
    */
   types?: ArvoDeclaredTypes<TDependencies, TMechanismHooks>;
+
+  /**
+   * Layers around every version's executor: each a layer, or a way to
+   * make one per execution. Before parts run in this order, inside any
+   * layers an execution is supplied; after parts in reverse.
+   *
+   * A layer may change what the executor sees, and so what an execution
+   * concludes; it never decides what is emitted. No two may share an
+   * identifier. See `IArvoEventHandlerMiddleware`.
+   */
+  middleware?: readonly ArvoEventHandlerMiddlewareEntry<
+    VersionedArvoContract,
+    TServices,
+    z.$ZodObject,
+    TDependencies,
+    TMechanismHooks
+  >[];
 };

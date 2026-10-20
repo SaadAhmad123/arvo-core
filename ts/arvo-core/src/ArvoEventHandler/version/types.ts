@@ -9,6 +9,7 @@ import type {
   ArvoEventHandlerExecutor,
   ArvoExecutorEmission,
 } from '../types/execute.js';
+import type { ArvoEventHandlerMiddlewareEntry } from '../types/middleware.js';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
 import type {
   ArvoAnyServiceResponse,
@@ -72,6 +73,20 @@ export type ArvoEventHandlerVersionParam<
    * nothing; it exists so both can be named.
    */
   types?: ArvoDeclaredTypes<TDependencies, TMechanismHooks>;
+
+  /**
+   * The layers the handler declared around every version's executor, or
+   * `null` where it declared none. Already judged.
+   */
+  middleware:
+    | readonly ArvoEventHandlerMiddlewareEntry<
+        VersionedArvoContract,
+        TServices,
+        z.$ZodObject,
+        TDependencies,
+        TMechanismHooks
+      >[]
+    | null;
 };
 
 /** What every execution of a version brings with it, however it arrived. */

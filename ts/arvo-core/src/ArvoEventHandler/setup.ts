@@ -99,6 +99,14 @@ export class ArvoEventHandlerSetup<
   /** Every version declared so far, in the order they were declared. */
   readonly versions: ArvoAccumulatedVersions;
 
+  /** The layers declared around every version's executor, as given. */
+  readonly middleware: ArvoEventHandlerSetupParam<
+    TSelf,
+    TServices,
+    TDependencies,
+    TMechanismHooks
+  >['middleware'];
+
   /**
    * @param param - The contract, what it may send to, and how its
    * versions behave unless one says otherwise.
@@ -121,6 +129,10 @@ export class ArvoEventHandlerSetup<
     });
     this.options = param.options ?? null;
     this.telemetry = param.telemetry;
+    this.middleware =
+      param.middleware === undefined
+        ? undefined
+        : Object.freeze([...param.middleware]);
     this.versions = Object.freeze([...versions]);
     Object.freeze(this);
   }
@@ -191,6 +203,9 @@ export class ArvoEventHandlerSetup<
         },
         ...(this.options === null ? {} : { options: this.options }),
         ...(this.telemetry === undefined ? {} : { telemetry: this.telemetry }),
+        ...(this.middleware === undefined
+          ? {}
+          : { middleware: this.middleware }),
       },
       [...this.versions, accumulated],
     );

@@ -29,6 +29,7 @@ import type {
   ArvoEventHandlerExecuteResponse,
   ArvoEventHandlerExecutor,
 } from '../types/execute.js';
+import type { ArvoEventHandlerMiddlewareEntry } from '../types/middleware.js';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
 import type { ArvoServiceMap } from '../types/services.js';
 import type {
@@ -149,6 +150,16 @@ export class ArvoEventHandlerVersion<
 
   readonly #depth: ArvoEventDepthValidator;
 
+  readonly #middleware:
+    | readonly ArvoEventHandlerMiddlewareEntry<
+        VersionedArvoContract,
+        TServices,
+        z.$ZodObject,
+        TDependencies,
+        TMechanismHooks
+      >[]
+    | null;
+
   // What a message names this version by, so that a reader of a fault knows
   // which of their versions it is about without looking anything up.
   readonly #contractAtVersion: string;
@@ -171,6 +182,7 @@ export class ArvoEventHandlerVersion<
     this.dataSchema = param.state;
     this.declaresState = param.declaresState;
     this.#executor = param.execute;
+    this.#middleware = param.middleware;
     this.#contractAtVersion = `${param.contracts.self.type}@${param.contracts.self.version}`;
     this.#depth = new ArvoEventDepthValidator({
       maxDepth: param.options.maxDepth,

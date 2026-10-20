@@ -15,10 +15,10 @@ Tests first, as every step from here. Each group is one commit, and every edit u
 
 ## 3. Declaring layers on a handler
 
-- [ ] 3.1 Extend `tests/ArvoEventHandler/declaration.spec.ts` and `build.spec.ts`: a handler with no `middleware` holds `null`; with `[]` holds `null`; with two layers holds both in order; two instances with one `id` is refused with an issue at `middleware[1].id` naming the identifier, reported alongside any other declaration issue; a factory is held as given and **not invoked** at build.
-- [ ] 3.2 Add `middleware?: readonly IArvoEventHandlerMiddleware[]` to `ArvoEventHandlerSetupParam` in `src/ArvoEventHandler/types/setup.ts`, carried through `ArvoEventHandlerSetup`.
-- [ ] 3.3 Add `src/ArvoEventHandler/helpers/check-middleware.ts`: the duplicate-identifier rule as `ErrorIssue[]`, one concern per file like the other `check-*` helpers.
-- [ ] 3.4 In `ArvoEventHandler` (`src/ArvoEventHandler/index.ts`): run the check with the others; normalize to `readonly middleware: readonly IArvoEventHandlerMiddleware[] | null`; pass it to every `new ArvoEventHandlerVersion`. Add `middleware` to `ArvoEventHandlerVersionParam` in `src/ArvoEventHandler/version/types.ts`.
+- [x] 3.1 Extend `tests/ArvoEventHandler/declaration.spec.ts` and `build.spec.ts`: a handler with no `middleware` holds `null`; with `[]` holds `null`; with two layers holds both in order; two instances with one `id` is refused with an issue at `middleware[1].id` naming the identifier, reported alongside any other declaration issue; a factory is held as given and **not invoked** at build.
+- [x] 3.2 Add `middleware?: readonly IArvoEventHandlerMiddleware[]` to `ArvoEventHandlerSetupParam` in `src/ArvoEventHandler/types/setup.ts`, carried through `ArvoEventHandlerSetup`.
+- [x] 3.3 Add `src/ArvoEventHandler/helpers/check-middleware.ts`: the duplicate-identifier rule as `ErrorIssue[]`, one concern per file like the other `check-*` helpers.
+- [x] 3.4 In `ArvoEventHandler` (`src/ArvoEventHandler/index.ts`): run the check with the others; normalize to `readonly middleware: readonly IArvoEventHandlerMiddleware[] | null`; pass it to every `new ArvoEventHandlerVersion`. Add `middleware` to `ArvoEventHandlerVersionParam` in `src/ArvoEventHandler/version/types.ts`.
 
 ## 4. Supplying layers per execution
 

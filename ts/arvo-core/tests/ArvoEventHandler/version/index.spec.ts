@@ -45,6 +45,7 @@ const declared = (overrides: Declared = {}) =>
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     state: orderData,
     declaresState: true,
+    middleware: null,
     execute: async (ctx) => {
       await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
       return ctx.entry === 'init'
