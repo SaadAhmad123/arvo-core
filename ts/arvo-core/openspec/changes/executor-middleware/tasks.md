@@ -10,8 +10,8 @@ Tests first, as every step from here. Each group is one commit, and every edit u
 
 ## 2. Middleware data on the context
 
-- [ ] 2.1 Extend `tests/ArvoEventHandler/context/`: `ctx.middleware` is a present empty object where nothing was written; a write is readable; a second write of one key faults `middleware_conflict` and leaves the first value; the read member is frozen and assigning through it throws; the data is not on the record exported at the end; a fresh context has fresh data.
-- [ ] 2.2 Add `#middleware`, the `middleware` getter (frozen shallow copy) and `async setMiddleware(key, value)` to `ArvoExecutionContext` in `src/ArvoEventHandler/context/index.ts`, faulting through `this.fault` with a message naming the key. TSDoc mirrors `setState`'s and says what is not persisted.
+- [x] 2.1 Extend `tests/ArvoEventHandler/context/`: `ctx.middleware` is a present empty object where nothing was written; a write is readable; a second write of one key faults `middleware_conflict` and leaves the first value; the read member is frozen and assigning through it throws; the data is not on the record exported at the end; a fresh context has fresh data.
+- [x] 2.2 Add `#middleware`, the `middleware` getter (frozen shallow copy) and `async setMiddleware(key, value)` to `ArvoExecutionContext` in `src/ArvoEventHandler/context/index.ts`, faulting through `this.fault` with a message naming the key. TSDoc mirrors `setState`'s and says what is not persisted.
 
 ## 3. Declaring layers on a handler
 

@@ -562,6 +562,116 @@ describe('ArvoExecutionContext', async () => {
     });
   });
 
+  describe('middleware data', async () => {
+    it('is present and empty where nothing was written', () => {
+      expect(onInit().middleware).toEqual({});
+    });
+
+    it('reads back what was written, under the key it was written', async () => {
+      const ctx = onInit();
+      await ctx.setMiddleware('tenant', { id: 't-1' });
+      expect(ctx.middleware.tenant).toEqual({ id: 't-1' });
+    });
+
+    it('keeps several keys side by side', async () => {
+      const ctx = onInit();
+      await ctx.setMiddleware('a', 1);
+      await ctx.setMiddleware('b', 2);
+      expect(ctx.middleware).toEqual({ a: 1, b: 2 });
+    });
+
+    it('holds a value by reference rather than copying it', async () => {
+      const ctx = onInit();
+      const tenant = { id: 't-1' };
+      await ctx.setMiddleware('tenant', tenant);
+      expect(ctx.middleware.tenant).toBe(tenant);
+    });
+
+    it('refuses a key written a second time, as a fault no further attempt fixes', async () => {
+      const ctx = onInit();
+      await ctx.setMiddleware('tenant', 'first');
+      const raised = await ctx
+        .setMiddleware('tenant', 'second')
+        .catch((error: unknown) => error);
+      expect(raised).toBeInstanceOf(ArvoHandlerFault);
+      expect((raised as ArvoHandlerFault).faultKind).toBe(
+        'middleware_conflict',
+      );
+      expect((raised as ArvoHandlerFault).retry).toBeNull();
+      expect((raised as ArvoHandlerFault).message).toContain('tenant');
+    });
+
+    it('leaves the first value where a second write is refused', async () => {
+      const ctx = onInit();
+      await ctx.setMiddleware('tenant', 'first');
+      await ctx.setMiddleware('tenant', 'second').catch(() => undefined);
+      expect(ctx.middleware.tenant).toBe('first');
+    });
+
+    it('counts a key written with nothing in it as written', async () => {
+      const ctx = onInit();
+      await ctx.setMiddleware('flag', undefined);
+      await expect(ctx.setMiddleware('flag', true)).rejects.toBeInstanceOf(
+        ArvoHandlerFault,
+      );
+    });
+
+    it('cannot be written through what reads it', async () => {
+      const ctx = onInit();
+      await ctx.setMiddleware('tenant', 'first');
+      expect(() => {
+        (ctx.middleware as Record<string, unknown>).tenant = 'other';
+      }).toThrow();
+      expect(() => {
+        (ctx.middleware as Record<string, unknown>).fresh = 'other';
+      }).toThrow();
+      expect(ctx.middleware).toEqual({ tenant: 'first' });
+    });
+
+    it('takes keys that are names on every object without disturbing any', async () => {
+      const ctx = onInit();
+      for (const key of [
+        '__proto__',
+        'constructor',
+        'prototype',
+        'toString',
+        'hasOwnProperty',
+        '',
+      ]) {
+        await ctx.setMiddleware(key, key.length);
+      }
+      expect(Object.getPrototypeOf(ctx.middleware)).toBe(null);
+      // read as a key, which is the point: an own value, not a prototype
+      expect(
+        Object.getOwnPropertyDescriptor(ctx.middleware, '__proto__')?.value,
+      ).toBe('__proto__'.length);
+      expect(ctx.middleware.constructor).toBe('constructor'.length);
+      expect(ctx.middleware['']).toBe(0);
+      expect(({} as Record<string, unknown>).toString).toBe(
+        Object.prototype.toString,
+      );
+    });
+
+    it('is fresh for every context', async () => {
+      const first = onInit();
+      await first.setMiddleware('tenant', 't-1');
+      expect(onInit().middleware).toEqual({});
+    });
+
+    it('is no part of what is remembered', async () => {
+      const ctx = onInit();
+      await ctx.setMiddleware('tenant', 'kept-out-of-the-record');
+      expect(JSON.stringify(ctx.state)).not.toContain('kept-out-of-the-record');
+    });
+
+    it('still accepts a write once the context is frozen', async () => {
+      const ctx = onInit();
+      expect(Object.isFrozen(ctx)).toBe(true);
+      await ctx.setMiddleware('tenant', 't-1');
+      expect(ctx.middleware.tenant).toBe('t-1');
+    });
+  });
+
   describe("raising a fault of an executor's own", () => {
     const raised = async (param: Record<string, unknown> = {}) =>
       onFollowup().fault({

@@ -125,6 +125,10 @@ export class ArvoExecutionContext<
   // member being replaced without also stopping a write.
   #state: ArvoContextState<TSelf, TServices, TDataSchema>;
 
+  // No prototype, so a key that names something every object has is
+  // written as itself rather than reaching what it names.
+  readonly #middleware: Record<string, unknown> = Object.create(null);
+
   constructor(
     param: ArvoExecutionContextParam<
       TSelf,
@@ -198,6 +202,41 @@ export class ArvoExecutionContext<
       });
     }
     this.#state = mutateState(this.#state, { data: checked.data });
+  }
+
+  /**
+   * What the layers around the executor left for what runs inside them.
+   *
+   * Built for this execution alone and remembered nowhere. Read-only: a
+   * key is written once, through {@link setMiddleware}. Its shape is
+   * whatever the layers chose, so narrow what you read.
+   */
+  get middleware(): Readonly<Record<string, unknown>> {
+    return Object.freeze(Object.assign(Object.create(null), this.#middleware));
+  }
+
+  /**
+   * Leaves a value for everything that runs inside this layer: the layers
+   * after it and the executor.
+   *
+   * Written once per key, readable through {@link middleware} from now
+   * on, and never part of what this execution remembers.
+   *
+   * @param key - Where the value is read from.
+   * @param value - Kept as given, not copied.
+   * @throws {ArvoHandlerFault} `middleware_conflict` where the key was
+   * already written, which no further attempt fixes. The value already
+   * there is left as it was.
+   */
+  async setMiddleware(key: string, value: unknown): Promise<void> {
+    if (Object.hasOwn(this.#middleware, key)) {
+      throw await this.fault({
+        faultKind: 'middleware_conflict',
+        message: `"${key}" was already written to ctx.middleware during this execution, so a second write to it was refused. Two layers are using the same key; give each its own`,
+        violations: [`middleware.${key}: already written`],
+      });
+    }
+    this.#middleware[key] = value;
   }
 
   /**
