@@ -2,11 +2,11 @@
 
 Tests first, as every step from here. Each group is one commit, and every edit under `src/` is shown for review before its commit.
 
-- [ ] 1.1 Add `tests/ArvoEventHandler/types/middleware.spec.ts`: a layer with only `before`, only `after`, both, and neither all satisfy `IArvoEventHandlerMiddleware`; `id` infers as a literal; both parts may be sync or async.
-- [ ] 1.2 Add `src/ArvoEventHandler/types/middleware.ts`: `IArvoEventHandlerMiddleware<TId extends string = string, …>` with `readonly id: TId`, optional `before(ctx)` and `after(ctx, emission)`, both returning `PromiseAble<void>`; and `ArvoEventHandlerMiddlewareEntry` — a layer or a zero-argument operation returning one. TSDoc per `project.md`: what each part may do, that nothing it returns is read, that a layer holds nothing per delivery, and where the ADR is.
-- [ ] 1.3 Extend `tests/ArvoEventHandler/fault/` for `middleware_conflict` and `middleware_instantiation_failed`: present in the vocabulary, non-retryable at every attempt, carry the abandonment pair when built after the gate.
-- [ ] 1.4 Add `middleware_conflict` and `middleware_instantiation_failed` to `ArvoFaultKind` in `src/ArvoEventHandler/fault/types.ts`, in the "what it returned, and what it wrote" group. Nothing in `fault/retry.ts` changes.
-- [ ] 1.5 Export `IArvoEventHandlerMiddleware` and `ArvoEventHandlerMiddlewareEntry` from `src/index.ts`.
+- [x] 1.1 Add `tests/ArvoEventHandler/types/middleware.spec.ts`: a layer with only `before`, only `after`, both, and neither all satisfy `IArvoEventHandlerMiddleware`; `id` infers as a literal; both parts may be sync or async.
+- [x] 1.2 Add `src/ArvoEventHandler/types/middleware.ts`: `IArvoEventHandlerMiddleware<TId extends string = string, …>` with `readonly id: TId`, optional `before(ctx)` and `after(ctx, emission)`, both returning `PromiseAble<void>`; and `ArvoEventHandlerMiddlewareEntry` — a layer or a zero-argument operation returning one. TSDoc per `project.md`: what each part may do, that nothing it returns is read, that a layer holds nothing per delivery, and where the ADR is.
+- [x] 1.3 Extend `tests/ArvoEventHandler/fault/` for `middleware_conflict` and `middleware_instantiation_failed`: present in the vocabulary, non-retryable at every attempt, carry the abandonment pair when built after the gate.
+- [x] 1.4 Add `middleware_conflict` and `middleware_instantiation_failed` to `ArvoFaultKind` in `src/ArvoEventHandler/fault/types.ts`, in the "what it returned, and what it wrote" group. Nothing in `fault/retry.ts` changes.
+- [x] 1.5 Export `IArvoEventHandlerMiddleware` and `ArvoEventHandlerMiddlewareEntry` from `src/index.ts`.
 
 ## 2. Middleware data on the context
 

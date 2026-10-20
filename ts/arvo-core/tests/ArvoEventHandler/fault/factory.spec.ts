@@ -91,6 +91,28 @@ describe('whether another attempt is in prospect', () => {
   });
 });
 
+describe('the two kinds a layer can cause', () => {
+  it.each(['middleware_conflict', 'middleware_instantiation_failed'])(
+    'is %s, with no further attempt in prospect at any attempt',
+    async (faultKind) => {
+      for (const attempt of [0, 1, 2]) {
+        const fault = await raise({ faultKind, attempt });
+        expect(fault.faultKind).toBe(faultKind);
+        expect(fault.retry).toBeNull();
+      }
+    },
+  );
+
+  it.each(['middleware_conflict', 'middleware_instantiation_failed'])(
+    'carries the pair a mechanism would abandon with, %s being raised after the gate',
+    async (faultKind) => {
+      const fault = await raise({ faultKind });
+      expect(fault.abandonmentEvent).not.toBeNull();
+      expect(fault.abandonmentState).not.toBeNull();
+    },
+  );
+});
+
 describe('what the execution would be abandoned with', () => {
   it('is a pair, both written out', async () => {
     const fault = await raise();

@@ -42,7 +42,10 @@ export type ArvoFaultKind =
   | 'emission_schema_rejected'
   | 'max_depth_event_requested'
   | 'state_schema_rejected'
-  | 'state_not_serializable';
+  | 'state_not_serializable'
+  // the layers around the executor
+  | 'middleware_conflict'
+  | 'middleware_instantiation_failed';
 
 /**
  * When another attempt may be made, where one is in prospect.

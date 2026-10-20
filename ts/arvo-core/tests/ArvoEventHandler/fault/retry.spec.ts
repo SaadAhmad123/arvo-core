@@ -54,6 +54,8 @@ describe('which faults a reexecution could fix', () => {
     'max_depth_event_requested',
     'state_schema_rejected',
     'state_not_serializable',
+    'middleware_conflict',
+    'middleware_instantiation_failed',
   ] as ArvoFaultKind[])('treats %s as not worth another', (faultKind) => {
     expect(isRetrySafeFaultKind(faultKind, true)).toBe(false);
   });
