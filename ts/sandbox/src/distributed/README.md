@@ -16,7 +16,8 @@ It is a conformance exercise, not a compatibility exercise. The rubric is
 | `temporal/` | Temporal. Keeps its records *in Temporal*: a record is a workflow, a revision is one update to it, and nothing of the mechanism is in a database. |
 | `dbos/` | DBOS. Keeps its records in Postgres, where a revision is a row and its outbox rows, committed in one transaction. |
 | `replay/` | No framework at all — one queue and a table. The control the other two are read against, and the tape recorder §12 replays with. |
-| `shared/` | Configuration, telemetry, health, the record store, and the two rules required of whoever sends an event in. |
+| `shared/` | Configuration, telemetry, health, the record store, and the two rules required of whoever sends an event in. Also the layers every mechanism supplies with a delivery, and the switch that injects a failure through one. |
+| `handler/middleware/` | The layers every handler declares (ADR-016): one shared, resolving the tenant every executor requires, and one made per execution, timing it. |
 
 ## Prerequisites
 
@@ -39,6 +40,11 @@ pnpm distributed:temporal     # Temporal, obligation by obligation
 pnpm distributed:dbos         # DBOS, the same obligations
 pnpm distributed:replay       # replay, and the run that changes mechanism half way
 pnpm distributed:purity       # the handlers import no framework
+
+# layers with failures injected, under each mechanism
+pnpm vitest run tests/distributed/replay/middleware.spec.ts
+pnpm vitest run tests/distributed/dbos/middleware.spec.ts
+pnpm vitest run tests/distributed/temporal/middleware.spec.ts
 pnpm distributed:probe        # traces, metrics and logs reach the backends
 ```
 

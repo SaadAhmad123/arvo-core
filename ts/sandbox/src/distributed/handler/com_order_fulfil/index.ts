@@ -8,6 +8,7 @@ import { inventoryCheckV1 } from '../com_inventory_check/contract.js';
 import { manualReviewV1 } from '../com_manual_review/contract.js';
 import { paymentChargeV1 } from '../com_payment_charge/contract.js';
 import type { DistributedDependencies } from '../dependencies.js';
+import { HANDLER_MIDDLEWARE, tenantFor } from '../middleware/index.js';
 import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { orderFulfilContract } from './contract.js';
 
@@ -160,6 +161,7 @@ export const orderFulfilHandler = setupArvoEventHandler({
     },
   },
   telemetry: HANDLER_TELEMETRY,
+  middleware: HANDLER_MIDDLEWARE,
   options: {
     // A wide execution rebuilds its whole collection on every answer,
     // so one entry is not where the time goes — but five hundred of
@@ -175,6 +177,7 @@ export const orderFulfilHandler = setupArvoEventHandler({
   .handler('1.0.0', {
     state: firstMemory,
     execute: async (ctx) => {
+      await tenantFor(ctx);
       const requested = ctx.state.initEvent.data;
       // Declared and not supplied. A mechanism hands what it has to
       // whichever handler an event names, so the member is checked
@@ -259,6 +262,7 @@ export const orderFulfilHandler = setupArvoEventHandler({
   .handler('2.0.0', {
     state: secondMemory,
     execute: async (ctx) => {
+      await tenantFor(ctx);
       const requested = ctx.state.initEvent.data;
       // Declared and not supplied. A mechanism hands what it has to
       // whichever handler an event names, so the member is checked

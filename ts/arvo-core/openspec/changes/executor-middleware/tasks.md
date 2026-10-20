@@ -54,10 +54,10 @@ Each of these is a test that passes only because the implementation refuses, con
 
 The sandbox is a proving ground, not authority: what it finds comes back here as a test or an ADR question, never as a rule by itself.
 
-- [ ] 7.1 Add layers to the distributed handlers under `ts/sandbox/src/distributed/handler/`: a tenant layer (writes middleware data every executor branches on), a duration layer (before/after through middleware data), and one declared layer per handler that writes state. The purity check still passes — layers import no framework.
-- [ ] 7.2 Each of the three mechanisms supplies one layer per execution (`middleware` on `tryExecute`), so supplied-outside-declared is exercised under Temporal, DBOS and the plain loop.
-- [ ] 7.3 A failure-injection layer, switchable per run: throws in before on the Nth delivery; faults retryable in before; throws in after; hangs in after past the run clock; writes a duplicate key; is supplied with a duplicate id. Each run asserts the protocol's outcome under each mechanism — retried where retryable, dead-lettered where not, result standing where the after failed — and that §12's cross-mechanism replay still agrees byte for byte.
-- [ ] 7.4 Soak: the §scale scenario with layers on every handler for the full run; no growth in span count per delivery; no leak across concurrent deliveries; the tape replays identically.
+- [x] 7.1 Add layers to the distributed handlers under `ts/sandbox/src/distributed/handler/`: a tenant layer (writes middleware data every executor requires), a duration layer (made per execution, holding its start time on itself). The purity check still passes — layers import no framework. **Deviation:** no layer writes state in the sandbox. Several executors write state in the function form, reading what is there, so a layer's write would change records the cross-mechanism replay compares; writing state from a before part is covered in the package (`middleware/execution.spec.ts`, `before.spec.ts`).
+- [x] 7.2 Each of the three mechanisms supplies one layer per execution (`middleware` on `tryExecute`), so supplied-outside-declared is exercised under Temporal, DBOS and the plain loop.
+- [x] 7.3 A failure-injection layer, switchable per run: throws in before on the Nth delivery; faults retryable in before; throws in after; hangs in after past the run clock; writes a duplicate key; is supplied with a duplicate id. Each run asserts the protocol's outcome under each mechanism — retried where retryable, dead-lettered where not, result standing where the after failed — and that §12's cross-mechanism replay still agrees byte for byte.
+- [x] 7.4 Soak: the §scale scenario with layers on every handler for the full run; no growth in span count per delivery; no leak across concurrent deliveries; the tape replays identically.
 - [x] 7.5 Anything the sandbox turns up that the package tests did not: write the package test first, then fix.
 
 ## 8. Scenarios, docs, and the bar
