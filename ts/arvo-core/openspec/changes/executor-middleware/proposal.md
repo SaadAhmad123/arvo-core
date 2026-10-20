@@ -121,7 +121,7 @@ const requireTenant: IArvoEventHandlerMiddleware<
   },
 };
 
-// A class is equally fine — Composed sees only the shape. Hold configuration on it, never a delivery.
+// A class is equally fine — the handler sees only the shape. Hold configuration on it, never a delivery.
 class AuditTrail implements IArvoEventHandlerMiddleware<'audit_trail'> {
   readonly id = 'audit_trail' as const;
   constructor(private readonly sink: AuditSink) {}
