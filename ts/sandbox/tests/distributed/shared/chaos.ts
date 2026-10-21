@@ -10,6 +10,7 @@ import type { Pool } from 'pg';
 import { categoryWalkV1 } from '../../../src/distributed/handler/com_category_walk/contract.js';
 import { inventoryCheckV1 } from '../../../src/distributed/handler/com_inventory_check/contract.js';
 import {
+  byCodePoint,
   comparablePayload,
   comparableRecord,
 } from '../../../src/distributed/replay/comparison.js';
@@ -441,7 +442,7 @@ const comparablePublished = (payload: string): string => {
 export const comparableEnding = (ending: WorkflowEnding): unknown => ({
   runKind: ending.runKind,
   record: ending.record === null ? null : comparableRecord(ending.record),
-  published: ending.published.map(comparablePublished).sort(),
+  published: ending.published.map(comparablePublished).sort(byCodePoint),
 });
 
 /** How many workflows of a plan were given each case, for a spec to print. */
