@@ -171,12 +171,12 @@ const walk = (
     let serialized: unknown;
     try {
       serialized = toJSON.call(value);
-    } catch (error) {
+    } catch (thrown) {
       ancestors.delete(value);
       issues.push(
         new ErrorIssue({
           path,
-          message: `toJSON() threw: ${error instanceof Error ? error.message : String(error)}`,
+          message: `toJSON() threw: ${thrown instanceof Error ? thrown.message : String(thrown)}`,
         }),
       );
       return null;

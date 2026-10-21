@@ -179,12 +179,12 @@ export const convertFromJSONSchema = (
   let native: zc.$ZodType;
   try {
     native = z.fromJSONSchema(withheld as never);
-  } catch (error) {
+  } catch (thrown) {
     return fromNeverthrow(
       err(
         new ErrorIssue({
           path: position,
-          message: `cannot be read: ${refusalOf(error)}`,
+          message: `cannot be read: ${refusalOf(thrown)}`,
         }),
       ),
     );

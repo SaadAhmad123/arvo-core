@@ -393,18 +393,18 @@ export class ArvoEventHandlerVersion<
       throw await this.#faultFor(param, ctx.state, this.#refuseForTime(ctx));
     }
     if (executorRun.kind === 'raised') {
-      if (executorRun.raised instanceof ArvoHandlerFault) {
-        if (this.#ownFault(executorRun.raised, ctx)) throw executorRun.raised;
+      if (executorRun.thrown instanceof ArvoHandlerFault) {
+        if (this.#ownFault(executorRun.thrown, ctx)) throw executorRun.thrown;
 
         throw await this.#faultFor(param, ctx.state, {
           faultKind: 'executor_raised',
-          message: `your executor for ${this.#contractAtVersion} raised a fault belonging to another execution (${executorRun.raised.subject}), which nothing sound can do — a fault describes the execution it was built in, and acting on this one would end that execution for an event that is not its own`,
+          message: `your executor for ${this.#contractAtVersion} raised a fault belonging to another execution (${executorRun.thrown.subject}), which nothing sound can do — a fault describes the execution it was built in, and acting on this one would end that execution for an event that is not its own`,
           violations: [],
-          cause: executorRun.raised.message,
+          cause: executorRun.thrown.message,
           retryable: false,
         });
       }
-      return this.#reportFailedWork(param, ctx.state, executorRun.raised);
+      return this.#reportFailedWork(param, ctx.state, executorRun.thrown);
     }
 
     // read at the executor's return: after parts change neither verdict
@@ -416,7 +416,7 @@ export class ArvoEventHandlerVersion<
       middlewareProgress.returnedAt as number,
     );
 
-    const batch = collectBatch(executorRun.returned);
+    const batch = collectBatch(executorRun.emission);
     if (batch === null) {
       throw await this.#faultFor(param, recordAtExecutorReturn, {
         faultKind: 'emission_not_permitted',
@@ -709,12 +709,12 @@ export class ArvoEventHandlerVersion<
     try {
       await dependencies.open(scope);
       return dependencies.attributes;
-    } catch (raised) {
+    } catch (thrown) {
       throw await this.#entryFaultFor(param, record, {
         faultKind: 'dependency_resolution_failed',
-        message: `the dependencies for ${this.#contractAtVersion} could not be opened, so your executor was never entered: ${raised instanceof Error ? raised.message : String(raised)}. Another attempt may succeed`,
+        message: `the dependencies for ${this.#contractAtVersion} could not be opened, so your executor was never entered: ${thrown instanceof Error ? thrown.message : String(thrown)}. Another attempt may succeed`,
         violations: [],
-        cause: raised instanceof Error ? raised.message : String(raised),
+        cause: thrown instanceof Error ? thrown.message : String(thrown),
       });
     }
   }
@@ -741,8 +741,8 @@ export class ArvoEventHandlerVersion<
 
     try {
       await param.dependencies.close(scope);
-    } catch (raised) {
-      markSwallowed(param.telemetry, 'dependencies_not_closed', raised);
+    } catch (thrown) {
+      markSwallowed(param.telemetry, 'dependencies_not_closed', thrown);
     }
   }
 
@@ -789,7 +789,7 @@ export class ArvoEventHandlerVersion<
    * would end an execution that has nothing to do with this event.
    */
   #ownFault(
-    raised: ArvoHandlerFault,
+    fault: ArvoHandlerFault,
     ctx: ArvoExecutionContext<
       TSelf,
       TServices,
@@ -799,8 +799,8 @@ export class ArvoEventHandlerVersion<
     >,
   ): boolean {
     return (
-      raised.executionId === ctx.state.executionId &&
-      raised.eventId === ctx.state.triggeringEvent.id
+      fault.executionId === ctx.state.executionId &&
+      fault.eventId === ctx.state.triggeringEvent.id
     );
   }
 
@@ -901,7 +901,7 @@ export class ArvoEventHandlerVersion<
         return {
           executorRun: {
             kind: 'returned',
-            returned: middlewareProgress.emission,
+            emission: middlewareProgress.emission,
           },
           middlewareProgress,
           readRecordAtExecutorReturn,
@@ -1006,9 +1006,9 @@ export class ArvoEventHandlerVersion<
       TMechanismHooks
     >,
     record: ArvoContextState<TSelf, TServices, TDataSchema>,
-    raised: unknown,
+    thrown: unknown,
   ): Promise<ArvoEventHandlerExecuteResponse> {
-    const message = raised instanceof Error ? raised.message : String(raised);
+    const message = thrown instanceof Error ? thrown.message : String(thrown);
 
     const answer = buildHandlerErrorEvent(
       this.contracts.self,

@@ -361,8 +361,8 @@ describe('a record handed to a version it does not belong to', () => {
         hooks: {},
         telemetry: telemetryFor(),
       } as never);
-    } catch (raised) {
-      const refused = raised as ArvoHandlerFault;
+    } catch (thrown) {
+      const refused = thrown as ArvoHandlerFault;
       expect(refused.message).toContain('com_order_fulfil@1.1.0');
       expect(refused.message).toContain('com_order_fulfil@1.0.0');
       expect(refused.retry).toBeNull();
@@ -401,7 +401,7 @@ describe('a record handed to a version it does not belong to', () => {
         hooks: {},
         telemetry: telemetryFor(),
       } as never)
-      .catch((raised: ArvoHandlerFault) => raised);
+      .catch((thrown: ArvoHandlerFault) => thrown);
     const given = JSON.parse(
       (refused as ArvoHandlerFault).abandonmentState as string,
     );

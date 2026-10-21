@@ -200,8 +200,8 @@ export type ArvoEventHandlerVersionExecuteParam<
  * does afterwards is accepted.
  */
 export type ArvoExecutorRun =
-  | { readonly kind: 'returned'; readonly returned: ArvoExecutorEmission }
-  | { readonly kind: 'raised'; readonly raised: unknown }
+  | { readonly kind: 'returned'; readonly emission: ArvoExecutorEmission }
+  | { readonly kind: 'raised'; readonly thrown: unknown }
   | { readonly kind: 'outran' };
 
 /**

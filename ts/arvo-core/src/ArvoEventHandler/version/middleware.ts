@@ -164,7 +164,7 @@ export const runMiddleware = async <TContext>(param: {
   try {
     for (const layer of layers) {
       if (middlewareProgress.outran)
-        return { kind: 'raised', raised: undefined };
+        return { kind: 'raised', thrown: undefined };
       if (layer.before === undefined) continue;
       markStage(telemetry, 'middleware_before_entered', {
         'middleware.id': layer.id,
@@ -175,13 +175,13 @@ export const runMiddleware = async <TContext>(param: {
       });
     }
 
-    if (middlewareProgress.outran) return { kind: 'raised', raised: undefined };
+    if (middlewareProgress.outran) return { kind: 'raised', thrown: undefined };
     middlewareProgress.executorStartedAt = Date.now();
     const executorEmission = await param.executor(ctx);
     middlewareProgress.returnedAt = Date.now();
     middlewareProgress.emission = executorEmission;
   } catch (thrown) {
-    return { kind: 'raised', raised: thrown };
+    return { kind: 'raised', thrown: thrown };
   }
 
   const readOnlyEmission: Readonly<ArvoExecutorEmission> = Array.isArray(
@@ -214,5 +214,5 @@ export const runMiddleware = async <TContext>(param: {
     }
   }
 
-  return { kind: 'returned', returned: middlewareProgress.emission };
+  return { kind: 'returned', emission: middlewareProgress.emission };
 };

@@ -209,9 +209,9 @@ export const markOutcome = (
 export const markSwallowed = (
   telemetry: ArvoExecutionContextTelemetry,
   what: string,
-  raised: unknown,
+  thrown: unknown,
 ): void => {
   telemetry.addEvent(`swallowed.${what}`, {
-    message: raised instanceof Error ? raised.message : String(raised),
+    message: thrown instanceof Error ? thrown.message : String(thrown),
   });
 };

@@ -146,11 +146,11 @@ export class ArvoEvent<
       return fromNeverthrow(
         ok(new ArvoEvent<T, D>(input as ArvoEventParam<T, D>, options)),
       );
-    } catch (error) {
-      if (error instanceof ArvoEventValidationError) {
-        return fromNeverthrow(err(error));
+    } catch (thrown) {
+      if (thrown instanceof ArvoEventValidationError) {
+        return fromNeverthrow(err(thrown));
       }
-      throw error;
+      throw thrown;
     }
   }
 }

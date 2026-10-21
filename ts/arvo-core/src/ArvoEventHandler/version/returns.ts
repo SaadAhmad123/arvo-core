@@ -23,10 +23,10 @@ import type { ArvoGateRefusal } from './types.js';
  * failing.
  */
 export const collectBatch = (
-  returned: ArvoExecutorEmission,
+  emission: ArvoExecutorEmission,
 ): ArvoEvent[] | null => {
-  if (returned === undefined || returned === null) return [];
-  const batch = Array.isArray(returned) ? returned : [returned];
+  if (emission === undefined || emission === null) return [];
+  const batch = Array.isArray(emission) ? emission : [emission];
   return batch.every((event) => event instanceof ArvoEvent) ? batch : null;
 };
 

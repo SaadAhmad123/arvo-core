@@ -156,9 +156,9 @@ describe('ArvoExecutionState', () => {
     it('reports every rule it broke, not only the first', () => {
       try {
         build({ depth: -1, casVersion: -1, lifecycle: 'pondering' });
-      } catch (raised) {
+      } catch (thrown) {
         expect(
-          (raised as ArvoExecutionStateValidationError).issues.length,
+          (thrown as ArvoExecutionStateValidationError).issues.length,
         ).toBe(3);
         return;
       }
@@ -168,9 +168,9 @@ describe('ArvoExecutionState', () => {
     it('names where each failure is', () => {
       try {
         build({ depth: -1 });
-      } catch (raised) {
+      } catch (thrown) {
         expect(
-          (raised as ArvoExecutionStateValidationError).issues[0]?.path,
+          (thrown as ArvoExecutionStateValidationError).issues[0]?.path,
         ).toBe('depth');
         return;
       }

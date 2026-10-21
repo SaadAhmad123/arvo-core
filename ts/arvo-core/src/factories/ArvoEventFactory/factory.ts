@@ -223,11 +223,11 @@ export class ArvoEventFactory<
    * broke.
    *
    * @example
-   * catch (caught) {
+   * catch (thrown) {
    *   return orders.createError({
    *     source: 'com.order.service',
    *     subject: requested.subject,
-   *     error: caught as Error,
+   *     error: thrown as Error,
    *   });
    * }
    */

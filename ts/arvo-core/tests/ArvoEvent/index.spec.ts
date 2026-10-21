@@ -15,9 +15,9 @@ const issuesOf = (fn: () => unknown): ArvoEventValidationError['issues'] => {
   try {
     fn();
     throw new Error('expected construction to throw');
-  } catch (err) {
-    if (err instanceof ArvoEventValidationError) return err.issues;
-    throw err;
+  } catch (thrown) {
+    if (thrown instanceof ArvoEventValidationError) return thrown.issues;
+    throw thrown;
   }
 };
 
@@ -917,13 +917,13 @@ describe('ArvoEvent.parse', () => {
     let fromNew: ArvoEventValidationError | undefined;
     try {
       ArvoEvent.parse(bad as never);
-    } catch (e) {
-      fromParse = e as ArvoEventValidationError;
+    } catch (thrown) {
+      fromParse = thrown as ArvoEventValidationError;
     }
     try {
       new ArvoEvent(bad as never);
-    } catch (e) {
-      fromNew = e as ArvoEventValidationError;
+    } catch (thrown) {
+      fromNew = thrown as ArvoEventValidationError;
     }
     expect(fromParse).toBeInstanceOf(ArvoEventValidationError);
     expect(fromParse?.message).toBe(fromNew?.message);
@@ -992,15 +992,15 @@ describe('ArvoEvent.tryParse', () => {
     }
 
     const bad = { source: 'a' };
-    let thrown: ArvoEventValidationError | undefined;
+    let thrownError: ArvoEventValidationError | undefined;
     try {
       ArvoEvent.parse(bad as never);
-    } catch (e) {
-      thrown = e as ArvoEventValidationError;
+    } catch (thrown) {
+      thrownError = thrown as ArvoEventValidationError;
     }
     const failed = ArvoEvent.tryParse(bad);
-    expect(thrown).toBeInstanceOf(ArvoEventValidationError);
-    expect(!failed.ok && failed.error.message).toBe(thrown?.message);
+    expect(thrownError).toBeInstanceOf(ArvoEventValidationError);
+    expect(!failed.ok && failed.error.message).toBe(thrownError?.message);
   });
 
   it('re-throws a non-ArvoEventValidationError rather than wrapping it in an error result', () => {

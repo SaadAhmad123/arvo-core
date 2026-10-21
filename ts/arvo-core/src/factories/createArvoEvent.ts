@@ -48,13 +48,13 @@ export const tryCreateArvoEvent = <
         }),
       ),
     );
-  } catch (error) {
-    if (error instanceof ArvoEventValidationError) {
-      return fromNeverthrow(err(error));
+  } catch (thrown) {
+    if (thrown instanceof ArvoEventValidationError) {
+      return fromNeverthrow(err(thrown));
     }
     // Anything else is not an invalid event, so reporting it here would make
     // the error type say something untrue. It goes up as it arrived.
-    throw error;
+    throw thrown;
   }
 };
 

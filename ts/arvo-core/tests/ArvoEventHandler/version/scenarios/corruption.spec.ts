@@ -112,8 +112,8 @@ const resumedWith = async (
       hooks: {},
       telemetry: telemetryFor(),
     } as never);
-  } catch (raised) {
-    return raised as ArvoHandlerFault;
+  } catch (thrown) {
+    return thrown as ArvoHandlerFault;
   }
   throw new Error('expected this row to be refused');
 };

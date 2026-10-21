@@ -399,8 +399,8 @@ export class ArvoLattice {
         return;
       }
       this.#commit(executionId, event, response.state, response.events);
-    } catch (raised) {
-      await this.#onFault(event, executionId, key, attempt, raised);
+    } catch (thrown) {
+      await this.#onFault(event, executionId, key, attempt, thrown);
     }
   }
 
@@ -447,17 +447,17 @@ export class ArvoLattice {
       const executionId = String(response.state.executionId);
       this.transcript.delivered.push({ event, executionId, attempt });
       this.#commit(executionId, event, response.state, response.events);
-    } catch (raised) {
+    } catch (thrown) {
       const named =
-        raised instanceof ArvoHandlerFault && raised.executionId !== null
-          ? raised.executionId
+        thrown instanceof ArvoHandlerFault && thrown.executionId !== null
+          ? thrown.executionId
           : 'unplaced';
       await this.#onFault(
         event,
         named,
         `${named}:${event.id}`,
         attempt,
-        raised,
+        thrown,
       );
     }
   }
@@ -517,20 +517,20 @@ export class ArvoLattice {
       [0, 1].map(async () => {
         try {
           return { ran: await this.#run(route, event, attempt) };
-        } catch (raised) {
-          return { raised };
+        } catch (thrown) {
+          return { thrown };
         }
       }),
     );
 
     for (const outcome of outcomes) {
-      if ('raised' in outcome) {
+      if ('thrown' in outcome) {
         await this.#onFault(
           event,
           route.executionId,
           key,
           attempt,
-          outcome.raised,
+          outcome.thrown,
         );
         continue;
       }
@@ -610,10 +610,10 @@ export class ArvoLattice {
     executionId: string,
     key: string,
     attempt: number,
-    raised: unknown,
+    thrown: unknown,
   ): Promise<void> {
-    const fault = raised as ArvoHandlerFault;
-    if (fault?._tag !== 'ArvoHandlerFault') throw raised;
+    const fault = thrown as ArvoHandlerFault;
+    if (fault?._tag !== 'ArvoHandlerFault') throw thrown;
     this.transcript.faults.push({ event, fault });
 
     if (fault.retry !== null) {

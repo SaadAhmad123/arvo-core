@@ -23,8 +23,8 @@ const declareOrderHandler = (
 const refusalFrom = (built: () => unknown): ArvoEventHandlerValidationError => {
   try {
     built();
-  } catch (raised) {
-    return raised as ArvoEventHandlerValidationError;
+  } catch (thrown) {
+    return thrown as ArvoEventHandlerValidationError;
   }
   throw new Error('the declaration was accepted');
 };

@@ -50,8 +50,8 @@ const running = async (
       hooks: {},
       telemetry: telemetryFor(),
     } as never)) as ArvoEventHandlerExecuteResponse;
-  } catch (raised) {
-    return raised as ArvoHandlerFault;
+  } catch (thrown) {
+    return thrown as ArvoHandlerFault;
   }
 };
 
@@ -260,58 +260,60 @@ describe('an executor that raises a fault belonging to somebody else', () => {
         hooks: {},
         telemetry: telemetryFor(),
       } as never);
-    } catch (raised) {
-      return raised as ArvoHandlerFault;
+    } catch (thrown) {
+      return thrown as ArvoHandlerFault;
     }
     throw new Error('expected that order to fault');
   };
 
   it('is refused, throwing one being the corruption itself', async () => {
     const borrowed = await faultOfAnotherOrder();
-    const raised = await faultFrom(() => {
+    const reportedFault = await faultFrom(() => {
       throw borrowed;
     });
 
-    expect(raised).not.toBe(borrowed);
-    expect(raised.faultKind).toBe('executor_raised');
-    expect(raised.message).toContain('another execution');
+    expect(reportedFault).not.toBe(borrowed);
+    expect(reportedFault.faultKind).toBe('executor_raised');
+    expect(reportedFault.message).toContain('another execution');
   });
 
   it('names this execution throughout, never the one it came from', async () => {
     const borrowed = await faultOfAnotherOrder();
     expect(borrowed.subject).toBe('somebody-elses-order');
 
-    const raised = await faultFrom(() => {
+    const reportedFault = await faultFrom(() => {
       throw borrowed;
     });
 
     // What a mechanism acts on is what the fault names. One naming
     // another execution would have it commit that execution's record and
     // answer that execution's caller, for an event belonging to this one.
-    expect(raised.subject).toBe('order-1');
-    expect(raised.executionId).not.toBe(borrowed.executionId);
-    expect(JSON.parse(raised.abandonmentEvent as string).subject).toBe(
+    expect(reportedFault.subject).toBe('order-1');
+    expect(reportedFault.executionId).not.toBe(borrowed.executionId);
+    expect(JSON.parse(reportedFault.abandonmentEvent as string).subject).toBe(
       'order-1',
     );
-    expect(JSON.parse(raised.abandonmentState as string).subject).toBe(
+    expect(JSON.parse(reportedFault.abandonmentState as string).subject).toBe(
       'order-1',
     );
   });
 
   it('is not worth another attempt, a redelivery doing the same thing', async () => {
     const borrowed = await faultOfAnotherOrder();
-    const raised = await faultFrom(() => {
+    const reportedFault = await faultFrom(() => {
       throw borrowed;
     });
-    expect(raised.retry).toBeNull();
+    expect(reportedFault.retry).toBeNull();
   });
 
   it('keeps what the other fault said, as the cause of this one', async () => {
     const borrowed = await faultOfAnotherOrder();
-    const raised = await faultFrom(() => {
+    const reportedFault = await faultFrom(() => {
       throw borrowed;
     });
-    expect(raised.cause).toContain('the gateway refused this other order');
+    expect(reportedFault.cause).toContain(
+      'the gateway refused this other order',
+    );
   });
 
   it('tells nobody the work failed, this being no answer at all', async () => {
@@ -324,14 +326,14 @@ describe('an executor that raises a fault belonging to somebody else', () => {
   });
 
   it('still lets an executor raise a fault of its own', async () => {
-    const raised = await faultFrom(async (ctx) => {
+    const reportedFault = await faultFrom(async (ctx) => {
       throw await ctx.fault({
         faultKind: 'executor_raised',
         message: 'the gateway refused',
       });
     });
-    expect(raised.faultKind).toBe('executor_raised');
-    expect(raised.message).toBe('the gateway refused');
-    expect(raised.retry).not.toBeNull();
+    expect(reportedFault.faultKind).toBe('executor_raised');
+    expect(reportedFault.message).toBe('the gateway refused');
+    expect(reportedFault.retry).not.toBeNull();
   });
 });

@@ -123,8 +123,8 @@ describe('an after part that tries to change what was returned', () => {
         after: (_ctx, emission) => {
           try {
             (emission as ArvoEvent[]).push(null as never);
-          } catch (raised) {
-            mutationError = raised;
+          } catch (thrown) {
+            mutationError = thrown;
           }
         },
       },
@@ -155,8 +155,8 @@ describe('an after part that tries to change what was returned', () => {
             (
               (emission as ArvoEvent[])[0] as unknown as Record<string, unknown>
             ).to = 'somewhere_else';
-          } catch (raised) {
-            mutationError = raised;
+          } catch (thrown) {
+            mutationError = thrown;
           }
         },
       },

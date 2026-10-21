@@ -104,9 +104,9 @@ describe('VersionedArvoContract', () => {
     const rejects = (over: Partial<VersionedArvoContractParam>): string[] => {
       try {
         new VersionedArvoContract(param(over));
-      } catch (error) {
-        if (!(error instanceof ArvoContractValidationError)) throw error;
-        return error.issues.map((i) => i.path);
+      } catch (thrown) {
+        if (!(thrown instanceof ArvoContractValidationError)) throw thrown;
+        return thrown.issues.map((i) => i.path);
       }
       throw new Error('expected construction to fail');
     };

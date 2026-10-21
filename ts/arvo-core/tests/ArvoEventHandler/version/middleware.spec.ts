@@ -70,7 +70,7 @@ describe('with no layers', () => {
     const executionResult = await runChain(null, loggingExecutorFor());
     expect(executionResult).toEqual({
       kind: 'returned',
-      returned: [initEvent],
+      emission: [initEvent],
     });
   });
 
@@ -205,8 +205,8 @@ describe('what each part is given', () => {
           after: (_ctx, emission) => {
             try {
               (emission as unknown[]).push('extra');
-            } catch (raised) {
-              pushError = raised;
+            } catch (thrown) {
+              pushError = thrown;
             }
           },
         },
@@ -216,7 +216,7 @@ describe('what each part is given', () => {
     expect(pushError).toBeInstanceOf(TypeError);
     expect(executionResult).toEqual({
       kind: 'returned',
-      returned: [initEvent],
+      emission: [initEvent],
     });
   });
 
@@ -276,7 +276,7 @@ describe('a before part that fails', () => {
       ],
       executorSpy,
     );
-    expect(executionResult).toEqual({ kind: 'raised', raised: beforeError });
+    expect(executionResult).toEqual({ kind: 'raised', thrown: beforeError });
     expect(partLog).toEqual(['a.before']);
     expect(executorSpy).not.toHaveBeenCalled();
   });
@@ -299,7 +299,7 @@ describe('a before part that fails', () => {
       ],
       () => undefined,
     );
-    expect(executionResult).toEqual({ kind: 'raised', raised: thrownValue });
+    expect(executionResult).toEqual({ kind: 'raised', thrown: thrownValue });
   });
 
   it('reports a rejected promise as raised too', async () => {
@@ -308,7 +308,7 @@ describe('a before part that fails', () => {
       [{ id: 'a', before: () => Promise.reject(beforeError) }],
       () => undefined,
     );
-    expect(executionResult).toEqual({ kind: 'raised', raised: beforeError });
+    expect(executionResult).toEqual({ kind: 'raised', thrown: beforeError });
   });
 });
 
@@ -322,7 +322,7 @@ describe('an executor that fails', () => {
         throw beforeError;
       },
     );
-    expect(executionResult).toEqual({ kind: 'raised', raised: beforeError });
+    expect(executionResult).toEqual({ kind: 'raised', thrown: beforeError });
     expect(partLog).toEqual(['a.before', 'b.before']);
   });
 });
@@ -345,7 +345,7 @@ describe('an after part that fails', () => {
     );
     expect(executionResult).toEqual({
       kind: 'returned',
-      returned: [initEvent],
+      emission: [initEvent],
     });
     expect(partLog).toEqual(['a.before', 'c.before', 'c.after', 'a.after']);
   });
@@ -397,7 +397,7 @@ describe('an after part that fails', () => {
       );
       expect(executionResult).toEqual({
         kind: 'returned',
-        returned: [initEvent],
+        emission: [initEvent],
       });
     },
   );
@@ -417,7 +417,7 @@ describe('what a layer returns', () => {
     );
     expect(executionResult).toEqual({
       kind: 'returned',
-      returned: [initEvent],
+      emission: [initEvent],
     });
   });
 });

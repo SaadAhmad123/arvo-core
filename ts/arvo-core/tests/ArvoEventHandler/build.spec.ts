@@ -61,16 +61,16 @@ describe('a declaration that is refused', () => {
   });
 
   it('reports the same issues either way', () => {
-    let thrown: ArvoEventHandlerValidationError | null = null;
+    let thrownError: ArvoEventHandlerValidationError | null = null;
     try {
       refused().build();
-    } catch (raised) {
-      thrown = raised as ArvoEventHandlerValidationError;
+    } catch (thrown) {
+      thrownError = thrown as ArvoEventHandlerValidationError;
     }
     const reported = refused().tryBuild();
     expect(
       !reported.ok && reported.error.issues.map((one) => one.path),
-    ).toEqual(thrown?.issues.map((one) => one.path));
+    ).toEqual(thrownError?.issues.map((one) => one.path));
   });
 });
 

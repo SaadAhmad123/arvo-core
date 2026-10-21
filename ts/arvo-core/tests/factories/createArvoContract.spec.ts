@@ -46,14 +46,14 @@ describe('tryCreateArvoContract', () => {
 
   it('reports every rule the declaration broke, as the constructor does', () => {
     const declared = tryCreateArvoContract(invalid);
-    let thrown: ArvoContractValidationError | null = null;
+    let thrownError: ArvoContractValidationError | null = null;
     try {
       new ArvoContract(invalid);
-    } catch (error) {
-      thrown = error as ArvoContractValidationError;
+    } catch (thrown) {
+      thrownError = thrown as ArvoContractValidationError;
     }
     if (declared.ok) throw new Error('expected the declaration to fail');
-    expect(declared.error.message).toBe(thrown?.message);
+    expect(declared.error.message).toBe(thrownError?.message);
   });
 
   it('lets an unrelated failure through rather than reporting it', () => {

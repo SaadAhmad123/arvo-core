@@ -56,11 +56,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * ```typescript
  * try {
  *   await serializer.deserialize(wire);
- * } catch (error) {
- *   if (error instanceof ArvoEventSerializerError) {
- *     log('malformed input', error.cause);
- *   } else if (error instanceof CloudEventTransformationError) {
- *     log('transformation failed', error.detail);
+ * } catch (thrown) {
+ *   if (thrown instanceof ArvoEventSerializerError) {
+ *     log('malformed input', thrown.cause);
+ *   } else if (thrown instanceof CloudEventTransformationError) {
+ *     log('transformation failed', thrown.detail);
  *   }
  * }
  * ```
@@ -102,9 +102,9 @@ export class ArvoEventSerializer {
     if (this.mode.type === 'arvoevent') {
       try {
         return fromNeverthrow(ok(JSON.stringify(event)));
-      } catch (cause) {
+      } catch (thrown) {
         return fromNeverthrow(
-          err(new ArvoEventSerializerError(cause as Error)),
+          err(new ArvoEventSerializerError(thrown as Error)),
         );
       }
     }
@@ -113,8 +113,8 @@ export class ArvoEventSerializer {
     if (!result.ok) return result;
     try {
       return fromNeverthrow(ok(JSON.stringify(result.value)));
-    } catch (cause) {
-      return fromNeverthrow(err(new ArvoEventSerializerError(cause as Error)));
+    } catch (thrown) {
+      return fromNeverthrow(err(new ArvoEventSerializerError(thrown as Error)));
     }
   }
 
@@ -162,8 +162,8 @@ export class ArvoEventSerializer {
     let parsed: unknown;
     try {
       parsed = JSON.parse(data);
-    } catch (cause) {
-      return fromNeverthrow(err(new ArvoEventSerializerError(cause as Error)));
+    } catch (thrown) {
+      return fromNeverthrow(err(new ArvoEventSerializerError(thrown as Error)));
     }
 
     if (this.mode.type === 'arvoevent') {

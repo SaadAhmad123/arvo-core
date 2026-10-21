@@ -205,9 +205,9 @@ describe("one execution's telemetry", () => {
   describe('a fault recorded before it is raised', () => {
     it('reaches the span as an exception', () => {
       const watched = spy();
-      const raised = fault();
-      built(watched.span).recordFault(raised);
-      expect(watched.exceptions[0]).toBe(raised);
+      const recordedFault = fault();
+      built(watched.span).recordFault(recordedFault);
+      expect(watched.exceptions[0]).toBe(recordedFault);
     });
 
     it('says which fault it was, and whether another attempt is due', () => {

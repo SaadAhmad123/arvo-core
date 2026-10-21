@@ -86,9 +86,9 @@ const isThrown = async (
 ): Promise<CloudEventTransformationError> => {
   try {
     await fn();
-  } catch (error) {
-    if (error instanceof CloudEventTransformationError) return error;
-    throw error;
+  } catch (thrown) {
+    if (thrown instanceof CloudEventTransformationError) return thrown;
+    throw thrown;
   }
   throw new Error(
     'expected the promise to reject with a CloudEventTransformationError',

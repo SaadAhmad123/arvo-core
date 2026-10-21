@@ -118,11 +118,11 @@ export const openedPerExecution = <TAttributes extends ArvoDependencies>(
  * would not go back being no reason to tell a caller its work failed.
  *
  * @param attributes - What the executor will find.
- * @param raised - What closing it raises.
+ * @param thrownOnClose - What closing it raises.
  */
 export const failingToClose = <TAttributes extends ArvoDependencies>(
   attributes: TAttributes,
-  raised: unknown,
+  thrownOnClose: unknown,
 ): WatchedDependency<TAttributes> => {
   const held = heldDependencies(attributes);
 
@@ -134,7 +134,7 @@ export const failingToClose = <TAttributes extends ArvoDependencies>(
         // awaited before the throw, so the recorded close cannot be
         // outrun by the failure it is supposed to precede
         await held.dependency.close(scope);
-        throw raised;
+        throw thrownOnClose;
       },
       get attributes() {
         return held.dependency.attributes;

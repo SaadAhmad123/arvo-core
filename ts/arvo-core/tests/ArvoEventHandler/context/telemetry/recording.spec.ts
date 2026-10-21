@@ -60,8 +60,8 @@ describe('what an execution may be told to record against', () => {
         meter: null,
         logger: null,
       });
-    } catch (refused) {
-      const named = refused as ArvoExecutionContextTelemetryValidationError;
+    } catch (thrown) {
+      const named = thrown as ArvoExecutionContextTelemetryValidationError;
       expect(named.issues[0]?.path).toBe('span');
       expect(named.message).toContain('addEvent');
       return;
@@ -76,8 +76,8 @@ describe('what an execution may be told to record against', () => {
         meter: {} as never,
         logger: null,
       });
-    } catch (refused) {
-      const named = refused as ArvoExecutionContextTelemetryValidationError;
+    } catch (thrown) {
+      const named = thrown as ArvoExecutionContextTelemetryValidationError;
       expect(named.issues[0]?.path).toBe('meter');
       return;
     }
@@ -91,8 +91,8 @@ describe('what an execution may be told to record against', () => {
         meter: null,
         logger: { log: () => undefined } as never,
       });
-    } catch (refused) {
-      const named = refused as ArvoExecutionContextTelemetryValidationError;
+    } catch (thrown) {
+      const named = thrown as ArvoExecutionContextTelemetryValidationError;
       expect(named.issues[0]?.path).toBe('logger');
       return;
     }
@@ -106,8 +106,8 @@ describe('what an execution may be told to record against', () => {
         meter: {} as never,
         logger: {} as never,
       });
-    } catch (refused) {
-      const named = refused as ArvoExecutionContextTelemetryValidationError;
+    } catch (thrown) {
+      const named = thrown as ArvoExecutionContextTelemetryValidationError;
       expect(named.issues.map((issue) => issue.path)).toEqual([
         'span',
         'meter',

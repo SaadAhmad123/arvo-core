@@ -354,8 +354,8 @@ describe('ArvoExecutionContext', async () => {
       const ctx = onInit();
       try {
         await ctx.setState({ data: { orderId: 42 } as never });
-      } catch (raised) {
-        return raised as ArvoHandlerFault;
+      } catch (thrown) {
+        return thrown as ArvoHandlerFault;
       }
       throw new Error('expected the write to be refused');
     };
@@ -400,9 +400,9 @@ describe('ArvoExecutionContext', async () => {
       const ctx = onInit();
       try {
         await ctx.setState({ data: 'not an object at all' as never });
-      } catch (raised) {
-        expect((raised as ArvoHandlerFault).violations[0]).toContain('(root)');
-        expect((raised as ArvoHandlerFault).message).toContain('(root)');
+      } catch (thrown) {
+        expect((thrown as ArvoHandlerFault).violations[0]).toContain('(root)');
+        expect((thrown as ArvoHandlerFault).message).toContain('(root)');
         return;
       }
       throw new Error('expected the write to be refused');
@@ -469,8 +469,8 @@ describe('ArvoExecutionContext', async () => {
       let fault: ArvoHandlerFault | undefined;
       try {
         await ctx.setState({ data: { orderId: 42 } as never });
-      } catch (raised) {
-        fault = raised as ArvoHandlerFault;
+      } catch (thrown) {
+        fault = thrown as ArvoHandlerFault;
       }
       const abandoned = JSON.parse(fault?.abandonmentState as string);
       expect(abandoned.data).toEqual({ orderId: 'o-1', attempts: 1 });
@@ -482,8 +482,8 @@ describe('ArvoExecutionContext', async () => {
       let fault: ArvoHandlerFault | undefined;
       try {
         await ctx.setState({ data: { orderId: 42 } as never });
-      } catch (raised) {
-        fault = raised as ArvoHandlerFault;
+      } catch (thrown) {
+        fault = thrown as ArvoHandlerFault;
       }
       expect(fault).toBeInstanceOf(ArvoHandlerFault);
       expect(fault?.abandonmentEvent).toBeNull();
@@ -590,15 +590,17 @@ describe('ArvoExecutionContext', async () => {
     it('refuses a key written a second time, as a fault no further attempt fixes', async () => {
       const ctx = onInit();
       await ctx.setMiddleware('tenant', 'first');
-      const raised = await ctx
+      const secondWriteFault = await ctx
         .setMiddleware('tenant', 'second')
-        .catch((error: unknown) => error);
-      expect(raised).toBeInstanceOf(ArvoHandlerFault);
-      expect((raised as ArvoHandlerFault).faultKind).toBe(
+        .catch((thrown: unknown) => thrown);
+      expect(secondWriteFault).toBeInstanceOf(ArvoHandlerFault);
+      expect((secondWriteFault as ArvoHandlerFault).faultKind).toBe(
         'middleware_conflict',
       );
-      expect((raised as ArvoHandlerFault).retry).toBeNull();
-      expect((raised as ArvoHandlerFault).message).toContain('tenant');
+      expect((secondWriteFault as ArvoHandlerFault).retry).toBeNull();
+      expect((secondWriteFault as ArvoHandlerFault).message).toContain(
+        'tenant',
+      );
     });
 
     it('leaves the first value where a second write is refused', async () => {
@@ -673,7 +675,7 @@ describe('ArvoExecutionContext', async () => {
   });
 
   describe("raising a fault of an executor's own", () => {
-    const raised = async (param: Record<string, unknown> = {}) =>
+    const buildExecutorFault = async (param: Record<string, unknown> = {}) =>
       onFollowup().fault({
         faultKind: 'executor_raised',
         message: 'the payment gateway refused the charge',
@@ -681,17 +683,17 @@ describe('ArvoExecutionContext', async () => {
       });
 
     it('builds a fault rather than throwing one, so a caller decides where it leaves from', async () => {
-      expect(await raised()).toBeInstanceOf(ArvoHandlerFault);
+      expect(await buildExecutorFault()).toBeInstanceOf(ArvoHandlerFault);
     });
 
     it('says which fault it is, and what went wrong', async () => {
-      const fault = await raised();
+      const fault = await buildExecutorFault();
       expect(fault.faultKind).toBe('executor_raised');
       expect(fault.message).toBe('the payment gateway refused the charge');
     });
 
     it('fills in the execution, so an executor says only what failed', async () => {
-      const fault = await raised();
+      const fault = await buildExecutorFault();
       expect(fault.subject).toBe(initEvent.subject);
       expect(fault.executionId).toBe(initEvent.executionid);
       expect(fault.eventId).toBe(chargedEvent.id);
@@ -699,36 +701,39 @@ describe('ArvoExecutionContext', async () => {
     });
 
     it('carries what underlies it where that was said', async () => {
-      expect((await raised({ cause: 'HTTP 402' })).cause).toBe('HTTP 402');
+      expect((await buildExecutorFault({ cause: 'HTTP 402' })).cause).toBe(
+        'HTTP 402',
+      );
     });
 
     it('carries nothing underneath where nothing was said', async () => {
-      expect((await raised()).cause).toBeNull();
+      expect((await buildExecutorFault()).cause).toBeNull();
     });
 
     it('carries the checks that failed where those were collected', async () => {
       expect(
-        (await raised({ violations: ['amount: too large'] })).violations,
+        (await buildExecutorFault({ violations: ['amount: too large'] }))
+          .violations,
       ).toEqual(['amount: too large']);
     });
 
     it('carries none where none were collected', async () => {
-      expect((await raised()).violations).toEqual([]);
+      expect((await buildExecutorFault()).violations).toEqual([]);
     });
 
     it('says another attempt is due, an executor fault being retry safe by default', async () => {
-      const fault = await raised();
+      const fault = await buildExecutorFault();
       expect(fault.retry?.maxRetryAttemptsAllowed).toBe(3);
       expect(fault.retry?.retryInMs).toBe(300);
       expect(fault.retry?.retryAt).toBe(fault.timestamp + 300);
     });
 
     it('says none is in prospect where the executor said not', async () => {
-      expect((await raised({ retryable: false })).retry).toBeNull();
+      expect((await buildExecutorFault({ retryable: false })).retry).toBeNull();
     });
 
     it('carries what the execution would be abandoned with, written out', async () => {
-      const fault = await raised();
+      const fault = await buildExecutorFault();
       expect(typeof fault.abandonmentEvent).toBe('string');
       expect(typeof fault.abandonmentState).toBe('string');
     });

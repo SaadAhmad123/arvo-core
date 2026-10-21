@@ -100,7 +100,7 @@ describe('the clock firing, by where it fires', () => {
     });
     expect(executionResult).toEqual({
       kind: 'returned',
-      returned: [initEvent],
+      emission: [initEvent],
     });
     expect(afterSpy).not.toHaveBeenCalled();
   });

@@ -15,10 +15,10 @@
 export const recording = (record: () => void): void => {
   try {
     record();
-  } catch (refused) {
+  } catch (thrown) {
     console.warn(
       'arvo: a telemetry recording failed, and the execution carried on without it',
-      refused,
+      thrown,
     );
   }
 };
@@ -41,10 +41,10 @@ export const recording = (record: () => void): void => {
 export const reading = <TRead>(read: () => TRead, instead: TRead): TRead => {
   try {
     return read();
-  } catch (refused) {
+  } catch (thrown) {
     console.warn(
       'arvo: a telemetry reading failed, and the execution carried on without it',
-      refused,
+      thrown,
     );
     return instead;
   }

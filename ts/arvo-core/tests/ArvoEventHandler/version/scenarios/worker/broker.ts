@@ -120,7 +120,7 @@ export class ArvoThreadedBroker {
       });
       const lane: Lane = { worker, held: null, alive: true };
       worker.on('message', (said) => void this.#heard(lane, said));
-      worker.on('error', (raised) => this.#broke(lane, raised));
+      worker.on('error', (workerError) => this.#broke(lane, workerError));
       worker.unref();
       this.#lanes.push(lane);
     }
@@ -282,10 +282,10 @@ export class ArvoThreadedBroker {
    * Whatever it held goes back on the queue, the same as a thread that
    * was killed, because from here the two are the same event.
    */
-  #broke(lane: Lane, raised: Error): void {
+  #broke(lane: Lane, workerError: Error): void {
     const held = lane.held;
     lane.held = null;
-    this.transcript.broken.push(raised.message);
+    this.transcript.broken.push(workerError.message);
     if (held) this.#queue.push(held.carried);
     this.#pump();
   }
