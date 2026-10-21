@@ -46,7 +46,7 @@ export type ArvoResolvedMiddleware = {
 export const tryResolveMiddleware = async (
   supplied: unknown,
   declared: readonly ArvoEventHandlerMiddlewareEntry[] | null,
-): AsyncResult<ArvoResolvedMiddleware, ArvoComposedMiddlewareValidationError> => {
+): AsyncResult<ArvoResolvedMiddleware, ArvoComposedMiddlewareResolutionError> => {
   const resolvedSupplied: unknown[] = [];
   const resolvedDeclared: unknown[] = [];
   const lists = [
@@ -66,14 +66,7 @@ export const tryResolveMiddleware = async (
       } catch (thrown) {
         // the first factory that throws stops resolution: later ones are not called
         return fromNeverthrow(
-          err(
-            new ArvoComposedMiddlewareValidationError(
-              'middleware_instantiation_failed',
-              'A way to make a layer failed, so no layer ran.',
-              [new ErrorIssue({ path: `${listName} middleware[${entryIndex}]`, message: 'calling it failed', received: thrown })],
-              { cause: thrown },
-            ),
-          ),
+          err(new ArvoComposedMiddlewareResolutionError({ position: `${listName} middleware[${entryIndex}]`, thrown })),
         );
       }
     }
@@ -97,12 +90,20 @@ export const tryResolveMiddleware = async (
 
 So one refusal lists every bad entry, or else every duplicate, never both: a duplicate cannot be judged among entries that are not all layers. Supplied middleware that is not a list blocks only its own positions; the declared entries are still checked.
 
-**Both steps fail the same way.** Each fails with `ArvoComposedMiddlewareValidationError`: `tryResolveMiddleware` returns it as `Err` in an `AsyncResult`, the constructor throws it, and the factory hands either back as its own `Err`. The error follows `ArvoEventValidatorError`, which already does this job for events: it carries every issue and the fault kind it becomes (`middleware_instantiation_failed` or `middleware_conflict`), so the version raises the fault without deciding anything again. `refusalFrom` copies the error's fault kind and message and renders its issues as the violations, which `#faultFor` already takes.
+**Each step has its own error, because each fails for a different reason.**
+
+- **`ArvoComposedMiddlewareResolutionError`**: a factory threw. Nothing was checked; code failed. It carries the entry's position and what was thrown, as its `cause`, and its message names both, as today's does: `supplied middleware[1] is a way to make a layer, and calling it failed: <cause>. No layer ran`. Its fault kind is always `middleware_instantiation_failed`.
+- **`ArvoComposedMiddlewareValidationError`**: the layers broke a rule. It follows `ArvoEventValidatorError`, which already does this job for events: it carries every issue, builds its message from them, and carries the fault kind it becomes, `middleware_instantiation_failed` for a shape problem or `middleware_conflict` for a repeated identifier.
+
+`tryResolveMiddleware` returns the first as `Err`, the constructor throws the second, and the factory hands either back as its own `Err`. Both carry their fault kind, so the version raises the fault without deciding anything again: `refusalFrom` copies the fault kind and message, and renders the violations, the validation error's issues or the resolution error's one position, into the shape `#faultFor` already takes. Both carry a `_tag`, and both live in `composed-middleware/errors.ts`.
 
 ```ts
 export const tryCreateArvoComposedMiddleware = async (
   param: ArvoComposedMiddlewareParam,
-): AsyncResult<ArvoComposedMiddleware, ArvoComposedMiddlewareValidationError> => {
+): AsyncResult<
+  ArvoComposedMiddleware,
+  ArvoComposedMiddlewareResolutionError | ArvoComposedMiddlewareValidationError
+> => {
   const resolution = await tryResolveMiddleware(param.supplied, param.declared);
   if (!resolution.ok) return resolution;
   try {

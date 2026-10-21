@@ -1,13 +1,13 @@
 Every group starts with its tests, ends at 100% coverage with lint and typecheck clean, and is its own commit. Every change under `src/` is shown for review before its commit. New files go under `src/ArvoEventHandler/version/composed-middleware/`, one concern per file, with tests mirrored under `tests/ArvoEventHandler/version/composed-middleware/`.
 
-## 1. The validation error
+## 1. The two errors
 
-- [ ] 1.1 Write `tests/.../composed-middleware/errors.spec.ts`: the error carries its fault kind and every issue, freezes the issues, builds its message from them, and carries a `_tag`.
-- [ ] 1.2 Add `ArvoComposedMiddlewareValidationError` in `src/.../composed-middleware/errors.ts`, following `ArvoEventValidatorError`.
+- [ ] 1.1 Write `tests/.../composed-middleware/errors.spec.ts`. The validation error carries its fault kind and every issue, freezes the issues, builds its message from them, and carries a `_tag`. The resolution error carries the position, keeps what was thrown as its `cause`, names both in its message, always has the fault kind for a failed instantiation, and carries a `_tag`.
+- [ ] 1.2 Add `ArvoComposedMiddlewareValidationError`, following `ArvoEventValidatorError`, and `ArvoComposedMiddlewareResolutionError`, both in `src/.../composed-middleware/errors.ts`.
 
 ## 2. Resolution that only resolves
 
-- [ ] 2.1 Write `tests/.../composed-middleware/resolve.spec.ts`: each factory is called once and replaced by what it returned; layers pass through untouched; resolution stops at the first factory that throws, returning `Err` naming its position as a failed instantiation; supplied middleware that is not a list passes through untouched; omitted and empty both resolve to empty lists.
+- [ ] 2.1 Write `tests/.../composed-middleware/resolve.spec.ts`: each factory is called once and replaced by what it returned; layers pass through untouched; resolution stops at the first factory that throws, returning the resolution error naming its position; supplied middleware that is not a list passes through untouched; omitted and empty both resolve to empty lists.
 - [ ] 2.2 Move `resolveMiddleware` into `src/.../composed-middleware/resolve.ts` as `tryResolveMiddleware`, returning an `AsyncResult` of `{ supplied, declared }`, built through neverthrow and `fromNeverthrow`. **Replaces** today's `resolveMiddleware` in `src/ArvoEventHandler/version/middleware.ts`: its shape check, identifier check and list check leave it for group 3.
 
 ## 3. The composite
@@ -20,7 +20,7 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 ## 4. The factory
 
-- [ ] 4.1 Write `tests/.../composed-middleware/factory.spec.ts`: a resolution failure comes back as `Err` without calling the constructor; a constructor refusal comes back as `Err`; anything else the constructor throws goes up as thrown; success returns the composite.
+- [ ] 4.1 Write `tests/.../composed-middleware/factory.spec.ts`: a resolution failure comes back as the resolution error without calling the constructor; a constructor refusal comes back as the validation error; anything else the constructor throws goes up as thrown; success returns the composite.
 - [ ] 4.2 Add `tryCreateArvoComposedMiddleware` in `src/.../composed-middleware/factory.ts`, returning an `AsyncResult`.
 
 ## 5. The version on the composite
