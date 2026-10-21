@@ -163,16 +163,20 @@ export type ArvoScenarioDependencies = {
 };
 
 /** Whichever the scenario supplied, or what this version does by default. */
-const behaving = <
+const runBehaviour = <
   TContext extends { dependencies: ArvoScenarioDependencies | null },
 >(
   ctx: TContext,
-  byDefault: ArvoBehaviour<TContext>,
+  defaultBehaviour: ArvoBehaviour<TContext>,
 ): PromiseAble<ArvoExecutorEmission> => {
   // These versions run without being told to behave differently, so
   // absence is the default rather than a reason to fail.
-  const told = ctx.dependencies?.behave as ArvoBehaviour<TContext> | undefined;
-  return told === undefined ? byDefault(ctx) : told(ctx);
+  const scenarioBehaviour = ctx.dependencies?.behave as
+    | ArvoBehaviour<TContext>
+    | undefined;
+  return scenarioBehaviour === undefined
+    ? defaultBehaviour(ctx)
+    : scenarioBehaviour(ctx);
 };
 
 /**
@@ -284,65 +288,65 @@ export type ArvoVersionsUnderTest = Record<
 export const declareVersions = (
   options: ArvoScenarioOptions = {},
 ): ArvoVersionsUnderTest => {
-  const per = (type: string) => optionsWith(options[type]);
+  const optionsFor = (type: string) => optionsWith(options[type]);
 
   return {
     [orderContract.type]: {
       '1.0.0': new ArvoEventHandlerVersion({
         contracts: { self: orderV1, services: orderServices },
-        options: per(orderContract.type),
+        options: optionsFor(orderContract.type),
         state: orderState,
         declaresState: true,
         middleware: null,
-        execute: (ctx) => behaving(ctx, orchestrate),
+        execute: (ctx) => runBehaviour(ctx, orchestrate),
       }),
       '1.1.0': new ArvoEventHandlerVersion({
         contracts: { self: orderV11, services: orderServices },
-        options: per(orderContract.type),
+        options: optionsFor(orderContract.type),
         state: rushOrderState,
         declaresState: true,
         middleware: null,
-        execute: (ctx) => behaving(ctx, orchestrate),
+        execute: (ctx) => runBehaviour(ctx, orchestrate),
       }),
     },
     [inventoryContract.type]: {
       '1.0.0': new ArvoEventHandlerVersion({
         contracts: { self: inventoryV1, services: {} },
-        options: per(inventoryContract.type),
+        options: optionsFor(inventoryContract.type),
         state: orderState,
         declaresState: true,
         middleware: null,
-        execute: (ctx) => behaving(ctx, reserve),
+        execute: (ctx) => runBehaviour(ctx, reserve),
       }),
     },
     [paymentContract.type]: {
       '1.0.0': new ArvoEventHandlerVersion({
         contracts: { self: paymentV1, services: {} },
-        options: per(paymentContract.type),
+        options: optionsFor(paymentContract.type),
         state: orderState,
         declaresState: true,
         middleware: null,
-        execute: (ctx) => behaving(ctx, charge),
+        execute: (ctx) => runBehaviour(ctx, charge),
       }),
     },
     [walkContract.type]: {
       '1.0.0': new ArvoEventHandlerVersion({
         contracts: { self: walkV1, services: walkServices },
-        options: per(walkContract.type),
+        options: optionsFor(walkContract.type),
         state: orderState,
         declaresState: true,
         middleware: null,
-        execute: (ctx) => behaving(ctx, walk),
+        execute: (ctx) => runBehaviour(ctx, walk),
       }),
     },
     [auditContract.type]: {
       '1.0.0': new ArvoEventHandlerVersion({
         contracts: { self: auditV1, services: {} },
-        options: per(auditContract.type),
+        options: optionsFor(auditContract.type),
         state: looseState,
         declaresState: true,
         middleware: null,
-        execute: (ctx) => behaving(ctx, audit),
+        execute: (ctx) => runBehaviour(ctx, audit),
       }),
     },
   };

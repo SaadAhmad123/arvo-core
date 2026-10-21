@@ -39,7 +39,7 @@ const recordShape = (record: JSONObject) => ({
   version: record.version,
   data: record.data,
   directions: (record.eventIds as { direction: string }[]).map(
-    (touchedEvent) => touchedEvent.direction,
+    (logEntry) => logEntry.direction,
   ),
   awaiting: Object.keys(record.inFlightEventMap as object).length,
 });

@@ -41,55 +41,55 @@ const anOrder = (subject = 'order-1') =>
   });
 
 /** The handler, run against a store, reporting whatever it refused. */
-const refusing = async (
+const runToFault = async (
   param: Partial<ArvoEventHandlerExecuteParam<ScenarioDependencies, never>> & {
     event: ArvoEvent;
   },
   store = new ScenarioStore(),
   handler = declareHandler(),
 ): Promise<{ fault: ArvoHandlerFault; store: ScenarioStore }> => {
-  const ran = await handler.tryExecute({
+  const outcome = await handler.tryExecute({
     state: store.resolver,
     attempt: 0,
     ...param,
   });
-  if (ran.ok) throw new Error(`nothing was refused: ${ran.value.kind}`);
-  return { fault: ran.error, store };
+  if (outcome.ok) throw new Error(`nothing was refused: ${outcome.value.kind}`);
+  return { fault: outcome.error, store };
 };
 
 /** An execution opened and committed, so a followup has one to answer. */
 const anOpenExecution = async (store = new ScenarioStore()) => {
   const handler = declareHandler();
   const order = anOrder();
-  const opened = await handler.execute({
+  const openingOutcome = await handler.execute({
     event: order,
     state: store.resolver,
     attempt: 0,
   });
-  if (opened.kind !== 'produced') throw new Error('nothing was opened');
-  store.commit(opened.state);
-  return { handler, order, opened, store };
+  if (openingOutcome.kind !== 'produced') throw new Error('nothing was opened');
+  store.commit(openingOutcome.state);
+  return { handler, order, openingOutcome, store };
 };
 
 /** What a service answers an execution with. */
-const answering = (
-  opened: Awaited<ReturnType<typeof anOpenExecution>>,
+const inventoryAnswer = (
+  execution: Awaited<ReturnType<typeof anOpenExecution>>,
   overrides: Record<string, unknown> = {},
 ) =>
   createArvoEventFactory(inventoryV1).createOutput({
     type: 'evt_inventory_reserved',
     source: inventoryV1.type,
-    subject: opened.order.subject,
+    subject: execution.order.subject,
     to: fulfilContract.type,
-    executionid: String(opened.opened.state.executionId),
-    initid: opened.opened.events[0]?.id,
-    parentid: opened.opened.events[0]?.id,
+    executionid: String(execution.openingOutcome.state.executionId),
+    initid: execution.openingOutcome.events[0]?.id,
+    parentid: execution.openingOutcome.events[0]?.id,
     data: { held: 1 },
     ...overrides,
   });
 
 describe('an event naming a contract nothing declared', () => {
-  const stray = () =>
+  const strayEvent = () =>
     createArvoEventFactory(strangerV1).createInput({
       source: 'com.web.checkout',
       subject: 'order-1',
@@ -98,36 +98,36 @@ describe('an event naming a contract nothing declared', () => {
     });
 
   it('is event_unclassifiable, and no further attempt changes that', async () => {
-    const { fault } = await refusing({ event: stray() });
+    const { fault } = await runToFault({ event: strayEvent() });
     expect(fault.faultKind).toBe('event_unclassifiable');
     expect(fault.retry).toBeNull();
   });
 
   it('names no execution, nothing having placed it', async () => {
-    const { fault } = await refusing({ event: stray() });
+    const { fault } = await runToFault({ event: strayEvent() });
     expect(fault.executionId).toBeNull();
   });
 
   it('carries nothing to give up with, there being nobody to tell', async () => {
-    const { fault } = await refusing({ event: stray() });
+    const { fault } = await runToFault({ event: strayEvent() });
     expect(fault.abandonmentEvent).toBeNull();
     expect(fault.abandonmentState).toBeNull();
   });
 
   it('says what it would have had to name', async () => {
-    const { fault } = await refusing({ event: stray() });
+    const { fault } = await runToFault({ event: strayEvent() });
     expect(fault.violations.join(' ')).toContain(fulfilContract.uri);
   });
 
   it('never reached the store', async () => {
-    const { store } = await refusing({ event: stray() });
+    const { store } = await runToFault({ event: strayEvent() });
     expect(store.reads).toEqual([]);
   });
 });
 
 describe('an event naming a version nothing declares', () => {
   it('is event_unclassifiable rather than anything about its type', async () => {
-    const { fault } = await refusing({
+    const { fault } = await runToFault({
       event: cloneArvoEvent(anOrder(), {
         dataschema: `${fulfilContract.uri}/9.9.9`,
       }),
@@ -139,22 +139,22 @@ describe('an event naming a version nothing declares', () => {
 
 describe('a service answering at a version this handler did not declare', () => {
   it('is where version skew surfaces, and says so', async () => {
-    const opened = await anOpenExecution();
-    const skewed = createArvoEventFactory(inventoryV11).createOutput({
+    const execution = await anOpenExecution();
+    const skewedAnswer = createArvoEventFactory(inventoryV11).createOutput({
       type: 'evt_inventory_reserved',
       source: inventoryV1.type,
-      subject: opened.order.subject,
+      subject: execution.order.subject,
       to: fulfilContract.type,
-      executionid: String(opened.opened.state.executionId),
-      initid: opened.opened.events[0]?.id,
-      parentid: opened.opened.events[0]?.id,
+      executionid: String(execution.openingOutcome.state.executionId),
+      initid: execution.openingOutcome.events[0]?.id,
+      parentid: execution.openingOutcome.events[0]?.id,
       data: { held: 1 },
     });
 
-    const { fault } = await refusing(
-      { event: skewed },
-      opened.store,
-      opened.handler,
+    const { fault } = await runToFault(
+      { event: skewedAnswer },
+      execution.store,
+      execution.handler,
     );
     expect(fault.faultKind).toBe('event_unclassifiable');
     expect(fault.message).toContain('1.0.0');
@@ -162,32 +162,32 @@ describe('a service answering at a version this handler did not declare', () => 
 });
 
 describe('an event whose stated role contradicts what it was placed as', () => {
-  const miscategorised = () =>
+  const miscategorisedEvent = () =>
     cloneArvoEvent(anOrder(), {
       category: 'io.arvo.complete',
       initid: 'a-request-somewhere-else',
     });
 
   it('is category_mismatch, and no further attempt reconciles it', async () => {
-    const { fault } = await refusing({ event: miscategorised() });
+    const { fault } = await runToFault({ event: miscategorisedEvent() });
     expect(fault.faultKind).toBe('category_mismatch');
     expect(fault.retry).toBeNull();
   });
 
   it('can still tell the caller, the event naming where it came from', async () => {
-    const { fault } = await refusing({ event: miscategorised() });
+    const { fault } = await runToFault({ event: miscategorisedEvent() });
     expect(fault.abandonmentEvent).not.toBeNull();
   });
 
   it('writes no record, no execution having begun', async () => {
-    const { fault } = await refusing({ event: miscategorised() });
+    const { fault } = await runToFault({ event: miscategorisedEvent() });
     expect(fault.abandonmentState).toBeNull();
   });
 });
 
 describe('a store that cannot be read', () => {
   it('is state_resolution_failed, and is worth another attempt', async () => {
-    const { fault } = await refusing(
+    const { fault } = await runToFault(
       { event: anOrder() },
       new ScenarioStore().misbehave({ kind: 'unreachable' }),
     );
@@ -196,10 +196,10 @@ describe('a store that cannot be read', () => {
   });
 
   it('keeps what the store said, however it said it', async () => {
-    for (const as of ['error', 'rejection', 'string'] as const) {
-      const { fault } = await refusing(
+    for (const failureForm of ['error', 'rejection', 'string'] as const) {
+      const { fault } = await runToFault(
         { event: anOrder() },
-        new ScenarioStore().misbehave({ kind: 'unreachable', as }),
+        new ScenarioStore().misbehave({ kind: 'unreachable', as: failureForm }),
       );
       expect(fault.faultKind).toBe('state_resolution_failed');
       expect(fault.cause).toContain('unreachable');
@@ -207,7 +207,7 @@ describe('a store that cannot be read', () => {
   });
 
   it('stops being worth another attempt once they are spent', async () => {
-    const { fault } = await refusing(
+    const { fault } = await runToFault(
       { event: anOrder(), attempt: 3 },
       new ScenarioStore().misbehave({ kind: 'unreachable' }),
     );
@@ -219,45 +219,47 @@ describe('a store that cannot be read', () => {
 
 describe('an opening event for an execution that already exists', () => {
   it('is record_unexpected, so a second is never opened', async () => {
-    const opened = await anOpenExecution();
-    const { fault } = await refusing(
-      { event: opened.order },
-      opened.store,
-      opened.handler,
+    const execution = await anOpenExecution();
+    const { fault } = await runToFault(
+      { event: execution.order },
+      execution.store,
+      execution.handler,
     );
     expect(fault.faultKind).toBe('record_unexpected');
     expect(fault.retry).toBeNull();
   });
 
   it('names the execution it found', async () => {
-    const opened = await anOpenExecution();
-    const { fault } = await refusing(
-      { event: opened.order },
-      opened.store,
-      opened.handler,
+    const execution = await anOpenExecution();
+    const { fault } = await runToFault(
+      { event: execution.order },
+      execution.store,
+      execution.handler,
     );
-    expect(fault.executionId).toBe(String(opened.opened.state.executionId));
+    expect(fault.executionId).toBe(
+      String(execution.openingOutcome.state.executionId),
+    );
   });
 });
 
 describe('an answering event for an execution nothing holds', () => {
   it('is record_expected, and no attempt produces one', async () => {
-    const opened = await anOpenExecution();
-    const { fault } = await refusing(
-      { event: answering(opened) },
+    const execution = await anOpenExecution();
+    const { fault } = await runToFault(
+      { event: inventoryAnswer(execution) },
       new ScenarioStore(),
-      opened.handler,
+      execution.handler,
     );
     expect(fault.faultKind).toBe('record_expected');
     expect(fault.retry).toBeNull();
   });
 
   it('tells nobody, its source naming the service rather than the caller', async () => {
-    const opened = await anOpenExecution();
-    const { fault } = await refusing(
-      { event: answering(opened) },
+    const execution = await anOpenExecution();
+    const { fault } = await runToFault(
+      { event: inventoryAnswer(execution) },
       new ScenarioStore(),
-      opened.handler,
+      execution.handler,
     );
     expect(fault.abandonmentEvent).toBeNull();
     expect(fault.abandonmentState).toBeNull();
@@ -266,22 +268,22 @@ describe('an answering event for an execution nothing holds', () => {
 
 describe('a stored row that is not a record', () => {
   it('is record_invalid, reported as corruption', async () => {
-    const opened = await anOpenExecution();
-    const { fault } = await refusing(
-      { event: answering(opened) },
+    const execution = await anOpenExecution();
+    const { fault } = await runToFault(
+      { event: inventoryAnswer(execution) },
       new ScenarioStore().misbehave({ kind: 'returns', row: NOT_A_RECORD }),
-      opened.handler,
+      execution.handler,
     );
     expect(fault.faultKind).toBe('record_invalid');
     expect(fault.retry).toBeNull();
   });
 
   it('carries nothing, nothing about it being trustworthy', async () => {
-    const opened = await anOpenExecution();
-    const { fault } = await refusing(
-      { event: answering(opened) },
+    const execution = await anOpenExecution();
+    const { fault } = await runToFault(
+      { event: inventoryAnswer(execution) },
       new ScenarioStore().misbehave({ kind: 'returns', row: NOT_A_RECORD }),
-      opened.handler,
+      execution.handler,
     );
     expect(fault.abandonmentEvent).toBeNull();
     expect(fault.abandonmentState).toBeNull();
@@ -290,16 +292,16 @@ describe('a stored row that is not a record', () => {
 
 describe('a record holding an event that will not restore', () => {
   it('is record_event_unrestorable, which is a different diagnosis', async () => {
-    const opened = await anOpenExecution();
-    const { fault } = await refusing(
-      { event: answering(opened) },
+    const execution = await anOpenExecution();
+    const { fault } = await runToFault(
+      { event: inventoryAnswer(execution) },
       new ScenarioStore()
         .misbehave({
           kind: 'mutates',
           change: (row) => ({ ...row, initEvent: { not: 'an event' } }),
         })
-        .commit(opened.opened.state),
-      opened.handler,
+        .commit(execution.openingOutcome.state),
+      execution.handler,
     );
     expect(fault.faultKind).toBe('record_event_unrestorable');
   });
@@ -307,13 +309,13 @@ describe('a record holding an event that will not restore', () => {
 
 describe('an execution at a version the handler no longer runs', () => {
   it('is version_not_declared, and tells its caller', async () => {
-    const opened = await anOpenExecution();
-    const drained = declareHandlerAfterDrain();
+    const execution = await anOpenExecution();
+    const drainedHandler = declareHandlerAfterDrain();
 
-    const { fault } = await refusing(
-      { event: answering(opened) },
-      opened.store,
-      drained as never,
+    const { fault } = await runToFault(
+      { event: inventoryAnswer(execution) },
+      execution.store,
+      drainedHandler as never,
     );
     expect(fault.faultKind).toBe('version_not_declared');
     expect(fault.retry).toBeNull();
@@ -321,25 +323,29 @@ describe('an execution at a version the handler no longer runs', () => {
   });
 
   it('leaves a record resting at failure for a mechanism that gives up', async () => {
-    const opened = await anOpenExecution();
-    const drained = declareHandlerAfterDrain();
-    const { fault } = await refusing(
-      { event: answering(opened) },
-      opened.store,
-      drained as never,
+    const execution = await anOpenExecution();
+    const drainedHandler = declareHandlerAfterDrain();
+    const { fault } = await runToFault(
+      { event: inventoryAnswer(execution) },
+      execution.store,
+      drainedHandler as never,
     );
-    const resting = JSON.parse(String(fault.abandonmentState)) as JSONObject;
-    expect(resting.lifecycle).toBe('failure');
-    expect(resting.casVersion).toBe(Number(opened.opened.state.casVersion) + 1);
+    const restingRecord = JSON.parse(
+      String(fault.abandonmentState),
+    ) as JSONObject;
+    expect(restingRecord.lifecycle).toBe('failure');
+    expect(restingRecord.casVersion).toBe(
+      Number(execution.openingOutcome.state.casVersion) + 1,
+    );
   });
 
   it('says which versions are left', async () => {
-    const opened = await anOpenExecution();
-    const drained = declareHandlerAfterDrain();
-    const { fault } = await refusing(
-      { event: answering(opened) },
-      opened.store,
-      drained as never,
+    const execution = await anOpenExecution();
+    const drainedHandler = declareHandlerAfterDrain();
+    const { fault } = await runToFault(
+      { event: inventoryAnswer(execution) },
+      execution.store,
+      drainedHandler as never,
     );
     expect(fault.violations.join(' ')).toContain('1.1.0');
   });
@@ -347,7 +353,7 @@ describe('an execution at a version the handler no longer runs', () => {
 
 describe('an event the contract it named cannot send here', () => {
   it('is type_not_receivable for a type it never takes in', async () => {
-    const { fault } = await refusing({
+    const { fault } = await runToFault({
       event: cloneArvoEvent(anOrder(), { type: 'evt_order_fulfilled' }),
     });
     expect(fault.faultKind).toBe('type_not_receivable');
@@ -355,7 +361,7 @@ describe('an event the contract it named cannot send here', () => {
   });
 
   it('is event_schema_rejected for a payload its schema refuses', async () => {
-    const { fault } = await refusing({
+    const { fault } = await runToFault({
       event: cloneArvoEvent(anOrder(), {
         data: { items: [7] as unknown as string[] },
       }),
@@ -364,7 +370,7 @@ describe('an event the contract it named cannot send here', () => {
   });
 
   it('names every part of the payload that was wrong, not only the first', async () => {
-    const { fault } = await refusing({
+    const { fault } = await runToFault({
       event: cloneArvoEvent(anOrder(), {
         data: { items: [7, 8] as unknown as string[] },
       }),
@@ -373,7 +379,7 @@ describe('an event the contract it named cannot send here', () => {
   });
 
   it('can still tell the caller, an opening event naming where it came from', async () => {
-    const { fault } = await refusing({
+    const { fault } = await runToFault({
       event: cloneArvoEvent(anOrder(), {
         data: { items: [7] as unknown as string[] },
       }),
@@ -383,57 +389,61 @@ describe('an event the contract it named cannot send here', () => {
 });
 
 describe('what every refusal has in common', () => {
-  const everyWay = async () => {
-    const opened = await anOpenExecution();
+  const everyRefusal = async () => {
+    const execution = await anOpenExecution();
     return [
-      await refusing(
+      await runToFault(
         { event: anOrder() },
         new ScenarioStore().misbehave({ kind: 'unreachable' }),
       ),
-      await refusing({
+      await runToFault({
         event: cloneArvoEvent(anOrder(), { type: 'evt_order_fulfilled' }),
       }),
-      await refusing({ event: opened.order }, opened.store, opened.handler),
-      await refusing(
-        { event: answering(opened) },
+      await runToFault(
+        { event: execution.order },
+        execution.store,
+        execution.handler,
+      ),
+      await runToFault(
+        { event: inventoryAnswer(execution) },
         new ScenarioStore().misbehave({ kind: 'returns', row: NOT_A_RECORD }),
-        opened.handler,
+        execution.handler,
       ),
     ];
   };
 
   it('names the event it was about', async () => {
-    for (const { fault } of await everyWay()) {
+    for (const { fault } of await everyRefusal()) {
       expect(fault.eventId).not.toBe('');
     }
   });
 
   it('names the workflow it was in', async () => {
-    for (const { fault } of await everyWay()) {
+    for (const { fault } of await everyRefusal()) {
       expect(fault.subject).toBe('order-1');
     }
   });
 
   it('says which attempt it was', async () => {
-    for (const { fault } of await everyWay()) {
+    for (const { fault } of await everyRefusal()) {
       expect(fault.attempt).toBe(0);
     }
   });
 
   it('says what it is in a message a reader can act on', async () => {
-    for (const { fault } of await everyWay()) {
+    for (const { fault } of await everyRefusal()) {
       expect(fault.message.length).toBeGreaterThan(40);
     }
   });
 
   it('is an ArvoHandlerFault by name, which is what crosses the wire', async () => {
-    for (const { fault } of await everyWay()) {
+    for (const { fault } of await everyRefusal()) {
       expect(fault.name).toBe('ArvoHandlerFault');
     }
   });
 
   it('survives being written out, since giving up means storing it', async () => {
-    for (const { fault } of await everyWay()) {
+    for (const { fault } of await everyRefusal()) {
       expect(() => JSON.stringify(fault.toJSON())).not.toThrow();
     }
   });
@@ -441,21 +451,21 @@ describe('what every refusal has in common', () => {
 
 describe('what the handler passes through from the version unaltered', () => {
   it('a response nothing was awaiting', async () => {
-    const opened = await anOpenExecution();
-    const unasked = createArvoEventFactory(paymentV1).createOutput({
+    const execution = await anOpenExecution();
+    const unaskedResponse = createArvoEventFactory(paymentV1).createOutput({
       type: 'evt_payment_charged',
       source: paymentV1.type,
-      subject: opened.order.subject,
+      subject: execution.order.subject,
       to: fulfilContract.type,
-      executionid: String(opened.opened.state.executionId),
+      executionid: String(execution.openingOutcome.state.executionId),
       initid: 'a-request-never-sent',
       parentid: 'a-request-never-sent',
       data: { receipt: 'r-1' },
     });
-    const { fault } = await refusing(
-      { event: unasked },
-      opened.store,
-      opened.handler,
+    const { fault } = await runToFault(
+      { event: unaskedResponse },
+      execution.store,
+      execution.handler,
     );
     expect(fault.faultKind).toBe('response_unawaited');
   });
@@ -464,7 +474,7 @@ describe('what the handler passes through from the version unaltered', () => {
     // `to` does not place an event — `dataschema` does — so one naming
     // this contract and addressed elsewhere is placed and then refused
     // for disagreeing about where it was going
-    const { fault } = await refusing({
+    const { fault } = await runToFault({
       event: cloneArvoEvent(anOrder(), { to: 'com_somebody_else' }),
     });
     expect(fault.faultKind).toBe('addressing_mismatch');
@@ -472,7 +482,7 @@ describe('what the handler passes through from the version unaltered', () => {
   });
 
   it('a dependency that could not be opened', async () => {
-    const { fault } = await refusing({
+    const { fault } = await runToFault({
       event: anOrder(),
       dependencies: openedPerExecution(() => {
         throw new Error('the pool is exhausted');
@@ -483,7 +493,7 @@ describe('what the handler passes through from the version unaltered', () => {
   });
 
   it('a dependency that failed to open with something that is not an error', async () => {
-    const { fault } = await refusing({
+    const { fault } = await runToFault({
       event: anOrder(),
       dependencies: openedPerExecution(() => {
         throw 'the pool said only this';
@@ -494,7 +504,7 @@ describe('what the handler passes through from the version unaltered', () => {
   });
 
   it('an executor that raised one deliberately', async () => {
-    const { fault } = await refusing({
+    const { fault } = await runToFault({
       event: anOrder(),
       dependencies: heldDependencies<ScenarioDependencies>({
         behave: async (ctx) => {

@@ -4,10 +4,10 @@ import { checkOptions } from '../../../src/ArvoEventHandler/helpers/check-option
 import type { ArvoEventHandlerOptions } from '../../../src/ArvoEventHandler/types/options.js';
 
 /** What a rejection says, flattened to what a reader would check. */
-const refusals = (
-  declared: Partial<ArvoEventHandlerOptions> | null,
-  at = 'options',
-) => checkOptions(declared, at).map((issue) => issue.path);
+const refusedPaths = (
+  declaredOptions: Partial<ArvoEventHandlerOptions> | null,
+  path = 'options',
+) => checkOptions(declaredOptions, path).map((issue) => issue.path);
 
 describe('what passes', () => {
   it('nothing declared at all', () => {
@@ -34,78 +34,82 @@ describe('what passes', () => {
 
   it('a retry delay worked out per attempt', () => {
     expect(
-      refusals({ retryDelay: (_e, _s, attempt) => attempt * 100 }),
+      refusedPaths({ retryDelay: (_event, _state, attempt) => attempt * 100 }),
     ).toEqual([]);
   });
 
   it('either clock written null, null being unbounded', () => {
-    expect(refusals({ runTimeout: null, executionTimeout: null })).toEqual([]);
+    expect(refusedPaths({ runTimeout: null, executionTimeout: null })).toEqual(
+      [],
+    );
   });
 
   it('a domain named as a source to read one from', () => {
     expect(
-      refusals({ handlerErrorDomain: ArvoDomain.FROM_TRIGGERING_EVENT }),
+      refusedPaths({ handlerErrorDomain: ArvoDomain.FROM_TRIGGERING_EVENT }),
     ).toEqual([]);
   });
 
   it('a domain written null, which asks for no domain', () => {
-    expect(refusals({ handlerErrorDomain: null })).toEqual([]);
+    expect(refusedPaths({ handlerErrorDomain: null })).toEqual([]);
   });
 });
 
 describe('each option is judged on its own domain', () => {
   it('refuses a depth below zero, and one that is not whole', () => {
-    expect(refusals({ maxDepth: -1 })).toEqual(['options.maxDepth']);
-    expect(refusals({ maxDepth: 1.5 })).toEqual(['options.maxDepth']);
+    expect(refusedPaths({ maxDepth: -1 })).toEqual(['options.maxDepth']);
+    expect(refusedPaths({ maxDepth: 1.5 })).toEqual(['options.maxDepth']);
   });
 
   it('refuses an attempt count below zero, and one that is not whole', () => {
-    expect(refusals({ maxRetryAttempts: -1 })).toEqual([
+    expect(refusedPaths({ maxRetryAttempts: -1 })).toEqual([
       'options.maxRetryAttempts',
     ]);
-    expect(refusals({ maxRetryAttempts: 2.5 })).toEqual([
+    expect(refusedPaths({ maxRetryAttempts: 2.5 })).toEqual([
       'options.maxRetryAttempts',
     ]);
   });
 
   it('refuses a retry delay below zero, and one that is neither a count nor a function', () => {
-    expect(refusals({ retryDelay: -1 })).toEqual(['options.retryDelay']);
-    expect(refusals({ retryDelay: 'soon' as unknown as number })).toEqual([
+    expect(refusedPaths({ retryDelay: -1 })).toEqual(['options.retryDelay']);
+    expect(refusedPaths({ retryDelay: 'soon' as unknown as number })).toEqual([
       'options.retryDelay',
     ]);
   });
 
   it('refuses a run clock at zero, since no attempt fits in no time', () => {
-    expect(refusals({ runTimeout: 0 })).toEqual(['options.runTimeout']);
-    expect(refusals({ runTimeout: -1 })).toEqual(['options.runTimeout']);
+    expect(refusedPaths({ runTimeout: 0 })).toEqual(['options.runTimeout']);
+    expect(refusedPaths({ runTimeout: -1 })).toEqual(['options.runTimeout']);
   });
 
   it('refuses an execution clock at zero', () => {
-    expect(refusals({ executionTimeout: 0 })).toEqual([
+    expect(refusedPaths({ executionTimeout: 0 })).toEqual([
       'options.executionTimeout',
     ]);
   });
 
   it('refuses a join it does not offer', () => {
-    expect(refusals({ collect: 'some' as unknown as 'all' })).toEqual([
+    expect(refusedPaths({ collect: 'some' as unknown as 'all' })).toEqual([
       'options.collect',
     ]);
   });
 
   it('refuses a domain that is neither a literal, a source, nor none', () => {
-    expect(refusals({ handlerErrorDomain: 7 as unknown as string })).toEqual([
-      'options.handlerErrorDomain',
-    ]);
+    expect(
+      refusedPaths({ handlerErrorDomain: 7 as unknown as string }),
+    ).toEqual(['options.handlerErrorDomain']);
   });
 
   it('refuses an empty domain, which names nothing', () => {
-    expect(refusals({ handlerErrorDomain: '  ' })).toEqual([
+    expect(refusedPaths({ handlerErrorDomain: '  ' })).toEqual([
       'options.handlerErrorDomain',
     ]);
   });
 
   it('refuses a count that is not a number at all', () => {
-    expect(refusals({ maxDepth: Number.NaN })).toEqual(['options.maxDepth']);
+    expect(refusedPaths({ maxDepth: Number.NaN })).toEqual([
+      'options.maxDepth',
+    ]);
   });
 });
 
@@ -128,15 +132,15 @@ describe('what a rejection tells the reader', () => {
 
   it('reports every option that is wrong, not only the first', () => {
     expect(
-      refusals({ maxDepth: -1, runTimeout: 0, collect: 'some' as 'all' }),
+      refusedPaths({ maxDepth: -1, runTimeout: 0, collect: 'some' as 'all' }),
     ).toEqual(['options.maxDepth', 'options.runTimeout', 'options.collect']);
   });
 
   it('judges what was written and says nothing about what was not', () => {
-    expect(refusals({ maxDepth: 5 })).toEqual([]);
+    expect(refusedPaths({ maxDepth: 5 })).toEqual([]);
   });
 
   it('reads an option written undefined as one never written', () => {
-    expect(refusals({ maxDepth: undefined })).toEqual([]);
+    expect(refusedPaths({ maxDepth: undefined })).toEqual([]);
   });
 });

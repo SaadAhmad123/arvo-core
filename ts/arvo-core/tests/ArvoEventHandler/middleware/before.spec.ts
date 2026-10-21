@@ -131,7 +131,7 @@ describe('a before part that writes through the context', () => {
     const { executionResult, executorSpy } = await runWithBeforePart(
       async (ctx) => {
         await (
-          ctx as never as { setState: (p: unknown) => Promise<void> }
+          ctx as never as { setState: (stateUpdate: unknown) => Promise<void> }
         ).setState({
           data: { stage: 42 },
         });

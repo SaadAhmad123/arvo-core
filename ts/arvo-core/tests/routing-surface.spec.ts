@@ -54,12 +54,12 @@ describe('what a mechanism routes an event by', () => {
   });
 
   it('hands them over frozen, so one mechanism cannot change another', () => {
-    for (const listed of [
+    for (const lifecycles of [
       surface.ARVO_EXECUTION_LIFECYCLES,
       surface.ARVO_TERMINAL_LIFECYCLES,
     ]) {
-      expect(Array.isArray(listed)).toBe(true);
-      expect(Object.isFrozen(listed)).toBe(true);
+      expect(Array.isArray(lifecycles)).toBe(true);
+      expect(Object.isFrozen(lifecycles)).toBe(true);
     }
   });
 });

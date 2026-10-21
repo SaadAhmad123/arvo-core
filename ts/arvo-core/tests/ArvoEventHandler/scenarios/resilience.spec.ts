@@ -32,286 +32,298 @@ const anOrder = (subject = 'order-1') =>
     data: { items: ['book'] },
   });
 
-const opened = async (store = new ScenarioStore()) => {
+const anOpenExecution = async (store = new ScenarioStore()) => {
   const handler = declareHandler();
   const order = anOrder();
-  const ran = await handler.execute({
+  const openingOutcome = await handler.execute({
     event: order,
     state: store.resolver,
     attempt: 0,
   });
-  if (ran.kind !== 'produced') throw new Error('nothing was opened');
-  store.commit(ran.state);
-  return { handler, order, ran, store };
+  if (openingOutcome.kind !== 'produced') throw new Error('nothing was opened');
+  store.commit(openingOutcome.state);
+  return { handler, order, openingOutcome, store };
 };
 
-const inventoryAnswers = (from: Awaited<ReturnType<typeof opened>>, at = 0) =>
+const inventoryAnswer = (
+  execution: Awaited<ReturnType<typeof anOpenExecution>>,
+  requestIndex = 0,
+) =>
   createArvoEventFactory(inventoryV1).createOutput({
     type: 'evt_inventory_reserved',
     source: inventoryV1.type,
-    subject: from.order.subject,
+    subject: execution.order.subject,
     to: fulfilContract.type,
-    executionid: String(from.ran.state.executionId),
-    initid: from.ran.events[at]?.id,
-    parentid: from.ran.events[at]?.id,
+    executionid: String(execution.openingOutcome.state.executionId),
+    initid: execution.openingOutcome.events[requestIndex]?.id,
+    parentid: execution.openingOutcome.events[requestIndex]?.id,
     data: { held: 1 },
   });
 
-const paymentAnswers = (from: Awaited<ReturnType<typeof opened>>, at = 1) =>
+const paymentAnswer = (
+  execution: Awaited<ReturnType<typeof anOpenExecution>>,
+  requestIndex = 1,
+) =>
   createArvoEventFactory(paymentV1).createOutput({
     type: 'evt_payment_charged',
     source: paymentV1.type,
-    subject: from.order.subject,
+    subject: execution.order.subject,
     to: fulfilContract.type,
-    executionid: String(from.ran.state.executionId),
-    initid: from.ran.events[at]?.id,
-    parentid: from.ran.events[at]?.id,
+    executionid: String(execution.openingOutcome.state.executionId),
+    initid: execution.openingOutcome.events[requestIndex]?.id,
+    parentid: execution.openingOutcome.events[requestIndex]?.id,
     data: { receipt: 'r-1' },
   });
 
 describe('a store that lies, each way separately', () => {
   it('refuses a row that is not a record at all', async () => {
-    const from = await opened();
-    from.store.misbehave({ kind: 'returns', row: NOT_A_RECORD });
-    const refused = await from.handler.tryExecute({
-      event: inventoryAnswers(from),
-      state: from.store.resolver,
+    const execution = await anOpenExecution();
+    execution.store.misbehave({ kind: 'returns', row: NOT_A_RECORD });
+    const refusal = await execution.handler.tryExecute({
+      event: inventoryAnswer(execution),
+      state: execution.store.resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.faultKind).toBe('record_invalid');
+    expect(!refusal.ok && refusal.error.faultKind).toBe('record_invalid');
   });
 
   it('refuses a record whose identity is not the one asked for', async () => {
-    const from = await opened();
-    from.store.misbehave({
+    const execution = await anOpenExecution();
+    execution.store.misbehave({
       kind: 'mutates',
       change: (row) => ({ ...row, executionId: 'somebody-elses' }),
     });
-    const refused = await from.handler.tryExecute({
-      event: inventoryAnswers(from),
-      state: from.store.resolver,
+    const refusal = await execution.handler.tryExecute({
+      event: inventoryAnswer(execution),
+      state: execution.store.resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.faultKind).toBe('record_invalid');
+    expect(!refusal.ok && refusal.error.faultKind).toBe('record_invalid');
   });
 
   it('refuses a record that disagrees with its own opening event', async () => {
-    const from = await opened();
-    from.store.misbehave({
+    const execution = await anOpenExecution();
+    execution.store.misbehave({
       kind: 'mutates',
       change: (row) => ({ ...row, subject: 'a-different-workflow' }),
     });
-    const refused = await from.handler.tryExecute({
-      event: inventoryAnswers(from),
-      state: from.store.resolver,
+    const refusal = await execution.handler.tryExecute({
+      event: inventoryAnswer(execution),
+      state: execution.store.resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.faultKind).toBe('record_invalid');
+    expect(!refusal.ok && refusal.error.faultKind).toBe('record_invalid');
   });
 
   it('refuses one whose opening event will not restore', async () => {
-    const from = await opened();
-    from.store.misbehave({
+    const execution = await anOpenExecution();
+    execution.store.misbehave({
       kind: 'mutates',
       change: (row) => ({ ...row, initEvent: { not: 'an event' } }),
     });
-    const refused = await from.handler.tryExecute({
-      event: inventoryAnswers(from),
-      state: from.store.resolver,
+    const refusal = await execution.handler.tryExecute({
+      event: inventoryAnswer(execution),
+      state: execution.store.resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.faultKind).toBe(
+    expect(!refusal.ok && refusal.error.faultKind).toBe(
       'record_event_unrestorable',
     );
   });
 
   it('writes nothing of its own when it refuses any of them', async () => {
-    const from = await opened();
-    const before = new Map(from.store.rows);
-    from.store.misbehave({ kind: 'returns', row: NOT_A_RECORD });
-    await from.handler.tryExecute({
-      event: inventoryAnswers(from),
-      state: from.store.resolver,
+    const execution = await anOpenExecution();
+    const rowsBefore = new Map(execution.store.rows);
+    execution.store.misbehave({ kind: 'returns', row: NOT_A_RECORD });
+    await execution.handler.tryExecute({
+      event: inventoryAnswer(execution),
+      state: execution.store.resolver,
       attempt: 0,
     });
-    expect(from.store.rows).toEqual(before);
+    expect(execution.store.rows).toEqual(rowsBefore);
   });
 });
 
 describe('a store that fails and then does not', () => {
   it('faults retry-safe, then succeeds against an unchanged record', async () => {
-    const from = await opened();
-    const before = from.store.rows.get(String(from.ran.state.executionId));
+    const execution = await anOpenExecution();
+    const rowBefore = execution.store.rows.get(
+      String(execution.openingOutcome.state.executionId),
+    );
 
-    from.store.misbehave({ kind: 'unreachable' });
-    const first = await from.handler.tryExecute({
-      event: inventoryAnswers(from),
-      state: from.store.resolver,
+    execution.store.misbehave({ kind: 'unreachable' });
+    const failedAttempt = await execution.handler.tryExecute({
+      event: inventoryAnswer(execution),
+      state: execution.store.resolver,
       attempt: 0,
     });
-    expect(!first.ok && first.error.retry).not.toBeNull();
+    expect(!failedAttempt.ok && failedAttempt.error.retry).not.toBeNull();
 
-    from.store.misbehave(null);
-    const second = await from.handler.execute({
-      event: inventoryAnswers(from),
-      state: from.store.resolver,
+    execution.store.misbehave(null);
+    const retryOutcome = await execution.handler.execute({
+      event: inventoryAnswer(execution),
+      state: execution.store.resolver,
       attempt: 1,
     });
 
-    expect(second.kind).toBe('produced');
+    expect(retryOutcome.kind).toBe('produced');
     // the record it ran against is the one that was always there
-    expect(from.store.rows.get(String(from.ran.state.executionId))).toEqual(
-      before,
-    );
+    expect(
+      execution.store.rows.get(
+        String(execution.openingOutcome.state.executionId),
+      ),
+    ).toEqual(rowBefore);
   });
 
   it('reads the store afresh on every attempt, never a value held earlier', async () => {
-    const from = await opened();
-    const asked = from.store.reads.length;
-    await from.handler.execute({
-      event: inventoryAnswers(from),
-      state: from.store.resolver,
+    const execution = await anOpenExecution();
+    const readsBefore = execution.store.reads.length;
+    await execution.handler.execute({
+      event: inventoryAnswer(execution),
+      state: execution.store.resolver,
       attempt: 1,
     });
-    expect(from.store.reads).toHaveLength(asked + 1);
+    expect(execution.store.reads).toHaveLength(readsBefore + 1);
   });
 
   it('asks for one execution and no other', async () => {
     const store = new ScenarioStore();
-    const from = await opened(store);
+    const execution = await anOpenExecution(store);
     store.reads.length = 0;
-    await from.handler.execute({
-      event: inventoryAnswers(from),
+    await execution.handler.execute({
+      event: inventoryAnswer(execution),
       state: store.resolver,
       attempt: 0,
     });
     expect(new Set(store.reads).size).toBe(1);
-    expect(store.reads[0]).toBe(String(from.ran.state.executionId));
+    expect(store.reads[0]).toBe(
+      String(execution.openingOutcome.state.executionId),
+    );
   });
 });
 
 describe('a transport that repeats itself', () => {
   it('discards an answer the execution has already processed', async () => {
-    const from = await opened();
-    const answered = inventoryAnswers(from);
+    const execution = await anOpenExecution();
+    const answer = inventoryAnswer(execution);
 
-    const first = await from.handler.execute({
-      event: answered,
-      state: from.store.resolver,
+    const answerOutcome = await execution.handler.execute({
+      event: answer,
+      state: execution.store.resolver,
       attempt: 0,
     });
-    if (first.kind !== 'produced') throw new Error('not recorded');
-    from.store.commit(first.state);
+    if (answerOutcome.kind !== 'produced') throw new Error('not recorded');
+    execution.store.commit(answerOutcome.state);
 
-    for (let again = 0; again < 5; again += 1) {
-      const repeat = await from.handler.execute({
-        event: answered,
-        state: from.store.resolver,
+    for (let repetition = 0; repetition < 5; repetition += 1) {
+      const repeatOutcome = await execution.handler.execute({
+        event: answer,
+        state: execution.store.resolver,
         attempt: 0,
       });
-      expect(repeat.kind).toBe('discarded');
+      expect(repeatOutcome.kind).toBe('discarded');
     }
   });
 
   it('leaves the store exactly as the first one left it', async () => {
-    const from = await opened();
-    const answered = inventoryAnswers(from);
-    const first = await from.handler.execute({
-      event: answered,
-      state: from.store.resolver,
+    const execution = await anOpenExecution();
+    const answer = inventoryAnswer(execution);
+    const answerOutcome = await execution.handler.execute({
+      event: answer,
+      state: execution.store.resolver,
       attempt: 0,
     });
-    if (first.kind !== 'produced') throw new Error('not recorded');
-    from.store.commit(first.state);
-    const after = new Map(from.store.rows);
+    if (answerOutcome.kind !== 'produced') throw new Error('not recorded');
+    execution.store.commit(answerOutcome.state);
+    const rowsAfter = new Map(execution.store.rows);
 
-    await from.handler.execute({
-      event: answered,
-      state: from.store.resolver,
+    await execution.handler.execute({
+      event: answer,
+      state: execution.store.resolver,
       attempt: 0,
     });
-    expect(from.store.rows).toEqual(after);
+    expect(execution.store.rows).toEqual(rowsAfter);
   });
 
   it('refuses a repeated opening event rather than opening a second', async () => {
-    const from = await opened();
-    const refused = await from.handler.tryExecute({
-      event: from.order,
-      state: from.store.resolver,
+    const execution = await anOpenExecution();
+    const refusal = await execution.handler.tryExecute({
+      event: execution.order,
+      state: execution.store.resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.faultKind).toBe('record_unexpected');
-    expect(from.store.rows.size).toBe(1);
+    expect(!refusal.ok && refusal.error.faultKind).toBe('record_unexpected');
+    expect(execution.store.rows.size).toBe(1);
   });
 
   it('derives the same identity for the repeat, which is why it is caught', async () => {
-    const from = await opened();
-    const refused = await from.handler.tryExecute({
-      event: from.order,
-      state: from.store.resolver,
+    const execution = await anOpenExecution();
+    const refusal = await execution.handler.tryExecute({
+      event: execution.order,
+      state: execution.store.resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.executionId).toBe(
-      String(from.ran.state.executionId),
+    expect(!refusal.ok && refusal.error.executionId).toBe(
+      String(execution.openingOutcome.state.executionId),
     );
   });
 });
 
 describe('an answer arriving at an execution that has finished', () => {
-  const finished = async () => {
-    const from = await opened();
-    const first = await from.handler.execute({
-      event: inventoryAnswers(from),
-      state: from.store.resolver,
+  const aFinishedExecution = async () => {
+    const execution = await anOpenExecution();
+    const inventoryOutcome = await execution.handler.execute({
+      event: inventoryAnswer(execution),
+      state: execution.store.resolver,
       attempt: 0,
     });
-    if (first.kind !== 'produced') throw new Error('not recorded');
-    from.store.commit(first.state);
+    if (inventoryOutcome.kind !== 'produced') throw new Error('not recorded');
+    execution.store.commit(inventoryOutcome.state);
 
-    const second = await from.handler.execute({
-      event: paymentAnswers(from),
-      state: from.store.resolver,
+    const paymentOutcome = await execution.handler.execute({
+      event: paymentAnswer(execution),
+      state: execution.store.resolver,
       attempt: 0,
     });
-    if (second.kind !== 'produced') throw new Error('not answered');
-    from.store.commit(second.state);
-    expect(second.state.lifecycle).toBe('success');
-    return from;
+    if (paymentOutcome.kind !== 'produced') throw new Error('not answered');
+    execution.store.commit(paymentOutcome.state);
+    expect(paymentOutcome.state.lifecycle).toBe('success');
+    return execution;
   };
 
   it('is refused for being late rather than for what it carries', async () => {
-    const from = await finished();
-    const late = createArvoEventFactory(paymentV1).createOutput({
+    const execution = await aFinishedExecution();
+    const lateAnswer = createArvoEventFactory(paymentV1).createOutput({
       type: 'evt_payment_charged',
       source: paymentV1.type,
-      subject: from.order.subject,
+      subject: execution.order.subject,
       to: fulfilContract.type,
-      executionid: String(from.ran.state.executionId),
+      executionid: String(execution.openingOutcome.state.executionId),
       initid: 'a-request-from-long-ago',
       parentid: 'a-request-from-long-ago',
       data: { receipt: 'r-2' },
     });
 
-    const refused = await from.handler.tryExecute({
-      event: late,
-      state: from.store.resolver,
+    const refusal = await execution.handler.tryExecute({
+      event: lateAnswer,
+      state: execution.store.resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.faultKind).toBe('lifecycle_terminal');
+    expect(!refusal.ok && refusal.error.faultKind).toBe('lifecycle_terminal');
   });
 
   it('is still refused for being late when its payload is also wrong', async () => {
-    const from = await finished();
+    const execution = await aFinishedExecution();
     // the ordering this implementation had to be built carefully to keep:
     // judged for its payload first, this would carry an answer to a
     // caller that was answered once already
-    const wrong = cloneArvoEvent(
+    const lateMalformedAnswer = cloneArvoEvent(
       createArvoEventFactory(paymentV1).createOutput({
         type: 'evt_payment_charged',
         source: paymentV1.type,
-        subject: from.order.subject,
+        subject: execution.order.subject,
         to: fulfilContract.type,
-        executionid: String(from.ran.state.executionId),
+        executionid: String(execution.openingOutcome.state.executionId),
         initid: 'a-request-from-long-ago',
         parentid: 'a-request-from-long-ago',
         data: { receipt: 'r-2' },
@@ -319,45 +331,45 @@ describe('an answer arriving at an execution that has finished', () => {
       { data: { receipt: 7 as unknown as string } },
     );
 
-    const refused = await from.handler.tryExecute({
-      event: wrong,
-      state: from.store.resolver,
+    const refusal = await execution.handler.tryExecute({
+      event: lateMalformedAnswer,
+      state: execution.store.resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.faultKind).toBe('lifecycle_terminal');
+    expect(!refusal.ok && refusal.error.faultKind).toBe('lifecycle_terminal');
   });
 
   it('sends that caller nothing, it having been answered once already', async () => {
-    const from = await finished();
-    const late = createArvoEventFactory(paymentV1).createOutput({
+    const execution = await aFinishedExecution();
+    const lateAnswer = createArvoEventFactory(paymentV1).createOutput({
       type: 'evt_payment_charged',
       source: paymentV1.type,
-      subject: from.order.subject,
+      subject: execution.order.subject,
       to: fulfilContract.type,
-      executionid: String(from.ran.state.executionId),
+      executionid: String(execution.openingOutcome.state.executionId),
       initid: 'a-request-from-long-ago',
       parentid: 'a-request-from-long-ago',
       data: { receipt: 'r-2' },
     });
-    const refused = await from.handler.tryExecute({
-      event: late,
-      state: from.store.resolver,
+    const refusal = await execution.handler.tryExecute({
+      event: lateAnswer,
+      state: execution.store.resolver,
       attempt: 0,
     });
-    if (refused.ok) throw new Error('nothing was refused');
-    expect(refused.error.abandonmentEvent).toBeNull();
-    expect(refused.error.abandonmentState).toBeNull();
+    if (refusal.ok) throw new Error('nothing was refused');
+    expect(refusal.error.abandonmentEvent).toBeNull();
+    expect(refusal.error.abandonmentState).toBeNull();
   });
 });
 
 describe('a state schema changed under records already written', () => {
   it('refuses every execution that was open under the old shape', async () => {
     const store = new ScenarioStore();
-    const from = await opened(store);
+    const execution = await anOpenExecution(store);
 
     // the same version, redeclared with a shape the stored data cannot
     // satisfy — which the protocol says fails every one of them
-    const changed = setupArvoEventHandler({
+    const changedHandler = setupArvoEventHandler({
       contracts: { self: fulfilContract, services: { inventory: inventoryV1 } },
       types: {} as { dependencies: ScenarioDependencies },
     })
@@ -369,20 +381,20 @@ describe('a state schema changed under records already written', () => {
       .handler('2.0.0', { execute: async () => {} })
       .build();
 
-    const refused = await changed.tryExecute({
-      event: inventoryAnswers(from),
+    const refusal = await changedHandler.tryExecute({
+      event: inventoryAnswer(execution),
       state: store.resolver,
       attempt: 0,
     });
 
-    expect(!refused.ok && refused.error.faultKind).toBe('record_invalid');
-    expect(!refused.ok && refused.error.retry).toBeNull();
+    expect(!refusal.ok && refusal.error.faultKind).toBe('record_invalid');
+    expect(!refusal.ok && refusal.error.retry).toBeNull();
   });
 
   it('can still tell the caller, the record itself being sound', async () => {
     const store = new ScenarioStore();
-    const from = await opened(store);
-    const changed = setupArvoEventHandler({
+    const execution = await anOpenExecution(store);
+    const changedHandler = setupArvoEventHandler({
       contracts: { self: fulfilContract, services: { inventory: inventoryV1 } },
       types: {} as { dependencies: ScenarioDependencies },
     })
@@ -394,20 +406,20 @@ describe('a state schema changed under records already written', () => {
       .handler('2.0.0', { execute: async () => {} })
       .build();
 
-    const refused = await changed.tryExecute({
-      event: inventoryAnswers(from),
+    const refusal = await changedHandler.tryExecute({
+      event: inventoryAnswer(execution),
       state: store.resolver,
       attempt: 0,
     });
-    if (refused.ok) throw new Error('nothing was refused');
+    if (refusal.ok) throw new Error('nothing was refused');
 
     // the envelope passed and only the data failed, so the caller is
     // addressable and the record can be brought to rest
-    expect(refused.error.abandonmentEvent).not.toBeNull();
-    const resting = JSON.parse(
-      String(refused.error.abandonmentState),
+    expect(refusal.error.abandonmentEvent).not.toBeNull();
+    const restingRecord = JSON.parse(
+      String(refusal.error.abandonmentState),
     ) as JSONObject;
-    expect(resting.lifecycle).toBe('failure');
+    expect(restingRecord.lifecycle).toBe('failure');
   });
 });
 
@@ -418,7 +430,7 @@ describe('a version that remembers nothing, handed a record that does', () => {
     const store = new ScenarioStore();
     const handler = declareHandler();
 
-    const shipped = await handler.execute({
+    const v2Outcome = await handler.execute({
       event: createArvoEventFactory(fulfilV2).createInput({
         source: 'com.web.checkout',
         subject: 'order-1',
@@ -428,28 +440,28 @@ describe('a version that remembers nothing, handed a record that does', () => {
       state: store.resolver,
       attempt: 0,
     });
-    if (shipped.kind !== 'produced') throw new Error('nothing was opened');
-    expect(shipped.state.data).toBeNull();
+    if (v2Outcome.kind !== 'produced') throw new Error('nothing was opened');
+    expect(v2Outcome.state.data).toBeNull();
 
-    const answered = createArvoEventFactory(inventoryV1).createOutput({
+    const unaskedAnswer = createArvoEventFactory(inventoryV1).createOutput({
       type: 'evt_inventory_reserved',
       source: inventoryV1.type,
       subject: 'order-1',
       to: fulfilContract.type,
-      executionid: String(shipped.state.executionId),
+      executionid: String(v2Outcome.state.executionId),
       initid: 'a-request-it-never-sent',
       parentid: 'a-request-it-never-sent',
       data: { held: 1 },
     });
 
-    const refused = await handler.tryExecute({
-      event: answered,
-      state: () => ({ ...shipped.state, data: {} }),
+    const refusal = await handler.tryExecute({
+      event: unaskedAnswer,
+      state: () => ({ ...v2Outcome.state, data: {} }),
       attempt: 0,
     });
 
-    expect(!refused.ok && refused.error.faultKind).toBe('record_invalid');
-    expect(!refused.ok && refused.error.violations.join(' ')).toContain(
+    expect(!refusal.ok && refusal.error.faultKind).toBe('record_invalid');
+    expect(!refusal.ok && refusal.error.violations.join(' ')).toContain(
       'must be null',
     );
   });

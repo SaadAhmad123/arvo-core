@@ -18,7 +18,7 @@ const contract = new ArvoContract({
 });
 
 /** A contract whose identifier shares nothing with its type. */
-const explicitUri = new ArvoContract({
+const explicitUriContract = new ArvoContract({
   type: 'com_user_register',
   uri: '#/services/identity/user/registration',
   versions: {
@@ -41,40 +41,40 @@ const event = (
 
 describe('a contract routes by the event dataschema', () => {
   it('takes the version from the event', () => {
-    const asserted = contract.assert(
+    const assertedEvent = contract.assert(
       event(
         'com_order_create',
         { items: ['a'], tier: 'express' },
         '#/com/order/create/1.1.0',
       ),
     );
-    expect(asserted.version).toBe('1.1.0');
-    expect(asserted.scope).toBe('input');
+    expect(assertedEvent.version).toBe('1.1.0');
+    expect(assertedEvent.scope).toBe('input');
   });
 
   it('names the version it selected, not the others', () => {
-    const asserted = contract.assert(
+    const assertedEvent = contract.assert(
       event('com_order_create', { items: [] }, '#/com/order/create/1.0.0'),
     );
-    expect(asserted.version).toBe('1.0.0');
+    expect(assertedEvent.version).toBe('1.0.0');
   });
 
   it('rejects an event from another contract', () => {
-    const attempt = contract.tryAssert(
+    const assertion = contract.tryAssert(
       event('com_order_create', { items: [] }, '#/com/other/thing/1.0.0'),
     );
-    expect(attempt.ok).toBe(false);
-    if (attempt.ok) return;
-    expect(attempt.error.issues[0]?.path).toBe('event.dataschema.uri');
+    expect(assertion.ok).toBe(false);
+    if (assertion.ok) return;
+    expect(assertion.error.issues[0]?.path).toBe('event.dataschema.uri');
   });
 
   it('rejects a version it does not declare, naming the ones it does', () => {
-    const attempt = contract.tryAssert(
+    const assertion = contract.tryAssert(
       event('com_order_create', { items: [] }, '#/com/order/create/2.0.0'),
     );
-    expect(attempt.ok).toBe(false);
-    if (attempt.ok) return;
-    const issue = attempt.error.issues[0];
+    expect(assertion.ok).toBe(false);
+    if (assertion.ok) return;
+    const issue = assertion.error.issues[0];
     expect(issue?.path).toBe('event.dataschema.version');
     expect(issue?.received).toBe('2.0.0');
     expect(issue?.message).toContain('1.0.0');
@@ -85,41 +85,41 @@ describe('a contract routes by the event dataschema', () => {
 
 describe('reading a dataschema', () => {
   it('rejects one with no separator', () => {
-    const attempt = contract.tryAssert(
+    const assertion = contract.tryAssert(
       event('com_order_create', { items: [] }, 'noseparator'),
     );
-    expect(attempt.ok).toBe(false);
-    if (attempt.ok) return;
-    expect(attempt.error.issues[0]?.path).toBe('event.dataschema');
-    expect(attempt.error.issues[0]?.received).toBe('noseparator');
+    expect(assertion.ok).toBe(false);
+    if (assertion.ok) return;
+    expect(assertion.error.issues[0]?.path).toBe('event.dataschema');
+    expect(assertion.error.issues[0]?.received).toBe('noseparator');
   });
 
   it('rejects one whose version half is empty', () => {
-    const attempt = contract.tryAssert(
+    const assertion = contract.tryAssert(
       event('com_order_create', { items: [] }, '#/com/order/create/'),
     );
-    expect(attempt.ok).toBe(false);
-    if (attempt.ok) return;
-    expect(attempt.error.issues[0]?.path).toBe('event.dataschema');
+    expect(assertion.ok).toBe(false);
+    if (assertion.ok) return;
+    expect(assertion.error.issues[0]?.path).toBe('event.dataschema');
   });
 
   it('rejects one whose identifier half is empty', () => {
-    const attempt = contract.tryAssert(
+    const assertion = contract.tryAssert(
       event('com_order_create', { items: [] }, '/1.0.0'),
     );
-    expect(attempt.ok).toBe(false);
-    if (attempt.ok) return;
-    expect(attempt.error.issues[0]?.path).toBe('event.dataschema');
+    expect(assertion.ok).toBe(false);
+    if (assertion.ok) return;
+    expect(assertion.error.issues[0]?.path).toBe('event.dataschema');
   });
 
   it('treats a version-shaped word as an undeclared version, not a bad shape', () => {
-    const attempt = contract.tryAssert(
+    const assertion = contract.tryAssert(
       event('com_order_create', { items: [] }, '#/com/order/create/latest'),
     );
-    expect(attempt.ok).toBe(false);
-    if (attempt.ok) return;
-    expect(attempt.error.issues[0]?.path).toBe('event.dataschema.version');
-    expect(attempt.error.issues[0]?.received).toBe('latest');
+    expect(assertion.ok).toBe(false);
+    if (assertion.ok) return;
+    expect(assertion.error.issues[0]?.path).toBe('event.dataschema.version');
+    expect(assertion.error.issues[0]?.received).toBe('latest');
   });
 
   it('cannot be handed a range at all, an event refusing to carry one', () => {
@@ -129,14 +129,14 @@ describe('reading a dataschema', () => {
   });
 
   it('reads an identifier containing separators whole', () => {
-    const asserted = explicitUri.assert(
+    const assertedEvent = explicitUriContract.assert(
       event(
         'com_user_register',
         { email: 'a@b.c' },
         '#/services/identity/user/registration/1.0.0',
       ),
     );
-    expect(asserted.version).toBe('1.0.0');
+    expect(assertedEvent.version).toBe('1.0.0');
   });
 });
 
@@ -164,26 +164,29 @@ describe('a contract and its version agree', () => {
     ],
   ];
 
-  it.each(cases)('agrees on %s', (_name, candidate) => {
-    const viaContract = contract.tryAssert(candidate);
-    const viaVersion = contract.versions['1.0.0'].tryAssert(candidate);
-    expect(viaContract.ok).toBe(viaVersion.ok);
-    if (viaContract.ok && viaVersion.ok) {
-      expect(viaContract.value.scope).toBe(viaVersion.value.scope);
-      expect(viaContract.value.version).toBe(viaVersion.value.version);
+  it.each(cases)('agrees on %s', (_name, candidateEvent) => {
+    const contractAssertion = contract.tryAssert(candidateEvent);
+    const versionAssertion =
+      contract.versions['1.0.0'].tryAssert(candidateEvent);
+    expect(contractAssertion.ok).toBe(versionAssertion.ok);
+    if (contractAssertion.ok && versionAssertion.ok) {
+      expect(contractAssertion.value.scope).toBe(versionAssertion.value.scope);
+      expect(contractAssertion.value.version).toBe(
+        versionAssertion.value.version,
+      );
     }
   });
 
   it('never disagrees with the event it carries', () => {
-    const asserted = contract.assert(
+    const assertedEvent = contract.assert(
       event(
         'com_order_create',
         { items: [], tier: 'x' },
         '#/com/order/create/1.1.0',
       ),
     );
-    expect(asserted.event.dataschema).toBe(
-      `${contract.uri}/${asserted.version}`,
+    expect(assertedEvent.event.dataschema).toBe(
+      `${contract.uri}/${assertedEvent.version}`,
     );
   });
 });

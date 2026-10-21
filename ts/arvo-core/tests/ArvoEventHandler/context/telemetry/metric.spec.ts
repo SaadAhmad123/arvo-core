@@ -3,68 +3,91 @@ import { describe, expect, it } from 'vitest';
 import { ArvoExecutionContextMeter } from '../../../../src/ArvoEventHandler/context/telemetry/metric.js';
 
 /** Everything a meter was asked for, and everything recorded on it. */
-const spy = () => {
-  const created: { kind: string; name: string; unit?: string }[] = [];
-  const recorded: { name: string; value: number; attributes?: unknown }[] = [];
+const spyMeter = () => {
+  const createdInstruments: { kind: string; name: string; unit?: string }[] =
+    [];
+  const measurements: { name: string; value: number; attributes?: unknown }[] =
+    [];
   const meter = {
-    createCounter: (name: string, options?: { unit?: string }) => {
-      created.push({ kind: 'counter', name, unit: options?.unit });
+    createCounter: (instrumentName: string, options?: { unit?: string }) => {
+      createdInstruments.push({
+        kind: 'counter',
+        name: instrumentName,
+        unit: options?.unit,
+      });
       return {
-        add: (value: number, attributes?: unknown) =>
-          recorded.push({ name, value, attributes }),
+        add: (amount: number, attributes?: unknown) =>
+          measurements.push({
+            name: instrumentName,
+            value: amount,
+            attributes,
+          }),
       } as Counter;
     },
-    createHistogram: (name: string, options?: { unit?: string }) => {
-      created.push({ kind: 'histogram', name, unit: options?.unit });
+    createHistogram: (instrumentName: string, options?: { unit?: string }) => {
+      createdInstruments.push({
+        kind: 'histogram',
+        name: instrumentName,
+        unit: options?.unit,
+      });
       return {
-        record: (value: number, attributes?: unknown) =>
-          recorded.push({ name, value, attributes }),
+        record: (amount: number, attributes?: unknown) =>
+          measurements.push({
+            name: instrumentName,
+            value: amount,
+            attributes,
+          }),
       } as Histogram;
     },
   } as unknown as Meter;
-  return { meter, created, recorded };
+  return { meter, createdInstruments, measurements };
 };
 
 describe("one execution's metering", () => {
   it('carries the meter it was given', () => {
-    const { meter } = spy();
+    const { meter } = spyMeter();
     expect(new ArvoExecutionContextMeter({ meter }).meter).toBe(meter);
   });
 
   describe('a counter', () => {
     it('is created on the meter, under a prefixed name', () => {
-      const watched = spy();
-      new ArvoExecutionContextMeter({ meter: watched.meter }).counter(
+      const meterCalls = spyMeter();
+      new ArvoExecutionContextMeter({ meter: meterCalls.meter }).counter(
         'charges',
       );
-      expect(watched.created).toEqual([
+      expect(meterCalls.createdInstruments).toEqual([
         { kind: 'counter', name: 'arvo.charges', unit: undefined },
       ]);
     });
 
     it('carries the unit where one was given', () => {
-      const watched = spy();
-      new ArvoExecutionContextMeter({ meter: watched.meter }).counter(
+      const meterCalls = spyMeter();
+      new ArvoExecutionContextMeter({ meter: meterCalls.meter }).counter(
         'bytes',
         'By',
       );
-      expect(watched.created[0]?.unit).toBe('By');
+      expect(meterCalls.createdInstruments[0]?.unit).toBe('By');
     });
 
     it('is created once and reused, two with one name being a mistake', () => {
-      const watched = spy();
-      const metering = new ArvoExecutionContextMeter({ meter: watched.meter });
-      const once = metering.counter('charges');
-      expect(metering.counter('charges')).toBe(once);
-      expect(watched.created).toHaveLength(1);
+      const meterCalls = spyMeter();
+      const metering = new ArvoExecutionContextMeter({
+        meter: meterCalls.meter,
+      });
+      const counter = metering.counter('charges');
+      expect(metering.counter('charges')).toBe(counter);
+      expect(meterCalls.createdInstruments).toHaveLength(1);
     });
 
     it('counts one occurrence through the shorthand', () => {
-      const watched = spy();
-      new ArvoExecutionContextMeter({ meter: watched.meter }).count('charges', {
-        outcome: 'ok',
-      });
-      expect(watched.recorded).toEqual([
+      const meterCalls = spyMeter();
+      new ArvoExecutionContextMeter({ meter: meterCalls.meter }).count(
+        'charges',
+        {
+          outcome: 'ok',
+        },
+      );
+      expect(meterCalls.measurements).toEqual([
         { name: 'arvo.charges', value: 1, attributes: { outcome: 'ok' } },
       ]);
     });
@@ -72,54 +95,56 @@ describe("one execution's metering", () => {
 
   describe('a histogram', () => {
     it('is created on the meter, under a prefixed name', () => {
-      const watched = spy();
-      new ArvoExecutionContextMeter({ meter: watched.meter }).histogram(
+      const meterCalls = spyMeter();
+      new ArvoExecutionContextMeter({ meter: meterCalls.meter }).histogram(
         'duration',
         'ms',
       );
-      expect(watched.created).toEqual([
+      expect(meterCalls.createdInstruments).toEqual([
         { kind: 'histogram', name: 'arvo.duration', unit: 'ms' },
       ]);
     });
 
     it('is created once and reused', () => {
-      const watched = spy();
-      const metering = new ArvoExecutionContextMeter({ meter: watched.meter });
-      const once = metering.histogram('duration');
-      expect(metering.histogram('duration')).toBe(once);
-      expect(watched.created).toHaveLength(1);
+      const meterCalls = spyMeter();
+      const metering = new ArvoExecutionContextMeter({
+        meter: meterCalls.meter,
+      });
+      const histogram = metering.histogram('duration');
+      expect(metering.histogram('duration')).toBe(histogram);
+      expect(meterCalls.createdInstruments).toHaveLength(1);
     });
 
     it('records one measurement through the shorthand', () => {
-      const watched = spy();
-      new ArvoExecutionContextMeter({ meter: watched.meter }).record(
+      const meterCalls = spyMeter();
+      new ArvoExecutionContextMeter({ meter: meterCalls.meter }).record(
         'duration',
         42,
       );
-      expect(watched.recorded).toEqual([
+      expect(meterCalls.measurements).toEqual([
         { name: 'arvo.duration', value: 42, attributes: undefined },
       ]);
     });
   });
 
   describe('where nothing is metering', () => {
-    const metering = () => new ArvoExecutionContextMeter({ meter: null });
+    const nullMetering = () => new ArvoExecutionContextMeter({ meter: null });
 
     it('still gives back a counter, so an executor needs no guard', () => {
-      expect(() => metering().count('charges')).not.toThrow();
+      expect(() => nullMetering().count('charges')).not.toThrow();
     });
 
     it('still gives back a histogram', () => {
-      expect(() => metering().record('duration', 42)).not.toThrow();
+      expect(() => nullMetering().record('duration', 42)).not.toThrow();
     });
 
     it('reuses the one it gave, as a real meter would', () => {
-      const none = metering();
-      expect(none.counter('charges')).toBe(none.counter('charges'));
+      const nullMeter = nullMetering();
+      expect(nullMeter.counter('charges')).toBe(nullMeter.counter('charges'));
     });
 
     it('says it has no meter', () => {
-      expect(metering().meter).toBeNull();
+      expect(nullMetering().meter).toBeNull();
     });
   });
 });

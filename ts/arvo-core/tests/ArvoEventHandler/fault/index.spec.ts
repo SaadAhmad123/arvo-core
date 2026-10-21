@@ -3,7 +3,7 @@ import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import type { ArvoHandlerFaultParam } from '../../../src/ArvoEventHandler/fault/types.js';
 import { initEvent } from '../fixtures.js';
 
-const minimal = (overrides: Partial<ArvoHandlerFaultParam> = {}) =>
+const minimalFault = (overrides: Partial<ArvoHandlerFaultParam> = {}) =>
   new ArvoHandlerFault({
     faultKind: 'state_schema_rejected',
     message: 'state does not satisfy the schema',
@@ -22,41 +22,41 @@ const minimal = (overrides: Partial<ArvoHandlerFaultParam> = {}) =>
 
 describe('ArvoHandlerFault', () => {
   it('is an Error, so it can be thrown and caught as one', () => {
-    expect(minimal()).toBeInstanceOf(Error);
+    expect(minimalFault()).toBeInstanceOf(Error);
   });
 
   it('identifies itself by a name a caller can branch on without instanceof', () => {
-    const fault = minimal();
+    const fault = minimalFault();
     expect(fault.name).toBe('ArvoHandlerFault');
     expect(fault._tag).toBe('ArvoHandlerFault');
   });
 
   it('says which fault it is', () => {
-    expect(minimal().faultKind).toBe('state_schema_rejected');
+    expect(minimalFault().faultKind).toBe('state_schema_rejected');
   });
 
   it('says what failed, in its message', () => {
-    expect(minimal().message).toBe('state does not satisfy the schema');
+    expect(minimalFault().message).toBe('state does not satisfy the schema');
   });
 
   describe('what it says about the execution', () => {
     it('names the workflow, the execution and the event', () => {
-      const fault = minimal();
+      const fault = minimalFault();
       expect(fault.subject).toBe(initEvent.subject);
       expect(fault.executionId).toBe(initEvent.executionid);
       expect(fault.eventId).toBe(initEvent.id);
     });
 
     it('allows no execution, where none was resolved', () => {
-      expect(minimal({ executionId: null }).executionId).toBeNull();
+      expect(minimalFault({ executionId: null }).executionId).toBeNull();
     });
 
     it('says which attempt it was', () => {
-      expect(minimal({ attempt: 2 }).attempt).toBe(2);
+      expect(minimalFault({ attempt: 2 }).attempt).toBe(2);
     });
 
     it('carries when it happened, as the raiser stamped it', () => {
-      expect(minimal({ timestamp: 1_700_000_000_500 }).timestamp).toBe(
+      expect(minimalFault({ timestamp: 1_700_000_000_500 }).timestamp).toBe(
         1_700_000_000_500,
       );
     });
@@ -64,21 +64,21 @@ describe('ArvoHandlerFault', () => {
 
   describe('cause and violations', () => {
     it('carries no cause where nothing underlies it', () => {
-      expect(minimal().cause).toBeNull();
+      expect(minimalFault().cause).toBeNull();
     });
 
     it('carries an underlying failure as a string, so the whole survives JSON', () => {
-      expect(minimal({ cause: 'ZodError: expected string' }).cause).toBe(
+      expect(minimalFault({ cause: 'ZodError: expected string' }).cause).toBe(
         'ZodError: expected string',
       );
     });
 
     it('carries no violations where none were collected', () => {
-      expect(minimal().violations).toEqual([]);
+      expect(minimalFault().violations).toEqual([]);
     });
 
     it('carries every check that failed, not only the first', () => {
-      const fault = minimal({
+      const fault = minimalFault({
         violations: ['orderId: expected string', 'attempts: required'],
       });
       expect(fault.violations).toHaveLength(2);
@@ -86,7 +86,7 @@ describe('ArvoHandlerFault', () => {
 
     it('copies the violations, so a caller mutating theirs cannot change it', () => {
       const violations = ['one'];
-      const fault = minimal({ violations });
+      const fault = minimalFault({ violations });
       violations.push('two');
       expect(fault.violations).toHaveLength(1);
     });
@@ -94,11 +94,11 @@ describe('ArvoHandlerFault', () => {
 
   describe('retry', () => {
     it('is null where no retry is in prospect', () => {
-      expect(minimal().retry).toBeNull();
+      expect(minimalFault().retry).toBeNull();
     });
 
     it('carries the figures where one is', () => {
-      const fault = minimal({
+      const fault = minimalFault({
         retry: {
           maxRetryAttemptsAllowed: 3,
           retryInMs: 300,
@@ -112,28 +112,28 @@ describe('ArvoHandlerFault', () => {
 
   describe('the abandonment pair', () => {
     it('carries neither where the execution could address nothing', () => {
-      const fault = minimal();
+      const fault = minimalFault();
       expect(fault.abandonmentEvent).toBeNull();
       expect(fault.abandonmentState).toBeNull();
     });
 
     it('carries the event to publish where one could be addressed', () => {
-      const written = JSON.stringify(initEvent);
-      expect(minimal({ abandonmentEvent: written }).abandonmentEvent).toBe(
-        written,
-      );
+      const serializedEvent = JSON.stringify(initEvent);
+      expect(
+        minimalFault({ abandonmentEvent: serializedEvent }).abandonmentEvent,
+      ).toBe(serializedEvent);
     });
 
     it('carries the record to commit alongside it', () => {
-      const written = JSON.stringify({ lifecycle: 'failure' });
-      expect(minimal({ abandonmentState: written }).abandonmentState).toBe(
-        written,
-      );
+      const serializedRecord = JSON.stringify({ lifecycle: 'failure' });
+      expect(
+        minimalFault({ abandonmentState: serializedRecord }).abandonmentState,
+      ).toBe(serializedRecord);
     });
   });
 
   it('cannot be changed once raised', () => {
-    const fault = minimal();
+    const fault = minimalFault();
     expect(() => {
       (fault as unknown as Record<string, unknown>).faultKind = 'run_timeout';
     }).toThrow();
@@ -141,24 +141,24 @@ describe('ArvoHandlerFault', () => {
 
   describe('writing one out for whatever stores it', () => {
     it('carries what failed, and where', () => {
-      const written = minimal({
+      const faultJson = minimalFault({
         cause: 'ZodError',
         violations: ['orderId: expected string'],
       }).toJSON();
-      expect(written.name).toBe('ArvoHandlerFault');
-      expect(written.faultKind).toBe('state_schema_rejected');
-      expect(written.message).toBe('state does not satisfy the schema');
-      expect(written.cause).toBe('ZodError');
-      expect(written.violations).toEqual(['orderId: expected string']);
+      expect(faultJson.name).toBe('ArvoHandlerFault');
+      expect(faultJson.faultKind).toBe('state_schema_rejected');
+      expect(faultJson.message).toBe('state does not satisfy the schema');
+      expect(faultJson.cause).toBe('ZodError');
+      expect(faultJson.violations).toEqual(['orderId: expected string']);
     });
 
     it('carries the execution it happened on', () => {
-      const written = minimal().toJSON();
-      expect(written.subject).toBe(initEvent.subject);
-      expect(written.executionId).toBe(initEvent.executionid);
-      expect(written.eventId).toBe(initEvent.id);
-      expect(written.attempt).toBe(0);
-      expect(written.timestamp).toBe(1_700_000_000_000);
+      const faultJson = minimalFault().toJSON();
+      expect(faultJson.subject).toBe(initEvent.subject);
+      expect(faultJson.executionId).toBe(initEvent.executionid);
+      expect(faultJson.eventId).toBe(initEvent.id);
+      expect(faultJson.attempt).toBe(0);
+      expect(faultJson.timestamp).toBe(1_700_000_000_000);
     });
 
     it('carries when another attempt is due', () => {
@@ -167,19 +167,19 @@ describe('ArvoHandlerFault', () => {
         retryInMs: 300,
         retryAt: 1_700_000_000_300,
       };
-      expect(minimal({ retry }).toJSON().retry).toEqual(retry);
+      expect(minimalFault({ retry }).toJSON().retry).toEqual(retry);
     });
 
     it('says none is due where none is', () => {
-      expect(minimal().toJSON().retry).toBeNull();
+      expect(minimalFault().toJSON().retry).toBeNull();
     });
 
     it('carries its stack, a stored fault without one being worth little', () => {
-      expect(typeof minimal().toJSON().stack).toBe('string');
+      expect(typeof minimalFault().toJSON().stack).toBe('string');
     });
 
     it('writes no stack as null rather than dropping the field', () => {
-      const stackless = Object.create(ArvoHandlerFault.prototype, {
+      const stacklessFault = Object.create(ArvoHandlerFault.prototype, {
         stack: { value: undefined },
         name: { value: 'ArvoHandlerFault' },
         faultKind: { value: 'state_schema_rejected' },
@@ -195,12 +195,12 @@ describe('ArvoHandlerFault', () => {
         abandonmentEvent: { value: null },
         abandonmentState: { value: null },
       }) as ArvoHandlerFault;
-      expect(stackless.toJSON().stack).toBeNull();
+      expect(stacklessFault.toJSON().stack).toBeNull();
     });
 
     it('survives being turned into a string', () => {
-      const written = JSON.parse(JSON.stringify(minimal()));
-      expect(written.faultKind).toBe('state_schema_rejected');
+      const faultJson = JSON.parse(JSON.stringify(minimalFault()));
+      expect(faultJson.faultKind).toBe('state_schema_rejected');
     });
   });
 
@@ -209,7 +209,7 @@ describe('ArvoHandlerFault', () => {
     const storedRecord = JSON.stringify({ lifecycle: 'failure' });
 
     it('holds both already written out, so nothing is serialized later', () => {
-      const fault = minimal({
+      const fault = minimalFault({
         abandonmentEvent: storedEvent,
         abandonmentState: storedRecord,
       });
@@ -218,20 +218,20 @@ describe('ArvoHandlerFault', () => {
     });
 
     it('passes both through untouched when written out', () => {
-      const written = minimal({
+      const faultJson = minimalFault({
         abandonmentEvent: storedEvent,
         abandonmentState: storedRecord,
       }).toJSON();
-      expect(written.abandonmentEvent).toBe(storedEvent);
-      expect(written.abandonmentState).toBe(storedRecord);
+      expect(faultJson.abandonmentEvent).toBe(storedEvent);
+      expect(faultJson.abandonmentState).toBe(storedRecord);
     });
 
     it('says there is nothing to publish where there is not', () => {
-      expect(minimal().toJSON().abandonmentEvent).toBeNull();
+      expect(minimalFault().toJSON().abandonmentEvent).toBeNull();
     });
 
     it('says there is nothing to commit where there is not', () => {
-      expect(minimal().toJSON().abandonmentState).toBeNull();
+      expect(minimalFault().toJSON().abandonmentState).toBeNull();
     });
   });
 });

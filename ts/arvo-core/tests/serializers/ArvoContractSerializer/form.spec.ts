@@ -3,14 +3,14 @@ import { validateCanonicalForm } from '../../../src/serializers/ArvoContractSeri
 
 const DIALECT = 'https://json-schema.org/draft/2020-12/schema';
 
-const objectSchema = (over: Record<string, unknown> = {}) => ({
+const objectSchema = (overrides: Record<string, unknown> = {}) => ({
   $schema: DIALECT,
   type: 'object',
   properties: { a: { type: 'string' } },
-  ...over,
+  ...overrides,
 });
 
-const form = (over: Record<string, unknown> = {}) => ({
+const form = (overrides: Record<string, unknown> = {}) => ({
   uri: '#/com/order/create',
   type: 'com_order_create',
   description: null,
@@ -19,11 +19,11 @@ const form = (over: Record<string, unknown> = {}) => ({
   versions: {
     '1.0.0': { input: objectSchema(), outputs: {} },
   },
-  ...over,
+  ...overrides,
 });
 
-const paths = (value: unknown): string[] =>
-  validateCanonicalForm(value).map((i) => i.path);
+const paths = (candidate: unknown): string[] =>
+  validateCanonicalForm(candidate).map((issue) => issue.path);
 
 describe('a well-formed canonical form', () => {
   it('reports nothing', () => {
@@ -48,9 +48,9 @@ describe('a well-formed canonical form', () => {
   it('does not insist on an optional field being present', () => {
     // Writing a form must materialize these; reading one that omitted them
     // should not reject a contract whose identity is intact.
-    const { description, domain, metadata, ...rest } = form();
+    const { description, domain, metadata, ...withoutOptionals } = form();
     void [description, domain, metadata];
-    expect(validateCanonicalForm(rest)).toEqual([]);
+    expect(validateCanonicalForm(withoutOptionals)).toEqual([]);
   });
 });
 
@@ -62,9 +62,9 @@ describe('the container', () => {
   });
 
   it('rejects a missing type', () => {
-    const { type, ...rest } = form();
+    const { type, ...withoutType } = form();
     void type;
-    expect(paths(rest)).toContain('type');
+    expect(paths(withoutType)).toContain('type');
   });
 
   it('rejects a non-string type', () => {
@@ -72,9 +72,9 @@ describe('the container', () => {
   });
 
   it('rejects a missing versions', () => {
-    const { versions, ...rest } = form();
+    const { versions, ...withoutVersions } = form();
     void versions;
-    expect(paths(rest)).toContain('versions');
+    expect(paths(withoutVersions)).toContain('versions');
   });
 
   it('rejects a versions declaring nothing', () => {
@@ -88,7 +88,7 @@ describe('the container', () => {
 });
 
 describe('a schema position', () => {
-  const withAccepts = (input: unknown) =>
+  const formWithInput = (input: unknown) =>
     form({ versions: { '1.0.0': { input, outputs: {} } } });
 
   it('rejects one describing an object without the literal keyword', () => {
@@ -98,41 +98,43 @@ describe('a schema position', () => {
       $schema: DIALECT,
       allOf: [{ properties: { a: { type: 'string' } } }],
     };
-    expect(paths(withAccepts(composed))).toContain('versions["1.0.0"].input');
+    expect(paths(formWithInput(composed))).toContain('versions["1.0.0"].input');
   });
 
   it('names the keyword it wanted', () => {
     const issues = validateCanonicalForm(
-      withAccepts({ $schema: DIALECT, type: 'string' }),
+      formWithInput({ $schema: DIALECT, type: 'string' }),
     );
     expect(issues[0]?.message).toContain('"type": "object"');
   });
 
   it('rejects one describing a non-object', () => {
-    expect(paths(withAccepts({ $schema: DIALECT, type: 'array' }))).toContain(
+    expect(paths(formWithInput({ $schema: DIALECT, type: 'array' }))).toContain(
       'versions["1.0.0"].input',
     );
   });
 
   it('rejects one that is not a schema object', () => {
-    expect(paths(withAccepts('a string'))).toContain('versions["1.0.0"].input');
+    expect(paths(formWithInput('a string'))).toContain(
+      'versions["1.0.0"].input',
+    );
   });
 
   it('rejects a missing dialect declaration', () => {
     const issues = validateCanonicalForm(
-      withAccepts({ type: 'object', properties: {} }),
+      formWithInput({ type: 'object', properties: {} }),
     );
-    expect(issues.map((i) => i.message).join(' ')).toContain('$schema');
+    expect(issues.map((issue) => issue.message).join(' ')).toContain('$schema');
   });
 
   it('rejects the wrong dialect', () => {
     const issues = validateCanonicalForm(
-      withAccepts({
+      formWithInput({
         $schema: 'http://json-schema.org/draft-07/schema#',
         type: 'object',
       }),
     );
-    expect(issues.map((i) => i.message).join(' ')).toContain('$schema');
+    expect(issues.map((issue) => issue.message).join(' ')).toContain('$schema');
   });
 
   it('checks every emit, not only input', () => {
@@ -151,7 +153,7 @@ describe('a schema position', () => {
   });
 
   it('checks every version, not only the first', () => {
-    const reported = paths(
+    const issuePaths = paths(
       form({
         versions: {
           '1.0.0': { input: objectSchema(), outputs: {} },
@@ -159,7 +161,7 @@ describe('a schema position', () => {
         },
       }),
     );
-    expect(reported).toContain('versions["1.1.0"].input');
+    expect(issuePaths).toContain('versions["1.1.0"].input');
   });
 
   it('rejects a version that is not an object', () => {

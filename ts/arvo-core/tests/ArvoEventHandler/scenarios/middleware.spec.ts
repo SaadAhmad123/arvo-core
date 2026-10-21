@@ -65,9 +65,9 @@ const createLayerWatch = () => {
   };
 
   return {
-    seen: observations,
-    declared: [tenantLayer, stopwatchFactory],
-    supplied: [suppliedLayer],
+    observations,
+    declaredLayers: [tenantLayer, stopwatchFactory],
+    suppliedLayers: [suppliedLayer],
   };
 };
 
@@ -79,12 +79,12 @@ const latticeWithLayers = (
     versions: {},
     handlers: {
       [fulfilContract.type]: declareHandler({
-        middleware: layerWatch.declared,
+        middleware: layerWatch.declaredLayers,
       }) as never,
       [inventoryV1.type]: declareInventoryWorker() as never,
       [paymentV1.type]: declarePaymentWorker() as never,
     },
-    middleware: layerWatch.supplied,
+    middleware: layerWatch.suppliedLayers,
     ...(options.chaos
       ? { chaos: { duplicate: 0.2, shuffle: true, loseRace: 0.1 } }
       : {}),
@@ -128,13 +128,15 @@ describe('layers around the three-version handler', () => {
 
     expect(lattice.transcript.faults).toEqual([]);
     await checkHandlerInvariants(lattice);
-    expect(layerWatch.seen.tenants.length).toBeGreaterThan(0);
-    for (const { subject, tenant: tenantLayer } of layerWatch.seen.tenants) {
-      expect(tenantLayer).toBe(`tenant-of-${subject}`);
+    expect(layerWatch.observations.tenants.length).toBeGreaterThan(0);
+    for (const { subject, tenant } of layerWatch.observations.tenants) {
+      expect(tenant).toBe(`tenant-of-${subject}`);
     }
-    expect(layerWatch.seen.timed).toBe(layerWatch.seen.tenants.length);
-    expect(layerWatch.seen.supplied).toBeGreaterThanOrEqual(
-      layerWatch.seen.tenants.length,
+    expect(layerWatch.observations.timed).toBe(
+      layerWatch.observations.tenants.length,
+    );
+    expect(layerWatch.observations.supplied).toBeGreaterThanOrEqual(
+      layerWatch.observations.tenants.length,
     );
   });
 
@@ -153,8 +155,8 @@ describe('layers around the three-version handler', () => {
       await lattice.settle();
 
       await checkHandlerInvariants(lattice);
-      for (const { subject, tenant: tenantLayer } of layerWatch.seen.tenants) {
-        expect(tenantLayer).toBe(`tenant-of-${subject}`);
+      for (const { subject, tenant } of layerWatch.observations.tenants) {
+        expect(tenant).toBe(`tenant-of-${subject}`);
       }
     },
   );

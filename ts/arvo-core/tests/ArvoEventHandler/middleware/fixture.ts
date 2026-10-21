@@ -54,8 +54,8 @@ export const orderRequest = (subject = 'order-1') =>
 export const recordingSpan = () => {
   const events: { name: string; attributes: Record<string, unknown> }[] = [];
   const span = {
-    addEvent: (name: string, attributes?: Record<string, unknown>) => {
-      events.push({ name, attributes: attributes ?? {} });
+    addEvent: (eventName: string, attributes?: Record<string, unknown>) => {
+      events.push({ name: eventName, attributes: attributes ?? {} });
       return span;
     },
     setAttribute: () => span,
@@ -196,8 +196,8 @@ export const createPartLog = () => {
 };
 
 /** Waits, so a clock can run out. */
-export const sleep = (ms: number) =>
-  new Promise<void>((settle) => setTimeout(settle, ms));
+export const sleep = (durationMs: number) =>
+  new Promise<void>((resolveSleep) => setTimeout(resolveSleep, durationMs));
 
 /** The executor that asks the payment service twice, then answers once both reply. */
 export const askingPaymentTwiceExecutor: OrderExecutor = async (ctx) => {

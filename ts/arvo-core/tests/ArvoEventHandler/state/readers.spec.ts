@@ -20,11 +20,11 @@ describe('whether an execution is finished', () => {
   );
 
   it('judges every lifecycle the vocabulary has, and no others', () => {
-    const judged = ARVO_EXECUTION_LIFECYCLES.map(
+    const terminalFlags = ARVO_EXECUTION_LIFECYCLES.map(
       (lifecycle) => buildState({ lifecycle }).isTerminal,
     );
-    expect(judged.filter(Boolean)).toHaveLength(4);
-    expect(judged).toHaveLength(6);
+    expect(terminalFlags.filter(Boolean)).toHaveLength(4);
+    expect(terminalFlags).toHaveLength(6);
   });
 });
 

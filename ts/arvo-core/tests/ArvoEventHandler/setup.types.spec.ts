@@ -15,7 +15,7 @@ import { orderContract, paymentVersion } from './fixtures.js';
  */
 
 /** Records what an executor saw, so a type can be asserted on a value. */
-const seen: Record<string, unknown> = {};
+const executorObservations: Record<string, unknown> = {};
 
 describe('what an executor is typed to see', () => {
   it('types the state from the schema the version declared', () => {
@@ -25,11 +25,11 @@ describe('what an executor is typed to see', () => {
         state: z.object({ orderId: z.string() }),
         execute: async (ctx) => {
           const orderId: string | undefined = ctx.state.data?.orderId;
-          seen.orderId = orderId;
+          executorObservations.orderId = orderId;
         },
       },
     );
-    expect(seen).toBeDefined();
+    expect(executorObservations).toBeDefined();
   });
 
   it('types the triggering event from the contracts declared', () => {
@@ -40,19 +40,19 @@ describe('what an executor is typed to see', () => {
       },
     }).handler('1.0.0', {
       execute: async (ctx) => {
-        const triggering = ctx.state.triggeringEvent;
-        if (triggering.type === 'com_order_create') {
-          const items: string[] = triggering.data.items;
-          seen.items = items;
+        const triggeringEvent = ctx.state.triggeringEvent;
+        if (triggeringEvent.type === 'com_order_create') {
+          const items: string[] = triggeringEvent.data.items;
+          executorObservations.items = items;
           return;
         }
-        if (triggering.type === 'evt_payment_charged') {
-          const receipt: string = triggering.data.receipt;
-          seen.receipt = receipt;
+        if (triggeringEvent.type === 'evt_payment_charged') {
+          const receipt: string = triggeringEvent.data.receipt;
+          executorObservations.receipt = receipt;
         }
       },
     });
-    expect(seen).toBeDefined();
+    expect(executorObservations).toBeDefined();
   });
 
   it('types the dependencies and the hooks from what the declaration named', () => {
@@ -71,13 +71,13 @@ describe('what an executor is typed to see', () => {
         if (db === undefined || scheduler === undefined) {
           throw new Error('this version was not given what it declared');
         }
-        const row: string = db.read();
-        const when: number = scheduler.at;
-        seen.row = row;
-        seen.when = when;
+        const dbRow: string = db.read();
+        const scheduledAt: number = scheduler.at;
+        executorObservations.row = dbRow;
+        executorObservations.when = scheduledAt;
       },
     });
-    expect(seen).toBeDefined();
+    expect(executorObservations).toBeDefined();
   });
 
   it('types a service emission from the contracts declared', () => {
@@ -90,7 +90,7 @@ describe('what an executor is typed to see', () => {
       execute: async (ctx) =>
         ctx.build({ type: 'com_payment_charge', data: { amount: 10 } }),
     });
-    expect(seen).toBeDefined();
+    expect(executorObservations).toBeDefined();
   });
 
   it('types the same way where the executor is declared alone', () => {
@@ -102,7 +102,7 @@ describe('what an executor is typed to see', () => {
     }).handler('1.0.0', async (ctx) =>
       ctx.build({ type: 'com_payment_charge', data: { amount: 10 } }),
     );
-    expect(seen).toBeDefined();
+    expect(executorObservations).toBeDefined();
   });
 });
 
@@ -113,7 +113,7 @@ describe('what the chain refuses before anything runs', () => {
       '9.9.9',
       async () => {},
     );
-    expect(seen).toBeDefined();
+    expect(executorObservations).toBeDefined();
   });
 
   it('refuses an emission of a type nothing declared', () => {
@@ -130,7 +130,7 @@ describe('what the chain refuses before anything runs', () => {
           data: { amount: 10 },
         }),
     });
-    expect(seen).toBeDefined();
+    expect(executorObservations).toBeDefined();
   });
 
   it('refuses a payload the declared type does not accept', () => {
@@ -147,7 +147,7 @@ describe('what the chain refuses before anything runs', () => {
           data: { note: 'hello' },
         }),
     });
-    expect(seen).toBeDefined();
+    expect(executorObservations).toBeDefined();
   });
 
   it('refuses reaching for a dependency the declaration never named', () => {
@@ -156,11 +156,11 @@ describe('what the chain refuses before anything runs', () => {
       {
         execute: async (ctx) => {
           // @ts-expect-error nothing declared what a dependency would be
-          seen.missing = ctx.dependencies.db;
+          executorObservations.missing = ctx.dependencies.db;
         },
       },
     );
-    expect(seen).toBeDefined();
+    expect(executorObservations).toBeDefined();
   });
 
   it('refuses state a version that declared none has no room for', () => {
@@ -173,6 +173,6 @@ describe('what the chain refuses before anything runs', () => {
         },
       },
     );
-    expect(seen).toBeDefined();
+    expect(executorObservations).toBeDefined();
   });
 });

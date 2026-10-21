@@ -38,10 +38,10 @@ const anOrder = (subject = 'order-1') =>
   });
 
 /** How many times each worker's business code actually ran. */
-const ran = new Map<string, number>();
+const chargeRuns = new Map<string, number>();
 
 /** An order asking one service, answering when it replies. */
-const asking = (chaos = {}, seed = 53) => {
+const orderLattice = (chaos = {}, seed = 53) => {
   const lattice = createArvoLattice({
     versions: declareVersions(),
     chaos,
@@ -62,8 +62,8 @@ const asking = (chaos = {}, seed = 53) => {
     paymentV1.type,
     async (ctx: WorkerContext<typeof paymentV1>) => {
       // what an executor does outside Arvo, which no commit can undo
-      const key = ctx.state.executionId;
-      ran.set(key, (ran.get(key) ?? 0) + 1);
+      const executionId = ctx.state.executionId;
+      chargeRuns.set(executionId, (chargeRuns.get(executionId) ?? 0) + 1);
       await ctx.setState({ data: { stage: 'charged', answers: 0 } });
       return ctx.build({
         type: 'evt_payment_charged',
@@ -74,17 +74,17 @@ const asking = (chaos = {}, seed = 53) => {
   return lattice;
 };
 
-const answered = (lattice: ReturnType<typeof asking>) =>
+const callerAnswers = (lattice: ReturnType<typeof orderLattice>) =>
   lattice.transcript.published.filter(
     (event) => event.to === 'com.web.checkout',
   );
 
-const orderRow = (lattice: ReturnType<typeof asking>) =>
+const orderRow = (lattice: ReturnType<typeof orderLattice>) =>
   [...lattice.store.values()].find((row) => row.source === orderV1.type);
 
 describe('a process that dies part way through an execution', () => {
   it('leaves nothing behind: no record, no event, no trace of it', async () => {
-    const lattice = asking({ crashMidExecution: 1 });
+    const lattice = orderLattice({ crashMidExecution: 1 });
     // one delivery, and no further, since every attempt dies the same way
     await lattice.publish(anOrder()).step();
 
@@ -95,33 +95,33 @@ describe('a process that dies part way through an execution', () => {
   });
 
   it('is run again from the record that is there, and finishes', async () => {
-    ran.clear();
-    const lattice = asking({ crashMidExecution: 0.4 });
+    chargeRuns.clear();
+    const lattice = orderLattice({ crashMidExecution: 0.4 });
     await lattice.publish(anOrder()).settle();
 
     expect(lattice.transcript.died.length).toBeGreaterThan(0);
-    expect(answered(lattice)).toHaveLength(1);
+    expect(callerAnswers(lattice)).toHaveLength(1);
     expect(orderRow(lattice)?.lifecycle).toBe('success');
     await checkInvariants(lattice);
   });
 
   it('reaches the same end as a run where nothing died', async () => {
-    const died = asking({ crashMidExecution: 0.4 });
-    await died.publish(anOrder()).settle();
-    const clean = asking();
-    await clean.publish(anOrder()).settle();
+    const dyingLattice = orderLattice({ crashMidExecution: 0.4 });
+    await dyingLattice.publish(anOrder()).settle();
+    const cleanLattice = orderLattice();
+    await cleanLattice.publish(anOrder()).settle();
 
-    const resting = (lattice: ReturnType<typeof asking>) =>
+    const endStates = (lattice: ReturnType<typeof orderLattice>) =>
       [...lattice.store.values()]
         .map((row) => `${row.source}:${row.lifecycle}:${row.casVersion}`)
         .sort();
 
-    expect(resting(died)).toEqual(resting(clean));
+    expect(endStates(dyingLattice)).toEqual(endStates(cleanLattice));
   });
 
   it('does the work outside Arvo again, which is the executor to make safe', async () => {
-    ran.clear();
-    const lattice = asking();
+    chargeRuns.clear();
+    const lattice = orderLattice();
     await lattice.publish(anOrder()).settle();
 
     const request = lattice.transcript.published.find(
@@ -132,18 +132,21 @@ describe('a process that dies part way through an execution', () => {
     // first: the record refuses to be opened twice, so the protocol
     // commits nothing — but what the executor already did elsewhere is
     // done, and was done again
-    const charged = [...ran.values()].reduce((all, one) => all + one, 0);
-    expect(charged).toBe(1);
-    expect(ran.size).toBe(1);
+    const chargeCount = [...chargeRuns.values()].reduce(
+      (total, runs) => total + runs,
+      0,
+    );
+    expect(chargeCount).toBe(1);
+    expect(chargeRuns.size).toBe(1);
 
-    const elsewhere = asking();
-    ran.clear();
-    await elsewhere.publish(request).settle();
+    const freshLattice = orderLattice();
+    chargeRuns.clear();
+    await freshLattice.publish(request).settle();
 
     // keyed on the execution, which is derived and therefore the same
     // on both machines: an executor that keys its own writes on it has
     // something stable to be idempotent against
-    expect([...ran.keys()]).toEqual([
+    expect([...chargeRuns.keys()]).toEqual([
       [...lattice.store.entries()].find(
         ([, row]) => row.source === paymentV1.type,
       )?.[0],
@@ -151,17 +154,17 @@ describe('a process that dies part way through an execution', () => {
   });
 
   it('answers its caller exactly once however many times it died', async () => {
-    const lattice = asking({ crashMidExecution: 0.6 }, 29);
+    const lattice = orderLattice({ crashMidExecution: 0.6 }, 29);
     await lattice.publish(anOrder()).settle();
-    expect(answered(lattice)).toHaveLength(1);
+    expect(callerAnswers(lattice)).toHaveLength(1);
     await checkInvariants(lattice);
   });
 });
 
 describe('a request that never arrives', () => {
   /** The order asked, and the broker lost what it asked for. */
-  const lost = async () => {
-    const lattice = asking().lose(paymentV1.type);
+  const lostRequest = async () => {
+    const lattice = orderLattice().lose(paymentV1.type);
     await lattice.publish(anOrder()).settle();
 
     const request = lattice.transcript.published.find(
@@ -171,7 +174,7 @@ describe('a request that never arrives', () => {
   };
 
   it('leaves the asker waiting, with nothing anywhere to report', async () => {
-    const { lattice } = await lost();
+    const { lattice } = await lostRequest();
 
     expect(orderRow(lattice)?.lifecycle).toBe('waiting');
     expect(lattice.store.size).toBe(1);
@@ -180,8 +183,8 @@ describe('a request that never arrives', () => {
   });
 
   it('is resumed by sending the very same request again', async () => {
-    ran.clear();
-    const { lattice, request } = await lost();
+    chargeRuns.clear();
+    const { lattice, request } = await lostRequest();
 
     // the queue comes back, and somebody sends what was lost. Nothing is
     // rebuilt and nothing is invented: the same event opens exactly the
@@ -191,12 +194,12 @@ describe('a request that never arrives', () => {
     await lattice.settle();
 
     expect(lattice.store.size).toBe(2);
-    expect(answered(lattice)).toHaveLength(1);
+    expect(callerAnswers(lattice)).toHaveLength(1);
     await checkInvariants(lattice);
   });
 
   it('opens one execution for it, not a second one beside the first', async () => {
-    const { lattice, request } = await lost();
+    const { lattice, request } = await lostRequest();
     lattice.deliverAgain(paymentV1.type).publish(request);
     await lattice.settle();
     lattice.publish(request);
@@ -204,13 +207,13 @@ describe('a request that never arrives', () => {
 
     // the second is refused before any work is done
     expect(lattice.store.size).toBe(2);
-    expect(answered(lattice)).toHaveLength(1);
+    expect(callerAnswers(lattice)).toHaveLength(1);
   });
 });
 
 describe('an answer that never arrives', () => {
   it('is resumed by publishing what was committed, not by asking again', async () => {
-    const lattice = asking({ crashBeforePublish: 1 });
+    const lattice = orderLattice({ crashBeforePublish: 1 });
     await lattice.publish(anOrder()).settle();
 
     // the request was committed and never left
@@ -218,27 +221,27 @@ describe('an answer that never arrives', () => {
     expect(orderRow(lattice)?.lifecycle).toBe('waiting');
 
     while (lattice.holding > 0) await lattice.recover().settle();
-    expect(answered(lattice)).toHaveLength(1);
+    expect(callerAnswers(lattice)).toHaveLength(1);
     await checkInvariants(lattice);
   });
 
   it('is not resumed by asking again, the work already having been done', async () => {
-    const lattice = asking();
+    const lattice = orderLattice();
     await lattice.publish(anOrder()).settle();
 
     const request = lattice.transcript.published.find(
       (event) => event.type === paymentV1.type,
     ) as ArvoEvent;
-    const before = JSON.stringify([...lattice.store.entries()]);
+    const storeSnapshot = JSON.stringify([...lattice.store.entries()]);
 
     // sending the same request again reaches an execution that already
     // ran: it is refused rather than charged twice
-    ran.clear();
+    chargeRuns.clear();
     lattice.publish(request);
     await lattice.settle();
 
-    expect(ran.size).toBe(0);
-    expect(JSON.stringify([...lattice.store.entries()])).toBe(before);
+    expect(chargeRuns.size).toBe(0);
+    expect(JSON.stringify([...lattice.store.entries()])).toBe(storeSnapshot);
   });
 });
 
@@ -271,39 +274,39 @@ describe('a workflow nobody is coming back for', () => {
 
   it('stays exactly where it stopped, for as long as it takes', async () => {
     const lattice = await waitingOnAPerson();
-    const stopped = JSON.stringify([...lattice.store.entries()]);
+    const stoppedSnapshot = JSON.stringify([...lattice.store.entries()]);
 
     // nothing happens, repeatedly
-    for (let at = 0; at < 5; at += 1) await lattice.settle();
+    for (let round = 0; round < 5; round += 1) await lattice.settle();
 
-    expect(JSON.stringify([...lattice.store.entries()])).toBe(stopped);
+    expect(JSON.stringify([...lattice.store.entries()])).toBe(stoppedSnapshot);
     expect(lattice.transcript.faults).toEqual([]);
   });
 
   it('is resumed by anything that can address the request it waits on', async () => {
     const lattice = await waitingOnAPerson();
-    const asked = lattice.parked.get('human_review')?.[0] as ArvoEvent;
+    const reviewRequest = lattice.parked.get('human_review')?.[0] as ArvoEvent;
 
     // an operator, a week later, with nothing of the original process
     // left alive: the record and the request's id are the whole of what
     // resuming it takes
-    const byHand = cloneArvoEvent(
+    const operatorDecision = cloneArvoEvent(
       createArvoEventFactory(reviewV1).createOutput({
         type: 'evt_review_decided',
         source: 'com.ops.console',
-        subject: asked.subject,
+        subject: reviewRequest.subject,
         to: orderV1.type,
         data: { approved: true },
       }),
       {
-        executionid: asked.executionid,
-        parentid: asked.id,
-        initid: asked.id,
-        depth: asked.depth,
+        executionid: reviewRequest.executionid,
+        parentid: reviewRequest.id,
+        initid: reviewRequest.id,
+        depth: reviewRequest.depth,
       },
     );
 
-    lattice.inject(byHand);
+    lattice.inject(operatorDecision);
     await lattice.settle();
 
     expect(
@@ -315,51 +318,53 @@ describe('a workflow nobody is coming back for', () => {
   });
 
   it('is resumed from the stored record alone, nothing of the first run surviving', async () => {
-    const first = await waitingOnAPerson();
-    const asked = first.parked.get('human_review')?.[0] as ArvoEvent;
+    const originalLattice = await waitingOnAPerson();
+    const reviewRequest = originalLattice.parked.get(
+      'human_review',
+    )?.[0] as ArvoEvent;
 
     // a different process entirely, which has only the store
-    const second = createArvoLattice({
+    const resumingLattice = createArvoLattice({
       versions: declareVersions({
         [orderV1.type]: { executionTimeout: null },
       }),
       seed: 68,
     });
-    second.behave(orderV1.type, async (ctx: OrderContext) => {
+    resumingLattice.behave(orderV1.type, async (ctx: OrderContext) => {
       await ctx.setState({ data: { stage: 'answering', answers: 1 } });
       return ctx.build({
         type: 'evt_order_fulfilled',
         data: { order_id: 'resumed elsewhere' },
       });
     });
-    for (const [executionId, row] of first.store) {
-      second.store.set(executionId, row);
+    for (const [executionId, row] of originalLattice.store) {
+      resumingLattice.store.set(executionId, row);
     }
 
-    second.inject(
+    resumingLattice.inject(
       cloneArvoEvent(
         createArvoEventFactory(reviewV1).createOutput({
           type: 'evt_review_decided',
           source: reviewV1.type,
-          subject: asked.subject,
+          subject: reviewRequest.subject,
           to: orderV1.type,
           data: { approved: true },
         }),
         {
-          executionid: asked.executionid,
-          parentid: asked.id,
-          initid: asked.id,
-          depth: asked.depth,
+          executionid: reviewRequest.executionid,
+          parentid: reviewRequest.id,
+          initid: reviewRequest.id,
+          depth: reviewRequest.depth,
         },
       ),
     );
-    await second.settle();
+    await resumingLattice.settle();
 
-    const told = second.transcript.published.filter(
+    const resumedAnswers = resumingLattice.transcript.published.filter(
       (event) => event.to === 'com.web.checkout',
     );
-    expect(told).toHaveLength(1);
-    expect(told[0]?.data.order_id).toBe('resumed elsewhere');
+    expect(resumedAnswers).toHaveLength(1);
+    expect(resumedAnswers[0]?.data.order_id).toBe('resumed elsewhere');
   });
 
   it('is refused rather than resumed where its version set a bound and it passed', async () => {
@@ -385,23 +390,23 @@ describe('a workflow nobody is coming back for', () => {
       });
     });
     await lattice.publish(anOrder()).settle();
-    const asked = lattice.parked.get('human_review')?.[0] as ArvoEvent;
+    const reviewRequest = lattice.parked.get('human_review')?.[0] as ArvoEvent;
 
-    await new Promise((settle) => setTimeout(settle, 60));
+    await new Promise((resolve) => setTimeout(resolve, 60));
     lattice.inject(
       cloneArvoEvent(
         createArvoEventFactory(reviewV1).createOutput({
           type: 'evt_review_decided',
           source: reviewV1.type,
-          subject: asked.subject,
+          subject: reviewRequest.subject,
           to: orderV1.type,
           data: { approved: true },
         }),
         {
-          executionid: asked.executionid,
-          parentid: asked.id,
-          initid: asked.id,
-          depth: asked.depth,
+          executionid: reviewRequest.executionid,
+          parentid: reviewRequest.id,
+          initid: reviewRequest.id,
+          depth: reviewRequest.depth,
         },
       ),
     );

@@ -17,7 +17,7 @@ import {
   tryCreateArvoEvent,
 } from '../../src/factories/createArvoEvent.js';
 
-const version = new ArvoContract({
+const orderVersion = new ArvoContract({
   type: 'com_order_create',
   versions: {
     '1.0.0': {
@@ -27,21 +27,21 @@ const version = new ArvoContract({
   },
 }).versions['1.0.0'];
 
-const orders = createArvoEventFactory(version);
+const orderFactory = createArvoEventFactory(orderVersion);
 
 /** One instance, so both forms compose the same stack from it. */
-const caught = new Error('boom');
+const sharedError = new Error('boom');
 
 const event = new ArvoEvent({
   source: 'com.test.suite',
   subject: 'order-42',
   type: 'com_order_created',
-  dataschema: version.dataschema,
+  dataschema: orderVersion.dataschema,
   data: { order_id: 'o-1' },
 });
 
 /** Each builder, as the pair it comes in, with a good and a bad input. */
-const pairs = [
+const builderPairs = [
   [
     'createArvoEvent',
     () =>
@@ -82,33 +82,33 @@ const pairs = [
   ],
   [
     'createInput',
-    () => orders.createInput({ source: 's', data: { items: [] } }),
-    () => orders.tryCreateInput({ source: 's', data: { items: [] } }),
-    () => orders.createInput({ source: 's', data: {} as never }),
-    () => orders.tryCreateInput({ source: 's', data: {} as never }),
+    () => orderFactory.createInput({ source: 's', data: { items: [] } }),
+    () => orderFactory.tryCreateInput({ source: 's', data: { items: [] } }),
+    () => orderFactory.createInput({ source: 's', data: {} as never }),
+    () => orderFactory.tryCreateInput({ source: 's', data: {} as never }),
   ],
   [
     'createOutput',
     () =>
-      orders.createOutput({
+      orderFactory.createOutput({
         type: 'com_order_created',
         source: 's',
         data: { order_id: 'o' },
       }),
     () =>
-      orders.tryCreateOutput({
+      orderFactory.tryCreateOutput({
         type: 'com_order_created',
         source: 's',
         data: { order_id: 'o' },
       }),
     () =>
-      orders.createOutput({
+      orderFactory.createOutput({
         type: 'com_order_created',
         source: 's',
         data: {} as never,
       }),
     () =>
-      orders.tryCreateOutput({
+      orderFactory.tryCreateOutput({
         type: 'com_order_created',
         source: 's',
         data: {} as never,
@@ -116,60 +116,67 @@ const pairs = [
   ],
   [
     'createError',
-    () => orders.createError({ source: 's', error: caught }),
-    () => orders.tryCreateError({ source: 's', error: caught }),
-    () => orders.createError({ source: 's', error: null as unknown as Error }),
+    () => orderFactory.createError({ source: 's', error: sharedError }),
+    () => orderFactory.tryCreateError({ source: 's', error: sharedError }),
     () =>
-      orders.tryCreateError({ source: 's', error: null as unknown as Error }),
+      orderFactory.createError({
+        source: 's',
+        error: null as unknown as Error,
+      }),
+    () =>
+      orderFactory.tryCreateError({
+        source: 's',
+        error: null as unknown as Error,
+      }),
   ],
 ] as const;
 
-describe.each(pairs)(
+describe.each(builderPairs)(
   '%s and its reporting form',
-  (_name, build, report, buildBad, reportBad) => {
+  (_name, buildValid, tryBuildValid, buildInvalid, tryBuildInvalid) => {
     it('agree on success', () => {
-      const reported = report();
-      expect(reported.ok).toBe(true);
-      expect(() => build()).not.toThrow();
+      const tryResult = tryBuildValid();
+      expect(tryResult.ok).toBe(true);
+      expect(() => buildValid()).not.toThrow();
     });
 
     it('produce an equivalent event on success', () => {
-      const reported = report();
-      if (!reported.ok) throw reported.error;
-      const built = build();
+      const tryResult = tryBuildValid();
+      if (!tryResult.ok) throw tryResult.error;
+      const builtEvent = buildValid();
       // `id`, `subject` and `time` are generated per call where not supplied,
       // so the payload and the routing fields are what must agree.
-      expect(built.type).toBe(reported.value.type);
-      expect(built.data).toEqual(reported.value.data);
-      expect(built.dataschema).toBe(reported.value.dataschema);
-      expect(built.to).toBe(reported.value.to);
+      expect(builtEvent.type).toBe(tryResult.value.type);
+      expect(builtEvent.data).toEqual(tryResult.value.data);
+      expect(builtEvent.dataschema).toBe(tryResult.value.dataschema);
+      expect(builtEvent.to).toBe(tryResult.value.to);
     });
 
     it('agree on failure', () => {
-      const reported = reportBad();
-      expect(reported.ok).toBe(false);
-      expect(() => buildBad()).toThrow();
+      const tryResult = tryBuildInvalid();
+      expect(tryResult.ok).toBe(false);
+      expect(() => buildInvalid()).toThrow();
     });
 
     it('raise from the throwing form what the other reported', () => {
-      const reported = reportBad();
-      if (reported.ok) throw new Error('expected a failure');
-      expect(() => buildBad()).toThrow(reported.error.message);
+      const tryResult = tryBuildInvalid();
+      if (tryResult.ok) throw new Error('expected a failure');
+      expect(() => buildInvalid()).toThrow(tryResult.error.message);
     });
 
     it('report rather than raise, for an input a caller can supply', () => {
-      expect(() => reportBad()).not.toThrow();
+      expect(() => tryBuildInvalid()).not.toThrow();
     });
   },
 );
 
 describe('reaching a factory', () => {
   it('reports something that is not a version of a contract', () => {
-    const attempt = tryCreateArvoEventFactory(null as never);
-    expect(attempt.ok).toBe(false);
-    if (attempt.ok) return;
-    expect(attempt.error).toBeInstanceOf(ArvoContractValidationError);
-    expect(attempt.error.issues[0]?.path).toBe('contract');
+    const createResult = tryCreateArvoEventFactory(null as never);
+    expect(createResult.ok).toBe(false);
+    if (createResult.ok) return;
+    expect(createResult.error).toBeInstanceOf(ArvoContractValidationError);
+    expect(createResult.error.issues[0]?.path).toBe('contract');
   });
 
   it('raises the same from the throwing form', () => {
@@ -179,11 +186,11 @@ describe('reaching a factory', () => {
   });
 
   it('carries the version it was given, and is frozen', () => {
-    expect(orders.contract).toBe(version);
-    expect(Object.isFrozen(orders)).toBe(true);
+    expect(orderFactory.contract).toBe(orderVersion);
+    expect(Object.isFrozen(orderFactory)).toBe(true);
   });
 
   it('is reachable by construction too', () => {
-    expect(new ArvoEventFactory(version).contract).toBe(version);
+    expect(new ArvoEventFactory(orderVersion).contract).toBe(orderVersion);
   });
 });

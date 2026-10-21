@@ -23,11 +23,11 @@ const aScope = () => ({
 
 describe('a dependency that holds nothing', () => {
   it('hands over what it was given, as it stands', () => {
-    const given = { note: 'given' };
-    const { dependency } = heldDependencies(given);
+    const attributes = { note: 'given' };
+    const { dependency } = heldDependencies(attributes);
 
     dependency.open(aScope());
-    expect(dependency.attributes).toBe(given);
+    expect(dependency.attributes).toBe(attributes);
   });
 
   it('may be read before it is opened, because it holds nothing', () => {
@@ -57,8 +57,8 @@ describe('a dependency that holds nothing', () => {
 describe('a dependency that holds something', () => {
   it('builds what it holds on open, and is told what it is opening for', () => {
     const scope = aScope();
-    const { dependency, calls } = openedPerExecution((given) => ({
-      executionId: given.executionId,
+    const { dependency, calls } = openedPerExecution((openScope) => ({
+      executionId: openScope.executionId,
     }));
 
     dependency.open(scope);
@@ -75,16 +75,16 @@ describe('a dependency that holds something', () => {
   });
 
   it('builds once however many times it is opened', () => {
-    let built = 0;
+    let buildCount = 0;
     const { dependency } = openedPerExecution(() => {
-      built += 1;
-      return { built };
+      buildCount += 1;
+      return { built: buildCount };
     });
 
     dependency.open(aScope());
     dependency.open(aScope());
 
-    expect(built).toBe(1);
+    expect(buildCount).toBe(1);
   });
 
   it('lets go on close, and may be closed again', () => {
@@ -102,17 +102,17 @@ describe('a dependency that holds something', () => {
   });
 
   it('builds again after being closed, so one object serves two executions', () => {
-    let built = 0;
+    let buildCount = 0;
     const { dependency } = openedPerExecution(() => {
-      built += 1;
-      return { built };
+      buildCount += 1;
+      return { built: buildCount };
     });
 
     dependency.open(aScope());
     dependency.close(aScope());
     dependency.open(aScope());
 
-    expect(built).toBe(2);
+    expect(buildCount).toBe(2);
     expect(dependency.attributes).toEqual({ built: 2 });
   });
 });

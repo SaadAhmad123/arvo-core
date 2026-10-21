@@ -139,11 +139,11 @@ export type ArvoLatticeParam = {
 export { chanceFrom } from './chance.js';
 
 /** The contract and version an event's `dataschema` names. */
-const named = (event: ArvoEvent) => {
-  const cut = event.dataschema.lastIndexOf('/');
+const dataschemaParts = (event: ArvoEvent) => {
+  const lastSlash = event.dataschema.lastIndexOf('/');
   return {
-    uri: event.dataschema.slice(0, cut),
-    version: event.dataschema.slice(cut + 1),
+    uri: event.dataschema.slice(0, lastSlash),
+    version: event.dataschema.slice(lastSlash + 1),
   };
 };
 
@@ -194,13 +194,13 @@ export class ArvoLattice {
   readonly #clock: { now: () => number };
   readonly #chance: () => number;
   readonly #abandons: boolean;
-  readonly #events = new ArvoEventSerializer({ type: 'arvoevent' });
+  readonly #serializer = new ArvoEventSerializer({ type: 'arvoevent' });
   readonly #behaviours = new Map<string, ArvoBehaviour<never>>();
   readonly #attempts = new Map<string, number>();
-  readonly #conflicts = new Map<string, number>();
-  readonly #lost = new Set<string>();
+  readonly #conflictRetries = new Map<string, number>();
+  readonly #lostContractTypes = new Set<string>();
   #queue: ArvoEvent[] = [];
-  #held: ArvoEvent[] = [];
+  #unpublished: ArvoEvent[] = [];
 
   constructor(param: ArvoLatticeParam) {
     this.#versions = param.versions;
@@ -231,16 +231,16 @@ export class ArvoLattice {
   publish(event: ArvoEvent): this {
     this.transcript.published.push(event);
     if (event.domain !== null) {
-      const waiting = this.parked.get(event.domain) ?? [];
-      waiting.push(event);
-      this.parked.set(event.domain, waiting);
+      const parkedEvents = this.parked.get(event.domain) ?? [];
+      parkedEvents.push(event);
+      this.parked.set(event.domain, parkedEvents);
       return this;
     }
 
     if (this.#chaos.drop > 0 && this.#chance() < this.#chaos.drop) return this;
 
     this.#queue.push(event);
-    for (let extra = 0; extra < this.#chaos.duplicate; extra += 1) {
+    for (let copy = 0; copy < this.#chaos.duplicate; copy += 1) {
       this.#queue.push(event);
     }
     return this;
@@ -253,26 +253,29 @@ export class ArvoLattice {
 
   /** What is waiting on one path, and no longer parked once taken. */
   take(domain: string): ArvoEvent[] {
-    const waiting = this.parked.get(domain) ?? [];
+    const parkedEvents = this.parked.get(domain) ?? [];
     this.parked.set(domain, []);
-    return waiting;
+    return parkedEvents;
   }
 
   /** Whatever is parked on one path, answered by something outside. */
-  fulfil(domain: string, answer: (asked: ArvoEvent) => ArvoEvent | null): this {
-    for (const asked of this.take(domain)) {
-      const given = answer(asked);
-      if (given !== null) this.inject(given);
+  fulfil(
+    domain: string,
+    answer: (parkedEvent: ArvoEvent) => ArvoEvent | null,
+  ): this {
+    for (const parkedEvent of this.take(domain)) {
+      const reply = answer(parkedEvent);
+      if (reply !== null) this.inject(reply);
     }
     return this;
   }
 
   /** Some fraction of what is parked on one path, never answered. */
   forget(domain: string, fraction: number): ArvoEvent[] {
-    const waiting = this.take(domain);
-    const kept = waiting.filter(() => this.#chance() >= fraction);
-    this.parked.set(domain, kept);
-    return waiting.filter((event) => !kept.includes(event));
+    const parkedEvents = this.take(domain);
+    const stillParked = parkedEvents.filter(() => this.#chance() >= fraction);
+    this.parked.set(domain, stillParked);
+    return parkedEvents.filter((event) => !stillParked.includes(event));
   }
 
   /** The record one execution stands at, as the store holds it. */
@@ -287,43 +290,45 @@ export class ArvoLattice {
    * wait on something that was never asked.
    */
   lose(contractType: string): this {
-    this.#lost.add(contractType);
+    this.#lostContractTypes.add(contractType);
     return this;
   }
 
   /** Whatever was lost to this contract is delivered again. */
   deliverAgain(contractType: string): this {
-    this.#lost.delete(contractType);
+    this.#lostContractTypes.delete(contractType);
     return this;
   }
 
   /** One event delivered, and nothing of what it causes. */
   async step(): Promise<this> {
-    const event = this.#next();
+    const event = this.#nextEvent();
     if (event !== undefined) await this.#deliver(event);
     return this;
   }
 
   /** Runs every event the lattice holds, and everything they cause. */
-  async settle(budget = 50_000): Promise<this> {
+  async settle(stepBudget = 50_000): Promise<this> {
     let steps = 0;
     while (this.#queue.length > 0) {
       steps += 1;
-      if (steps > budget) {
-        throw new Error(`this lattice did not settle within ${budget} steps`);
+      if (steps > stepBudget) {
+        throw new Error(
+          `this lattice did not settle within ${stepBudget} steps`,
+        );
       }
-      const event = this.#next();
+      const event = this.#nextEvent();
       if (event !== undefined) await this.#deliver(event);
     }
     return this;
   }
 
   /** Whichever event is next, which under chaos is not the first. */
-  #next(): ArvoEvent | undefined {
+  #nextEvent(): ArvoEvent | undefined {
     if (!this.#chaos.shuffle) return this.#queue.shift();
-    const at = Math.floor(this.#chance() * this.#queue.length);
-    const [taken] = this.#queue.splice(at, 1);
-    return taken;
+    const index = Math.floor(this.#chance() * this.#queue.length);
+    const [event] = this.#queue.splice(index, 1);
+    return event;
   }
 
   /**
@@ -335,39 +340,39 @@ export class ArvoLattice {
    * and which version owns that record.
    */
   async #routeFor(event: ArvoEvent) {
-    if (event.to !== null && this.#lost.has(event.to)) return null;
+    if (event.to !== null && this.#lostContractTypes.has(event.to)) return null;
 
     const versions = event.to === null ? undefined : this.#versions[event.to];
     if (versions === undefined) return null;
 
-    const naming = named(event);
+    const schema = dataschemaParts(event);
     const self = Object.values(versions)[0]?.contracts.self;
     const entry: 'init' | 'followup' =
-      self !== undefined && naming.uri === self.uri && event.type === self.type
+      self !== undefined && schema.uri === self.uri && event.type === self.type
         ? 'init'
         : 'followup';
 
     const executionId =
       entry === 'init' ? await deriveArvoExecutionId(event) : event.executionid;
 
-    const read = this.stored(executionId);
-    if (entry === 'init' && read !== null) return null;
-    if (entry === 'followup' && read === null) return null;
+    const record = this.stored(executionId);
+    if (entry === 'init' && record !== null) return null;
+    if (entry === 'followup' && record === null) return null;
 
     const version =
       entry === 'init'
-        ? versions[naming.version]
-        : versions[String(read?.version)];
+        ? versions[schema.version]
+        : versions[String(record?.version)];
     if (version === undefined) return null;
 
-    return { version, entry, executionId, read };
+    return { version, entry, executionId, record };
   }
 
   /** One event, through everything a mechanism owns, to a version and back. */
   async #deliver(event: ArvoEvent): Promise<void> {
     const handler = event.to === null ? undefined : this.#handlers[event.to];
     if (handler !== undefined) {
-      if (this.#lost.has(event.to as string)) return;
+      if (this.#lostContractTypes.has(event.to as string)) return;
       return this.#deliverWhole(handler, event);
     }
 
@@ -375,18 +380,18 @@ export class ArvoLattice {
     if (route === null) return;
 
     const { executionId } = route;
-    const key = `${executionId}:${event.id}`;
-    const attempt = this.#attempts.get(key) ?? 0;
+    const attemptKey = `${executionId}:${event.id}`;
+    const attempt = this.#attempts.get(attemptKey) ?? 0;
     this.transcript.delivered.push({ event, executionId, attempt });
 
     // The process dies with the work half done: nothing committed,
     // nothing published, and nothing anywhere recording that it ran. A
     // mechanism notices only that the event was never acknowledged, and
     // delivers it again.
-    const died =
+    const diesMidExecution =
       this.#chaos.crashMidExecution > 0 &&
       this.#chance() < this.#chaos.crashMidExecution;
-    if (died) {
+    if (diesMidExecution) {
       this.transcript.died.push({ event, executionId });
       this.#queue.push(event);
       return;
@@ -400,7 +405,7 @@ export class ArvoLattice {
       }
       this.#commit(executionId, event, response.state, response.events);
     } catch (thrown) {
-      await this.#onFault(event, executionId, key, attempt, thrown);
+      await this.#onFault(event, executionId, attemptKey, attempt, thrown);
     }
   }
 
@@ -415,13 +420,13 @@ export class ArvoLattice {
     handler: ArvoHandlerUnderTest,
     event: ArvoEvent,
   ): Promise<void> {
-    const key = event.id;
-    const attempt = this.#attempts.get(key) ?? 0;
+    const attemptKey = event.id;
+    const attempt = this.#attempts.get(attemptKey) ?? 0;
 
-    const died =
+    const diesMidExecution =
       this.#chaos.crashMidExecution > 0 &&
       this.#chance() < this.#chaos.crashMidExecution;
-    if (died) {
+    if (diesMidExecution) {
       this.transcript.died.push({ event, executionId: 'unknown' });
       this.#queue.push(event);
       return;
@@ -448,14 +453,14 @@ export class ArvoLattice {
       this.transcript.delivered.push({ event, executionId, attempt });
       this.#commit(executionId, event, response.state, response.events);
     } catch (thrown) {
-      const named =
+      const faultExecutionId =
         thrown instanceof ArvoHandlerFault && thrown.executionId !== null
           ? thrown.executionId
           : 'unplaced';
       await this.#onFault(
         event,
-        named,
-        `${named}:${event.id}`,
+        faultExecutionId,
+        `${faultExecutionId}:${event.id}`,
         attempt,
         thrown,
       );
@@ -471,7 +476,7 @@ export class ArvoLattice {
     return (await route.version.execute({
       entry: route.entry,
       event,
-      state: route.read,
+      state: route.record,
       executionId: route.executionId,
       attempt,
       dependencies: heldDependencies({
@@ -501,8 +506,8 @@ export class ArvoLattice {
     const route = await this.#routeFor(event);
     if (route === null) return this;
 
-    const key = `${route.executionId}:${event.id}`;
-    const attempt = this.#attempts.get(key) ?? 0;
+    const attemptKey = `${route.executionId}:${event.id}`;
+    const attempt = this.#attempts.get(attemptKey) ?? 0;
     for (const _ of [0, 1]) {
       this.transcript.delivered.push({
         event,
@@ -513,36 +518,39 @@ export class ArvoLattice {
 
     // both against the same record, neither having written anything, and
     // each raising whatever it raises on its own account
-    const outcomes = await Promise.all(
+    const executions = await Promise.all(
       [0, 1].map(async () => {
         try {
-          return { ran: await this.#run(route, event, attempt) };
+          return { response: await this.#run(route, event, attempt) };
         } catch (thrown) {
           return { thrown };
         }
       }),
     );
 
-    for (const outcome of outcomes) {
-      if ('thrown' in outcome) {
+    for (const execution of executions) {
+      if ('thrown' in execution) {
         await this.#onFault(
           event,
           route.executionId,
-          key,
+          attemptKey,
           attempt,
-          outcome.thrown,
+          execution.thrown,
         );
         continue;
       }
-      if (outcome.ran.kind === 'discarded') {
-        this.transcript.discarded.push({ event, reason: outcome.ran.reason });
+      if (execution.response.kind === 'discarded') {
+        this.transcript.discarded.push({
+          event,
+          reason: execution.response.reason,
+        });
         continue;
       }
       this.#commit(
         route.executionId,
         event,
-        outcome.ran.state,
-        outcome.ran.events,
+        execution.response.state,
+        execution.response.events,
       );
     }
     return this;
@@ -558,19 +566,20 @@ export class ArvoLattice {
     // Against what the store holds now, not against what this delivery
     // read: another may have written in between, which is the whole of
     // what comparing and swapping is for.
-    const held = this.stored(executionId);
-    const expected = held === null ? 0 : Number(held.casVersion) + 1;
-    const lost =
+    const storedRecord = this.stored(executionId);
+    const expectedCasVersion =
+      storedRecord === null ? 0 : Number(storedRecord.casVersion) + 1;
+    const raceLost =
       this.#chaos.loseRace > 0 && this.#chance() < this.#chaos.loseRace;
 
-    if (lost || Number(row.casVersion) !== expected) {
+    if (raceLost || Number(row.casVersion) !== expectedCasVersion) {
       // What a mechanism does with the delivery that lost: it ran against
       // a record that has since moved, so it runs again against the one
       // that is there now. Nothing it produced is published.
       this.transcript.conflicts.push({ executionId, event });
-      const tried = this.#conflicts.get(event.id) ?? 0;
-      if (tried < 20) {
-        this.#conflicts.set(event.id, tried + 1);
+      const retries = this.#conflictRetries.get(event.id) ?? 0;
+      if (retries < 20) {
+        this.#conflictRetries.set(event.id, retries + 1);
         this.#queue.push(event);
       }
       return;
@@ -582,25 +591,25 @@ export class ArvoLattice {
     // Noted as this execution's as it is committed, not as it is
     // published: an event held back by a crash is still one an execution
     // produced, and recovery sends the very bytes that were committed.
-    for (const leaving of emitted) {
-      this.transcript.fromExecutions.add(leaving.id);
+    for (const emittedEvent of emitted) {
+      this.transcript.fromExecutions.add(emittedEvent.id);
     }
 
-    const crashed =
+    const crashesBeforePublish =
       this.#chaos.crashBeforePublish > 0 &&
       this.#chance() < this.#chaos.crashBeforePublish;
-    if (crashed) {
-      this.#held.push(...emitted);
+    if (crashesBeforePublish) {
+      this.#unpublished.push(...emitted);
       return;
     }
-    for (const leaving of emitted) this.publish(leaving);
+    for (const emittedEvent of emitted) this.publish(emittedEvent);
   }
 
   /** What was committed but never published, sent on recovery. */
   recover(): this {
-    const holding = this.#held;
-    this.#held = [];
-    for (const leaving of holding) this.publish(leaving);
+    const unpublished = this.#unpublished;
+    this.#unpublished = [];
+    for (const emittedEvent of unpublished) this.publish(emittedEvent);
     return this;
   }
 
@@ -608,7 +617,7 @@ export class ArvoLattice {
   async #onFault(
     event: ArvoEvent,
     executionId: string,
-    key: string,
+    attemptKey: string,
     attempt: number,
     thrown: unknown,
   ): Promise<void> {
@@ -617,7 +626,7 @@ export class ArvoLattice {
     this.transcript.faults.push({ event, fault });
 
     if (fault.retry !== null) {
-      this.#attempts.set(key, attempt + 1);
+      this.#attempts.set(attemptKey, attempt + 1);
       this.#queue.push(event);
       return;
     }
@@ -642,12 +651,12 @@ export class ArvoLattice {
       });
     }
     if (fault.abandonmentEvent !== null) {
-      const restored = await this.#events.tryDeserialize(
+      const abandonmentEvent = await this.#serializer.tryDeserialize(
         fault.abandonmentEvent,
       );
-      if (restored.ok) {
-        this.transcript.fromExecutions.add(restored.value.id);
-        this.publish(restored.value);
+      if (abandonmentEvent.ok) {
+        this.transcript.fromExecutions.add(abandonmentEvent.value.id);
+        this.publish(abandonmentEvent.value);
       }
     }
   }
@@ -663,7 +672,7 @@ export class ArvoLattice {
 
   /** How many events were committed but never published. */
   get holding(): number {
-    return this.#held.length;
+    return this.#unpublished.length;
   }
 
   /** What the lattice calls the time. */

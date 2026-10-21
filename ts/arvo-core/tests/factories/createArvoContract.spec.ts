@@ -8,7 +8,7 @@ import {
   tryCreateArvoContract,
 } from '../../src/factories/createArvoContract.js';
 
-const valid = {
+const validParam = {
   type: 'com_order_create',
   versions: {
     '1.0.0': {
@@ -19,45 +19,45 @@ const valid = {
 } as const;
 
 /** Not lowercase_snake_case, and a version key with a leading zero. */
-const invalid = {
+const invalidParam = {
   type: 'Com_Order_Create',
   versions: { '01.0.0': { input: z.object({}), outputs: {} } },
 } as unknown as ArvoContractParam;
 
 describe('tryCreateArvoContract', () => {
   it('builds the contract the constructor would', () => {
-    const declared = tryCreateArvoContract(valid);
-    expect(declared.ok).toBe(true);
-    if (!declared.ok) return;
-    expect(declared.value).toBeInstanceOf(ArvoContract);
-    expect(declared.value.uri).toBe('#/com/order/create');
-    expect(declared.value.versions['1.0.0'].dataschema).toBe(
+    const createResult = tryCreateArvoContract(validParam);
+    expect(createResult.ok).toBe(true);
+    if (!createResult.ok) return;
+    expect(createResult.value).toBeInstanceOf(ArvoContract);
+    expect(createResult.value.uri).toBe('#/com/order/create');
+    expect(createResult.value.versions['1.0.0'].dataschema).toBe(
       '#/com/order/create/1.0.0',
     );
   });
 
   it('reports an invalid declaration rather than throwing', () => {
-    const declared = tryCreateArvoContract(invalid);
-    expect(declared.ok).toBe(false);
-    if (declared.ok) return;
-    expect(declared.error).toBeInstanceOf(ArvoContractValidationError);
-    expect(declared.error.issues.length).toBeGreaterThan(0);
+    const createResult = tryCreateArvoContract(invalidParam);
+    expect(createResult.ok).toBe(false);
+    if (createResult.ok) return;
+    expect(createResult.error).toBeInstanceOf(ArvoContractValidationError);
+    expect(createResult.error.issues.length).toBeGreaterThan(0);
   });
 
   it('reports every rule the declaration broke, as the constructor does', () => {
-    const declared = tryCreateArvoContract(invalid);
+    const createResult = tryCreateArvoContract(invalidParam);
     let thrownError: ArvoContractValidationError | null = null;
     try {
-      new ArvoContract(invalid);
+      new ArvoContract(invalidParam);
     } catch (thrown) {
       thrownError = thrown as ArvoContractValidationError;
     }
-    if (declared.ok) throw new Error('expected the declaration to fail');
-    expect(declared.error.message).toBe(thrownError?.message);
+    if (createResult.ok) throw new Error('expected the declaration to fail');
+    expect(createResult.error.message).toBe(thrownError?.message);
   });
 
   it('lets an unrelated failure through rather than reporting it', () => {
-    const hostile = {
+    const hostileParam = {
       type: 'com_order_create',
       versions: new Proxy(
         {},
@@ -69,11 +69,11 @@ describe('tryCreateArvoContract', () => {
       ),
     } as unknown as ArvoContractParam;
 
-    expect(() => tryCreateArvoContract(hostile)).toThrow(TypeError);
+    expect(() => tryCreateArvoContract(hostileParam)).toThrow(TypeError);
   });
 
   it('keeps each version its own payload type', () => {
-    const declared = tryCreateArvoContract({
+    const createResult = tryCreateArvoContract({
       type: 'com_order_create',
       versions: {
         '1.0.0': {
@@ -83,38 +83,40 @@ describe('tryCreateArvoContract', () => {
         '1.1.0': { input: z.object({ tier: z.string() }), outputs: {} },
       },
     });
-    if (!declared.ok) throw declared.error;
+    if (!createResult.ok) throw createResult.error;
     expectTypeOf<
-      z.infer<(typeof declared.value.versions)['1.0.0']['input']>
+      z.infer<(typeof createResult.value.versions)['1.0.0']['input']>
     >().toEqualTypeOf<{ items: string[] }>();
     expectTypeOf<
-      z.infer<(typeof declared.value.versions)['1.1.0']['input']>
+      z.infer<(typeof createResult.value.versions)['1.1.0']['input']>
     >().toEqualTypeOf<{ tier: string }>();
   });
 });
 
 describe('createArvoContract', () => {
   it('returns the contract directly', () => {
-    const contract = createArvoContract(valid);
+    const contract = createArvoContract(validParam);
     expect(contract).toBeInstanceOf(ArvoContract);
     expect(contract.type).toBe('com_order_create');
   });
 
   it('throws what the non-throwing form reports', () => {
-    const declared = tryCreateArvoContract(invalid);
-    if (declared.ok) throw new Error('expected the declaration to fail');
-    expect(() => createArvoContract(invalid)).toThrow(
+    const createResult = tryCreateArvoContract(invalidParam);
+    if (createResult.ok) throw new Error('expected the declaration to fail');
+    expect(() => createArvoContract(invalidParam)).toThrow(
       ArvoContractValidationError,
     );
-    expect(() => createArvoContract(invalid)).toThrow(declared.error.message);
+    expect(() => createArvoContract(invalidParam)).toThrow(
+      createResult.error.message,
+    );
   });
 
   it('agrees with the constructor', () => {
-    const built = createArvoContract(valid);
-    const constructed = new ArvoContract(valid);
-    expect(built.uri).toBe(constructed.uri);
-    expect(Object.keys(built.versions)).toEqual(
-      Object.keys(constructed.versions),
+    const factoryContract = createArvoContract(validParam);
+    const constructedContract = new ArvoContract(validParam);
+    expect(factoryContract.uri).toBe(constructedContract.uri);
+    expect(Object.keys(factoryContract.versions)).toEqual(
+      Object.keys(constructedContract.versions),
     );
   });
 });

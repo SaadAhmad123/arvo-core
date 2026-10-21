@@ -18,10 +18,13 @@ import {
  */
 
 /** An event as it travels: written out, the way a broker carries one. */
-export type Carried = { readonly written: string; readonly plain: Plain };
+export type WireEvent = {
+  readonly written: string;
+  readonly plain: RoutingFields;
+};
 
 /** The fields of an event a broker reads to route it. */
-type Plain = {
+type RoutingFields = {
   id: string;
   to: string | null;
   type: string;
@@ -43,12 +46,12 @@ type Plain = {
  */
 type Lane = {
   readonly worker: Worker;
-  held: { carried: Carried; executionId: string | null } | null;
+  held: { carried: WireEvent; executionId: string | null } | null;
   alive: boolean;
 };
 
 export type ArvoThreadedTranscript = {
-  published: Plain[];
+  published: RoutingFields[];
   committed: { executionId: string; casVersion: number }[];
   conflicts: number;
   discarded: number;
@@ -90,22 +93,22 @@ export class ArvoThreadedBroker {
     abandoned: [],
   };
 
-  readonly #events = new ArvoEventSerializer({ type: 'arvoevent' });
+  readonly #serializer = new ArvoEventSerializer({ type: 'arvoevent' });
   readonly #lanes: Lane[] = [];
-  readonly #queue: Carried[] = [];
+  readonly #queue: WireEvent[] = [];
   readonly #attempts = new Map<string, number>();
-  #settled: (() => void) | null = null;
-  readonly #howMany: number;
+  #resolveSettle: (() => void) | null = null;
+  readonly #threadCount: number;
   readonly #charges: ChargeBehaviour;
-  readonly #slowly: number;
+  readonly #executorDelay: number;
   readonly #duplicate: boolean;
   readonly #shuffle: boolean;
   readonly #draw: () => number;
 
-  constructor(howMany: number, options: ArvoThreadedBrokerOptions = {}) {
-    this.#howMany = howMany;
+  constructor(threadCount: number, options: ArvoThreadedBrokerOptions = {}) {
+    this.#threadCount = threadCount;
     this.#charges = options.charges ?? 'succeeds';
-    this.#slowly = options.slowly ?? 0;
+    this.#executorDelay = options.slowly ?? 0;
     this.#duplicate = options.duplicate === true;
     this.#shuffle = options.shuffle === true;
     this.#draw = chanceFrom(options.seed ?? DEFAULT_SEED);
@@ -113,14 +116,14 @@ export class ArvoThreadedBroker {
 
   /** Starts every thread, each loading the built package for itself. */
   start(): Promise<this> {
-    const at = new URL('./runner.mts', import.meta.url);
-    for (let which = 0; which < this.#howMany; which += 1) {
-      const worker = new Worker(at, {
+    const runnerUrl = new URL('./runner.mts', import.meta.url);
+    for (let thread = 0; thread < this.#threadCount; thread += 1) {
+      const worker = new Worker(runnerUrl, {
         workerData: { charges: this.#charges },
       });
       const lane: Lane = { worker, held: null, alive: true };
-      worker.on('message', (said) => void this.#heard(lane, said));
-      worker.on('error', (workerError) => this.#broke(lane, workerError));
+      worker.on('message', (message) => void this.#onMessage(lane, message));
+      worker.on('error', (workerError) => this.#onError(lane, workerError));
       worker.unref();
       this.#lanes.push(lane);
     }
@@ -145,85 +148,86 @@ export class ArvoThreadedBroker {
    * for whoever is left — which is what a lost machine looks like from
    * everywhere else.
    */
-  async kill(which: number): Promise<void> {
-    const lane = this.#live()[which];
+  async kill(liveIndex: number): Promise<void> {
+    const lane = this.#liveLanes()[liveIndex];
     if (lane === undefined) return;
 
     lane.alive = false;
-    const held = lane.held;
+    const assignment = lane.held;
     lane.held = null;
     await lane.worker.terminate();
 
-    if (held) {
+    if (assignment) {
       this.transcript.died += 1;
-      this.#queue.push(held.carried);
+      this.#queue.push(assignment.carried);
     }
     this.#pump();
   }
 
   /** An event into the broker, to be routed to whichever thread is free. */
   async publish(event: unknown): Promise<this> {
-    const written = await this.#events.trySerialize(event as never);
-    if (!written.ok) return this;
-    const plain = JSON.parse(written.value) as Plain;
-    this.transcript.published.push(plain);
-    this.#queue.push({ written: written.value, plain });
-    if (this.#duplicate) this.#queue.push({ written: written.value, plain });
+    const eventJson = await this.#serializer.trySerialize(event as never);
+    if (!eventJson.ok) return this;
+    const routingFields = JSON.parse(eventJson.value) as RoutingFields;
+    this.transcript.published.push(routingFields);
+    this.#queue.push({ written: eventJson.value, plain: routingFields });
+    if (this.#duplicate)
+      this.#queue.push({ written: eventJson.value, plain: routingFields });
     return this;
   }
 
   /** Runs until every thread is idle and nothing is queued. */
-  async settle(within = 20_000): Promise<this> {
+  async settle(timeoutMs = 20_000): Promise<this> {
     this.#pump();
     if (this.#isQuiet()) return this;
 
-    await new Promise<void>((done, fail) => {
-      const giveUp = setTimeout(() => {
-        this.#settled = null;
-        fail(new Error('these threads did not settle'));
-      }, within);
-      this.#settled = () => {
-        clearTimeout(giveUp);
-        this.#settled = null;
-        done();
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.#resolveSettle = null;
+        reject(new Error('these threads did not settle'));
+      }, timeoutMs);
+      this.#resolveSettle = () => {
+        clearTimeout(timeout);
+        this.#resolveSettle = null;
+        resolve();
       };
     });
     return this;
   }
 
   /** The next event off the queue, in order or out of it. */
-  #take(): Carried | undefined {
+  #nextEvent(): WireEvent | undefined {
     if (!this.#shuffle) return this.#queue.shift();
     const position = Math.floor(this.#draw() * this.#queue.length);
     return this.#queue.splice(position, 1)[0];
   }
 
-  #live(): Lane[] {
+  #liveLanes(): Lane[] {
     return this.#lanes.filter((lane) => lane.alive);
   }
 
   #isQuiet(): boolean {
     return (
       this.#queue.length === 0 &&
-      this.#live().every((lane) => lane.held === null)
+      this.#liveLanes().every((lane) => lane.held === null)
     );
   }
 
   /** Hands work to every thread that is free, all at once. */
   #pump(): void {
-    for (const lane of this.#live()) {
+    for (const lane of this.#liveLanes()) {
       if (lane.held !== null) continue;
-      const carried = this.#take();
-      if (carried === undefined) break;
-      lane.held = { carried, executionId: null };
-      void this.#give(lane, carried);
+      const wireEvent = this.#nextEvent();
+      if (wireEvent === undefined) break;
+      lane.held = { carried: wireEvent, executionId: null };
+      void this.#dispatch(lane, wireEvent);
     }
-    if (this.#isQuiet()) this.#settled?.();
+    if (this.#isQuiet()) this.#resolveSettle?.();
   }
 
   /** One event handed to one thread, against the record as it stands. */
-  async #give(lane: Lane, carried: Carried): Promise<void> {
-    const route = await this.#routeFor(carried.plain);
+  async #dispatch(lane: Lane, wireEvent: WireEvent): Promise<void> {
+    const route = await this.#routeFor(wireEvent.plain);
     if (!lane.alive) return;
 
     if (route === null) {
@@ -232,47 +236,47 @@ export class ArvoThreadedBroker {
       return;
     }
 
-    const key = `${route.executionId}:${carried.plain.id}`;
-    lane.held = { carried, executionId: route.executionId };
+    const attemptKey = `${route.executionId}:${wireEvent.plain.id}`;
+    lane.held = { carried: wireEvent, executionId: route.executionId };
     lane.worker.postMessage({
-      event: carried.written,
+      event: wireEvent.written,
       entry: route.entry,
       executionId: route.executionId,
-      attempt: this.#attempts.get(key) ?? 0,
-      contractType: carried.plain.to,
+      attempt: this.#attempts.get(attemptKey) ?? 0,
+      contractType: wireEvent.plain.to,
       version: route.version,
-      state: route.read,
-      slowly: this.#slowly,
+      state: route.record,
+      slowly: this.#executorDelay,
     });
   }
 
   /** Who would run this, against what, or nothing where nobody would. */
-  async #routeFor(plain: Plain) {
-    const contract = CONTRACTS.find((one) => one.type === plain.to);
+  async #routeFor(event: RoutingFields) {
+    const contract = CONTRACTS.find((candidate) => candidate.type === event.to);
     if (contract === undefined) return null;
 
-    const cut = plain.dataschema.lastIndexOf('/');
-    const uri = plain.dataschema.slice(0, cut);
-    const named = plain.dataschema.slice(cut + 1);
+    const lastSlash = event.dataschema.lastIndexOf('/');
+    const uri = event.dataschema.slice(0, lastSlash);
+    const schemaVersion = event.dataschema.slice(lastSlash + 1);
     const entry: 'init' | 'followup' =
-      uri === contract.uri && plain.type === contract.type
+      uri === contract.uri && event.type === contract.type
         ? 'init'
         : 'followup';
 
     const executionId =
       entry === 'init'
-        ? await deriveArvoExecutionId(plain as never)
-        : plain.executionid;
+        ? await deriveArvoExecutionId(event as never)
+        : event.executionid;
 
-    const read = this.store.get(executionId) ?? null;
-    if (entry === 'init' && read !== null) return null;
-    if (entry === 'followup' && read === null) return null;
+    const record = this.store.get(executionId) ?? null;
+    if (entry === 'init' && record !== null) return null;
+    if (entry === 'followup' && record === null) return null;
 
     return {
       entry,
       executionId,
-      read,
-      version: entry === 'init' ? named : String(read?.version),
+      record,
+      version: entry === 'init' ? schemaVersion : String(record?.version),
     };
   }
 
@@ -282,64 +286,71 @@ export class ArvoThreadedBroker {
    * Whatever it held goes back on the queue, the same as a thread that
    * was killed, because from here the two are the same event.
    */
-  #broke(lane: Lane, workerError: Error): void {
-    const held = lane.held;
+  #onError(lane: Lane, workerError: Error): void {
+    const assignment = lane.held;
     lane.held = null;
     this.transcript.broken.push(workerError.message);
-    if (held) this.#queue.push(held.carried);
+    if (assignment) this.#queue.push(assignment.carried);
     this.#pump();
   }
 
   /** What one thread said about what it was given. */
-  async #heard(lane: Lane, said: Record<string, unknown>): Promise<void> {
-    const held = lane.held;
+  async #onMessage(
+    lane: Lane,
+    message: Record<string, unknown>,
+  ): Promise<void> {
+    const assignment = lane.held;
     lane.held = null;
-    if (held === null || held.executionId === null) return;
+    if (assignment === null || assignment.executionId === null) return;
 
-    const executionId = held.executionId;
-    const key = `${executionId}:${held.carried.plain.id}`;
+    const executionId = assignment.executionId;
+    const attemptKey = `${executionId}:${assignment.carried.plain.id}`;
 
-    if (said.kind === 'discarded') this.transcript.discarded += 1;
+    if (message.kind === 'discarded') this.transcript.discarded += 1;
 
-    if (said.kind === 'produced') {
-      const row = said.state as Record<string, unknown>;
-      const now = this.store.get(executionId) ?? null;
-      const expected = now === null ? 0 : Number(now.casVersion) + 1;
+    if (message.kind === 'produced') {
+      const row = message.state as Record<string, unknown>;
+      const storedRecord = this.store.get(executionId) ?? null;
+      const expectedCasVersion =
+        storedRecord === null ? 0 : Number(storedRecord.casVersion) + 1;
 
-      if (Number(row.casVersion) !== expected) {
+      if (Number(row.casVersion) !== expectedCasVersion) {
         this.transcript.conflicts += 1;
-        this.#queue.push(held.carried);
+        this.#queue.push(assignment.carried);
       } else {
         this.store.set(executionId, row);
         this.transcript.committed.push({
           executionId,
           casVersion: Number(row.casVersion),
         });
-        for (const leaving of said.events as string[]) {
-          await this.publish(JSON.parse(leaving));
+        for (const emittedJson of message.events as string[]) {
+          await this.publish(JSON.parse(emittedJson));
         }
       }
     }
 
-    if (said.kind === 'faulted') {
-      this.transcript.faults.push(String(said.faultKind));
-      if (said.retryable === true) {
-        this.#attempts.set(key, (this.#attempts.get(key) ?? 0) + 1);
-        this.#queue.push(held.carried);
+    if (message.kind === 'faulted') {
+      this.transcript.faults.push(String(message.faultKind));
+      if (message.retryable === true) {
+        this.#attempts.set(
+          attemptKey,
+          (this.#attempts.get(attemptKey) ?? 0) + 1,
+        );
+        this.#queue.push(assignment.carried);
       } else {
         this.transcript.abandoned.push(executionId);
-        if (said.abandonmentState !== null) {
+        if (message.abandonmentState !== null) {
           // the pair crosses written out, the same as every event does
           this.store.set(
             executionId,
-            JSON.parse(String(said.abandonmentState)) as Record<
+            JSON.parse(String(message.abandonmentState)) as Record<
               string,
               unknown
             >,
           );
         }
-        if (said.abandonmentEvent !== null) {
-          await this.publish(JSON.parse(String(said.abandonmentEvent)));
+        if (message.abandonmentEvent !== null) {
+          await this.publish(JSON.parse(String(message.abandonmentEvent)));
         }
       }
     }

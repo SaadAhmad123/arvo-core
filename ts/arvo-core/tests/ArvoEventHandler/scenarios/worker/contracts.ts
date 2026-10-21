@@ -54,25 +54,25 @@ export type ChargeBehaviour = 'succeeds' | 'errors';
  * what it learns on itself. The executor answers with both, so an answer
  * carrying another workflow's subject is cross-talk made visible.
  */
-const layersFor = () => [
+const declareLayers = () => [
   {
     id: 'shared_marker',
     before: (ctx: {
       state: { subject: string };
-      setMiddleware: (k: string, v: unknown) => Promise<void>;
+      setMiddleware: (key: string, payload: unknown) => Promise<void>;
     }) => ctx.setMiddleware('marker', ctx.state.subject),
   },
   () => {
-    let held = '';
+    let learnedSubject = '';
     return {
       id: 'made_per_execution',
       before: async (ctx: {
         state: { subject: string };
-        setMiddleware: (k: string, v: unknown) => Promise<void>;
+        setMiddleware: (key: string, payload: unknown) => Promise<void>;
       }) => {
-        held = ctx.state.subject;
-        await new Promise((settle) => setTimeout(settle, Math.random() * 3));
-        await ctx.setMiddleware('held', held);
+        learnedSubject = ctx.state.subject;
+        await new Promise((resolve) => setTimeout(resolve, Math.random() * 3));
+        await ctx.setMiddleware('held', learnedSubject);
       },
     };
   },
@@ -84,21 +84,23 @@ export const declareThreadedHandlers = (
 ) => ({
   [orderContract.type]: setupArvoEventHandler({
     contracts: { self: orderContract, services: { charge: chargeV1 } },
-    ...(layered ? { middleware: layersFor() } : {}),
+    ...(layered ? { middleware: declareLayers() } : {}),
   })
     .handler('1.0.0', {
       state: z.object({ stage: z.string() }),
       execute: async (ctx) => {
         if (ctx.entry === 'followup') {
           await ctx.setState({ data: { stage: 'answering' } });
-          const { marker, held } = ctx.middleware as {
+          const { marker, held: learnedSubject } = ctx.middleware as {
             marker?: string;
             held?: string;
           };
           return ctx.build({
             type: 'evt_threaded_order_done',
             data: {
-              order_id: layered ? `${marker}|${held}` : ctx.state.subject,
+              order_id: layered
+                ? `${marker}|${learnedSubject}`
+                : ctx.state.subject,
             },
           });
         }

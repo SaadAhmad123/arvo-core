@@ -94,12 +94,12 @@ describe('where layers are listed', () => {
   });
 
   it('takes a layer or a way to make one, and nothing else', () => {
-    const entries: ArvoEventHandlerMiddlewareEntry[] = [
+    const middlewareEntries: ArvoEventHandlerMiddlewareEntry[] = [
       { id: 'layer' },
       () => ({ id: 'made' }),
       async () => ({ id: 'made_later' }),
     ];
-    expect(entries).toHaveLength(3);
+    expect(middlewareEntries).toHaveLength(3);
     // @ts-expect-error a string is not a layer
     const invalidLayer: ArvoEventHandlerMiddlewareEntry = 'layer';
     expect(invalidLayer).toBe('layer');

@@ -59,19 +59,19 @@ export const paymentFailedEvent = createArvoEventFactory(
 
 /** What one execution records against, for a test that only carries it. */
 export const telemetry = () => {
-  const emitted: { severityNumber: number; body: string }[] = [];
+  const logRecords: { severityNumber: number; body: string }[] = [];
   const span = trace.getTracer('test').startSpan('execution');
   const meter = metrics.getMeter('test');
   const logger = {
     emit: (record: { severityNumber: number; body: string }) =>
-      emitted.push(record),
+      logRecords.push(record),
   };
   return {
     telemetry: new ArvoExecutionContextTelemetry({ span, meter, logger }),
     span,
     meter,
     logger,
-    emitted,
+    emitted: logRecords,
   };
 };
 

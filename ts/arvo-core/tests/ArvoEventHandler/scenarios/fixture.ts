@@ -19,10 +19,13 @@ import type { PromiseAble } from '../../../src/types.js';
  */
 
 /** What the first version remembers. */
-export const firstState = z.object({ stage: z.string(), answers: z.number() });
+export const fulfilV1State = z.object({
+  stage: z.string(),
+  answers: z.number(),
+});
 
 /** What the second remembers, which the first cannot satisfy. */
-export const secondState = z.object({
+export const fulfilV11State = z.object({
   stage: z.string(),
   answers: z.number(),
   rush: z.boolean(),
@@ -117,19 +120,19 @@ export const fulfilServices = {
 export const walkServices = { deeper: walkV1 };
 
 /** What each version's executor can know and do. */
-export type FirstContext = ArvoExecutionContext<
+export type FulfilV1Context = ArvoExecutionContext<
   typeof fulfilV1,
   typeof fulfilServices,
-  typeof firstState,
+  typeof fulfilV1State,
   ScenarioDependencies
 >;
-export type SecondContext = ArvoExecutionContext<
+export type FulfilV11Context = ArvoExecutionContext<
   typeof fulfilV11,
   typeof fulfilServices,
-  typeof secondState,
+  typeof fulfilV11State,
   ScenarioDependencies
 >;
-export type ThirdContext = ArvoExecutionContext<
+export type FulfilV2Context = ArvoExecutionContext<
   typeof fulfilV2,
   typeof fulfilServices,
   typeof ARVO_NO_STATE_SCHEMA,
@@ -138,7 +141,7 @@ export type ThirdContext = ArvoExecutionContext<
 export type WalkContext = ArvoExecutionContext<
   typeof walkV1,
   typeof walkServices,
-  typeof firstState,
+  typeof fulfilV1State,
   ScenarioDependencies
 >;
 
@@ -154,7 +157,7 @@ export type WalkContext = ArvoExecutionContext<
  * contexts differ, and each is checked where it is written.
  */
 export type ScenarioBehaviour = (
-  ctx: FirstContext | SecondContext | ThirdContext | WalkContext,
+  ctx: FulfilV1Context | FulfilV11Context | FulfilV2Context | WalkContext,
 ) => PromiseAble<ArvoExecutorEmission>;
 
 /** What a scenario hands an executor beyond what the protocol hands it. */
@@ -171,22 +174,22 @@ export type ScenarioDependencies = {
  * These versions can run without a scenario telling them to behave
  * differently, so absence is the default rather than a reason to fail.
  */
-const behaving = <
+const behaveOrDefault = <
   TContext extends { dependencies: ScenarioDependencies | null },
 >(
   ctx: TContext,
-  byDefault: (ctx: TContext) => PromiseAble<ArvoExecutorEmission>,
+  defaultBehaviour: (ctx: TContext) => PromiseAble<ArvoExecutorEmission>,
 ): PromiseAble<ArvoExecutorEmission> => {
-  const told = ctx.dependencies?.behave;
-  return told === undefined
-    ? byDefault(ctx)
-    : told(ctx as unknown as Parameters<ScenarioBehaviour>[0]);
+  const suppliedBehaviour = ctx.dependencies?.behave;
+  return suppliedBehaviour === undefined
+    ? defaultBehaviour(ctx)
+    : suppliedBehaviour(ctx as unknown as Parameters<ScenarioBehaviour>[0]);
 };
 
 /** How each version behaves when nothing tells it otherwise. */
 export const DEFAULT_BEHAVIOURS = {
   /** Asks both services, then answers its caller once both have replied. */
-  first: async (ctx: FirstContext): Promise<ArvoExecutorEmission> => {
+  v1: async (ctx: FulfilV1Context): Promise<ArvoExecutorEmission> => {
     if (ctx.entry === 'init') {
       await ctx.setState({ data: { stage: 'asking', answers: 0 } });
       return [
@@ -205,7 +208,7 @@ export const DEFAULT_BEHAVIOURS = {
   },
 
   /** The same, remembering one thing more. */
-  second: async (ctx: SecondContext): Promise<ArvoExecutorEmission> => {
+  v11: async (ctx: FulfilV11Context): Promise<ArvoExecutorEmission> => {
     if (ctx.entry === 'init') {
       await ctx.setState({
         data: { stage: 'asking', answers: 0, rush: true },
@@ -222,7 +225,7 @@ export const DEFAULT_BEHAVIOURS = {
   },
 
   /** Remembers nothing, and answers with what only it answers with. */
-  third: async (ctx: ThirdContext): Promise<ArvoExecutorEmission> =>
+  v2: async (ctx: FulfilV2Context): Promise<ArvoExecutorEmission> =>
     ctx.build({
       type: 'evt_order_shipped',
       data: { tracking: `t-${ctx.state.subject}` },
@@ -273,24 +276,24 @@ export const declareHandler = (shape: ScenarioShape = {}) =>
     types: {} as { dependencies: ScenarioDependencies },
   })
     .handler('1.0.0', {
-      state: firstState,
+      state: fulfilV1State,
       ...(shape.versionOptions?.['1.0.0'] === undefined
         ? {}
         : { options: shape.versionOptions['1.0.0'] }),
-      execute: (ctx) => behaving(ctx, DEFAULT_BEHAVIOURS.first),
+      execute: (ctx) => behaveOrDefault(ctx, DEFAULT_BEHAVIOURS.v1),
     })
     .handler('1.1.0', {
-      state: secondState,
+      state: fulfilV11State,
       ...(shape.versionOptions?.['1.1.0'] === undefined
         ? {}
         : { options: shape.versionOptions['1.1.0'] }),
-      execute: (ctx) => behaving(ctx, DEFAULT_BEHAVIOURS.second),
+      execute: (ctx) => behaveOrDefault(ctx, DEFAULT_BEHAVIOURS.v11),
     })
     .handler('2.0.0', {
       ...(shape.versionOptions?.['2.0.0'] === undefined
         ? {}
         : { options: shape.versionOptions['2.0.0'] }),
-      execute: (ctx) => behaving(ctx, DEFAULT_BEHAVIOURS.third),
+      execute: (ctx) => behaveOrDefault(ctx, DEFAULT_BEHAVIOURS.v2),
     })
     .build();
 
@@ -301,11 +304,11 @@ export const declareHandlerAfterDrain = () =>
     types: {} as { dependencies: ScenarioDependencies },
   })
     .handler('1.1.0', {
-      state: secondState,
-      execute: (ctx) => behaving(ctx, DEFAULT_BEHAVIOURS.second),
+      state: fulfilV11State,
+      execute: (ctx) => behaveOrDefault(ctx, DEFAULT_BEHAVIOURS.v11),
     })
     .handler('2.0.0', {
-      execute: (ctx) => behaving(ctx, DEFAULT_BEHAVIOURS.third),
+      execute: (ctx) => behaveOrDefault(ctx, DEFAULT_BEHAVIOURS.v2),
     })
     .build();
 
@@ -316,29 +319,28 @@ export const declareWalker = () =>
     types: {} as { dependencies: ScenarioDependencies },
   })
     .handler('1.0.0', {
-      state: firstState,
+      state: fulfilV1State,
       execute: (ctx: WalkContext) =>
-        behaving(ctx, async (walking: WalkContext) => {
-          if (walking.entry === 'followup') {
-            await walking.setState({ data: { stage: 'done', answers: 1 } });
-            return walking.build({
+        behaveOrDefault(ctx, async (ctx: WalkContext) => {
+          if (ctx.entry === 'followup') {
+            await ctx.setState({ data: { stage: 'done', answers: 1 } });
+            return ctx.build({
               type: 'evt_walk_done',
               data: { visited: 1 },
             });
           }
           const remaining =
-            walking.state.initEvent.type === 'com_tree_walk'
-              ? (walking.state.initEvent.data as { remaining: number })
-                  .remaining
+            ctx.state.initEvent.type === 'com_tree_walk'
+              ? (ctx.state.initEvent.data as { remaining: number }).remaining
               : 0;
-          await walking.setState({ data: { stage: 'walking', answers: 0 } });
+          await ctx.setState({ data: { stage: 'walking', answers: 0 } });
           if (remaining <= 0) {
-            return walking.build({
+            return ctx.build({
               type: 'evt_walk_done',
               data: { visited: 1 },
             });
           }
-          return walking.build({
+          return ctx.build({
             type: 'com_tree_walk',
             data: { node: `${remaining - 1}`, remaining: remaining - 1 },
           });
@@ -360,8 +362,8 @@ export const declareInventoryWorker = () =>
   })
     .handler('1.0.0', {
       execute: (ctx) =>
-        behaving(ctx, async (working) =>
-          working.build({
+        behaveOrDefault(ctx, async (ctx) =>
+          ctx.build({
             type: 'evt_inventory_reserved',
             data: { held: 1 },
           }),
@@ -369,8 +371,8 @@ export const declareInventoryWorker = () =>
     })
     .handler('1.1.0', {
       execute: (ctx) =>
-        behaving(ctx, async (working) =>
-          working.build({
+        behaveOrDefault(ctx, async (ctx) =>
+          ctx.build({
             type: 'evt_inventory_reserved',
             data: { held: 2 },
           }),
@@ -385,10 +387,10 @@ export const declarePaymentWorker = () =>
   })
     .handler('1.0.0', {
       execute: (ctx) =>
-        behaving(ctx, async (working) =>
-          working.build({
+        behaveOrDefault(ctx, async (ctx) =>
+          ctx.build({
             type: 'evt_payment_charged',
-            data: { receipt: `r-${working.state.subject}` },
+            data: { receipt: `r-${ctx.state.subject}` },
           }),
         ),
     })

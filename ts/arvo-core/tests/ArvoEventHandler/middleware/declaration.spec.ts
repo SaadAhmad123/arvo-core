@@ -20,9 +20,11 @@ const declareOrderHandler = (
     ...(options === undefined ? {} : { options }),
   }).handler('1.0.0', async () => undefined);
 
-const refusalFrom = (built: () => unknown): ArvoEventHandlerValidationError => {
+const validationRefusal = (
+  buildHandler: () => unknown,
+): ArvoEventHandlerValidationError => {
   try {
-    built();
+    buildHandler();
   } catch (thrown) {
     return thrown as ArvoEventHandlerValidationError;
   }
@@ -59,21 +61,21 @@ describe('a handler declaring layers', () => {
   });
 
   it('is not changed by the list it was given changing later', () => {
-    const givenList = [layerNamed('first')];
-    const handler = declareOrderHandler(givenList).build();
-    givenList.push(layerNamed('second'));
+    const callerLayers = [layerNamed('first')];
+    const handler = declareOrderHandler(callerLayers).build();
+    callerLayers.push(layerNamed('second'));
     expect(handler.middleware).toHaveLength(1);
   });
 
   it('carries them through every version added to the declaration', () => {
-    const onlyLayer = layerNamed('only');
+    const soleLayer = layerNamed('only');
     const setup = setupArvoEventHandler({
       contracts: { self: orderContract },
-      middleware: [onlyLayer],
+      middleware: [soleLayer],
     });
     expect(
       setup.handler('1.0.0', async () => undefined).build().middleware,
-    ).toEqual([onlyLayer]);
+    ).toEqual([soleLayer]);
   });
 
   it('holds a way to make a layer as given, and does not call it', () => {
@@ -92,7 +94,7 @@ describe('a declaration naming two layers with one identifier', () => {
   });
 
   it('names the identifier, at the second one', () => {
-    const refusal = refusalFrom(() =>
+    const refusal = validationRefusal(() =>
       declareOrderHandler([
         layerNamed('same'),
         layerNamed('other'),
@@ -107,7 +109,7 @@ describe('a declaration naming two layers with one identifier', () => {
   });
 
   it('reports each repeat, not only the first', () => {
-    const refusal = refusalFrom(() =>
+    const refusal = validationRefusal(() =>
       declareOrderHandler([
         layerNamed('a'),
         layerNamed('a'),
@@ -121,7 +123,7 @@ describe('a declaration naming two layers with one identifier', () => {
   });
 
   it('is reported alongside every other rule the declaration broke', () => {
-    const refusal = refusalFrom(() =>
+    const refusal = validationRefusal(() =>
       declareOrderHandler([layerNamed('same'), layerNamed('same')], {
         maxDepth: -1,
       }).build(),
@@ -132,11 +134,11 @@ describe('a declaration naming two layers with one identifier', () => {
   });
 
   it('is reported by tryBuild rather than thrown', () => {
-    const built = declareOrderHandler([
+    const buildHandler = declareOrderHandler([
       layerNamed('same'),
       layerNamed('same'),
     ]).tryBuild();
-    expect(built.ok).toBe(false);
+    expect(buildHandler.ok).toBe(false);
   });
 
   it('treats two identifiers differing only in case as two', () => {
@@ -170,7 +172,7 @@ describe('a declaration naming something that is not a layer', () => {
     ['nothing at all', null],
     ['a number', 7],
   ])('refuses %s', (_label, notALayer) => {
-    const refusal = refusalFrom(() =>
+    const refusal = validationRefusal(() =>
       declareOrderHandler([
         notALayer as unknown as ArvoEventHandlerMiddlewareEntry,
       ]).build(),
@@ -181,7 +183,7 @@ describe('a declaration naming something that is not a layer', () => {
   });
 
   it('refuses a before part that is not something to call', () => {
-    const refusal = refusalFrom(() =>
+    const refusal = validationRefusal(() =>
       declareOrderHandler([
         {
           id: 'wrong',
@@ -195,7 +197,7 @@ describe('a declaration naming something that is not a layer', () => {
   });
 
   it('refuses an after part that is not something to call', () => {
-    const refusal = refusalFrom(() =>
+    const refusal = validationRefusal(() =>
       declareOrderHandler([
         { id: 'wrong', after: 1 } as unknown as IArvoEventHandlerMiddleware,
       ]).build(),

@@ -37,28 +37,33 @@ describe('the handler the scenarios are built on', () => {
   });
 
   it('gives each version a schema only it can satisfy', () => {
-    const first = handler.versions.get('1.0.0').dataSchema;
-    const second = handler.versions.get('1.1.0').dataSchema;
-    expect(first).not.toBe(second);
+    const v1Schema = handler.versions.get('1.0.0').dataSchema;
+    const v11Schema = handler.versions.get('1.1.0').dataSchema;
+    expect(v1Schema).not.toBe(v11Schema);
     expect(handler.versions.get('2.0.0').declaresState).toBe(false);
   });
 
   it('lets a version hold options the others do not', () => {
-    const shaped = declareHandler({
+    const shapedHandler = declareHandler({
       options: { maxRetryAttempts: 5 },
       versionOptions: { '1.1.0': { maxDepth: 7 } },
     });
-    expect(shaped.versions.get('1.1.0').options.maxDepth).toBe(7);
-    expect(shaped.versions.get('1.0.0').options.maxDepth).not.toBe(7);
-    expect(shaped.versions.get('1.0.0').options.maxRetryAttempts).toBe(5);
+    expect(shapedHandler.versions.get('1.1.0').options.maxDepth).toBe(7);
+    expect(shapedHandler.versions.get('1.0.0').options.maxDepth).not.toBe(7);
+    expect(shapedHandler.versions.get('1.0.0').options.maxRetryAttempts).toBe(
+      5,
+    );
   });
 });
 
 describe('the same handler after a version is drained away', () => {
   it('no longer runs it, while its records are still addressed to it', () => {
-    const drained = declareHandlerAfterDrain();
-    expect([...drained.versions.keys()].sort()).toEqual(['1.1.0', '2.0.0']);
-    expect(drained.contracts.self.uri).toBe(fulfilContract.uri);
+    const drainedHandler = declareHandlerAfterDrain();
+    expect([...drainedHandler.versions.keys()].sort()).toEqual([
+      '1.1.0',
+      '2.0.0',
+    ]);
+    expect(drainedHandler.contracts.self.uri).toBe(fulfilContract.uri);
   });
 });
 
@@ -89,12 +94,14 @@ describe('a store that behaves', () => {
 });
 
 describe('a store that does not', () => {
-  const asking = (store: ScenarioStore) =>
+  const readExecution = (store: ScenarioStore) =>
     store.resolver({ executionId: 'e-1' } as never);
 
   it('fails as an error', async () => {
     const store = new ScenarioStore().misbehave({ kind: 'unreachable' });
-    await expect(async () => asking(store)).rejects.toThrow('unreachable');
+    await expect(async () => readExecution(store)).rejects.toThrow(
+      'unreachable',
+    );
   });
 
   it('fails as a rejection', async () => {
@@ -102,7 +109,7 @@ describe('a store that does not', () => {
       kind: 'unreachable',
       as: 'rejection',
     });
-    await expect(asking(store)).rejects.toThrow('unreachable');
+    await expect(readExecution(store)).rejects.toThrow('unreachable');
   });
 
   it('fails as something that is not an error at all', async () => {
@@ -110,7 +117,7 @@ describe('a store that does not', () => {
       kind: 'unreachable',
       as: 'string',
     });
-    expect(() => asking(store)).toThrow();
+    expect(() => readExecution(store)).toThrow();
   });
 
   it('answers with something that is not a record', async () => {
@@ -118,15 +125,18 @@ describe('a store that does not', () => {
       kind: 'returns',
       row: NOT_A_RECORD,
     });
-    expect(await asking(store)).toEqual(NOT_A_RECORD);
+    expect(await readExecution(store)).toEqual(NOT_A_RECORD);
   });
 
   it('answers wrongly once, and honestly afterwards', async () => {
     const store = new ScenarioStore();
     store.commit({ executionId: 'e-1', honest: true });
     store.misbehave({ kind: 'returnsOnce', row: NOT_A_RECORD });
-    expect(await asking(store)).toEqual(NOT_A_RECORD);
-    expect(await asking(store)).toEqual({ executionId: 'e-1', honest: true });
+    expect(await readExecution(store)).toEqual(NOT_A_RECORD);
+    expect(await readExecution(store)).toEqual({
+      executionId: 'e-1',
+      honest: true,
+    });
   });
 
   it('changes what it holds on the way out, leaving the store untouched', async () => {
@@ -136,13 +146,13 @@ describe('a store that does not', () => {
       kind: 'mutates',
       change: (row) => ({ ...row, subject: 'wrong' }),
     });
-    expect(await asking(store)).toMatchObject({ subject: 'wrong' });
+    expect(await readExecution(store)).toMatchObject({ subject: 'wrong' });
     expect(store.rows.get('e-1')).toMatchObject({ subject: 'right' });
   });
 });
 
 describe('what each version answers with, so routing is provable', () => {
-  const opening = {
+  const openingFields = {
     source: 'com.web.checkout',
     subject: 'order-1',
     to: fulfilContract.type,
@@ -151,38 +161,38 @@ describe('what each version answers with, so routing is provable', () => {
   it('runs the version the event names, and no other', async () => {
     const handler = declareHandler();
 
-    const shipped = await handler.execute({
+    const v2Outcome = await handler.execute({
       event: createArvoEventFactory(fulfilV2).createInput({
-        ...opening,
+        ...openingFields,
         data: { items: ['book'] },
       }),
       state: new ScenarioStore().resolver,
       attempt: 0,
     });
-    expect(shipped.kind === 'produced' && shipped.events[0]?.type).toBe(
+    expect(v2Outcome.kind === 'produced' && v2Outcome.events[0]?.type).toBe(
       'evt_order_shipped',
     );
 
-    const rushed = await handler.execute({
+    const v11Outcome = await handler.execute({
       event: createArvoEventFactory(fulfilV11).createInput({
-        ...opening,
+        ...openingFields,
         data: { items: ['book'], rush: true },
       }),
       state: new ScenarioStore().resolver,
       attempt: 0,
     });
-    expect(rushed.kind === 'produced' && rushed.events[0]?.type).toBe(
+    expect(v11Outcome.kind === 'produced' && v11Outcome.events[0]?.type).toBe(
       'com_payment_charge',
     );
 
-    const first = await handler.execute({
+    const v1Outcome = await handler.execute({
       event: createArvoEventFactory(fulfilV1).createInput({
-        ...opening,
+        ...openingFields,
         data: { items: ['book'] },
       }),
       state: new ScenarioStore().resolver,
       attempt: 0,
     });
-    expect(first.kind === 'produced' && first.events).toHaveLength(2);
+    expect(v1Outcome.kind === 'produced' && v1Outcome.events).toHaveLength(2);
   });
 });

@@ -26,12 +26,12 @@ const baseEvent = () => new ArvoEvent(baseParam());
  */
 const circularStage = (): ICloudEventConverter => ({
   async convert() {
-    const circular: Record<string, unknown> = {};
-    circular.self = circular;
-    return circular as never;
+    const circularRecord: Record<string, unknown> = {};
+    circularRecord.self = circularRecord;
+    return circularRecord as never;
   },
-  async revert(data) {
-    return data;
+  async revert(cloudEvent) {
+    return cloudEvent;
   },
 });
 
@@ -40,8 +40,8 @@ const throwingStage = (): ICloudEventConverter => ({
   async convert() {
     throw new Error('stage boom');
   },
-  async revert(data) {
-    return data;
+  async revert(cloudEvent) {
+    return cloudEvent;
   },
 });
 
@@ -51,20 +51,20 @@ describe('ArvoEventSerializer', () => {
       const serializer = new ArvoEventSerializer();
       const event = baseEvent();
       const wire = await serializer.serialize(event);
-      const parsed = JSON.parse(wire);
-      expect(parsed.specversion).toBe('1.0');
+      const wireJson = JSON.parse(wire);
+      expect(wireJson.specversion).toBe('1.0');
     });
 
     it('uses a caller-supplied CloudEventConverter, including custom enrichment stages, for both serialize and deserialize', async () => {
       const calls: string[] = [];
       const stage: ICloudEventConverter = {
-        async convert(data) {
+        async convert(cloudEvent) {
           calls.push('convert');
-          return data;
+          return cloudEvent;
         },
-        async revert(data) {
+        async revert(cloudEvent) {
           calls.push('revert');
-          return data;
+          return cloudEvent;
         },
       };
       const converter = new CloudEventConverter(undefined, [stage]);
@@ -80,10 +80,10 @@ describe('ArvoEventSerializer', () => {
     it('arvoevent mode never touches CloudEvent shape at all', async () => {
       const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
       const wire = await serializer.serialize(baseEvent());
-      const parsed = JSON.parse(wire);
-      expect(parsed.specversion).toBeUndefined();
-      expect(parsed.datacontenttype).toBeUndefined();
-      expect(parsed.subject).toBe('subj-1');
+      const wireJson = JSON.parse(wire);
+      expect(wireJson.specversion).toBeUndefined();
+      expect(wireJson.datacontenttype).toBeUndefined();
+      expect(wireJson.subject).toBe('subj-1');
     });
   });
 
@@ -103,45 +103,62 @@ describe('ArvoEventSerializer', () => {
       });
       const event = baseEvent();
       const wire = await serializer.serialize(event);
-      const expected = JSON.stringify(await converter.convert(event));
-      expect(wire).toBe(expected);
+      const expectedWire = JSON.stringify(await converter.convert(event));
+      expect(wire).toBe(expectedWire);
     });
 
     it('arvoevent mode: an event that will not stringify reports ArvoEventSerializerError rather than rejecting', async () => {
       const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
-      const circular: Record<string, unknown> = {};
-      circular.self = circular;
-      const unserializable = Object.create(ArvoEvent.prototype) as ArvoEvent;
-      Object.assign(unserializable, { ...baseEvent(), data: circular });
+      const circularRecord: Record<string, unknown> = {};
+      circularRecord.self = circularRecord;
+      const unserializableEvent = Object.create(
+        ArvoEvent.prototype,
+      ) as ArvoEvent;
+      Object.assign(unserializableEvent, {
+        ...baseEvent(),
+        data: circularRecord,
+      });
 
-      const result = await serializer.trySerialize(unserializable);
-      expect(result.ok).toBe(false);
-      expect(!result.ok && result.error).toBeInstanceOf(
+      const serialization = await serializer.trySerialize(unserializableEvent);
+      expect(serialization.ok).toBe(false);
+      expect(!serialization.ok && serialization.error).toBeInstanceOf(
         ArvoEventSerializerError,
       );
     });
 
     it('arvoevent mode: that failure keeps the TypeError as its cause', async () => {
       const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
-      const circular: Record<string, unknown> = {};
-      circular.self = circular;
-      const unserializable = Object.create(ArvoEvent.prototype) as ArvoEvent;
-      Object.assign(unserializable, { ...baseEvent(), data: circular });
+      const circularRecord: Record<string, unknown> = {};
+      circularRecord.self = circularRecord;
+      const unserializableEvent = Object.create(
+        ArvoEvent.prototype,
+      ) as ArvoEvent;
+      Object.assign(unserializableEvent, {
+        ...baseEvent(),
+        data: circularRecord,
+      });
 
-      const result = await serializer.trySerialize(unserializable);
-      expect(!result.ok && result.error.cause).toBeInstanceOf(TypeError);
+      const serialization = await serializer.trySerialize(unserializableEvent);
+      expect(!serialization.ok && serialization.error.cause).toBeInstanceOf(
+        TypeError,
+      );
     });
 
     it('arvoevent mode: serialize throws that same error', async () => {
       const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
-      const circular: Record<string, unknown> = {};
-      circular.self = circular;
-      const unserializable = Object.create(ArvoEvent.prototype) as ArvoEvent;
-      Object.assign(unserializable, { ...baseEvent(), data: circular });
+      const circularRecord: Record<string, unknown> = {};
+      circularRecord.self = circularRecord;
+      const unserializableEvent = Object.create(
+        ArvoEvent.prototype,
+      ) as ArvoEvent;
+      Object.assign(unserializableEvent, {
+        ...baseEvent(),
+        data: circularRecord,
+      });
 
-      await expect(serializer.serialize(unserializable)).rejects.toBeInstanceOf(
-        ArvoEventSerializerError,
-      );
+      await expect(
+        serializer.serialize(unserializableEvent),
+      ).rejects.toBeInstanceOf(ArvoEventSerializerError);
     });
 
     it("trySerialize never rejects/throws in either mode's default configuration", async () => {
@@ -150,8 +167,8 @@ describe('ArvoEventSerializer', () => {
         { type: 'cloudevent' as const },
       ]) {
         const serializer = new ArvoEventSerializer(mode);
-        const result = await serializer.trySerialize(baseEvent());
-        expect(result.ok).toBe(true);
+        const serialization = await serializer.trySerialize(baseEvent());
+        expect(serialization.ok).toBe(true);
       }
     });
 
@@ -161,12 +178,14 @@ describe('ArvoEventSerializer', () => {
         type: 'cloudevent',
         converter,
       });
-      const result = await serializer.trySerialize(baseEvent());
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error).toBeInstanceOf(CloudEventTransformationError);
+      const serialization = await serializer.trySerialize(baseEvent());
+      expect(serialization.ok).toBe(false);
+      if (!serialization.ok) {
+        expect(serialization.error).toBeInstanceOf(
+          CloudEventTransformationError,
+        );
         expect(
-          (result.error as CloudEventTransformationError).detail.kind,
+          (serialization.error as CloudEventTransformationError).detail.kind,
         ).toBe('stage');
       }
     });
@@ -188,13 +207,13 @@ describe('ArvoEventSerializer', () => {
         type: 'cloudevent',
         converter,
       });
-      const result = await serializer.trySerialize(baseEvent());
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error).toBeInstanceOf(ArvoEventSerializerError);
-        expect((result.error as ArvoEventSerializerError).cause).toBeInstanceOf(
-          TypeError,
-        );
+      const serialization = await serializer.trySerialize(baseEvent());
+      expect(serialization.ok).toBe(false);
+      if (!serialization.ok) {
+        expect(serialization.error).toBeInstanceOf(ArvoEventSerializerError);
+        expect(
+          (serialization.error as ArvoEventSerializerError).cause,
+        ).toBeInstanceOf(TypeError);
       }
     });
 
@@ -215,8 +234,8 @@ describe('ArvoEventSerializer', () => {
       const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
       const event = baseEvent();
       const wire = await serializer.serialize(event);
-      const back = await serializer.deserialize(wire);
-      expect(JSON.parse(JSON.stringify(back))).toEqual(
+      const restoredEvent = await serializer.deserialize(wire);
+      expect(JSON.parse(JSON.stringify(restoredEvent))).toEqual(
         JSON.parse(JSON.stringify(event)),
       );
     });
@@ -225,8 +244,8 @@ describe('ArvoEventSerializer', () => {
       const serializer = new ArvoEventSerializer();
       const event = baseEvent();
       const wire = await serializer.serialize(event);
-      const back = await serializer.deserialize(wire);
-      expect(JSON.parse(JSON.stringify(back))).toEqual(
+      const restoredEvent = await serializer.deserialize(wire);
+      expect(JSON.parse(JSON.stringify(restoredEvent))).toEqual(
         JSON.parse(JSON.stringify(event)),
       );
     });
@@ -238,22 +257,23 @@ describe('ArvoEventSerializer', () => {
         converter,
       });
       const event = baseEvent();
-      const ce = await converter.convert(event);
-      const wireBody = JSON.stringify(ce);
+      const cloudEvent = await converter.convert(event);
+      const wireBody = JSON.stringify(cloudEvent);
       // the caller only ever has the JSON string — no CloudEvent construction of their own
-      const back = await serializer.deserialize(wireBody);
-      expect(back.subject).toBe(event.subject);
+      const restoredEvent = await serializer.deserialize(wireBody);
+      expect(restoredEvent.subject).toBe(event.subject);
     });
 
     it('reports non-JSON input as ArvoEventSerializerError, with the SyntaxError available via .cause', async () => {
       const serializer = new ArvoEventSerializer();
-      const result = await serializer.tryDeserialize('not json at all');
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error).toBeInstanceOf(ArvoEventSerializerError);
-        expect((result.error as ArvoEventSerializerError).cause).toBeInstanceOf(
-          SyntaxError,
-        );
+      const deserialization =
+        await serializer.tryDeserialize('not json at all');
+      expect(deserialization.ok).toBe(false);
+      if (!deserialization.ok) {
+        expect(deserialization.error).toBeInstanceOf(ArvoEventSerializerError);
+        expect(
+          (deserialization.error as ArvoEventSerializerError).cause,
+        ).toBeInstanceOf(SyntaxError);
       }
     });
 
@@ -266,15 +286,15 @@ describe('ArvoEventSerializer', () => {
 
     it('arvoevent mode: a structurally invalid parsed object reports ArvoEventSerializerError, with the ArvoEventValidationError available via .cause', async () => {
       const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
-      const result = await serializer.tryDeserialize(
+      const deserialization = await serializer.tryDeserialize(
         JSON.stringify({ nonsense: true }),
       );
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error).toBeInstanceOf(ArvoEventSerializerError);
-        expect((result.error as ArvoEventSerializerError).cause).toBeInstanceOf(
-          ArvoEventValidationError,
-        );
+      expect(deserialization.ok).toBe(false);
+      if (!deserialization.ok) {
+        expect(deserialization.error).toBeInstanceOf(ArvoEventSerializerError);
+        expect(
+          (deserialization.error as ArvoEventSerializerError).cause,
+        ).toBeInstanceOf(ArvoEventValidationError);
       }
     });
 
@@ -284,7 +304,7 @@ describe('ArvoEventSerializer', () => {
         type: 'cloudevent',
         converter,
       });
-      const malformed = {
+      const malformedEvent = {
         id: 'id-1',
         source: 'test/source',
         type: 'test.event',
@@ -292,37 +312,44 @@ describe('ArvoEventSerializer', () => {
         datacontenttype: 'application/vnd.arvo.event+json;version=1',
         // arvosubject deliberately missing -- Arvo-shaped but not strictly valid
       };
-      const result = await serializer.tryDeserialize(JSON.stringify(malformed));
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error).toBeInstanceOf(CloudEventTransformationError);
+      const deserialization = await serializer.tryDeserialize(
+        JSON.stringify(malformedEvent),
+      );
+      expect(deserialization.ok).toBe(false);
+      if (!deserialization.ok) {
+        expect(deserialization.error).toBeInstanceOf(
+          CloudEventTransformationError,
+        );
         expect(
-          (result.error as CloudEventTransformationError).detail.kind,
+          (deserialization.error as CloudEventTransformationError).detail.kind,
         ).toBe('strict');
       }
 
-      const directResult = await converter.tryRevert(
-        new CloudEvent(malformed as never, false),
+      const directReversion = await converter.tryRevert(
+        new CloudEvent(malformedEvent as never, false),
       );
-      expect(directResult.ok).toBe(false);
+      expect(directReversion.ok).toBe(false);
     });
 
     it('cloudevent mode: a foreign-shaped parsed object with a supplied foreignFallback adapts correctly', async () => {
       const serializer = new ArvoEventSerializer();
-      const foreign = {
+      const foreignEvent = {
         id: 'x1',
         source: 'https://partner.example.com/orders',
         type: 'com.partner.order.shipped',
         specversion: '1.0',
       };
-      const result = await serializer.tryDeserialize(JSON.stringify(foreign), {
-        dataschema: 'unknown/0.0.0',
-        subject: 's1',
-        data: {},
-      });
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.value.type).toBe('com.partner.order.shipped');
+      const deserialization = await serializer.tryDeserialize(
+        JSON.stringify(foreignEvent),
+        {
+          dataschema: 'unknown/0.0.0',
+          subject: 's1',
+          data: {},
+        },
+      );
+      expect(deserialization.ok).toBe(true);
+      if (deserialization.ok) {
+        expect(deserialization.value.type).toBe('com.partner.order.shipped');
       }
     });
 
@@ -330,14 +357,14 @@ describe('ArvoEventSerializer', () => {
       const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
       const event = baseEvent();
       const wire = await serializer.serialize(event);
-      const withFallback = await serializer.deserialize(wire, {
+      const eventWithFallback = await serializer.deserialize(wire, {
         dataschema: 'ignored/0.0.0',
         subject: 'ignored',
         data: { ignored: true },
       });
-      const withoutFallback = await serializer.deserialize(wire);
-      expect(JSON.parse(JSON.stringify(withFallback))).toEqual(
-        JSON.parse(JSON.stringify(withoutFallback)),
+      const eventWithoutFallback = await serializer.deserialize(wire);
+      expect(JSON.parse(JSON.stringify(eventWithFallback))).toEqual(
+        JSON.parse(JSON.stringify(eventWithoutFallback)),
       );
     });
 
@@ -345,31 +372,34 @@ describe('ArvoEventSerializer', () => {
       const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
       const event = baseEvent();
       const wire = await serializer.serialize(event);
-      const typed = await serializer.deserialize<
+      const typedEvent = await serializer.deserialize<
         'test.event',
         { hello: string }
       >(wire);
-      expect(typed.type).toBe('test.event');
-      expect(typed.data.hello).toBe('world');
+      expect(typedEvent.type).toBe('test.event');
+      expect(typedEvent.data.hello).toBe('world');
 
       // no runtime validation of D's shape beyond what tryParse already performs
       const wrongShapeWire = await serializer.serialize(event);
-      const wronglyTyped = await serializer.deserialize<
+      const wronglyTypedEvent = await serializer.deserialize<
         'test.event',
         { nonexistent: number }
       >(wrongShapeWire);
-      expect(wronglyTyped.data).toEqual({ hello: 'world' });
+      expect(wronglyTypedEvent.data).toEqual({ hello: 'world' });
     });
 
     it('cloudevent mode: rejects a parsed value with no specversion field before attempting foreign adaptation', async () => {
       const serializer = new ArvoEventSerializer();
-      const result = await serializer.tryDeserialize(
+      const deserialization = await serializer.tryDeserialize(
         JSON.stringify({ id: 'x', source: 's' }),
       );
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error).toBeInstanceOf(CloudEventTransformationError);
-        const detail = (result.error as CloudEventTransformationError).detail;
+      expect(deserialization.ok).toBe(false);
+      if (!deserialization.ok) {
+        expect(deserialization.error).toBeInstanceOf(
+          CloudEventTransformationError,
+        );
+        const detail = (deserialization.error as CloudEventTransformationError)
+          .detail;
         expect(detail.kind).toBe('foreign');
         if (detail.kind === 'foreign') {
           expect(
@@ -383,10 +413,12 @@ describe('ArvoEventSerializer', () => {
       const arvoModeSerializer = new ArvoEventSerializer({ type: 'arvoevent' });
       const cloudModeSerializer = new ArvoEventSerializer();
       const wire = await arvoModeSerializer.serialize(baseEvent());
-      const result = await cloudModeSerializer.tryDeserialize(wire);
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error).toBeInstanceOf(CloudEventTransformationError);
+      const deserialization = await cloudModeSerializer.tryDeserialize(wire);
+      expect(deserialization.ok).toBe(false);
+      if (!deserialization.ok) {
+        expect(deserialization.error).toBeInstanceOf(
+          CloudEventTransformationError,
+        );
       }
     });
   });

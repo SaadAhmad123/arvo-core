@@ -44,26 +44,27 @@ const aWalk = (remaining: number, subject: string) =>
   });
 
 /** What a person decides, injected from outside the lattice. */
-const decided = (asked: ArvoEvent) =>
+const reviewDecision = (reviewRequest: ArvoEvent) =>
   cloneArvoEvent(
     createArvoEventFactory(reviewV1).createOutput({
       type: 'evt_review_decided',
       source: reviewV1.type,
-      subject: asked.subject,
-      to: asked.source,
+      subject: reviewRequest.subject,
+      to: reviewRequest.source,
       data: { approved: true },
     }),
     {
-      executionid: asked.executionid,
-      parentid: asked.id,
-      initid: asked.id,
-      depth: asked.depth,
+      executionid: reviewRequest.executionid,
+      parentid: reviewRequest.id,
+      initid: reviewRequest.id,
+      depth: reviewRequest.depth,
     },
   );
 
 /** How badly this lattice behaves, decided by the seed alone. */
 const chaosFrom = (seed: number): Partial<ArvoChaos> => {
-  const draw = (at: number) => ((seed * 9301 + at * 49297) % 233280) / 233280;
+  const draw = (index: number) =>
+    ((seed * 9301 + index * 49297) % 233280) / 233280;
   return {
     duplicate: Math.floor(draw(1) * 3),
     shuffle: draw(2) > 0.3,
@@ -73,7 +74,7 @@ const chaosFrom = (seed: number): Partial<ArvoChaos> => {
 };
 
 /** One run of a shape, under whatever that seed decided. */
-const ran = async (
+const runShape = async (
   seed: number,
   shape: (lattice: ReturnType<typeof createArvoLattice>) => void,
 ) => {
@@ -90,11 +91,11 @@ const ran = async (
 };
 
 /** Every property, with the seed named where one of them does not hold. */
-const holds = async (
+const runAndCheck = async (
   seed: number,
   shape: (lattice: ReturnType<typeof createArvoLattice>) => void,
 ) => {
-  const { lattice, chaos } = await ran(seed, shape);
+  const { lattice, chaos } = await runShape(seed, shape);
   try {
     await checkInvariants(lattice);
   } catch (thrown) {
@@ -108,10 +109,10 @@ const holds = async (
   return lattice;
 };
 
-const SEEDS = Array.from({ length: 40 }, (_, at) => at + 1);
+const SEEDS = Array.from({ length: 40 }, (_, index) => index + 1);
 
 describe('a fan-out, however the lattice behaves', () => {
-  const fanningOut = (lattice: ReturnType<typeof createArvoLattice>) => {
+  const fanOut = (lattice: ReturnType<typeof createArvoLattice>) => {
     lattice.behave(orderV1.type, async (ctx: OrderContext) => {
       if (ctx.entry === 'followup') {
         await ctx.setState({ data: { stage: 'answering', answers: 2 } });
@@ -133,13 +134,13 @@ describe('a fan-out, however the lattice behaves', () => {
   };
 
   it.each(SEEDS)('holds under seed %i', async (seed) => {
-    const lattice = await holds(seed, fanningOut);
+    const lattice = await runAndCheck(seed, fanOut);
 
     // and whatever was done to it, both callers were answered once
-    const answered = lattice.transcript.published.filter(
+    const callerAnswers = lattice.transcript.published.filter(
       (event) => event.to === 'com.web.checkout',
     );
-    expect(answered.map((event) => event.subject).sort()).toEqual([
+    expect(callerAnswers.map((event) => event.subject).sort()).toEqual([
       'order-1',
       'order-2',
     ]);
@@ -147,12 +148,12 @@ describe('a fan-out, however the lattice behaves', () => {
 });
 
 describe('a chain, however the lattice behaves', () => {
-  const chaining = (lattice: ReturnType<typeof createArvoLattice>) => {
+  const startChain = (lattice: ReturnType<typeof createArvoLattice>) => {
     lattice.publish(aWalk(12, 'walk-1'));
   };
 
   it.each(SEEDS)('holds under seed %i', async (seed) => {
-    const lattice = await holds(seed, chaining);
+    const lattice = await runAndCheck(seed, startChain);
 
     expect(lattice.store.size).toBe(13);
     expect(
@@ -164,7 +165,7 @@ describe('a chain, however the lattice behaves', () => {
 });
 
 describe('a workflow waiting on a person, however the lattice behaves', () => {
-  const reviewing = (lattice: ReturnType<typeof createArvoLattice>) => {
+  const awaitReview = (lattice: ReturnType<typeof createArvoLattice>) => {
     lattice.behave(orderV1.type, async (ctx: OrderContext) => {
       if (ctx.entry === 'followup') {
         await ctx.setState({ data: { stage: 'answering', answers: 1 } });
@@ -186,13 +187,15 @@ describe('a workflow waiting on a person, however the lattice behaves', () => {
   it.each(SEEDS.slice(0, 20))(
     'holds across the suspension under seed %i',
     async (seed) => {
-      const { lattice, chaos } = await ran(seed, reviewing);
+      const { lattice, chaos } = await runShape(seed, awaitReview);
 
       // nothing on the lattice can answer this, whatever it does to the
       // events it does carry
       expect(lattice.parked.get('human_review')).toHaveLength(1);
 
-      lattice.fulfil('human_review', (asked) => decided(asked));
+      lattice.fulfil('human_review', (reviewRequest) =>
+        reviewDecision(reviewRequest),
+      );
       await lattice.settle();
       while (lattice.holding > 0) await lattice.recover().settle();
 
@@ -217,7 +220,7 @@ describe('a workflow waiting on a person, however the lattice behaves', () => {
 });
 
 describe('a worker that fails, however the lattice behaves', () => {
-  const failing = (lattice: ReturnType<typeof createArvoLattice>) => {
+  const failPayment = (lattice: ReturnType<typeof createArvoLattice>) => {
     lattice.behave(orderV1.type, async (ctx: OrderContext) => {
       if (ctx.entry === 'followup') {
         await ctx.setState({ data: { stage: 'answering', answers: 1 } });
@@ -238,12 +241,12 @@ describe('a worker that fails, however the lattice behaves', () => {
   it.each(SEEDS.slice(0, 20))(
     'tells the order once, and ends it, under seed %i',
     async (seed) => {
-      const lattice = await holds(seed, failing);
+      const lattice = await runAndCheck(seed, failPayment);
 
-      const told = lattice.transcript.published.filter(
+      const errorEvents = lattice.transcript.published.filter(
         (event) => event.type === paymentV1.error.type,
       );
-      expect(told.length).toBeGreaterThanOrEqual(1);
+      expect(errorEvents.length).toBeGreaterThanOrEqual(1);
       expect(
         lattice.transcript.published.filter(
           (event) => event.to === 'com.web.checkout',

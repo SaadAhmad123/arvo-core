@@ -17,29 +17,29 @@ const contract = new ArvoContract({
   },
 });
 
-const v1 = contract.versions['1.0.0'];
+const version100 = contract.versions['1.0.0'];
 
 const event = (type: string, data: Record<string, unknown>) =>
   new ArvoEvent({
     source: 'com.test.suite',
     subject: 'order-1',
     type,
-    dataschema: v1.dataschema,
+    dataschema: version100.dataschema,
     data,
   });
 
 describe('what an expectation narrows', () => {
   it('narrows the scope to one literal per shape', () => {
-    const input = v1.assert(
+    const assertedInput = version100.assert(
       event('com_order_create', { items: [] }),
       'com_order_create',
     );
-    const outputs = v1.assert(
+    const assertedOutput = version100.assert(
       event('com_order_created', { order_id: 'o' }),
       'com_order_created',
     );
-    const failed = v1.assert(
-      event(v1.error.type, {
+    const assertedError = version100.assert(
+      event(version100.error.type, {
         error_name: 'E',
         error_message: 'm',
         error_stack: null,
@@ -47,57 +47,69 @@ describe('what an expectation narrows', () => {
       'handler_com_order_create_error',
     );
 
-    expectTypeOf(input.scope).toEqualTypeOf<'input'>();
-    expectTypeOf(outputs.scope).toEqualTypeOf<'output'>();
-    expectTypeOf(failed.scope).toEqualTypeOf<'error'>();
+    expectTypeOf(assertedInput.scope).toEqualTypeOf<'input'>();
+    expectTypeOf(assertedOutput.scope).toEqualTypeOf<'output'>();
+    expectTypeOf(assertedError.scope).toEqualTypeOf<'error'>();
   });
 
   it('gives the payload the expected shape declares', () => {
-    const emitted = v1.assert(
+    const assertedOutput = version100.assert(
       event('com_order_created', { order_id: 'o' }),
       'com_order_created',
     );
-    expectTypeOf(emitted.event.data).toEqualTypeOf<{ order_id: string }>();
-    expectTypeOf(emitted.event.type).toEqualTypeOf<'com_order_created'>();
+    expectTypeOf(assertedOutput.event.data).toEqualTypeOf<{
+      order_id: string;
+    }>();
+    expectTypeOf(
+      assertedOutput.event.type,
+    ).toEqualTypeOf<'com_order_created'>();
   });
 
   it('leaves the scope wide and the payload unparameterised without one', () => {
-    const asked = v1.assert(event('com_order_create', { items: [] }));
-    expectTypeOf(asked.scope).toEqualTypeOf<'input' | 'output' | 'error'>();
-    expectTypeOf(asked.version).toEqualTypeOf<'1.0.0'>();
+    const assertedInput = version100.assert(
+      event('com_order_create', { items: [] }),
+    );
+    expectTypeOf(assertedInput.scope).toEqualTypeOf<
+      'input' | 'output' | 'error'
+    >();
+    expectTypeOf(assertedInput.version).toEqualTypeOf<'1.0.0'>();
   });
 
   it('refuses a type the version does not declare', () => {
     expect(() =>
       // @ts-expect-error not a type this version declares
-      v1.assert(event('com_order_create', { items: [] }), 'com_nope'),
+      version100.assert(event('com_order_create', { items: [] }), 'com_nope'),
     ).toThrow();
   });
 
   it('refuses a plain string where a literal is wanted', () => {
-    const loose: string = 'com_order_create';
+    const typeString: string = 'com_order_create';
     expect(() =>
       // @ts-expect-error a string variable is not an assertable literal
-      v1.assert(event('com_order_create', { items: [] }), loose),
+      version100.assert(event('com_order_create', { items: [] }), typeString),
     ).not.toThrow();
   });
 });
 
 describe('what a contract reports', () => {
   it('reports the union of its declared versions', () => {
-    const asserted = contract.assert(event('com_order_create', { items: [] }));
-    expectTypeOf(asserted.version).toEqualTypeOf<'1.0.0' | '1.1.0'>();
+    const assertedEvent = contract.assert(
+      event('com_order_create', { items: [] }),
+    );
+    expectTypeOf(assertedEvent.version).toEqualTypeOf<'1.0.0' | '1.1.0'>();
   });
 
   it('narrows to one version contract once the version is a literal', () => {
-    const asserted = contract.assert(event('com_order_create', { items: [] }));
-    if (asserted.version === '1.0.0') {
-      const narrowed = contract.versions[asserted.version];
-      expectTypeOf(narrowed).toEqualTypeOf<typeof v1>();
+    const assertedEvent = contract.assert(
+      event('com_order_create', { items: [] }),
+    );
+    if (assertedEvent.version === '1.0.0') {
+      const narrowedVersion = contract.versions[assertedEvent.version];
+      expectTypeOf(narrowedVersion).toEqualTypeOf<typeof version100>();
       // Only reachable once narrowed: the expected-type overload is not
       // callable on a union of version contracts at all.
       expectTypeOf(
-        narrowed.assert(
+        narrowedVersion.assert(
           event('com_order_created', { order_id: 'o' }),
           'com_order_created',
         ).scope,

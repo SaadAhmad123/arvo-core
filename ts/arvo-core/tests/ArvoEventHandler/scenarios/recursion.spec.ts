@@ -16,7 +16,7 @@ import { ScenarioStore } from './store.js';
  * Reachable only here. The version was handed the answer.
  */
 
-const walking = (subject: string, remaining: number) =>
+const walkRequest = (subject: string, remaining: number) =>
   createArvoEventFactory(walkV1).createInput({
     source: 'com.web.walk',
     subject,
@@ -30,7 +30,7 @@ describe('a request a handler sends to itself', () => {
     const walker = declareWalker();
 
     const parent = await walker.execute({
-      event: walking('walk-1', 2),
+      event: walkRequest('walk-1', 2),
       state: store.resolver,
       attempt: 0,
     });
@@ -48,7 +48,7 @@ describe('a request a handler sends to itself', () => {
     const walker = declareWalker();
 
     const parent = await walker.execute({
-      event: walking('walk-1', 2),
+      event: walkRequest('walk-1', 2),
       state: store.resolver,
       attempt: 0,
     });
@@ -70,12 +70,12 @@ describe('a request a handler sends to itself', () => {
 });
 
 describe('a reply a handler sends itself', () => {
-  const unwound = async () => {
+  const openParentAndChild = async () => {
     const store = new ScenarioStore();
     const walker = declareWalker();
 
     const parent = await walker.execute({
-      event: walking('walk-1', 2),
+      event: walkRequest('walk-1', 2),
       state: store.resolver,
       attempt: 0,
     });
@@ -94,7 +94,7 @@ describe('a reply a handler sends itself', () => {
   };
 
   it('resumes the parent rather than opening another child', async () => {
-    const { store, walker, parent, child } = await unwound();
+    const { store, walker, parent, child } = await openParentAndChild();
 
     // the grandchild answers, which completes the child
     const grandchild = await walker.execute({
@@ -105,41 +105,43 @@ describe('a reply a handler sends itself', () => {
     if (grandchild.kind !== 'produced') throw new Error('no grandchild');
     store.commit(grandchild.state);
 
-    const childDone = await walker.execute({
+    const childCompletion = await walker.execute({
       event: grandchild.events[0] as never,
       state: store.resolver,
       attempt: 0,
     });
-    if (childDone.kind !== 'produced') throw new Error('child not answered');
-    store.commit(childDone.state);
+    if (childCompletion.kind !== 'produced')
+      throw new Error('child not answered');
+    store.commit(childCompletion.state);
 
-    const parentDone = await walker.execute({
-      event: childDone.events[0] as never,
+    const parentCompletion = await walker.execute({
+      event: childCompletion.events[0] as never,
       state: store.resolver,
       attempt: 0,
     });
-    if (parentDone.kind !== 'produced') throw new Error('parent not answered');
+    if (parentCompletion.kind !== 'produced')
+      throw new Error('parent not answered');
 
     // the parent resumed and completed, rather than opening a fourth
-    expect(parentDone.state.executionId).toBe(parent.state.executionId);
-    expect(parentDone.state.lifecycle).toBe('success');
-    expect(parentDone.events[0]?.type).toBe('evt_walk_done');
-    expect(parentDone.events[0]?.to).toBe('com.web.walk');
+    expect(parentCompletion.state.executionId).toBe(parent.state.executionId);
+    expect(parentCompletion.state.lifecycle).toBe('success');
+    expect(parentCompletion.events[0]?.type).toBe('evt_walk_done');
+    expect(parentCompletion.events[0]?.to).toBe('com.web.walk');
   });
 
   it('is told apart from a request by its type alone', async () => {
-    const { store, walker, child } = await unwound();
+    const { store, walker, child } = await openParentAndChild();
     const reply = child.events[0];
 
     // the two carry the same dataschema; only the type differs
     expect(reply?.dataschema).toBe(walkV1.dataschema);
 
-    const resumed = await walker.execute({
+    const resumedOutcome = await walker.execute({
       event: reply as never,
       state: store.resolver,
       attempt: 0,
     });
-    expect(resumed.kind).toBe('produced');
+    expect(resumedOutcome.kind).toBe('produced');
   });
 });
 
@@ -149,24 +151,24 @@ describe('an event that is neither a request nor a reply', () => {
     const walker = declareWalker();
 
     const parent = await walker.execute({
-      event: walking('walk-1', 1),
+      event: walkRequest('walk-1', 1),
       state: store.resolver,
       attempt: 0,
     });
     if (parent.kind !== 'produced') throw new Error('nothing was asked');
     store.commit(parent.state);
 
-    const neither = cloneArvoEvent(parent.events[0] as never, {
+    const unplaceableEvent = cloneArvoEvent(parent.events[0] as never, {
       type: 'evt_nothing_declared',
     });
-    const refused = await walker.tryExecute({
-      event: neither,
+    const refusal = await walker.tryExecute({
+      event: unplaceableEvent,
       state: store.resolver,
       attempt: 0,
     });
 
-    expect(!refused.ok && refused.error.faultKind).toBe('event_unclassifiable');
-    expect(!refused.ok && refused.error.violations.join(' ')).toContain(
+    expect(!refusal.ok && refusal.error.faultKind).toBe('event_unclassifiable');
+    expect(!refusal.ok && refusal.error.violations.join(' ')).toContain(
       'evt_walk_done',
     );
   });

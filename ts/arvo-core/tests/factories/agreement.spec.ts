@@ -8,7 +8,7 @@ import { createArvoEventFactory } from '../../src/factories/ArvoEventFactory/ind
  * event and there is none yet while building — so the only thing that can hold
  * them together is this property.
  */
-const version = new ArvoContract({
+const orderVersion = new ArvoContract({
   type: 'com_order_create',
   versions: {
     '1.0.0': {
@@ -21,65 +21,65 @@ const version = new ArvoContract({
   },
 }).versions['1.0.0'];
 
-const orders = createArvoEventFactory(version);
+const orderFactory = createArvoEventFactory(orderVersion);
 
 describe('an event built from a version is one that version accepts', () => {
   it('accepts what was built as its accepted request', () => {
-    const built = orders.createInput({
+    const event = orderFactory.createInput({
       source: 'com.web.checkout',
       subject: 'order-42',
       data: { items: ['book'] },
     });
 
-    const asserted = version.assert(built);
-    expect(asserted.scope).toBe('input');
-    expect(asserted.version).toBe('1.0.0');
-    expect(asserted.event).toBe(built);
+    const assertedEvent = orderVersion.assert(event);
+    expect(assertedEvent.scope).toBe('input');
+    expect(assertedEvent.version).toBe('1.0.0');
+    expect(assertedEvent.event).toBe(event);
   });
 
   it('accepts what was built as one of its emitted events', () => {
-    const built = orders.createOutput({
+    const event = orderFactory.createOutput({
       type: 'com_order_created',
       source: 'com.order.service',
       subject: 'order-42',
       data: { order_id: 'o-1' },
     });
 
-    expect(version.assert(built).scope).toBe('output');
+    expect(orderVersion.assert(event).scope).toBe('output');
   });
 
   it('accepts what was built as its handler error', () => {
-    const built = orders.createError({
+    const event = orderFactory.createError({
       source: 'com.order.service',
       subject: 'order-42',
       error: new Error('boom'),
     });
 
-    expect(version.assert(built).scope).toBe('error');
+    expect(orderVersion.assert(event).scope).toBe('error');
   });
 
   it('accepts a payload the schema defaulted on the way out', () => {
     // The factory materializes a default; asserting must still accept it,
     // which is only true because both read the same declaration.
-    const built = orders.createInput({
+    const event = orderFactory.createInput({
       source: 'com.web.checkout',
       data: { items: [] },
     });
 
-    expect(built.data.currency).toBe('GBP');
-    expect(version.assert(built, 'com_order_create').scope).toBe('input');
+    expect(event.data.currency).toBe('GBP');
+    expect(orderVersion.assert(event, 'com_order_create').scope).toBe('input');
   });
 
   it('agrees when the expected type is named too', () => {
-    const built = orders.createOutput({
+    const event = orderFactory.createOutput({
       type: 'com_order_created',
       source: 'com.order.service',
       data: { order_id: 'o-1' },
     });
 
-    const asserted = version.assert(built, 'com_order_created');
-    expect(asserted.scope).toBe('output');
-    expect(asserted.event.data.order_id).toBe('o-1');
+    const assertedEvent = orderVersion.assert(event, 'com_order_created');
+    expect(assertedEvent.scope).toBe('output');
+    expect(assertedEvent.event.data.order_id).toBe('o-1');
   });
 
   it('is accepted by the contract as well as the version', () => {
@@ -93,14 +93,14 @@ describe('an event built from a version is one that version accepts', () => {
       },
     });
 
-    const built = createArvoEventFactory(
+    const event = createArvoEventFactory(
       contract.versions['1.0.0'],
     ).createInput({
       source: 'com.web.checkout',
       data: { items: ['book'] },
     });
 
-    expect(contract.assert(built).version).toBe('1.0.0');
-    expect(contract.assert(built).scope).toBe('input');
+    expect(contract.assert(event).version).toBe('1.0.0');
+    expect(contract.assert(event).scope).toBe('input');
   });
 });

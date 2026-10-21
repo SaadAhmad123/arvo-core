@@ -40,10 +40,10 @@ const createPartLog = () => {
       ? { after: () => void partLog.push(`${layerId}.after`) }
       : {}),
   });
-  const loggingExecutorFor = (returned: ArvoExecutorEmission = [initEvent]) =>
+  const loggingExecutorFor = (emission: ArvoExecutorEmission = [initEvent]) =>
     vi.fn(() => {
       partLog.push('executor');
-      return returned;
+      return emission;
     });
   return { log: partLog, layer: layerNamed, executor: loggingExecutorFor };
 };

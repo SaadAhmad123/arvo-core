@@ -24,8 +24,8 @@ describe('spans', () => {
       await executeOrder(
         orderHandler({
           tracer: spanRecorder.tracer,
-          middleware: Array.from({ length: layerCount }, (_, index) =>
-            layerWithBothParts(`l${index}`),
+          middleware: Array.from({ length: layerCount }, (_, layerIndex) =>
+            layerWithBothParts(`l${layerIndex}`),
           ),
         }),
       );
@@ -108,10 +108,12 @@ describe('marks', () => {
     );
     const markNames = spanRecorder.events.map((spanEvent) => spanEvent.name);
     expect(
-      markNames.some((name) => name.endsWith('middleware_after_failed')),
+      markNames.some((markName) =>
+        markName.endsWith('middleware_after_failed'),
+      ),
     ).toBe(true);
     expect(
-      markNames.some((name) => name.endsWith('middleware_after_cut')),
+      markNames.some((markName) => markName.endsWith('middleware_after_cut')),
     ).toBe(true);
   });
 });
@@ -120,11 +122,11 @@ describe('the time recorded', () => {
   it('keeps the executor its own time, the layers around it counted apart', async () => {
     const recordedHistograms: Record<string, number[]> = {};
     const recordingMeter = {
-      createHistogram: (name: string) => ({
-        record: (value: number) => {
-          recordedHistograms[name] = [
-            ...(recordedHistograms[name] ?? []),
-            value,
+      createHistogram: (histogramName: string) => ({
+        record: (measurement: number) => {
+          recordedHistograms[histogramName] = [
+            ...(recordedHistograms[histogramName] ?? []),
+            measurement,
           ];
         },
       }),
@@ -165,9 +167,9 @@ describe('the time recorded', () => {
       attempt: 0,
     });
 
-    const metricNamed = (part: string) =>
-      Object.keys(recordedHistograms).find((name) =>
-        name.endsWith(part),
+    const metricNamed = (suffix: string) =>
+      Object.keys(recordedHistograms).find((metricName) =>
+        metricName.endsWith(suffix),
       ) as string;
     const executorDurationMs = recordedHistograms[
       metricNamed('executor.duration')

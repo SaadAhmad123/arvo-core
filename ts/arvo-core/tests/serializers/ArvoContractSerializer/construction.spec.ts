@@ -32,25 +32,27 @@ const form = JSON.stringify({
 });
 
 describe('when a form passes every rule but will not construct', () => {
-  const result = new ArvoContractSerializer().tryDeserialize(form);
+  const deserialization = new ArvoContractSerializer().tryDeserialize(form);
 
   it('reports rather than raising', () => {
-    expect(result.ok).toBe(false);
+    expect(deserialization.ok).toBe(false);
   });
 
   it('does not blame the form', () => {
     // Nothing was wrong with what the caller supplied, and the message must
     // not suggest otherwise.
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.message).toContain('could not be constructed');
-      expect(result.error.message).not.toContain('could not be read');
+    expect(deserialization.ok).toBe(false);
+    if (!deserialization.ok) {
+      expect(deserialization.error.message).toContain(
+        'could not be constructed',
+      );
+      expect(deserialization.error.message).not.toContain('could not be read');
     }
   });
 
   it('keeps the underlying failure retrievable', () => {
-    expect(result.ok).toBe(false);
-    if (!result.ok)
-      expect(result.error.cause?.message).toBe('invariant broken');
+    expect(deserialization.ok).toBe(false);
+    if (!deserialization.ok)
+      expect(deserialization.error.cause?.message).toBe('invariant broken');
   });
 });

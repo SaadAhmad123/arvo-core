@@ -14,10 +14,10 @@ import { declareThreadedVersions } from './contracts.ts';
  */
 
 const versions = declareThreadedVersions(workerData?.charges ?? 'succeeds');
-const events = new ArvoEventSerializer({ type: 'arvoevent' });
+const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
 
 /** What a broker asks this thread to run. */
-type Asked = {
+type RunRequest = {
   readonly event: string;
   readonly entry: 'init' | 'followup';
   readonly executionId: string;
@@ -28,20 +28,20 @@ type Asked = {
   readonly slowly: number;
 };
 
-parentPort?.on('message', async (asked: Asked) => {
-  const restored = await events.tryDeserialize(asked.event);
-  if (!restored.ok) {
+parentPort?.on('message', async (request: RunRequest) => {
+  const parsedEvent = await serializer.tryDeserialize(request.event);
+  if (!parsedEvent.ok) {
     parentPort?.postMessage({ kind: 'refused' });
     return;
   }
 
   // held open deliberately, so two threads are inside their executors at
   // the same moment rather than merely close to it
-  if (asked.slowly > 0) {
-    await new Promise((settle) => setTimeout(settle, asked.slowly));
+  if (request.slowly > 0) {
+    await new Promise((resolve) => setTimeout(resolve, request.slowly));
   }
 
-  const version = versions[asked.contractType]?.[asked.version];
+  const version = versions[request.contractType]?.[request.version];
   if (version === undefined) {
     parentPort?.postMessage({ kind: 'refused' });
     return;
@@ -49,11 +49,11 @@ parentPort?.on('message', async (asked: Asked) => {
 
   try {
     const response = await version.execute({
-      entry: asked.entry,
-      event: restored.value,
-      state: asked.state,
-      executionId: asked.executionId,
-      attempt: asked.attempt,
+      entry: request.entry,
+      event: parsedEvent.value,
+      state: request.state,
+      executionId: request.executionId,
+      attempt: request.attempt,
       dependencies: null,
       hooks: {},
       telemetry: new ArvoExecutionContextTelemetry({
@@ -71,20 +71,23 @@ parentPort?.on('message', async (asked: Asked) => {
       return;
     }
 
-    const written = await Promise.all(
-      response.events.map(async (leaving) => {
-        const out = await events.trySerialize(leaving);
-        return out.ok ? out.value : null;
+    const serializedEvents = await Promise.all(
+      response.events.map(async (emittedEvent) => {
+        const eventJson = await serializer.trySerialize(emittedEvent);
+        return eventJson.ok ? eventJson.value : null;
       }),
     );
 
     parentPort?.postMessage({
       kind: 'produced',
       state: response.state,
-      events: written.filter((one): one is string => one !== null),
+      events: serializedEvents.filter(
+        (serializedEvent): serializedEvent is string =>
+          serializedEvent !== null,
+      ),
     });
-  } catch (raised) {
-    const fault = raised as {
+  } catch (thrown) {
+    const fault = thrown as {
       _tag?: string;
       faultKind?: string;
       retry?: unknown;

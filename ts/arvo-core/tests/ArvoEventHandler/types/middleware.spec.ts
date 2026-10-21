@@ -49,7 +49,7 @@ describe('a layer', () => {
       new Both(),
       new Neither(),
     ];
-    expect(layers.map((literalLayer) => literalLayer.id)).toEqual([
+    expect(layers.map((layer) => layer.id)).toEqual([
       'before_only',
       'after_only',
       'both',
@@ -62,11 +62,11 @@ describe('a layer', () => {
   });
 
   it('may be written as a plain object as well as a class', () => {
-    const literal: IArvoEventHandlerMiddleware<'literal'> = {
+    const objectLayer: IArvoEventHandlerMiddleware<'literal'> = {
       id: 'literal',
       before: () => undefined,
     };
-    expect(literal.id).toBe('literal');
+    expect(objectLayer.id).toBe('literal');
   });
 
   it('may be typed for one handler, reaching what that handler declared', () => {
@@ -109,18 +109,18 @@ describe('a layer', () => {
 
 describe('an entry in a list of layers', () => {
   it('is a layer, or a way to make one', () => {
-    const entries: ArvoEventHandlerMiddlewareEntry[] = [
+    const middlewareEntries: ArvoEventHandlerMiddlewareEntry[] = [
       new Both(),
       () => new Both(),
       async () => new AfterOnly(),
     ];
-    expect(entries).toHaveLength(3);
+    expect(middlewareEntries).toHaveLength(3);
   });
 
   it('is not a way to make one that takes anything', () => {
     // @ts-expect-error a factory takes nothing
-    const entry: ArvoEventHandlerMiddlewareEntry = (_given: string) =>
+    const factoryEntry: ArvoEventHandlerMiddlewareEntry = (_argument: string) =>
       new Both();
-    expect(entry).toBeTypeOf('function');
+    expect(factoryEntry).toBeTypeOf('function');
   });
 });

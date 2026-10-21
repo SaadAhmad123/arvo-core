@@ -84,7 +84,7 @@ export const openedPerExecution = <TAttributes extends ArvoDependencies>(
     closed: [],
     built: [],
   };
-  let held: TAttributes | null = null;
+  let liveAttributes: TAttributes | null = null;
 
   return {
     calls,
@@ -92,18 +92,18 @@ export const openedPerExecution = <TAttributes extends ArvoDependencies>(
       open: (scope: ArvoDependencyScope) => {
         calls.opened.push(scope);
         // idempotent: a second open holds what the first built
-        held ??= build(scope);
-        calls.built.push(held);
+        liveAttributes ??= build(scope);
+        calls.built.push(liveAttributes);
       },
       close: (scope: ArvoDependencyScope) => {
         calls.closed.push(scope);
-        held = null;
+        liveAttributes = null;
       },
       get attributes(): TAttributes {
-        if (held === null) {
+        if (liveAttributes === null) {
           throw new Error('these dependencies have not been opened');
         }
-        return held;
+        return liveAttributes;
       },
     },
   };
@@ -124,20 +124,20 @@ export const failingToClose = <TAttributes extends ArvoDependencies>(
   attributes: TAttributes,
   thrownOnClose: unknown,
 ): WatchedDependency<TAttributes> => {
-  const held = heldDependencies(attributes);
+  const conformantDependency = heldDependencies(attributes);
 
   return {
-    calls: held.calls,
+    calls: conformantDependency.calls,
     dependency: {
-      open: held.dependency.open,
+      open: conformantDependency.dependency.open,
       close: async (scope: ArvoDependencyScope) => {
         // awaited before the throw, so the recorded close cannot be
         // outrun by the failure it is supposed to precede
-        await held.dependency.close(scope);
+        await conformantDependency.dependency.close(scope);
         throw thrownOnClose;
       },
       get attributes() {
-        return held.dependency.attributes;
+        return conformantDependency.dependency.attributes;
       },
     },
   };

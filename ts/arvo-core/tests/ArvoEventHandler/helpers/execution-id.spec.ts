@@ -12,33 +12,35 @@ describe('the identifier an init event opens an execution under', () => {
   });
 
   it('is the same every time, so a reexecution resolves to the same execution', async () => {
-    const once = await deriveArvoExecutionId(initEvent);
-    const again = await deriveArvoExecutionId(initEvent);
-    expect(again).toBe(once);
+    const derivedId = await deriveArvoExecutionId(initEvent);
+    const rederivedId = await deriveArvoExecutionId(initEvent);
+    expect(rederivedId).toBe(derivedId);
   });
 
   it('turns only on the id and the dataschema, nothing else about the event', async () => {
-    const copy = cloneArvoEvent(initEvent, {
+    const otherWorkflowEvent = cloneArvoEvent(initEvent, {
       subject: 'a-different-workflow',
       executionid: 'a-different-workflow',
     });
-    expect(await deriveArvoExecutionId(copy)).toBe(
+    expect(await deriveArvoExecutionId(otherWorkflowEvent)).toBe(
       await deriveArvoExecutionId(initEvent),
     );
   });
 
   it('differs where the event id differs', async () => {
-    const other = cloneArvoEvent(initEvent, { id: 'a-different-event' });
-    expect(await deriveArvoExecutionId(other)).not.toBe(
+    const differentIdEvent = cloneArvoEvent(initEvent, {
+      id: 'a-different-event',
+    });
+    expect(await deriveArvoExecutionId(differentIdEvent)).not.toBe(
       await deriveArvoExecutionId(initEvent),
     );
   });
 
   it('differs where the contract or version differs', async () => {
-    const other = cloneArvoEvent(initEvent, {
+    const differentVersionEvent = cloneArvoEvent(initEvent, {
       dataschema: '#/com/order/create/1.1.0',
     });
-    expect(await deriveArvoExecutionId(other)).not.toBe(
+    expect(await deriveArvoExecutionId(differentVersionEvent)).not.toBe(
       await deriveArvoExecutionId(initEvent),
     );
   });
@@ -46,27 +48,27 @@ describe('the identifier an init event opens an execution under', () => {
   it('is a known answer, pinned so no implementation drifts from it', async () => {
     // SHA-256 over utf8('#/com/order/create/1.0.0') + 0x00 + utf8('fixed-id'),
     // computed with node:crypto rather than by this code.
-    const fixed = cloneArvoEvent(initEvent, {
+    const pinnedEvent = cloneArvoEvent(initEvent, {
       id: 'fixed-id',
       dataschema: '#/com/order/create/1.0.0',
     });
-    expect(await deriveArvoExecutionId(fixed)).toBe(
+    expect(await deriveArvoExecutionId(pinnedEvent)).toBe(
       '04cb04d634dac9b7cefdbca70de6cfb5be077b66117c4d21d045b96d5b3c31bd',
     );
   });
 
   it('cannot be confused by the delimiter, it being a byte neither input holds', async () => {
     // A split that would collide were the two simply concatenated.
-    const left = cloneArvoEvent(initEvent, {
+    const bcIdEvent = cloneArvoEvent(initEvent, {
       dataschema: '#/com/a/1.0.0',
       id: 'bc',
     });
-    const right = cloneArvoEvent(initEvent, {
+    const cIdEvent = cloneArvoEvent(initEvent, {
       dataschema: '#/com/a/1.0.0b',
       id: 'c',
     });
-    expect(await deriveArvoExecutionId(left)).not.toBe(
-      await deriveArvoExecutionId(right),
+    expect(await deriveArvoExecutionId(bcIdEvent)).not.toBe(
+      await deriveArvoExecutionId(cIdEvent),
     );
   });
 
@@ -90,7 +92,7 @@ describe('recognising one', () => {
     ['uppercase hex', 'A'.repeat(64)],
     ['something outside hex', 'g'.repeat(64)],
     ['a prefixed digest', `0x${'a'.repeat(62)}`],
-  ])('refuses %s', (_label, value) => {
-    expect(isArvoExecutionId(value)).toBe(false);
+  ])('refuses %s', (_label, candidate) => {
+    expect(isArvoExecutionId(candidate)).toBe(false);
   });
 });

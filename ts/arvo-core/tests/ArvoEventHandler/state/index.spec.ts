@@ -6,7 +6,7 @@ import { chargedEvent, initEvent } from '../fixtures.js';
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
-const whole = (overrides: Record<string, unknown> = {}) => ({
+const stateFields = (overrides: Record<string, unknown> = {}) => ({
   data: null,
   subject: initEvent.subject,
   executionId: initEvent.executionid,
@@ -25,13 +25,13 @@ const whole = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const build = (overrides: Record<string, unknown> = {}) =>
-  new ArvoExecutionState(whole(overrides) as never);
+const buildState = (overrides: Record<string, unknown> = {}) =>
+  new ArvoExecutionState(stateFields(overrides) as never);
 
 describe('ArvoExecutionState', () => {
   describe('what it carries', () => {
     it('carries the execution it is the memory of', () => {
-      const state = build();
+      const state = buildState();
       expect(state.subject).toBe(initEvent.subject);
       expect(state.executionId).toBe(initEvent.executionid);
       expect(state.parentExecutionId).toBe(initEvent.executionid);
@@ -39,13 +39,13 @@ describe('ArvoExecutionState', () => {
     });
 
     it('carries the contract and version it belongs to', () => {
-      const state = build();
+      const state = buildState();
       expect(state.source).toBe('com_order_create');
       expect(state.version).toBe('1.0.0');
     });
 
     it('carries where it rests, and why', () => {
-      const state = build({
+      const state = buildState({
         lifecycle: 'error',
         lifecycleDescription: 'it failed',
       });
@@ -54,37 +54,37 @@ describe('ArvoExecutionState', () => {
     });
 
     it('carries no reason where nothing explains where it rests', () => {
-      expect(build().lifecycleDescription).toBeNull();
+      expect(buildState().lifecycleDescription).toBeNull();
     });
 
     it('carries the event that opened it and the one that caused this execution', () => {
-      const state = build({ triggeringEvent: chargedEvent });
+      const state = buildState({ triggeringEvent: chargedEvent });
       expect(state.initEvent).toBe(initEvent);
       expect(state.triggeringEvent).toBe(chargedEvent);
     });
 
     it('carries every event it has touched, and which way', () => {
-      expect(build().eventIds).toEqual([
+      expect(buildState().eventIds).toEqual([
         { id: initEvent.id, direction: 'received' },
       ]);
     });
 
     it('carries what it is waiting on, keyed by the event it emitted', () => {
-      const state = build({
+      const state = buildState({
         inFlightEventMap: new Map([['emitted-1', null]]),
       });
       expect(state.inFlightEventMap.get('emitted-1')).toBeNull();
     });
 
     it('carries an answered request as the event that answered it', () => {
-      const state = build({
+      const state = buildState({
         inFlightEventMap: new Map([['emitted-1', chargedEvent]]),
       });
       expect(state.inFlightEventMap.get('emitted-1')).toBe(chargedEvent);
     });
 
     it('carries the bookkeeping whatever stores it needs', () => {
-      const state = build({ casVersion: 3 });
+      const state = buildState({ casVersion: 3 });
       expect(state.recordFormatVersion).toBe('1.0.0');
       expect(state.casVersion).toBe(3);
     });
@@ -92,18 +92,20 @@ describe('ArvoExecutionState', () => {
 
   describe('its data', () => {
     it('is null on an execution that has written nothing', () => {
-      expect(build().data).toBeNull();
+      expect(buildState().data).toBeNull();
     });
 
     it('is what was written', () => {
-      expect(build({ data: { orderId: 'o-1', attempts: 1 } }).data).toEqual({
+      expect(
+        buildState({ data: { orderId: 'o-1', attempts: 1 } }).data,
+      ).toEqual({
         orderId: 'o-1',
         attempts: 1,
       });
     });
 
     it('is the only field that may be empty', () => {
-      expect(() => build({ subject: undefined })).toThrow(
+      expect(() => buildState({ subject: undefined })).toThrow(
         ArvoExecutionStateValidationError,
       );
     });
@@ -111,7 +113,7 @@ describe('ArvoExecutionState', () => {
 
   describe('checking itself as it is built', () => {
     it('refuses a lifecycle that is not one of the six', () => {
-      expect(() => build({ lifecycle: 'pondering' })).toThrow(
+      expect(() => buildState({ lifecycle: 'pondering' })).toThrow(
         ArvoExecutionStateValidationError,
       );
     });
@@ -119,43 +121,43 @@ describe('ArvoExecutionState', () => {
     it.each(['idle', 'waiting', 'success', 'error', 'cancelled', 'failure'])(
       'accepts the lifecycle %s',
       (lifecycle) => {
-        expect(build({ lifecycle }).lifecycle).toBe(lifecycle);
+        expect(buildState({ lifecycle }).lifecycle).toBe(lifecycle);
       },
     );
 
     it('refuses a negative depth', () => {
-      expect(() => build({ depth: -1 })).toThrow(
+      expect(() => buildState({ depth: -1 })).toThrow(
         ArvoExecutionStateValidationError,
       );
     });
 
     it('refuses a negative revision', () => {
-      expect(() => build({ casVersion: -1 })).toThrow(
+      expect(() => buildState({ casVersion: -1 })).toThrow(
         ArvoExecutionStateValidationError,
       );
     });
 
     it('refuses a format version that is not a semantic version', () => {
-      expect(() => build({ recordFormatVersion: 'one' })).toThrow(
+      expect(() => buildState({ recordFormatVersion: 'one' })).toThrow(
         ArvoExecutionStateValidationError,
       );
     });
 
     it('refuses something that is not an event where an event belongs', () => {
-      expect(() => build({ initEvent: { id: 'not-an-event' } })).toThrow(
+      expect(() => buildState({ initEvent: { id: 'not-an-event' } })).toThrow(
         ArvoExecutionStateValidationError,
       );
     });
 
     it('refuses a touched event with a direction it does not have', () => {
       expect(() =>
-        build({ eventIds: [{ id: 'e-1', direction: 'sideways' }] }),
+        buildState({ eventIds: [{ id: 'e-1', direction: 'sideways' }] }),
       ).toThrow(ArvoExecutionStateValidationError);
     });
 
     it('reports every rule it broke, not only the first', () => {
       try {
-        build({ depth: -1, casVersion: -1, lifecycle: 'pondering' });
+        buildState({ depth: -1, casVersion: -1, lifecycle: 'pondering' });
       } catch (thrown) {
         expect(
           (thrown as ArvoExecutionStateValidationError).issues.length,
@@ -167,7 +169,7 @@ describe('ArvoExecutionState', () => {
 
     it('names where each failure is', () => {
       try {
-        build({ depth: -1 });
+        buildState({ depth: -1 });
       } catch (thrown) {
         expect(
           (thrown as ArvoExecutionStateValidationError).issues[0]?.path,
@@ -180,78 +182,85 @@ describe('ArvoExecutionState', () => {
 
   describe('rebuilding one from what was stored', () => {
     it('builds a record from what was stored', () => {
-      const result = ArvoExecutionState.tryBuild(whole(), orderData);
-      expect(result.ok).toBe(true);
+      const rebuilding = ArvoExecutionState.tryBuild(stateFields(), orderData);
+      expect(rebuilding.ok).toBe(true);
     });
 
     it('reports rather than throwing where the record is wrong', () => {
-      const result = ArvoExecutionState.tryBuild(
-        whole({ depth: -1 }),
+      const rebuilding = ArvoExecutionState.tryBuild(
+        stateFields({ depth: -1 }),
         orderData,
       );
-      expect(result.ok).toBe(false);
+      expect(rebuilding.ok).toBe(false);
     });
 
     it('checks the data against the schema it is given', () => {
-      const result = ArvoExecutionState.tryBuild(
-        whole({ data: { orderId: 42 } }),
+      const rebuilding = ArvoExecutionState.tryBuild(
+        stateFields({ data: { orderId: 42 } }),
         orderData,
       );
-      expect(result.ok).toBe(false);
+      expect(rebuilding.ok).toBe(false);
     });
 
     it('accepts a record that has written nothing', () => {
-      const result = ArvoExecutionState.tryBuild(
-        whole({ data: null }),
+      const rebuilding = ArvoExecutionState.tryBuild(
+        stateFields({ data: null }),
         orderData,
       );
-      expect(result.ok && result.value.data).toBeNull();
+      expect(rebuilding.ok && rebuilding.value.data).toBeNull();
     });
 
     it('reads back what was stored, not what the schema would produce', () => {
-      const withDefault = z.object({
+      const defaultingData = z.object({
         orderId: z.string(),
         currency: z.string().default('GBP'),
       });
-      const result = ArvoExecutionState.tryBuild(
-        whole({ data: { orderId: 'o-1' } }),
-        withDefault,
+      const rebuilding = ArvoExecutionState.tryBuild(
+        stateFields({ data: { orderId: 'o-1' } }),
+        defaultingData,
       );
-      expect(result.ok && result.value.data).toEqual({ orderId: 'o-1' });
+      expect(rebuilding.ok && rebuilding.value.data).toEqual({
+        orderId: 'o-1',
+      });
     });
 
     it('judges the data against the schema without applying it', () => {
-      const withDefault = z.object({
+      const defaultingData = z.object({
         orderId: z.string(),
         currency: z.string().default('GBP'),
       });
       expect(
         ArvoExecutionState.tryBuild(
-          whole({ data: { orderId: 42 } }),
-          withDefault,
+          stateFields({ data: { orderId: 42 } }),
+          defaultingData,
         ).ok,
       ).toBe(false);
     });
 
     it('throws through the other form', () => {
       expect(() =>
-        ArvoExecutionState.build(whole({ depth: -1 }), orderData),
+        ArvoExecutionState.build(stateFields({ depth: -1 }), orderData),
       ).toThrow(ArvoExecutionStateValidationError);
     });
 
     it('gives back a record through the other form', () => {
-      expect(ArvoExecutionState.build(whole(), orderData).depth).toBe(0);
+      expect(ArvoExecutionState.build(stateFields(), orderData).depth).toBe(0);
     });
 
     it('says (root) where the data itself is wrong, not one of its fields', () => {
       const noBadOrders = z
         .object({ orderId: z.string() })
-        .refine((value) => value.orderId !== 'bad', 'orderId must not be bad');
-      const result = ArvoExecutionState.tryBuild(
-        whole({ data: { orderId: 'bad' } }),
+        .refine(
+          (stateData) => stateData.orderId !== 'bad',
+          'orderId must not be bad',
+        );
+      const rebuilding = ArvoExecutionState.tryBuild(
+        stateFields({ data: { orderId: 'bad' } }),
         noBadOrders,
       );
-      expect(!result.ok && result.error.issues[0]?.path).toBe('data.(root)');
+      expect(!rebuilding.ok && rebuilding.error.issues[0]?.path).toBe(
+        'data.(root)',
+      );
     });
 
     it('refuses something that is not a record at all', () => {
@@ -262,7 +271,7 @@ describe('ArvoExecutionState', () => {
   });
 
   it('cannot be changed once built', () => {
-    const state = build();
+    const state = buildState();
     expect(Object.isFrozen(state)).toBe(true);
     expect(() => {
       (state as unknown as Record<string, unknown>).depth = 9;

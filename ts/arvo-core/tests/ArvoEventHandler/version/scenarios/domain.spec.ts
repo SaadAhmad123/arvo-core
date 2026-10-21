@@ -41,7 +41,7 @@ const anOrder = (subject = 'order-1') =>
  * An order that asks two services and one person, and answers once all
  * three are in.
  */
-const needingReview = (lattice = latticeWith()) => {
+const reviewLattice = (lattice = latticeWith()) => {
   lattice.behave(orderV1.type, async (ctx: OrderContext) => {
     if (ctx.entry === 'followup') {
       const answers = [...ctx.state.inFlightEventMap.values()].filter(
@@ -72,54 +72,57 @@ const needingReview = (lattice = latticeWith()) => {
 };
 
 /** What a person decides, put back into the lattice as an answer. */
-const decided = (asked: ArvoEvent, overrides: Record<string, unknown> = {}) =>
+const reviewDecision = (
+  reviewRequest: ArvoEvent,
+  overrides: Record<string, unknown> = {},
+) =>
   cloneArvoEvent(
     createArvoEventFactory(reviewV1).createOutput({
       type: 'evt_review_decided',
       source: reviewV1.type,
-      subject: asked.subject,
-      to: asked.source,
+      subject: reviewRequest.subject,
+      to: reviewRequest.source,
       data: { approved: true },
     }),
     {
-      executionid: asked.executionid,
-      parentid: asked.id,
-      initid: asked.id,
-      depth: asked.depth,
+      executionid: reviewRequest.executionid,
+      parentid: reviewRequest.id,
+      initid: reviewRequest.id,
+      depth: reviewRequest.depth,
       ...overrides,
     },
   );
 
-const answered = (lattice: ReturnType<typeof latticeWith>) =>
+const callerAnswers = (lattice: ReturnType<typeof latticeWith>) =>
   lattice.transcript.published.filter(
     (event) => event.to === 'com.web.checkout',
   );
 
-const resting = (lattice: ReturnType<typeof latticeWith>) =>
+const orderLifecycle = (lattice: ReturnType<typeof latticeWith>) =>
   [...lattice.store.values()].find((row) => row.source === orderV1.type)
     ?.lifecycle;
 
 describe('an order that cannot finish without a person', () => {
   it('lifts the review off the lattice, and delivers it to nobody', async () => {
-    const lattice = needingReview();
+    const lattice = reviewLattice();
     await lattice.publish(anOrder()).settle();
 
     expect(lattice.parked.get(REVIEW)).toHaveLength(1);
     expect(
       lattice.transcript.delivered.some(
-        (given) => given.event.type === reviewV1.type,
+        (delivery) => delivery.event.type === reviewV1.type,
       ),
     ).toBe(false);
   });
 
   it('sends it on the path the contract it is built from declares', async () => {
-    const lattice = needingReview();
+    const lattice = reviewLattice();
     await lattice.publish(anOrder()).settle();
     expect(lattice.parked.get(REVIEW)?.[0]?.domain).toBe(REVIEW);
   });
 
   it('leaves its siblings on the lattice, where they belong', async () => {
-    const lattice = needingReview();
+    const lattice = reviewLattice();
     await lattice.publish(anOrder()).settle();
 
     const siblings = lattice.transcript.published.filter((event) =>
@@ -129,29 +132,29 @@ describe('an order that cannot finish without a person', () => {
   });
 
   it('waits, however long it takes, with the services already answered', async () => {
-    const lattice = needingReview();
+    const lattice = reviewLattice();
     await lattice.publish(anOrder()).settle();
 
-    expect(resting(lattice)).toBe('waiting');
-    expect(answered(lattice)).toHaveLength(0);
+    expect(orderLifecycle(lattice)).toBe('waiting');
+    expect(callerAnswers(lattice)).toHaveLength(0);
     expect(lattice.transcript.faults).toEqual([]);
   });
 
   it('goes on once a person answers, entering the executor exactly once more', async () => {
-    const lattice = needingReview();
+    const lattice = reviewLattice();
     await lattice.publish(anOrder()).settle();
-    lattice.fulfil(REVIEW, (asked) => decided(asked));
+    lattice.fulfil(REVIEW, (reviewRequest) => reviewDecision(reviewRequest));
     await lattice.settle();
 
-    expect(resting(lattice)).toBe('success');
-    expect(answered(lattice)).toHaveLength(1);
-    expect(answered(lattice)[0]?.data.order_id).toBe('3');
+    expect(orderLifecycle(lattice)).toBe('success');
+    expect(callerAnswers(lattice)).toHaveLength(1);
+    expect(callerAnswers(lattice)[0]?.data.order_id).toBe('3');
   });
 
   it('holds everything that must hold, across the suspension', async () => {
-    const lattice = needingReview();
+    const lattice = reviewLattice();
     await lattice.publish(anOrder()).settle();
-    lattice.fulfil(REVIEW, (asked) => decided(asked));
+    lattice.fulfil(REVIEW, (reviewRequest) => reviewDecision(reviewRequest));
     await lattice.settle();
     await checkInvariants(lattice);
   });
@@ -159,167 +162,174 @@ describe('an order that cannot finish without a person', () => {
 
 describe('everything the outside world does wrong', () => {
   /** An order waiting on a person, with the request they are holding. */
-  const parked = async (lattice = needingReview()) => {
+  const awaitingReview = async (lattice = reviewLattice()) => {
     await lattice.publish(anOrder()).settle();
-    const asked = lattice.parked.get(REVIEW)?.[0] as ArvoEvent;
-    return { lattice, asked };
+    const reviewRequest = lattice.parked.get(REVIEW)?.[0] as ArvoEvent;
+    return { lattice, reviewRequest };
   };
 
   it('never answers: the execution waits, and nothing is reported', async () => {
-    const { lattice } = await parked();
-    expect(resting(lattice)).toBe('waiting');
+    const { lattice } = await awaitingReview();
+    expect(orderLifecycle(lattice)).toBe('waiting');
     expect(lattice.transcript.faults).toEqual([]);
     await checkInvariants(lattice);
   });
 
   it('answers twice: the second is discarded, not reported', async () => {
-    const { lattice, asked } = await parked();
-    const answer = decided(asked);
+    const { lattice, reviewRequest } = await awaitingReview();
+    const answer = reviewDecision(reviewRequest);
     lattice.inject(answer).inject(answer);
     await lattice.settle();
 
-    expect(answered(lattice)).toHaveLength(1);
+    expect(callerAnswers(lattice)).toHaveLength(1);
     expect(lattice.transcript.discarded).toHaveLength(1);
     expect(lattice.transcript.faults).toEqual([]);
   });
 
   it('answers a request nobody made: refused, naming what it claimed', async () => {
-    const { lattice, asked } = await parked();
-    lattice.inject(decided(asked, { initid: 'never-asked' }));
+    const { lattice, reviewRequest } = await awaitingReview();
+    lattice.inject(reviewDecision(reviewRequest, { initid: 'never-asked' }));
     await lattice.settle();
 
-    const refused = lattice.transcript.faults[0]?.fault;
-    expect(refused?.faultKind).toBe('response_unawaited');
-    expect(refused?.message).toContain('never-asked');
+    const fault = lattice.transcript.faults[0]?.fault;
+    expect(fault?.faultKind).toBe('response_unawaited');
+    expect(fault?.message).toContain('never-asked');
   });
 
   it('answers a request nobody made, where the lattice holds rather than gives up', async () => {
-    const holding = needingReview(
+    const holdingLattice = reviewLattice(
       createArvoLattice({
         versions: declareVersions(),
         seed: 23,
         abandons: false,
       }),
     );
-    await holding.publish(anOrder()).settle();
-    const asked = holding.parked.get(REVIEW)?.[0] as ArvoEvent;
+    await holdingLattice.publish(anOrder()).settle();
+    const reviewRequest = holdingLattice.parked.get(REVIEW)?.[0] as ArvoEvent;
 
-    holding.inject(decided(asked, { initid: 'never-asked' }));
-    await holding.settle();
+    holdingLattice.inject(
+      reviewDecision(reviewRequest, { initid: 'never-asked' }),
+    );
+    await holdingLattice.settle();
 
     // the stray is refused and the execution is left as it was, still
     // waiting on the review nobody has answered
-    expect(resting(holding)).toBe('waiting');
-    expect(holding.parked.get(REVIEW)).toHaveLength(1);
-    expect(holding.transcript.abandoned).toEqual([]);
+    expect(orderLifecycle(holdingLattice)).toBe('waiting');
+    expect(holdingLattice.parked.get(REVIEW)).toHaveLength(1);
+    expect(holdingLattice.transcript.abandoned).toEqual([]);
   });
 
   it('answers a request nobody made, where the lattice gives up on what it will not retry', async () => {
-    const { lattice, asked } = await parked();
-    lattice.inject(decided(asked, { initid: 'never-asked' }));
+    const { lattice, reviewRequest } = await awaitingReview();
+    lattice.inject(reviewDecision(reviewRequest, { initid: 'never-asked' }));
     await lattice.settle();
 
     // the fault carries what giving up takes, and this lattice takes it:
     // a stray event ends an execution that was waiting on a person
-    expect(resting(lattice)).toBe('failure');
+    expect(orderLifecycle(lattice)).toBe('failure');
     expect(lattice.transcript.abandoned).toHaveLength(1);
-    expect(answered(lattice)).toHaveLength(1);
+    expect(callerAnswers(lattice)).toHaveLength(1);
   });
 
   it('answers in the wrong workflow: refused for what disagrees', async () => {
-    const { lattice, asked } = await parked();
-    lattice.inject(decided(asked, { subject: 'another-workflow' }));
+    const { lattice, reviewRequest } = await awaitingReview();
+    lattice.inject(
+      reviewDecision(reviewRequest, { subject: 'another-workflow' }),
+    );
     await lattice.settle();
 
-    const refused = lattice.transcript.faults[0]?.fault;
-    expect(refused?.faultKind).toBe('addressing_mismatch');
+    const fault = lattice.transcript.faults[0]?.fault;
+    expect(fault?.faultKind).toBe('addressing_mismatch');
     expect(
-      refused?.violations.some((broken) => broken.includes('subject')),
+      fault?.violations.some((violation) => violation.includes('subject')),
     ).toBe(true);
   });
 
   it('answers an execution that already ended: refused, and carries nothing', async () => {
-    const { lattice, asked } = await parked();
-    lattice.inject(decided(asked));
+    const { lattice, reviewRequest } = await awaitingReview();
+    lattice.inject(reviewDecision(reviewRequest));
     await lattice.settle();
-    expect(resting(lattice)).toBe('success');
+    expect(orderLifecycle(lattice)).toBe('success');
 
-    lattice.inject(decided(asked, { id: 'a-second-opinion' }));
+    lattice.inject(reviewDecision(reviewRequest, { id: 'a-second-opinion' }));
     await lattice.settle();
 
-    const late = lattice.transcript.faults.at(-1)?.fault;
-    expect(late?.faultKind).toBe('lifecycle_terminal');
-    expect(late?.abandonmentEvent).toBeNull();
-    expect(late?.abandonmentState).toBeNull();
+    const lateFault = lattice.transcript.faults.at(-1)?.fault;
+    expect(lateFault?.faultKind).toBe('lifecycle_terminal');
+    expect(lateFault?.abandonmentEvent).toBeNull();
+    expect(lateFault?.abandonmentState).toBeNull();
   });
 
   it('answers after the execution outlived its time: refused for time', async () => {
-    const lattice = needingReview(
+    const lattice = reviewLattice(
       createArvoLattice({
         versions: declareVersions({ [orderV1.type]: { executionTimeout: 50 } }),
         seed: 5,
       }),
     );
     await lattice.publish(anOrder()).settle();
-    const asked = lattice.parked.get(REVIEW)?.[0] as ArvoEvent;
+    const reviewRequest = lattice.parked.get(REVIEW)?.[0] as ArvoEvent;
 
-    await new Promise((settle) => setTimeout(settle, 70));
-    lattice.inject(decided(asked));
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    lattice.inject(reviewDecision(reviewRequest));
     await lattice.settle();
 
-    const late = lattice.transcript.faults.at(-1)?.fault;
-    expect(late?.faultKind).toBe('execution_timeout');
-    expect(late?.retry).toBeNull();
-    expect(late?.message).toContain('executionTimeout');
+    const lateFault = lattice.transcript.faults.at(-1)?.fault;
+    expect(lateFault?.faultKind).toBe('execution_timeout');
+    expect(lateFault?.retry).toBeNull();
+    expect(lateFault?.message).toContain('executionTimeout');
   });
 
   it('answers with the service own failure: an answer like any other', async () => {
-    const { lattice, asked } = await parked();
+    const { lattice, reviewRequest } = await awaitingReview();
     lattice.inject(
       cloneArvoEvent(
         createArvoEventFactory(reviewV1).createError({
           source: reviewV1.type,
-          subject: asked.subject,
-          to: asked.source,
+          subject: reviewRequest.subject,
+          to: reviewRequest.source,
           error: new Error('nobody could decide'),
         }),
         {
-          executionid: asked.executionid,
-          parentid: asked.id,
-          initid: asked.id,
-          depth: asked.depth,
+          executionid: reviewRequest.executionid,
+          parentid: reviewRequest.id,
+          initid: reviewRequest.id,
+          depth: reviewRequest.depth,
         },
       ),
     );
     await lattice.settle();
 
-    expect(resting(lattice)).toBe('success');
-    expect(answered(lattice)).toHaveLength(1);
+    expect(orderLifecycle(lattice)).toBe('success');
+    expect(callerAnswers(lattice)).toHaveLength(1);
   });
 
   it('answers with a path still set: it parks again, and the order stalls', async () => {
-    const { lattice, asked } = await parked();
-    lattice.inject(decided(asked, { domain: 'somewhere_else' }));
+    const { lattice, reviewRequest } = await awaitingReview();
+    lattice.inject(reviewDecision(reviewRequest, { domain: 'somewhere_else' }));
     await lattice.settle();
 
     expect(lattice.parked.get('somewhere_else')).toHaveLength(1);
-    expect(resting(lattice)).toBe('waiting');
-    expect(answered(lattice)).toHaveLength(0);
+    expect(orderLifecycle(lattice)).toBe('waiting');
+    expect(callerAnswers(lattice)).toHaveLength(0);
   });
 
   it('answers an execution that never asked: refused, nothing else touched', async () => {
-    const { lattice, asked } = await parked();
+    const { lattice, reviewRequest } = await awaitingReview();
     lattice.inject(
-      decided(asked, { executionid: 'f'.repeat(64), initid: 'never-asked' }),
+      reviewDecision(reviewRequest, {
+        executionid: 'f'.repeat(64),
+        initid: 'never-asked',
+      }),
     );
     await lattice.settle();
 
-    expect(resting(lattice)).toBe('waiting');
+    expect(orderLifecycle(lattice)).toBe('waiting');
     expect(lattice.store.size).toBe(3);
   });
 
   it('injects an order of its own: it opens, like any other', async () => {
-    const { lattice } = await parked();
+    const { lattice } = await awaitingReview();
     lattice.inject(anOrder('order-2'));
     await lattice.settle();
 
@@ -329,50 +339,50 @@ describe('everything the outside world does wrong', () => {
 });
 
 describe('a hundred orders where a third of the people forget', () => {
-  const many = async (count: number) => {
-    const lattice = needingReview(latticeWith({}, 41));
-    for (let at = 0; at < count; at += 1) {
-      lattice.publish(anOrder(`order-${at}`));
+  const ordersAwaitingReview = async (count: number) => {
+    const lattice = reviewLattice(latticeWith({}, 41));
+    for (let orderIndex = 0; orderIndex < count; orderIndex += 1) {
+      lattice.publish(anOrder(`order-${orderIndex}`));
     }
     await lattice.settle();
     return lattice;
   };
 
   it('answers exactly those whose reviewer answered, and no others', async () => {
-    const lattice = await many(60);
-    const waiting = lattice.parked.get(REVIEW) as ArvoEvent[];
-    expect(waiting).toHaveLength(60);
+    const lattice = await ordersAwaitingReview(60);
+    const parkedReviews = lattice.parked.get(REVIEW) as ArvoEvent[];
+    expect(parkedReviews).toHaveLength(60);
 
-    const forgotten = lattice.forget(REVIEW, 1 / 3);
-    for (const asked of lattice.take(REVIEW)) {
-      lattice.inject(decided(asked));
+    const forgottenReviews = lattice.forget(REVIEW, 1 / 3);
+    for (const reviewRequest of lattice.take(REVIEW)) {
+      lattice.inject(reviewDecision(reviewRequest));
     }
     await lattice.settle();
 
-    expect(answered(lattice)).toHaveLength(60 - forgotten.length);
-    expect(forgotten.length).toBeGreaterThan(0);
+    expect(callerAnswers(lattice)).toHaveLength(60 - forgottenReviews.length);
+    expect(forgottenReviews.length).toBeGreaterThan(0);
   });
 
   it('leaves the forgotten waiting, and reports nothing about them', async () => {
-    const lattice = await many(30);
-    const forgotten = lattice.forget(REVIEW, 1 / 2);
-    for (const asked of lattice.take(REVIEW)) {
-      lattice.inject(decided(asked));
+    const lattice = await ordersAwaitingReview(30);
+    const forgottenReviews = lattice.forget(REVIEW, 1 / 2);
+    for (const reviewRequest of lattice.take(REVIEW)) {
+      lattice.inject(reviewDecision(reviewRequest));
     }
     await lattice.settle();
 
-    const stalled = [...lattice.store.values()].filter(
+    const stalledOrders = [...lattice.store.values()].filter(
       (row) => row.source === orderV1.type && row.lifecycle === 'waiting',
     );
-    expect(stalled).toHaveLength(forgotten.length);
+    expect(stalledOrders).toHaveLength(forgottenReviews.length);
     expect(lattice.transcript.faults).toEqual([]);
   });
 
   it('holds everything that must hold, with half the branches stalled', async () => {
-    const lattice = await many(20);
+    const lattice = await ordersAwaitingReview(20);
     lattice.forget(REVIEW, 1 / 2);
-    for (const asked of lattice.take(REVIEW)) {
-      lattice.inject(decided(asked));
+    for (const reviewRequest of lattice.take(REVIEW)) {
+      lattice.inject(reviewDecision(reviewRequest));
     }
     await lattice.settle();
     await checkInvariants(lattice);
@@ -395,9 +405,11 @@ describe('where a version sends its own failures', () => {
 
     // cancelling without answering is a fault, and its contingency is the
     // event a mechanism publishes on giving up
-    const given = lattice.transcript.abandoned[0]?.fault;
-    const told = JSON.parse(given?.abandonmentEvent as string);
-    expect(told.domain).toBe('orders');
+    const abandonmentFault = lattice.transcript.abandoned[0]?.fault;
+    const abandonmentEvent = JSON.parse(
+      abandonmentFault?.abandonmentEvent as string,
+    );
+    expect(abandonmentEvent.domain).toBe('orders');
     expect(lattice.parked.get('orders')).toHaveLength(1);
   });
 
@@ -414,10 +426,10 @@ describe('where a version sends its own failures', () => {
     });
     await lattice.publish(anOrder()).settle();
 
-    const told = JSON.parse(
+    const abandonmentEvent = JSON.parse(
       lattice.transcript.abandoned[0]?.fault.abandonmentEvent as string,
     );
-    expect(told.domain).toBeNull();
+    expect(abandonmentEvent.domain).toBeNull();
     expect(lattice.parked.get('orders') ?? []).toHaveLength(0);
   });
 });

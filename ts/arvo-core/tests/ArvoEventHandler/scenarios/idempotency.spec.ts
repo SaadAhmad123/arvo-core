@@ -17,14 +17,14 @@ import { ScenarioStore } from './store.js';
  */
 
 /** A handler whose executor records the keys it was given. */
-const handlerRecordingKeys = (seen: ArvoIdempotencyKeys[]) =>
+const keyRecordingHandler = (recordedKeys: ArvoIdempotencyKeys[]) =>
   setupArvoEventHandler({
     contracts: { self: fulfilContract, services: { inventory: inventoryV1 } },
   })
     .handler('1.0.0', {
       state: z.object({ stage: z.string() }),
       execute: async (ctx) => {
-        seen.push(ctx.idempotency);
+        recordedKeys.push(ctx.idempotency);
         await ctx.setState({ data: { stage: 'asking' } });
         return ctx.build({
           type: 'com_inventory_reserve',
@@ -37,7 +37,7 @@ const handlerRecordingKeys = (seen: ArvoIdempotencyKeys[]) =>
       execute: async () => {},
     })
     .handler('2.0.0', async (ctx) => {
-      seen.push(ctx.idempotency);
+      recordedKeys.push(ctx.idempotency);
       return ctx.build({
         type: 'evt_order_shipped',
         data: { tracking: 't-1' },
@@ -53,8 +53,8 @@ const anOrder = (subject: string) =>
     data: { items: ['book'] },
   });
 
-const answering = (
-  opened: {
+const inventoryAnswer = (
+  openingOutcome: {
     state: { executionId?: unknown };
     events: readonly { id: string }[];
   },
@@ -65,9 +65,9 @@ const answering = (
     source: inventoryV1.type,
     subject,
     to: fulfilContract.type,
-    executionid: String(opened.state.executionId),
-    initid: opened.events[0]?.id,
-    parentid: opened.events[0]?.id,
+    executionid: String(openingOutcome.state.executionId),
+    initid: openingOutcome.events[0]?.id,
+    parentid: openingOutcome.events[0]?.id,
     data: { held: 1 },
   });
 
@@ -79,25 +79,34 @@ const answering = (
  * that opened it, so reusing the event is the only way to express the
  * same delivery happening twice.
  */
-const openOne = async (event: ReturnType<typeof anOrder>, attempt = 0) => {
-  const seen: ArvoIdempotencyKeys[] = [];
+const openExecution = async (
+  event: ReturnType<typeof anOrder>,
+  attempt = 0,
+) => {
+  const recordedKeys: ArvoIdempotencyKeys[] = [];
   const store = new ScenarioStore();
-  const handler = handlerRecordingKeys(seen);
+  const handler = keyRecordingHandler(recordedKeys);
 
-  const opened = await handler.execute({
+  const openingOutcome = await handler.execute({
     event,
     state: store.resolver,
     attempt,
   });
-  if (opened.kind !== 'produced') throw new Error('nothing was opened');
+  if (openingOutcome.kind !== 'produced') throw new Error('nothing was opened');
 
-  return { opened, store, handler, seen, keys: seen[0] as ArvoIdempotencyKeys };
+  return {
+    openingOutcome,
+    store,
+    handler,
+    recordedKeys,
+    keys: recordedKeys[0] as ArvoIdempotencyKeys,
+  };
 };
 
 describe('the workflow key', () => {
   it('is one key across every execution of the workflow it belongs to', async () => {
-    const seen: ArvoIdempotencyKeys[] = [];
-    const handler = handlerRecordingKeys(seen);
+    const recordedKeys: ArvoIdempotencyKeys[] = [];
+    const handler = keyRecordingHandler(recordedKeys);
     const store = new ScenarioStore();
 
     // Two executions of one workflow: two events sharing a subject open
@@ -111,46 +120,54 @@ describe('the workflow key', () => {
       });
     }
 
-    const [first, second] = seen as [ArvoIdempotencyKeys, ArvoIdempotencyKeys];
-    expect(second.workflow).toBe(first.workflow);
+    const [firstExecutionKeys, secondExecutionKeys] = recordedKeys as [
+      ArvoIdempotencyKeys,
+      ArvoIdempotencyKeys,
+    ];
+    expect(secondExecutionKeys.workflow).toBe(firstExecutionKeys.workflow);
     // and they are two executions, not one seen twice
-    expect(second.execution).not.toBe(first.execution);
+    expect(secondExecutionKeys.execution).not.toBe(
+      firstExecutionKeys.execution,
+    );
   });
 
   it('is a different key for a different workflow', async () => {
-    const here = await openOne(anOrder('one-run'));
-    const elsewhere = await openOne(anOrder('another-run'));
+    const firstWorkflow = await openExecution(anOrder('one-run'));
+    const secondWorkflow = await openExecution(anOrder('another-run'));
 
-    expect(elsewhere.keys.workflow).not.toBe(here.keys.workflow);
+    expect(secondWorkflow.keys.workflow).not.toBe(firstWorkflow.keys.workflow);
   });
 });
 
 describe('the execution key', () => {
   it('is the same key on a later delivery to the same execution', async () => {
-    const { opened, store, handler, seen } = await openOne(anOrder('one-run'));
-    store.commit(opened.state);
+    const { openingOutcome, store, handler, recordedKeys } =
+      await openExecution(anOrder('one-run'));
+    store.commit(openingOutcome.state);
 
     await handler.execute({
-      event: answering(opened, 'one-run'),
+      event: inventoryAnswer(openingOutcome, 'one-run'),
       state: store.resolver,
       attempt: 0,
     });
 
-    const [opening, answered] = seen as [
+    const [openingKeys, answerKeys] = recordedKeys as [
       ArvoIdempotencyKeys,
       ArvoIdempotencyKeys,
     ];
-    expect(answered.execution).toBe(opening.execution);
+    expect(answerKeys.execution).toBe(openingKeys.execution);
     // which is the whole point of it: the delivery key did move
-    expect(answered.delivery).not.toBe(opening.delivery);
-    expect(answered.workflow).toBe(opening.workflow);
+    expect(answerKeys.delivery).not.toBe(openingKeys.delivery);
+    expect(answerKeys.workflow).toBe(openingKeys.workflow);
   });
 
   it('is a different key for another execution of the same workflow', async () => {
-    const first = await openOne(anOrder('one-run'));
-    const second = await openOne(anOrder('one-run'));
+    const firstExecution = await openExecution(anOrder('one-run'));
+    const secondExecution = await openExecution(anOrder('one-run'));
 
-    expect(second.keys.execution).not.toBe(first.keys.execution);
+    expect(secondExecution.keys.execution).not.toBe(
+      firstExecution.keys.execution,
+    );
   });
 });
 
@@ -160,36 +177,37 @@ describe('the delivery key', () => {
     // part the keys are composed from is what it was. No key is keyed
     // on the attempt, which is why the attempt here is not 1.
     const order = anOrder('one-run');
-    const first = await openOne(order);
-    const retried = await openOne(order, 4);
+    const original = await openExecution(order);
+    const retry = await openExecution(order, 4);
 
-    expect(retried.keys).toEqual(first.keys);
+    expect(retry.keys).toEqual(original.keys);
   });
 
   it('is a different key for each event one execution receives', async () => {
-    const { opened, store, handler, seen } = await openOne(anOrder('one-run'));
-    store.commit(opened.state);
+    const { openingOutcome, store, handler, recordedKeys } =
+      await openExecution(anOrder('one-run'));
+    store.commit(openingOutcome.state);
 
     await handler.execute({
-      event: answering(opened, 'one-run'),
+      event: inventoryAnswer(openingOutcome, 'one-run'),
       state: store.resolver,
       attempt: 0,
     });
 
-    expect(seen[1]?.delivery).not.toBe(seen[0]?.delivery);
+    expect(recordedKeys[1]?.delivery).not.toBe(recordedKeys[0]?.delivery);
   });
 });
 
 describe('what the keys are not', () => {
   it('are nowhere in what the execution remembers', async () => {
-    const { opened, keys } = await openOne(anOrder('one-run'));
-    const committed = JSON.stringify(opened.state);
+    const { openingOutcome, keys } = await openExecution(anOrder('one-run'));
+    const recordJson = JSON.stringify(openingOutcome.state);
 
     for (const key of Object.values(keys)) {
-      expect(committed).not.toContain(key);
+      expect(recordJson).not.toContain(key);
     }
     // nor anything of the composition, under any member name
-    expect(committed).not.toContain('arvo-');
+    expect(recordJson).not.toContain('arvo-');
   });
 
   it('are the same keys again where the same events are carried out again', async () => {
@@ -197,9 +215,9 @@ describe('what the keys are not', () => {
     // reaches is what the first reached — which is what lets an effect
     // keyed on one of these not happen twice.
     const order = anOrder('one-run');
-    const once = await openOne(order);
-    const again = await openOne(order);
+    const firstRun = await openExecution(order);
+    const secondRun = await openExecution(order);
 
-    expect(again.keys).toEqual(once.keys);
+    expect(secondRun.keys).toEqual(firstRun.keys);
   });
 });

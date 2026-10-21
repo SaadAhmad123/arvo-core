@@ -11,9 +11,11 @@ const baseParam = (): ArvoEventParam<'test.event', { hello: string }> => ({
   data: { hello: 'world' },
 });
 
-const issuesOf = (fn: () => unknown): ArvoEventValidationError['issues'] => {
+const constructionIssues = (
+  construct: () => unknown,
+): ArvoEventValidationError['issues'] => {
   try {
-    fn();
+    construct();
     throw new Error('expected construction to throw');
   } catch (thrown) {
     if (thrown instanceof ArvoEventValidationError) return thrown.issues;
@@ -21,8 +23,8 @@ const issuesOf = (fn: () => unknown): ArvoEventValidationError['issues'] => {
   }
 };
 
-const pathsOf = (fn: () => unknown): string[] =>
-  issuesOf(fn).map((i) => i.path);
+const constructionPaths = (construct: () => unknown): string[] =>
+  constructionIssues(construct).map((issue) => issue.path);
 
 describe('ArvoEvent', () => {
   describe('defaults', () => {
@@ -33,9 +35,9 @@ describe('ArvoEvent', () => {
     });
 
     it('generates a different id for each instance', () => {
-      const a = new ArvoEvent(baseParam());
-      const b = new ArvoEvent(baseParam());
-      expect(a.id).not.toBe(b.id);
+      const firstEvent = new ArvoEvent(baseParam());
+      const secondEvent = new ArvoEvent(baseParam());
+      expect(firstEvent.id).not.toBe(secondEvent.id);
     });
 
     it('generates ids matching the UUID shape produced by crypto.randomUUID', () => {
@@ -102,14 +104,16 @@ describe('ArvoEvent', () => {
       (field) => {
         const param = baseParam();
         delete (param as Record<string, unknown>)[field];
-        expect(pathsOf(() => new ArvoEvent(param))).toContain(field);
+        expect(constructionPaths(() => new ArvoEvent(param))).toContain(field);
       },
     );
 
     it('reports data as required when omitted', () => {
       const param = baseParam() as Record<string, unknown>;
       delete param.data;
-      expect(pathsOf(() => new ArvoEvent(param as never))).toContain('data');
+      expect(constructionPaths(() => new ArvoEvent(param as never))).toContain(
+        'data',
+      );
     });
   });
 
@@ -123,7 +127,7 @@ describe('ArvoEvent', () => {
       'dataschema',
     ] as const)('rejects an empty string for %s', (field) => {
       const param = { ...baseParam(), [field]: '' };
-      expect(pathsOf(() => new ArvoEvent(param))).toContain(field);
+      expect(constructionPaths(() => new ArvoEvent(param))).toContain(field);
     });
   });
 
@@ -140,8 +144,8 @@ describe('ArvoEvent', () => {
       'rejects whitespace in %s, naming the URI-reference rule',
       (field) => {
         const param = { ...baseParam(), [field]: 'not a uri reference' };
-        const issue = issuesOf(() => new ArvoEvent(param)).find(
-          (i) => i.path === field,
+        const issue = constructionIssues(() => new ArvoEvent(param)).find(
+          (issue) => issue.path === field,
         );
         expect(issue?.message).toContain('URI-reference');
       },
@@ -151,15 +155,17 @@ describe('ArvoEvent', () => {
   describe('character domain', () => {
     it('rejects a control character in a required field, naming the offending code point', () => {
       const param = { ...baseParam(), subject: 'order\u00071' };
-      const issue = issuesOf(() => new ArvoEvent(param)).find(
-        (i) => i.path === 'subject',
+      const issue = constructionIssues(() => new ArvoEvent(param)).find(
+        (issue) => issue.path === 'subject',
       );
       expect(issue?.message).toContain('U+0007');
     });
 
     it('rejects a control character in a nullable field', () => {
       const param = { ...baseParam(), category: 'cat\u0007egory' };
-      expect(pathsOf(() => new ArvoEvent(param))).toContain('category');
+      expect(constructionPaths(() => new ArvoEvent(param))).toContain(
+        'category',
+      );
     });
 
     it('does not apply to strings nested inside data', () => {
@@ -184,7 +190,7 @@ describe('ArvoEvent', () => {
       'rejects an empty string for %s, distinguishing it from null',
       (field) => {
         const param = { ...baseParam(), [field]: '' };
-        expect(pathsOf(() => new ArvoEvent(param))).toContain(field);
+        expect(constructionPaths(() => new ArvoEvent(param))).toContain(field);
       },
     );
   });
@@ -200,9 +206,9 @@ describe('ArvoEvent', () => {
     });
 
     it.each([-1, 1.5, Number.NaN])('rejects %s', (depth) => {
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), depth }))).toContain(
-        'depth',
-      );
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), depth })),
+      ).toContain('depth');
     });
 
     it('rejects a non-number', () => {
@@ -210,7 +216,7 @@ describe('ArvoEvent', () => {
         ...baseParam(),
         depth: 'three',
       } as unknown as ArvoEventParam;
-      expect(pathsOf(() => new ArvoEvent(param))).toContain('depth');
+      expect(constructionPaths(() => new ArvoEvent(param))).toContain('depth');
     });
   });
 
@@ -227,12 +233,12 @@ describe('ArvoEvent', () => {
 
     it('rejects a timestamp without an offset', () => {
       const param = { ...baseParam(), time: '2024-01-01T00:00:00' };
-      expect(pathsOf(() => new ArvoEvent(param))).toContain('time');
+      expect(constructionPaths(() => new ArvoEvent(param))).toContain('time');
     });
 
     it('rejects a non-date string', () => {
       const param = { ...baseParam(), time: 'not-a-date' };
-      expect(pathsOf(() => new ArvoEvent(param))).toContain('time');
+      expect(constructionPaths(() => new ArvoEvent(param))).toContain('time');
     });
   });
 
@@ -251,9 +257,11 @@ describe('ArvoEvent', () => {
 
     it.each([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN])(
       'rejects %s',
-      (value) => {
-        const param = { ...baseParam(), executionunits: value };
-        expect(pathsOf(() => new ArvoEvent(param))).toContain('executionunits');
+      (executionUnits) => {
+        const param = { ...baseParam(), executionunits: executionUnits };
+        expect(constructionPaths(() => new ArvoEvent(param))).toContain(
+          'executionunits',
+        );
       },
     );
 
@@ -272,7 +280,9 @@ describe('ArvoEvent', () => {
 
     it('still rejects a forbidden code point in traceparent', () => {
       const param = { ...baseParam(), traceparent: 'bad\u0007value' };
-      expect(pathsOf(() => new ArvoEvent(param))).toContain('traceparent');
+      expect(constructionPaths(() => new ArvoEvent(param))).toContain(
+        'traceparent',
+      );
     });
   });
 
@@ -289,29 +299,29 @@ describe('ArvoEvent', () => {
   describe('strictness', () => {
     it('rejects an unrecognised key', () => {
       const param = { ...baseParam(), notAField: 'x' };
-      expect(pathsOf(() => new ArvoEvent(param as never))).toContain(
+      expect(constructionPaths(() => new ArvoEvent(param as never))).toContain(
         'notAField',
       );
     });
 
     it('rejects a removed field (extensions)', () => {
       const param = { ...baseParam(), extensions: { a: 1 } };
-      expect(pathsOf(() => new ArvoEvent(param as never))).toContain(
+      expect(constructionPaths(() => new ArvoEvent(param as never))).toContain(
         'extensions',
       );
     });
 
     it('rejects a removed field (rootsubject)', () => {
       const param = { ...baseParam(), rootsubject: 'x' };
-      expect(pathsOf(() => new ArvoEvent(param as never))).toContain(
+      expect(constructionPaths(() => new ArvoEvent(param as never))).toContain(
         'rootsubject',
       );
     });
 
     it('rejects a camelCase typo rather than silently treating it as omitted', () => {
       const param = { ...baseParam(), parentId: 'oops' };
-      const issues = issuesOf(() => new ArvoEvent(param as never));
-      expect(issues.map((i) => i.path)).toContain('parentId');
+      const issues = constructionIssues(() => new ArvoEvent(param as never));
+      expect(issues.map((issue) => issue.path)).toContain('parentId');
       // and it must not have silently become a root event with parentid
       // defaulted — i.e. the typo is reported, not swallowed.
     });
@@ -332,8 +342,10 @@ describe('ArvoEvent', () => {
       ['null', null],
     ] as const)(
       'rejects %s with exactly one clean issue, not one per character or element',
-      (_label, input) => {
-        const issues = issuesOf(() => new ArvoEvent(input as never));
+      (_label, nonObject) => {
+        const issues = constructionIssues(
+          () => new ArvoEvent(nonObject as never),
+        );
         expect(issues).toHaveLength(1);
         expect(issues[0]?.path).toBe('event');
       },
@@ -347,14 +359,16 @@ describe('ArvoEvent', () => {
 
     it('rejects a root event whose executionid differs from subject', () => {
       const param = { ...baseParam(), executionid: 'different' };
-      expect(pathsOf(() => new ArvoEvent(param))).toContain(
+      expect(constructionPaths(() => new ArvoEvent(param))).toContain(
         'parentid + executionid',
       );
     });
 
     it('rejects a root event with non-zero depth', () => {
       const param = { ...baseParam(), depth: 2 };
-      expect(pathsOf(() => new ArvoEvent(param))).toContain('parentid + depth');
+      expect(constructionPaths(() => new ArvoEvent(param))).toContain(
+        'parentid + depth',
+      );
     });
 
     it('PERMITS a caused event (parentid set) at depth 0', () => {
@@ -376,7 +390,7 @@ describe('ArvoEvent', () => {
   describe('correlation constraint', () => {
     it('rejects a completion without initid', () => {
       const param = { ...baseParam(), category: 'io.arvo.complete' };
-      expect(pathsOf(() => new ArvoEvent(param))).toContain(
+      expect(constructionPaths(() => new ArvoEvent(param))).toContain(
         'category + initid',
       );
     });
@@ -409,37 +423,37 @@ describe('ArvoEvent', () => {
       'rejects a non-finite number %s',
       (_label, data, expectedPath) => {
         expect(
-          pathsOf(() => new ArvoEvent({ ...baseParam(), data })),
+          constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
         ).toContain(expectedPath);
       },
     );
 
     it('rejects a bigint as an object property', () => {
       const data = { a: 1n };
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data.a',
-      );
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
+      ).toContain('data.a');
     });
 
     it('rejects a bigint as an array element', () => {
       const data = { a: [1n] };
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data.a[0]',
-      );
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
+      ).toContain('data.a[0]');
     });
 
     it('rejects a function', () => {
       const data = { a: () => {} };
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data.a',
-      );
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
+      ).toContain('data.a');
     });
 
     it('rejects a symbol', () => {
       const data = { a: Symbol('x') };
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data.a',
-      );
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
+      ).toContain('data.a');
     });
 
     it('accepts a Date, serialized via its own toJSON — see the toJSON() block below', () => {
@@ -453,31 +467,31 @@ describe('ArvoEvent', () => {
 
     it('rejects a Map', () => {
       const data = { a: new Map() };
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data.a',
-      );
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
+      ).toContain('data.a');
     });
 
     it('rejects a Set', () => {
       const data = { a: new Set() };
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data.a',
-      );
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
+      ).toContain('data.a');
     });
 
     it('rejects a RegExp', () => {
       const data = { a: /x/ };
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data.a',
-      );
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
+      ).toContain('data.a');
     });
 
     it('rejects a class instance', () => {
-      class Foo {}
-      const data = { a: new Foo() };
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data.a',
-      );
+      class PlainClass {}
+      const data = { a: new PlainClass() };
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
+      ).toContain('data.a');
     });
 
     it.each([
@@ -486,13 +500,15 @@ describe('ArvoEvent', () => {
       ['a number', 42],
     ] as const)('rejects %s as the top-level data value', (_label, data) => {
       expect(
-        pathsOf(() => new ArvoEvent({ ...baseParam(), data: data as never })),
+        constructionPaths(
+          () => new ArvoEvent({ ...baseParam(), data: data as never }),
+        ),
       ).toContain('data');
     });
 
     it('rejects a nested value in baggage', () => {
       const param = { ...baseParam(), baggage: { a: { nested: true } } };
-      expect(pathsOf(() => new ArvoEvent(param as never))).toContain(
+      expect(constructionPaths(() => new ArvoEvent(param as never))).toContain(
         'baggage.a',
       );
     });
@@ -502,7 +518,9 @@ describe('ArvoEvent', () => {
         ...baseParam(),
         baggage: { a: Number.POSITIVE_INFINITY },
       };
-      expect(pathsOf(() => new ArvoEvent(param))).toContain('baggage.a');
+      expect(constructionPaths(() => new ArvoEvent(param))).toContain(
+        'baggage.a',
+      );
     });
   });
 
@@ -552,40 +570,43 @@ describe('ArvoEvent', () => {
     });
 
     it('rejects a toJSON return value that is still outside the JSON domain, at the same path', () => {
-      class Bad {
+      class UnserializableToJson {
         toJSON() {
           return { fn: () => {} };
         }
       }
       expect(
-        pathsOf(
+        constructionPaths(
           () =>
-            new ArvoEvent({ ...baseParam(), data: { b: new Bad() } as never }),
+            new ArvoEvent({
+              ...baseParam(),
+              data: { b: new UnserializableToJson() } as never,
+            }),
         ),
       ).toContain('data.b.fn');
     });
 
     it('reports a throwing toJSON as a validation issue, not an uncaught exception', () => {
-      class Throws {
+      class ThrowingToJson {
         toJSON(): never {
           throw new Error('boom');
         }
       }
-      const issues = issuesOf(
+      const issues = constructionIssues(
         () =>
           new ArvoEvent({
             ...baseParam(),
-            data: { t: new Throws() } as never,
+            data: { t: new ThrowingToJson() } as never,
           }),
       );
-      const issue = issues.find((i) => i.path === 'data.t');
+      const issue = issues.find((candidate) => candidate.path === 'data.t');
       expect(issue?.message).toContain('boom');
     });
 
     it('still rejects a value with no toJSON at all, exactly as before', () => {
       class PlainClass {}
       expect(
-        pathsOf(
+        constructionPaths(
           () =>
             new ArvoEvent({
               ...baseParam(),
@@ -597,13 +618,13 @@ describe('ArvoEvent', () => {
 
     it('still rejects Map and Set, which have no toJSON', () => {
       expect(
-        pathsOf(
+        constructionPaths(
           () =>
             new ArvoEvent({ ...baseParam(), data: { a: new Map() } as never }),
         ),
       ).toContain('data.a');
       expect(
-        pathsOf(
+        constructionPaths(
           () =>
             new ArvoEvent({ ...baseParam(), data: { a: new Set() } as never }),
         ),
@@ -616,14 +637,16 @@ describe('ArvoEvent', () => {
           return { self: this };
         }
       }
-      const issues = issuesOf(
+      const issues = constructionIssues(
         () =>
           new ArvoEvent({
             ...baseParam(),
             data: { c: new Cyclic() } as never,
           }),
       );
-      expect(issues.some((i) => i.message.includes('circular'))).toBe(true);
+      expect(issues.some((issue) => issue.message.includes('circular'))).toBe(
+        true,
+      );
     });
 
     it('accepts a toJSON-having value legitimately repeated in two branches', () => {
@@ -633,12 +656,12 @@ describe('ArvoEvent', () => {
           return this.value;
         }
       }
-      const shared = new Id('shared-id');
+      const sharedId = new Id('shared-id');
       const event = new ArvoEvent({
         ...baseParam(),
         data: {
-          a: shared as unknown as string,
-          b: shared as unknown as string,
+          a: sharedId as unknown as string,
+          b: sharedId as unknown as string,
         },
       });
       expect(event.data.a).toBe('shared-id');
@@ -650,32 +673,32 @@ describe('ArvoEvent', () => {
     it('rejects a self-referential object', () => {
       const data: Record<string, unknown> = { a: 1 };
       data.self = data;
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data.self',
-      );
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
+      ).toContain('data.self');
     });
 
     it('rejects a self-referential array', () => {
-      const arr: unknown[] = [1, 2];
-      arr.push(arr);
-      const data = { list: arr };
+      const cyclicList: unknown[] = [1, 2];
+      cyclicList.push(cyclicList);
+      const data = { list: cyclicList };
       expect(() => new ArvoEvent({ ...baseParam(), data })).toThrow(
         ArvoEventValidationError,
       );
     });
 
     it('rejects a mutual reference between two objects', () => {
-      const a: Record<string, unknown> = {};
-      const b: Record<string, unknown> = { a };
-      a.b = b;
-      expect(() => new ArvoEvent({ ...baseParam(), data: a })).toThrow(
+      const cycleStart: Record<string, unknown> = {};
+      const cycleEnd: Record<string, unknown> = { a: cycleStart };
+      cycleStart.b = cycleEnd;
+      expect(() => new ArvoEvent({ ...baseParam(), data: cycleStart })).toThrow(
         ArvoEventValidationError,
       );
     });
 
     it('ACCEPTS a value legitimately repeated in two branches, which is not a cycle', () => {
-      const shared = { x: 1 };
-      const data = { a: shared, b: shared };
+      const sharedBranch = { x: 1 };
+      const data = { a: sharedBranch, b: sharedBranch };
       expect(() => new ArvoEvent({ ...baseParam(), data })).not.toThrow();
     });
   });
@@ -708,9 +731,9 @@ describe('ArvoEvent', () => {
     });
 
     it('produces a payload equivalent to serializing the original input', () => {
-      const input = { a: undefined, b: 1, c: [undefined, 2] };
-      const event = new ArvoEvent({ ...baseParam(), data: input as never });
-      expect(event.data).toEqual(JSON.parse(JSON.stringify(input)));
+      const payload = { a: undefined, b: 1, c: [undefined, 2] };
+      const event = new ArvoEvent({ ...baseParam(), data: payload as never });
+      expect(event.data).toEqual(JSON.parse(JSON.stringify(payload)));
     });
   });
 
@@ -726,16 +749,16 @@ describe('ArvoEvent', () => {
   describe('path reporting', () => {
     it('names the exact path to a failure several levels deep, including array indices', () => {
       const data = { a: { b: [{ c: Number.NaN }] } };
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data.a.b[0].c',
-      );
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
+      ).toContain('data.a.b[0].c');
     });
 
     it('brackets a non-identifier key', () => {
       const data = { 'weird key': Number.NaN };
-      expect(pathsOf(() => new ArvoEvent({ ...baseParam(), data }))).toContain(
-        'data["weird key"]',
-      );
+      expect(
+        constructionPaths(() => new ArvoEvent({ ...baseParam(), data })),
+      ).toContain('data["weird key"]');
     });
   });
 
@@ -779,13 +802,13 @@ describe('ArvoEvent', () => {
         ...baseParam(),
         data: { nested: { a: 1 } },
       });
-      const nested = event.data.nested as { a: number };
+      const nestedPayload = event.data.nested as { a: number };
       try {
-        nested.a = 999;
+        nestedPayload.a = 999;
       } catch {
         // strict mode throws; either outcome is fine
       }
-      expect(nested.a).toBe(1);
+      expect(nestedPayload.a).toBe(1);
     });
   });
 
@@ -801,7 +824,7 @@ describe('ArvoEvent', () => {
 
     it('still enforces field rules when skipPayloadValidation is set', () => {
       expect(
-        pathsOf(
+        constructionPaths(
           () =>
             new ArvoEvent(
               { ...baseParam(), depth: -1 },
@@ -813,7 +836,7 @@ describe('ArvoEvent', () => {
 
     it('still enforces cross-field rules when skipPayloadValidation is set', () => {
       expect(
-        pathsOf(
+        constructionPaths(
           () =>
             new ArvoEvent(
               { ...baseParam(), executionid: 'wrong' },
@@ -831,10 +854,10 @@ describe('ArvoEvent', () => {
 
   describe('diagnostics', () => {
     it('names the field, the rule, and the received value for a field failure', () => {
-      const issues = issuesOf(
+      const issues = constructionIssues(
         () => new ArvoEvent({ ...baseParam(), depth: -1 }),
       );
-      const issue = issues.find((i) => i.path === 'depth');
+      const issue = issues.find((candidate) => candidate.path === 'depth');
       expect(issue).toBeDefined();
       expect(issue?.message).toContain('non-negative integer');
       expect(issue?.received).toBe(-1);
@@ -842,20 +865,22 @@ describe('ArvoEvent', () => {
 
     it('reports several field failures together rather than only the first', () => {
       const param = { source: '', type: '' } as unknown as ArvoEventParam;
-      const issues = issuesOf(() => new ArvoEvent(param));
+      const issues = constructionIssues(() => new ArvoEvent(param));
       expect(issues.length).toBeGreaterThanOrEqual(3);
     });
 
     it('explains a cross-field failure rather than naming only the fields', () => {
-      const issues = issuesOf(
+      const issues = constructionIssues(
         () => new ArvoEvent({ ...baseParam(), category: 'io.arvo.complete' }),
       );
-      const issue = issues.find((i) => i.path === 'category + initid');
+      const issue = issues.find(
+        (candidate) => candidate.path === 'category + initid',
+      );
       expect(issue?.message).toContain('must carry initid');
     });
 
     it('preserves every issue on the thrown error, accessible without parsing the message', () => {
-      const issues = issuesOf(
+      const issues = constructionIssues(
         () => new ArvoEvent({ ...baseParam(), depth: -1 }),
       );
       expect(Array.isArray(issues)).toBe(true);
@@ -901,113 +926,119 @@ describe('ArvoEvent', () => {
 describe('ArvoEvent.parse', () => {
   it('succeeds identically to new ArvoEvent(...), field for field', () => {
     const param = baseParam();
-    const viaNew = new ArvoEvent(param);
-    const viaParse = ArvoEvent.parse(param);
-    expect(viaParse).toBeInstanceOf(ArvoEvent);
-    expect(viaParse.subject).toBe(viaNew.subject);
-    expect(viaParse.source).toBe(viaNew.source);
-    expect(viaParse.dataschema).toBe(viaNew.dataschema);
-    expect(viaParse.executionid).toBe(viaParse.subject);
-    expect(Object.isFrozen(viaParse)).toBe(true);
+    const constructedEvent = new ArvoEvent(param);
+    const parsedEvent = ArvoEvent.parse(param);
+    expect(parsedEvent).toBeInstanceOf(ArvoEvent);
+    expect(parsedEvent.subject).toBe(constructedEvent.subject);
+    expect(parsedEvent.source).toBe(constructedEvent.source);
+    expect(parsedEvent.dataschema).toBe(constructedEvent.dataschema);
+    expect(parsedEvent.executionid).toBe(parsedEvent.subject);
+    expect(Object.isFrozen(parsedEvent)).toBe(true);
   });
 
   it('throws ArvoEventValidationError on invalid input, with the same issues a direct construction would produce', () => {
-    const bad = { source: 'a' };
-    let fromParse: ArvoEventValidationError | undefined;
-    let fromNew: ArvoEventValidationError | undefined;
+    const incompleteParam = { source: 'a' };
+    let parseError: ArvoEventValidationError | undefined;
+    let constructorError: ArvoEventValidationError | undefined;
     try {
-      ArvoEvent.parse(bad as never);
+      ArvoEvent.parse(incompleteParam as never);
     } catch (thrown) {
-      fromParse = thrown as ArvoEventValidationError;
+      parseError = thrown as ArvoEventValidationError;
     }
     try {
-      new ArvoEvent(bad as never);
+      new ArvoEvent(incompleteParam as never);
     } catch (thrown) {
-      fromNew = thrown as ArvoEventValidationError;
+      constructorError = thrown as ArvoEventValidationError;
     }
-    expect(fromParse).toBeInstanceOf(ArvoEventValidationError);
-    expect(fromParse?.message).toBe(fromNew?.message);
+    expect(parseError).toBeInstanceOf(ArvoEventValidationError);
+    expect(parseError?.message).toBe(constructorError?.message);
   });
 });
 
 describe('ArvoEvent.tryParse', () => {
   it('returns a genuine ArvoEvent instance on success', () => {
-    const result = ArvoEvent.tryParse(baseParam());
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toBeInstanceOf(ArvoEvent);
-      expect(result.value.executionid).toBe(result.value.subject);
+    const parseResult = ArvoEvent.tryParse(baseParam());
+    expect(parseResult.ok).toBe(true);
+    if (parseResult.ok) {
+      expect(parseResult.value).toBeInstanceOf(ArvoEvent);
+      expect(parseResult.value.executionid).toBe(parseResult.value.subject);
     }
   });
 
   it('reports failure as a value rather than throwing on invalid input', () => {
-    const result = ArvoEvent.tryParse({ source: 'a' });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error).toBeInstanceOf(ArvoEventValidationError);
-      expect(result.error.issues.some((i) => i.path === 'subject')).toBe(true);
+    const parseResult = ArvoEvent.tryParse({ source: 'a' });
+    expect(parseResult.ok).toBe(false);
+    if (!parseResult.ok) {
+      expect(parseResult.error).toBeInstanceOf(ArvoEventValidationError);
+      expect(
+        parseResult.error.issues.some((issue) => issue.path === 'subject'),
+      ).toBe(true);
     }
   });
 
   it('fails cleanly on input that is not even an object', () => {
-    const result = ArvoEvent.tryParse('not an object');
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.issues).toHaveLength(1);
-      expect(result.error.issues[0]?.path).toBe('event');
+    const parseResult = ArvoEvent.tryParse('not an object');
+    expect(parseResult.ok).toBe(false);
+    if (!parseResult.ok) {
+      expect(parseResult.error.issues).toHaveLength(1);
+      expect(parseResult.error.issues[0]?.path).toBe('event');
     }
   });
 
   it('still enforces structural rules, not bypassing them', () => {
-    const result = ArvoEvent.tryParse({
+    const parseResult = ArvoEvent.tryParse({
       ...baseParam(),
       data: { a: Number.POSITIVE_INFINITY },
     });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.issues.some((i) => i.path === 'data.a')).toBe(true);
+    expect(parseResult.ok).toBe(false);
+    if (!parseResult.ok) {
+      expect(
+        parseResult.error.issues.some((issue) => issue.path === 'data.a'),
+      ).toBe(true);
     }
   });
 
   it("returns arvo-core's own plain Result shape, not a leaked neverthrow instance", () => {
-    const success = ArvoEvent.tryParse(baseParam());
-    expect(success.constructor).toBe(Object);
-    expect('isOk' in success).toBe(false);
-    expect('match' in success).toBe(false);
-    expect('_unsafeUnwrap' in success).toBe(false);
+    const successfulParse = ArvoEvent.tryParse(baseParam());
+    expect(successfulParse.constructor).toBe(Object);
+    expect('isOk' in successfulParse).toBe(false);
+    expect('match' in successfulParse).toBe(false);
+    expect('_unsafeUnwrap' in successfulParse).toBe(false);
 
-    const failure = ArvoEvent.tryParse({ source: 'a' });
-    expect(failure.constructor).toBe(Object);
-    expect('isOk' in failure).toBe(false);
+    const failedParse = ArvoEvent.tryParse({ source: 'a' });
+    expect(failedParse.constructor).toBe(Object);
+    expect('isOk' in failedParse).toBe(false);
   });
 
   it('agrees with parse on the same input, success and failure alike', () => {
     const param = baseParam();
-    const viaParse = ArvoEvent.parse(param);
-    const tried = ArvoEvent.tryParse(param);
-    expect(tried.ok).toBe(true);
-    if (tried.ok) {
-      expect(tried.value.subject).toBe(viaParse.subject);
-      expect(tried.value.dataschema).toBe(viaParse.dataschema);
+    const parsedEvent = ArvoEvent.parse(param);
+    const parseResult = ArvoEvent.tryParse(param);
+    expect(parseResult.ok).toBe(true);
+    if (parseResult.ok) {
+      expect(parseResult.value.subject).toBe(parsedEvent.subject);
+      expect(parseResult.value.dataschema).toBe(parsedEvent.dataschema);
     }
 
-    const bad = { source: 'a' };
+    const incompleteParam = { source: 'a' };
     let thrownError: ArvoEventValidationError | undefined;
     try {
-      ArvoEvent.parse(bad as never);
+      ArvoEvent.parse(incompleteParam as never);
     } catch (thrown) {
       thrownError = thrown as ArvoEventValidationError;
     }
-    const failed = ArvoEvent.tryParse(bad);
+    const failedParse = ArvoEvent.tryParse(incompleteParam);
     expect(thrownError).toBeInstanceOf(ArvoEventValidationError);
-    expect(!failed.ok && failed.error.message).toBe(thrownError?.message);
+    expect(!failedParse.ok && failedParse.error.message).toBe(
+      thrownError?.message,
+    );
   });
 
   it('re-throws a non-ArvoEventValidationError rather than wrapping it in an error result', () => {
     // The constructor spreads `param` before validation ever runs, which
     // invokes a getter if present. A throwing getter produces a genuine
     // non-validation exception straight out of the constructor.
-    const pathological = {
+    const throwingGetterParam = {
       get subject(): string {
         throw new RangeError('boom-from-getter');
       },
@@ -1017,8 +1048,8 @@ describe('ArvoEvent.tryParse', () => {
       data: {},
     };
 
-    expect(() => ArvoEvent.tryParse(pathological)).toThrow(RangeError);
-    expect(() => ArvoEvent.tryParse(pathological)).not.toThrow(
+    expect(() => ArvoEvent.tryParse(throwingGetterParam)).toThrow(RangeError);
+    expect(() => ArvoEvent.tryParse(throwingGetterParam)).not.toThrow(
       ArvoEventValidationError,
     );
   });

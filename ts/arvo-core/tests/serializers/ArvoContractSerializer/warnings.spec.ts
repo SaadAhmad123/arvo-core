@@ -42,31 +42,31 @@ describe('buildWarningFromErrorIssues', () => {
 });
 
 describe('a drop and a demotion read differently', () => {
-  const dropped = droppedConstraint('input.a', 'a BigInt');
-  const demoted = demotedCheck('input.email', 'format: email');
+  const dropWarning = droppedConstraint('input.a', 'a BigInt');
+  const demotionWarning = demotedCheck('input.email', 'format: email');
 
   it('a drop says the constraint is gone', () => {
-    expect(dropped.toString()).toContain('dropped');
+    expect(dropWarning.toString()).toContain('dropped');
   });
 
   it('a demotion says it survives but enforces nothing', () => {
-    expect(demoted.toString()).toContain('documentation only');
-    expect(demoted.toString()).toContain('nothing enforces it');
+    expect(demotionWarning.toString()).toContain('documentation only');
+    expect(demotionWarning.toString()).toContain('nothing enforces it');
   });
 
   it('neither is mistakable for the other', () => {
-    expect(demoted.toString()).not.toContain('dropped');
-    expect(dropped.toString()).not.toContain('documentation only');
+    expect(demotionWarning.toString()).not.toContain('dropped');
+    expect(dropWarning.toString()).not.toContain('documentation only');
   });
 
   it('both carry the position they came from', () => {
-    expect(dropped.path).toBe('input.a');
-    expect(demoted.path).toBe('input.email');
+    expect(dropWarning.path).toBe('input.a');
+    expect(demotionWarning.path).toBe('input.email');
   });
 
   it('neither is blocking — a loss does not stop the crossing', () => {
-    expect(dropped.isBlocking).toBe(false);
-    expect(demoted.isBlocking).toBe(false);
+    expect(dropWarning.isBlocking).toBe(false);
+    expect(demotionWarning.isBlocking).toBe(false);
   });
 });
 

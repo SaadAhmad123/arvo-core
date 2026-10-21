@@ -26,62 +26,62 @@ import { ScenarioStore } from './store.js';
  * things, and one remembers nothing at all.
  */
 
-const opening = (subject: string) => ({
+const openingFields = (subject: string) => ({
   source: 'com.web.checkout',
   subject,
   to: fulfilContract.type,
 });
 
-const atFirst = (subject: string) =>
+const v1Opening = (subject: string) =>
   createArvoEventFactory(fulfilV1).createInput({
-    ...opening(subject),
+    ...openingFields(subject),
     data: { items: ['book'] },
   });
 
-const atSecond = (subject: string) =>
+const v11Opening = (subject: string) =>
   createArvoEventFactory(fulfilV11).createInput({
-    ...opening(subject),
+    ...openingFields(subject),
     data: { items: ['book'], rush: true },
   });
 
-const atThird = (subject: string) =>
+const v2Opening = (subject: string) =>
   createArvoEventFactory(fulfilV2).createInput({
-    ...opening(subject),
+    ...openingFields(subject),
     data: { items: ['book'] },
   });
 
 /** Opens an execution and commits what it produced. */
 const open = async (
-  event: ReturnType<typeof atFirst>,
+  event: ReturnType<typeof v1Opening>,
   store: ScenarioStore,
   handler = declareHandler(),
 ) => {
-  const ran = await handler.execute({
+  const outcome = await handler.execute({
     event,
     state: store.resolver,
     attempt: 0,
   });
-  if (ran.kind !== 'produced') throw new Error('nothing was opened');
-  store.commit(ran.state);
-  return ran;
+  if (outcome.kind !== 'produced') throw new Error('nothing was opened');
+  store.commit(outcome.state);
+  return outcome;
 };
 
 /** What a service answers one of those executions with. */
-const answer = (
-  opened: { state: JSONObject; events: readonly { id: string }[] },
+const serviceAnswer = (
+  openingOutcome: { state: JSONObject; events: readonly { id: string }[] },
   subject: string,
-  from: typeof inventoryV1 | typeof paymentV1,
-  at = 0,
+  service: typeof inventoryV1 | typeof paymentV1,
+  requestIndex = 0,
 ) =>
-  from.type === inventoryV1.type
+  service.type === inventoryV1.type
     ? createArvoEventFactory(inventoryV1).createOutput({
         type: 'evt_inventory_reserved',
         source: inventoryV1.type,
         subject,
         to: fulfilContract.type,
-        executionid: String(opened.state.executionId),
-        initid: opened.events[at]?.id,
-        parentid: opened.events[at]?.id,
+        executionid: String(openingOutcome.state.executionId),
+        initid: openingOutcome.events[requestIndex]?.id,
+        parentid: openingOutcome.events[requestIndex]?.id,
         data: { held: 1 },
       })
     : createArvoEventFactory(paymentV1).createOutput({
@@ -89,9 +89,9 @@ const answer = (
         source: paymentV1.type,
         subject,
         to: fulfilContract.type,
-        executionid: String(opened.state.executionId),
-        initid: opened.events[at]?.id,
-        parentid: opened.events[at]?.id,
+        executionid: String(openingOutcome.state.executionId),
+        initid: openingOutcome.events[requestIndex]?.id,
+        parentid: openingOutcome.events[requestIndex]?.id,
         data: { receipt: 'r-1' },
       });
 
@@ -100,51 +100,51 @@ describe('three versions of one contract, open at once', () => {
     const store = new ScenarioStore();
     const handler = declareHandler();
 
-    const first = await open(atFirst('order-first'), store, handler);
-    const second = await open(atSecond('order-second'), store, handler);
-    const third = await open(atThird('order-third'), store, handler);
+    const v1Outcome = await open(v1Opening('order-first'), store, handler);
+    const v11Outcome = await open(v11Opening('order-second'), store, handler);
+    const v2Outcome = await open(v2Opening('order-third'), store, handler);
 
-    expect(first.state.version).toBe('1.0.0');
-    expect(second.state.version).toBe('1.1.0');
-    expect(third.state.version).toBe('2.0.0');
+    expect(v1Outcome.state.version).toBe('1.0.0');
+    expect(v11Outcome.state.version).toBe('1.1.0');
+    expect(v2Outcome.state.version).toBe('2.0.0');
   });
 
   it('gives each the state only its own version declares', async () => {
     const store = new ScenarioStore();
     const handler = declareHandler();
 
-    const first = await open(atFirst('order-first'), store, handler);
-    const second = await open(atSecond('order-second'), store, handler);
-    const third = await open(atThird('order-third'), store, handler);
+    const v1Outcome = await open(v1Opening('order-first'), store, handler);
+    const v11Outcome = await open(v11Opening('order-second'), store, handler);
+    const v2Outcome = await open(v2Opening('order-third'), store, handler);
 
-    expect(first.state.data).toEqual({ stage: 'asking', answers: 0 });
-    expect(second.state.data).toEqual({
+    expect(v1Outcome.state.data).toEqual({ stage: 'asking', answers: 0 });
+    expect(v11Outcome.state.data).toEqual({
       stage: 'asking',
       answers: 0,
       rush: true,
     });
     // this one declared none, so it remembers none
-    expect(third.state.data).toBeNull();
+    expect(v2Outcome.state.data).toBeNull();
   });
 
   it('lets each answer with what only it answers with', async () => {
     const store = new ScenarioStore();
-    const third = await open(atThird('order-third'), store);
-    expect(third.events[0]?.type).toBe('evt_order_shipped');
+    const v2Outcome = await open(v2Opening('order-third'), store);
+    expect(v2Outcome.events[0]?.type).toBe('evt_order_shipped');
   });
 
   it('asks the services each version asks, and no others', async () => {
     const store = new ScenarioStore();
     const handler = declareHandler();
 
-    const first = await open(atFirst('order-first'), store, handler);
-    const second = await open(atSecond('order-second'), store, handler);
+    const v1Outcome = await open(v1Opening('order-first'), store, handler);
+    const v11Outcome = await open(v11Opening('order-second'), store, handler);
 
-    expect(first.events.map((one) => one.type).sort()).toEqual([
+    expect(v1Outcome.events.map((event) => event.type).sort()).toEqual([
       'com_inventory_reserve',
       'com_payment_charge',
     ]);
-    expect(second.events.map((one) => one.type)).toEqual([
+    expect(v11Outcome.events.map((event) => event.type)).toEqual([
       'com_payment_charge',
     ]);
   });
@@ -153,46 +153,46 @@ describe('three versions of one contract, open at once', () => {
     const store = new ScenarioStore();
     const handler = declareHandler();
 
-    const first = await open(atFirst('order-first'), store, handler);
-    const second = await open(atSecond('order-second'), store, handler);
+    const v1Outcome = await open(v1Opening('order-first'), store, handler);
+    const v11Outcome = await open(v11Opening('order-second'), store, handler);
 
     // the second completes first, which is what interleaving means
-    const secondDone = await handler.execute({
-      event: answer(second, 'order-second', paymentV1),
+    const v11Completion = await handler.execute({
+      event: serviceAnswer(v11Outcome, 'order-second', paymentV1),
       state: store.resolver,
       attempt: 0,
     });
-    if (secondDone.kind !== 'produced') throw new Error('not answered');
-    store.commit(secondDone.state);
+    if (v11Completion.kind !== 'produced') throw new Error('not answered');
+    store.commit(v11Completion.state);
 
     // and the first needs both of its answers
-    const firstPart = await handler.execute({
-      event: answer(first, 'order-first', inventoryV1, 0),
+    const v1Partial = await handler.execute({
+      event: serviceAnswer(v1Outcome, 'order-first', inventoryV1, 0),
       state: store.resolver,
       attempt: 0,
     });
-    if (firstPart.kind !== 'produced') throw new Error('not recorded');
-    store.commit(firstPart.state);
+    if (v1Partial.kind !== 'produced') throw new Error('not recorded');
+    store.commit(v1Partial.state);
 
-    const firstDone = await handler.execute({
-      event: answer(first, 'order-first', paymentV1, 1),
+    const v1Completion = await handler.execute({
+      event: serviceAnswer(v1Outcome, 'order-first', paymentV1, 1),
       state: store.resolver,
       attempt: 0,
     });
-    if (firstDone.kind !== 'produced') throw new Error('not answered');
+    if (v1Completion.kind !== 'produced') throw new Error('not answered');
 
-    expect(secondDone.state.version).toBe('1.1.0');
-    expect(firstDone.state.version).toBe('1.0.0');
-    expect(secondDone.state.data).toMatchObject({ rush: true });
-    expect(firstDone.state.data).toEqual({ stage: 'answering', answers: 2 });
+    expect(v11Completion.state.version).toBe('1.1.0');
+    expect(v1Completion.state.version).toBe('1.0.0');
+    expect(v11Completion.state.data).toMatchObject({ rush: true });
+    expect(v1Completion.state.data).toEqual({ stage: 'answering', answers: 2 });
   });
 
   it('keeps each execution under its own identity', async () => {
     const store = new ScenarioStore();
     const handler = declareHandler();
-    await open(atFirst('order-first'), store, handler);
-    await open(atSecond('order-second'), store, handler);
-    await open(atThird('order-third'), store, handler);
+    await open(v1Opening('order-first'), store, handler);
+    await open(v11Opening('order-second'), store, handler);
+    await open(v2Opening('order-third'), store, handler);
 
     expect(store.rows.size).toBe(3);
     expect(new Set([...store.rows.keys()]).size).toBe(3);
@@ -202,61 +202,65 @@ describe('three versions of one contract, open at once', () => {
 describe('a rolling upgrade, seen from outside', () => {
   it('strands the executions of a version that was removed', async () => {
     const store = new ScenarioStore();
-    const before = declareHandler();
-    const opened = await open(atFirst('order-first'), store, before);
+    const handlerBeforeDrain = declareHandler();
+    const openingOutcome = await open(
+      v1Opening('order-first'),
+      store,
+      handlerBeforeDrain,
+    );
 
     // the version is drained and removed, and this execution was still open
-    const after = declareHandlerAfterDrain();
-    const refused = await after.tryExecute({
-      event: answer(opened, 'order-first', inventoryV1),
+    const handlerAfterDrain = declareHandlerAfterDrain();
+    const refusal = await handlerAfterDrain.tryExecute({
+      event: serviceAnswer(openingOutcome, 'order-first', inventoryV1),
       state: store.resolver,
       attempt: 0,
     });
 
-    expect(!refused.ok && refused.error.faultKind).toBe('version_not_declared');
+    expect(!refusal.ok && refusal.error.faultKind).toBe('version_not_declared');
   });
 
   it('tells each stranded caller, so nobody waits for an answer that is not coming', async () => {
     const store = new ScenarioStore();
-    const opened = await open(atFirst('order-first'), store);
-    const after = declareHandlerAfterDrain();
+    const openingOutcome = await open(v1Opening('order-first'), store);
+    const handlerAfterDrain = declareHandlerAfterDrain();
 
-    const refused = await after.tryExecute({
-      event: answer(opened, 'order-first', inventoryV1),
+    const refusal = await handlerAfterDrain.tryExecute({
+      event: serviceAnswer(openingOutcome, 'order-first', inventoryV1),
       state: store.resolver,
       attempt: 0,
     });
-    if (refused.ok) throw new Error('nothing was refused');
+    if (refusal.ok) throw new Error('nothing was refused');
 
-    const told = JSON.parse(String(refused.error.abandonmentEvent)) as {
+    const abandonment = JSON.parse(String(refusal.error.abandonmentEvent)) as {
       type: string;
       to: string;
       data: { errorName: string };
     };
-    expect(told.to).toBe('com.web.checkout');
-    expect(told.type).toBe(fulfilV1.error.type);
+    expect(abandonment.to).toBe('com.web.checkout');
+    expect(abandonment.type).toBe(fulfilV1.error.type);
   });
 
   it('keeps taking new work at the versions that remain', async () => {
     const store = new ScenarioStore();
-    const after = declareHandlerAfterDrain();
+    const handlerAfterDrain = declareHandlerAfterDrain();
 
-    const taken = await after.execute({
-      event: atSecond('order-second'),
+    const outcome = await handlerAfterDrain.execute({
+      event: v11Opening('order-second'),
       state: store.resolver,
       attempt: 0,
     });
-    expect(taken.kind).toBe('produced');
-    expect(taken.kind === 'produced' && taken.state.version).toBe('1.1.0');
+    expect(outcome.kind).toBe('produced');
+    expect(outcome.kind === 'produced' && outcome.state.version).toBe('1.1.0');
   });
 
   it('refuses new work at the version that went', async () => {
-    const after = declareHandlerAfterDrain();
-    const refused = await after.tryExecute({
-      event: atFirst('order-first'),
+    const handlerAfterDrain = declareHandlerAfterDrain();
+    const refusal = await handlerAfterDrain.tryExecute({
+      event: v1Opening('order-first'),
       state: new ScenarioStore().resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.faultKind).toBe('event_unclassifiable');
+    expect(!refusal.ok && refusal.error.faultKind).toBe('event_unclassifiable');
   });
 });

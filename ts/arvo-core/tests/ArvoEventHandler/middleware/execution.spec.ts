@@ -96,7 +96,9 @@ describe('what a before part can do to what the executor sees', () => {
           id: 'stager',
           before: async (ctx) => {
             await (
-              ctx as never as { setState: (p: unknown) => Promise<void> }
+              ctx as never as {
+                setState: (stateUpdate: unknown) => Promise<void>;
+              }
             ).setState({
               data: { stage: 'set-by-layer' },
             });
@@ -403,7 +405,7 @@ describe('a way to make a layer', () => {
     expect(instances).toHaveLength(2);
     expect(instances[0]).not.toBe(instances[1]);
     expect(
-      (instances as Stopwatch[]).every((spanEvent) => spanEvent.took >= 0),
+      (instances as Stopwatch[]).every((stopwatch) => stopwatch.took >= 0),
     ).toBe(true);
   });
 
@@ -559,8 +561,8 @@ describe('where layers do not run', () => {
 describe('the span', () => {
   it('is one span however many layers there are', async () => {
     const spanRecorder = recordingSpan();
-    const manyLayers = Array.from({ length: 50 }, (_, index) => ({
-      id: `l${index}`,
+    const manyLayers = Array.from({ length: 50 }, (_, layerIndex) => ({
+      id: `l${layerIndex}`,
       before: () => undefined,
       after: () => undefined,
     }));

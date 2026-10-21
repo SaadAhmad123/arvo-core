@@ -10,7 +10,7 @@ import type { ArvoFaultKind } from '../../../src/ArvoEventHandler/fault/types.js
 import type { ArvoRetryDelayFn } from '../../../src/ArvoEventHandler/types/options.js';
 import { chargedEvent } from '../fixtures.js';
 
-const verdict = (overrides: Partial<ArvoRetryVerdictParam> = {}) =>
+const retryVerdict = (overrides: Partial<ArvoRetryVerdictParam> = {}) =>
   resolveRetry({
     retrySafe: true,
     attempt: 0,
@@ -84,21 +84,23 @@ describe('how long to wait', () => {
   });
 
   it('tells the function everything a backoff can turn on', () => {
-    const seen: unknown[] = [];
-    const record: ArvoRetryDelayFn = (...args) => {
-      seen.push(...args);
+    const receivedArguments: unknown[] = [];
+    const recordingDelay: ArvoRetryDelayFn = (...delayArguments) => {
+      receivedArguments.push(...delayArguments);
       return 1;
     };
-    resolveRetryDelayMs(record, chargedEvent, null, 2, 5);
-    expect(seen).toEqual([chargedEvent, null, 2, 5]);
+    resolveRetryDelayMs(recordingDelay, chargedEvent, null, 2, 5);
+    expect(receivedArguments).toEqual([chargedEvent, null, 2, 5]);
   });
 
   describe('a function that cannot be trusted', () => {
     it('falls back where it throws', () => {
-      const broken: ArvoRetryDelayFn = () => {
+      const throwingDelay: ArvoRetryDelayFn = () => {
         throw new Error('no');
       };
-      expect(resolveRetryDelayMs(broken, chargedEvent, null, 0, 3)).toBe(300);
+      expect(resolveRetryDelayMs(throwingDelay, chargedEvent, null, 0, 3)).toBe(
+        300,
+      );
     });
 
     it.each([
@@ -107,44 +109,46 @@ describe('how long to wait', () => {
       ['a fraction of a millisecond', 1.5],
       ['a negative wait', -1],
       ['something unmeasurable', Number.NaN],
-    ])('falls back where it returns %s', (_label, returned) => {
+    ])('falls back where it returns %s', (_label, badDelay) => {
       // Deliberately not a count of milliseconds: the point of the test.
-      const odd = () => returned as unknown as number;
-      expect(resolveRetryDelayMs(odd, chargedEvent, null, 0, 3)).toBe(300);
+      const misbehavingDelay = () => badDelay as unknown as number;
+      expect(
+        resolveRetryDelayMs(misbehavingDelay, chargedEvent, null, 0, 3),
+      ).toBe(300);
     });
   });
 });
 
 describe('what a fault says about another attempt', () => {
   it('says how many this version allows', () => {
-    expect(verdict()?.maxRetryAttemptsAllowed).toBe(3);
+    expect(retryVerdict()?.maxRetryAttemptsAllowed).toBe(3);
   });
 
   it('says how long to wait, and when that lands', () => {
-    const retry = verdict({ retryDelay: 5_000 });
+    const retry = retryVerdict({ retryDelay: 5_000 });
     expect(retry?.retryInMs).toBe(5_000);
     expect(retry?.retryAt).toBe(1_700_000_005_000);
   });
 
   it('says nothing where nothing would fix the failure', () => {
-    expect(verdict({ retrySafe: false })).toBeNull();
+    expect(retryVerdict({ retrySafe: false })).toBeNull();
   });
 
   describe('once the attempts are spent', () => {
     it('says nothing on the attempt that reaches the limit', () => {
-      expect(verdict({ attempt: 3 })).toBeNull();
+      expect(retryVerdict({ attempt: 3 })).toBeNull();
     });
 
     it('says nothing past it', () => {
-      expect(verdict({ attempt: 9 })).toBeNull();
+      expect(retryVerdict({ attempt: 9 })).toBeNull();
     });
 
     it('still says something on the one before', () => {
-      expect(verdict({ attempt: 2 })).not.toBeNull();
+      expect(retryVerdict({ attempt: 2 })).not.toBeNull();
     });
 
     it('says nothing at all where none were allowed', () => {
-      expect(verdict({ maxRetryAttempts: 0 })).toBeNull();
+      expect(retryVerdict({ maxRetryAttempts: 0 })).toBeNull();
     });
   });
 });

@@ -26,7 +26,7 @@ const aWalk = (remaining: number, subject = 'walk-1') =>
     data: { node: 'root', remaining },
   });
 
-const walked = async (remaining = DEEP, chaos = {}) => {
+const latticeAfterWalk = async (remaining = DEEP, chaos = {}) => {
   const lattice = createArvoLattice({
     versions: declareVersions({ [walkV1.type]: { maxDepth: 10_000 } }),
     chaos,
@@ -38,83 +38,86 @@ const walked = async (remaining = DEEP, chaos = {}) => {
 
 describe('a workflow fifty executions deep', () => {
   it('opens one execution per level, and no more', async () => {
-    const lattice = await walked();
+    const lattice = await latticeAfterWalk();
     expect(lattice.store.size).toBe(DEEP + 1);
   });
 
   it('counts one level per hop on the way down', async () => {
-    const lattice = await walked();
-    const asked = lattice.transcript.published
+    const lattice = await latticeAfterWalk();
+    const requestDepths = lattice.transcript.published
       .filter((event) => event.type === walkV1.type)
       .map((event) => event.depth)
-      .sort((first, second) => first - second);
+      .sort((leftDepth, rightDepth) => leftDepth - rightDepth);
 
-    expect(asked).toEqual([...Array(DEEP + 1).keys()]);
+    expect(requestDepths).toEqual([...Array(DEEP + 1).keys()]);
   });
 
   it('answers back up, each completion at the level it belongs to', async () => {
-    const lattice = await walked();
-    const answered = lattice.transcript.published
+    const lattice = await latticeAfterWalk();
+    const completionDepths = lattice.transcript.published
       .filter((event) => event.type === 'evt_walk_done')
       .map((event) => event.depth)
-      .sort((first, second) => first - second);
+      .sort((leftDepth, rightDepth) => leftDepth - rightDepth);
 
-    expect(answered).toEqual([...Array(DEEP + 1).keys()]);
+    expect(completionDepths).toEqual([...Array(DEEP + 1).keys()]);
   });
 
   it('ends with the first caller answered, from the top of the chain', async () => {
-    const lattice = await walked();
-    const home = lattice.transcript.published.filter(
+    const lattice = await latticeAfterWalk();
+    const rootAnswers = lattice.transcript.published.filter(
       (event) => event.to === 'com.web.start',
     );
-    expect(home).toHaveLength(1);
-    expect(home[0]?.type).toBe('evt_walk_done');
-    expect(home[0]?.depth).toBe(0);
+    expect(rootAnswers).toHaveLength(1);
+    expect(rootAnswers[0]?.type).toBe('evt_walk_done');
+    expect(rootAnswers[0]?.depth).toBe(0);
   });
 
   it('leaves every execution of the chain finished', async () => {
-    const lattice = await walked();
-    const resting = [...lattice.store.values()].map((row) => row.lifecycle);
-    expect(new Set(resting)).toEqual(new Set(['success']));
+    const lattice = await latticeAfterWalk();
+    const lifecycles = [...lattice.store.values()].map((row) => row.lifecycle);
+    expect(new Set(lifecycles)).toEqual(new Set(['success']));
   });
 
   it('keeps every execution in the one workflow it belongs to', async () => {
-    const lattice = await walked();
-    const workflows = new Set(
+    const lattice = await latticeAfterWalk();
+    const subjects = new Set(
       lattice.transcript.published.map((event) => event.subject),
     );
-    expect(workflows).toEqual(new Set(['walk-1']));
+    expect(subjects).toEqual(new Set(['walk-1']));
   });
 
   it('stamps each execution identity downward and its caller upward', async () => {
-    const lattice = await walked(3);
+    const lattice = await latticeAfterWalk(3);
     for (const [executionId, row] of lattice.store) {
-      const sent = lattice.transcript.published.filter(
+      const walkEvents = lattice.transcript.published.filter(
         (event) => event.parentid !== null && event.source === walkV1.type,
       );
-      const asking = sent.filter(
+      const requests = walkEvents.filter(
         (event) => event.executionid === executionId && event.initid === null,
       );
-      const answering = sent.filter(
+      const completions = walkEvents.filter(
         (event) =>
           event.initid !== null &&
           event.executionid === String(row.parentExecutionId),
       );
       expect(
-        asking.length + answering.length,
+        requests.length + completions.length,
         `${executionId} sent something addressed to neither`,
       ).toBeGreaterThan(0);
     }
   });
 
   it('holds everything that must hold, however deep it went', async () => {
-    await checkInvariants(await walked());
+    await checkInvariants(await latticeAfterWalk());
   });
 });
 
 describe('a chain under a transport that repeats itself', () => {
   it('still ends once, with every level run once', async () => {
-    const lattice = await walked(DEEP, { duplicate: 2, shuffle: true });
+    const lattice = await latticeAfterWalk(DEEP, {
+      duplicate: 2,
+      shuffle: true,
+    });
 
     expect(
       lattice.transcript.published.filter(
@@ -127,7 +130,9 @@ describe('a chain under a transport that repeats itself', () => {
   });
 
   it('holds everything that must hold', async () => {
-    await checkInvariants(await walked(DEEP, { duplicate: 2, shuffle: true }));
+    await checkInvariants(
+      await latticeAfterWalk(DEEP, { duplicate: 2, shuffle: true }),
+    );
   });
 });
 
@@ -139,10 +144,10 @@ describe('a chain that reaches as deep as it is allowed', () => {
     });
     await lattice.publish(aWalk(DEEP)).settle();
 
-    const deepest = Math.max(
+    const maxDepth = Math.max(
       ...lattice.transcript.published.map((event) => event.depth),
     );
-    expect(deepest).toBeLessThan(5);
+    expect(maxDepth).toBeLessThan(5);
     expect(
       lattice.transcript.published.filter(
         (event) => event.to === 'com.web.start',
@@ -169,10 +174,10 @@ describe('a chain that reaches as deep as it is allowed', () => {
     });
     await lattice.publish(aWalk(DEEP)).settle();
 
-    const refused = lattice.transcript.faults.map(
+    const faultKinds = lattice.transcript.faults.map(
       ({ fault }) => fault.faultKind,
     );
-    expect(refused).toContain('max_depth_event_requested');
+    expect(faultKinds).toContain('max_depth_event_requested');
     expect(lattice.store.size).toBe(3);
   });
 });

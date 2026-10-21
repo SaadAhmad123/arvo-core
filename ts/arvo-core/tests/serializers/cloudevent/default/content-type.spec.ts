@@ -34,8 +34,8 @@ describe('parseDataContentType', () => {
   });
 
   it('lower-cases parameter names but not parameter values', () => {
-    const parsed = parseDataContentType('application/x;VERSION=UPPER');
-    expect(parsed?.params.version).toBe('UPPER');
+    const contentType = parseDataContentType('application/x;VERSION=UPPER');
+    expect(contentType?.params.version).toBe('UPPER');
   });
 
   it('trims whitespace around the media type and parameters', () => {

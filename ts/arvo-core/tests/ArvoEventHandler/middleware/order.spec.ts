@@ -17,7 +17,7 @@ describe('the order, at every size', () => {
       const { partLog, loggingLayer, loggingExecutor } = createPartLog();
       const layerIds = Array.from(
         { length: layerCount },
-        (_, index) => `l${index}`,
+        (_, layerIndex) => `l${layerIndex}`,
       );
       const executionResult = await executeOrder(
         orderHandler({

@@ -5,7 +5,7 @@ import { ArvoContractSerializer } from '../../../src/serializers/ArvoContractSer
 
 const DIALECT = 'https://json-schema.org/draft/2020-12/schema';
 
-const contract = (over: Record<string, unknown> = {}) =>
+const orderContract = (overrides: Record<string, unknown> = {}) =>
   new ArvoContract({
     type: 'com_order_create',
     versions: {
@@ -14,15 +14,15 @@ const contract = (over: Record<string, unknown> = {}) =>
         outputs: { com_order_created: z.object({ id: z.string() }) },
       },
     },
-    ...over,
+    ...overrides,
   } as never);
 
-const formOf = (c: ArvoContract, options?: never) =>
-  JSON.parse(new ArvoContractSerializer(options).serialize(c).schema);
+const canonicalForm = (contract: ArvoContract, options?: never) =>
+  JSON.parse(new ArvoContractSerializer(options).serialize(contract).schema);
 
 describe('the canonical form', () => {
   it('declares the dialect at every schema position', () => {
-    const form = formOf(
+    const form = canonicalForm(
       new ArvoContract({
         type: 'com_order_create',
         versions: {
@@ -39,16 +39,16 @@ describe('the canonical form', () => {
     );
     for (const version of ['1.0.0', '1.1.0']) {
       expect(form.versions[version].input.$schema).toBe(DIALECT);
-      for (const emit of Object.values<{ $schema: string }>(
+      for (const emitSchema of Object.values<{ $schema: string }>(
         form.versions[version].outputs,
       )) {
-        expect(emit.$schema).toBe(DIALECT);
+        expect(emitSchema.$schema).toBe(DIALECT);
       }
     }
   });
 
   it('materializes every optional field at its default', () => {
-    const form = formOf(contract());
+    const form = canonicalForm(orderContract());
     expect(form.description).toBeNull();
     expect(form.domain).toBeNull();
     expect(form.metadata).toEqual({});
@@ -57,14 +57,16 @@ describe('the canonical form', () => {
   it('cannot tell an explicit default from an omitted one', () => {
     // Two contracts differing only in whether a default was written are the
     // same contract, so their forms must not differ either.
-    const omitted = formOf(contract());
-    const explicit = formOf(contract({ metadata: {} }));
-    expect(JSON.stringify(explicit)).toBe(JSON.stringify(omitted));
+    const omittedDefaultForm = canonicalForm(orderContract());
+    const explicitDefaultForm = canonicalForm(orderContract({ metadata: {} }));
+    expect(JSON.stringify(explicitDefaultForm)).toBe(
+      JSON.stringify(omittedDefaultForm),
+    );
   });
 
   it('carries the identity fields as declared', () => {
-    const form = formOf(
-      contract({
+    const form = canonicalForm(
+      orderContract({
         uri: '#/services/orders',
         description: 'Creates orders',
         domain: 'order_priority',
@@ -81,14 +83,14 @@ describe('the canonical form', () => {
   it('gives the handler error no position anywhere', () => {
     // It is a fixed function of `type` and the producing version, so every
     // implementation computes it rather than reading it.
-    const form = formOf(contract());
+    const form = canonicalForm(orderContract());
     expect(JSON.stringify(form)).not.toContain(
       'handler_com_order_create_error',
     );
   });
 
   it('keeps an empty outputs as an empty object', () => {
-    const form = formOf(
+    const form = canonicalForm(
       new ArvoContract({
         type: 'com_a_b',
         versions: { '1.0.0': { input: z.object({}), outputs: {} } },
@@ -104,7 +106,7 @@ describe('the canonical form', () => {
         return z.array(Node);
       },
     });
-    const form = formOf(
+    const form = canonicalForm(
       new ArvoContract({
         type: 'com_tree_create',
         versions: { '1.0.0': { input: Node as never, outputs: {} } },
@@ -115,7 +117,7 @@ describe('the canonical form', () => {
 });
 
 describe('what the crossing cost', () => {
-  const lossy = new ArvoContract({
+  const lossyContract = new ArvoContract({
     type: 'com_a_b',
     versions: {
       '1.0.0': {
@@ -126,34 +128,36 @@ describe('what the crossing cost', () => {
   });
 
   it('reports an inexpressible constraint rather than raising', () => {
-    const result = new ArvoContractSerializer().trySerialize(lossy);
-    expect(result.ok).toBe(true);
+    const serialization = new ArvoContractSerializer().trySerialize(
+      lossyContract,
+    );
+    expect(serialization.ok).toBe(true);
   });
 
   it('names the position the constraint occupied', () => {
-    const { warnings } = new ArvoContractSerializer().serialize(lossy);
-    expect(warnings.map((w) => w.path)).toContain(
+    const { warnings } = new ArvoContractSerializer().serialize(lossyContract);
+    expect(warnings.map((warning) => warning.path)).toContain(
       'versions["1.0.0"].input.properties.at',
     );
   });
 
   it('leaves the expressible constraints alone', () => {
-    const { warnings } = new ArvoContractSerializer().serialize(lossy);
-    expect(warnings.map((w) => w.path)).not.toContain(
+    const { warnings } = new ArvoContractSerializer().serialize(lossyContract);
+    expect(warnings.map((warning) => warning.path)).not.toContain(
       'versions["1.0.0"].input.properties.amount',
     );
   });
 
   it('still produces the form', () => {
     const form = JSON.parse(
-      new ArvoContractSerializer().serialize(lossy).schema,
+      new ArvoContractSerializer().serialize(lossyContract).schema,
     );
     expect(form.versions['1.0.0'].input.properties.at).toEqual({});
   });
 
   it('reports nothing, and no message, when nothing was lost', () => {
     const { warnings, warningString } = new ArvoContractSerializer().serialize(
-      contract(),
+      orderContract(),
     );
     expect(warnings).toEqual([]);
     expect(warningString).toBeNull();
@@ -171,13 +175,13 @@ describe('what the crossing cost', () => {
         },
       }),
     );
-    expect(warnings.map((w) => w.path)).toContain(
+    expect(warnings.map((warning) => warning.path)).toContain(
       'versions["1.0.0"].outputs["com_a_done"].properties.at',
     );
   });
 
   it('names the construct that could not be expressed', () => {
-    const { warnings } = new ArvoContractSerializer().serialize(lossy);
+    const { warnings } = new ArvoContractSerializer().serialize(lossyContract);
     expect(warnings[0]?.message).toContain('a date');
   });
 
@@ -264,7 +268,7 @@ describe('conversion options', () => {
   });
 
   it('reports a failure when the caller asks to refuse the conversion', () => {
-    const result = new ArvoContractSerializer({
+    const serialization = new ArvoContractSerializer({
       serialize: { unrepresentable: 'throw' },
     }).trySerialize(
       new ArvoContract({
@@ -274,7 +278,7 @@ describe('conversion options', () => {
         },
       }),
     );
-    expect(result.ok).toBe(false);
+    expect(serialization.ok).toBe(false);
   });
 
   it('stops reporting when the caller supplies their own override', () => {
@@ -293,18 +297,18 @@ describe('conversion options', () => {
   });
 
   it('the throwing companion raises what the primitive reported', () => {
-    const refusing = new ArvoContractSerializer({
+    const refusingSerializer = new ArvoContractSerializer({
       serialize: { unrepresentable: 'throw' },
     });
-    const withADate = new ArvoContract({
+    const contractWithDate = new ArvoContract({
       type: 'com_a_b',
       versions: { '1.0.0': { input: z.object({ at: z.date() }), outputs: {} } },
     });
-    const reported = refusing.trySerialize(withADate);
-    expect(reported.ok).toBe(false);
-    if (!reported.ok) {
-      expect(() => refusing.serialize(withADate)).toThrow(
-        reported.error.message,
+    const serialization = refusingSerializer.trySerialize(contractWithDate);
+    expect(serialization.ok).toBe(false);
+    if (!serialization.ok) {
+      expect(() => refusingSerializer.serialize(contractWithDate)).toThrow(
+        serialization.error.message,
       );
     }
   });
@@ -312,7 +316,7 @@ describe('conversion options', () => {
   it('cannot be told to target another dialect', () => {
     // `target` is absent from the options type, so this needs a cast to even
     // attempt. The form must still declare 2020-12.
-    const form = formOf(contract(), {
+    const form = canonicalForm(orderContract(), {
       serialize: { target: 'draft-07' },
     } as never);
     expect(form.versions['1.0.0'].input.$schema).toBe(DIALECT);

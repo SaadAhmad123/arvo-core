@@ -14,17 +14,17 @@ describe('DepthCodec', () => {
     );
 
     it('never emits exponential notation for a very large integer', () => {
-      const huge = 10 ** 25;
-      expect(codec.encode(huge)).not.toMatch(/e/i);
-      expect(codec.encode(huge)).toMatch(/^[1-9][0-9]*$/);
+      const hugeDepth = 10 ** 25;
+      expect(codec.encode(hugeDepth)).not.toMatch(/e/i);
+      expect(codec.encode(hugeDepth)).toMatch(/^[1-9][0-9]*$/);
     });
   });
 
   describe('decode', () => {
     it.each(['0', '1', '42', '1000000'])(
       'decodes canonical %s to its numeric value',
-      (value) => {
-        expect(codec.decode(value)).toBe(Number(value));
+      (encoding) => {
+        expect(codec.decode(encoding)).toBe(Number(encoding));
       },
     );
 
@@ -42,8 +42,8 @@ describe('DepthCodec', () => {
       'abc',
       '1.',
       '.1',
-    ])('rejects the non-canonical encoding %j', (value) => {
-      expect(codec.decode(value)).toBeNull();
+    ])('rejects the non-canonical encoding %j', (encoding) => {
+      expect(codec.decode(encoding)).toBeNull();
     });
 
     it('round-trips 0 exactly', () => {
@@ -51,8 +51,8 @@ describe('DepthCodec', () => {
     });
 
     it('round-trips a large safe integer exactly', () => {
-      const value = Number.MAX_SAFE_INTEGER;
-      expect(codec.decode(codec.encode(value))).toBe(value);
+      const depth = Number.MAX_SAFE_INTEGER;
+      expect(codec.decode(codec.encode(depth))).toBe(depth);
     });
   });
 });
@@ -70,8 +70,8 @@ describe('ExecutionUnitsCodec', () => {
       1e21,
       Number.MAX_SAFE_INTEGER,
       Number.MIN_SAFE_INTEGER,
-    ])('encodes %s via JSON.stringify', (value) => {
-      expect(codec.encode(value)).toBe(JSON.stringify(value));
+    ])('encodes %s via JSON.stringify', (executionUnits) => {
+      expect(codec.encode(executionUnits)).toBe(JSON.stringify(executionUnits));
     });
   });
 
@@ -84,8 +84,8 @@ describe('ExecutionUnitsCodec', () => {
       '-3.25',
       '1e+21',
       String(Number.MAX_SAFE_INTEGER),
-    ])('decodes canonical %s to its numeric value', (value) => {
-      expect(codec.decode(value)).toBe(Number(value));
+    ])('decodes canonical %s to its numeric value', (encoding) => {
+      expect(codec.decode(encoding)).toBe(Number(encoding));
     });
 
     it.each([
@@ -100,8 +100,8 @@ describe('ExecutionUnitsCodec', () => {
       'Infinity',
       '-Infinity',
       'NaN',
-    ])('rejects the non-canonical or non-finite encoding %j', (value) => {
-      expect(codec.decode(value)).toBeNull();
+    ])('rejects the non-canonical or non-finite encoding %j', (encoding) => {
+      expect(codec.decode(encoding)).toBeNull();
     });
 
     it('round-trips 0 exactly', () => {
@@ -114,8 +114,8 @@ describe('ExecutionUnitsCodec', () => {
     });
 
     it('round-trips a fractional value exactly', () => {
-      const value = 12.375;
-      expect(codec.decode(codec.encode(value))).toBe(value);
+      const executionUnits = 12.375;
+      expect(codec.decode(codec.encode(executionUnits))).toBe(executionUnits);
     });
 
     it('round-trips a large-magnitude value exactly', () => {

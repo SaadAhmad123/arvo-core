@@ -66,8 +66,10 @@ export class ScenarioStore {
         return fault.row;
       }
 
-      const held = this.rows.get(executionId);
-      return held === undefined ? null : fault.change({ ...held });
+      const committedRow = this.rows.get(executionId);
+      return committedRow === undefined
+        ? null
+        : fault.change({ ...committedRow });
     };
   }
 }

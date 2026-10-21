@@ -39,7 +39,7 @@ import { createArvoLattice } from './lattice.js';
  */
 
 /** How many times each execution's business code ran, and where. */
-const ran: string[] = [];
+const executorRuns: string[] = [];
 
 /**
  * Every property but the one about who answered.
@@ -73,10 +73,10 @@ const anOrder = (subject = 'order-1') =>
  * service replies — so the answer in this file is the one that completes
  * the collection, and every delivery of it enters the executor.
  */
-const asking = (seed = 83) => {
+const orderLattice = (seed = 83) => {
   const lattice = createArvoLattice({ versions: declareVersions(), seed });
   lattice.behave(orderV1.type, async (ctx: OrderContext) => {
-    ran.push(`order:${ctx.entry}`);
+    executorRuns.push(`order:${ctx.entry}`);
     if (ctx.entry === 'followup') {
       const answers = [...ctx.state.inFlightEventMap.values()].filter(
         (answer) => answer !== null,
@@ -96,22 +96,25 @@ const asking = (seed = 83) => {
 
   // the services say nothing of their own, so the answers in this file
   // are the only ones the order ever sees
-  for (const quiet of [inventoryV1.type, paymentV1.type]) {
-    lattice.behave(quiet, async (ctx: WorkerContext<typeof inventoryV1>) => {
-      await ctx.setState({ data: { stage: 'quiet', answers: 0 } });
-    });
+  for (const serviceType of [inventoryV1.type, paymentV1.type]) {
+    lattice.behave(
+      serviceType,
+      async (ctx: WorkerContext<typeof inventoryV1>) => {
+        await ctx.setState({ data: { stage: 'quiet', answers: 0 } });
+      },
+    );
   }
   return lattice;
 };
 
 /** An order that has asked, with what it asked for in hand. */
-const asked = async (seed = 83) => {
-  ran.length = 0;
-  const lattice = asking(seed);
+const orderAwaitingAnswer = async (seed = 83) => {
+  executorRuns.length = 0;
+  const lattice = orderLattice(seed);
   await lattice.publish(anOrder()).settle();
 
   const [executionId, row] = [...lattice.store.entries()].find(
-    ([, held]) => held.source === orderV1.type,
+    ([, storedRow]) => storedRow.source === orderV1.type,
   ) as [string, Record<string, unknown>];
 
   return {
@@ -153,67 +156,69 @@ const orderRow = (lattice: ReturnType<typeof createArvoLattice>) =>
   ) as Record<string, unknown[]> & { lifecycle: string; casVersion: number };
 
 describe('one answer, two handlers, at the same moment', () => {
-  const racing = async (seed = 83) => {
-    const built = await asked(seed);
-    const answer = answerTo(built.toInventory, built.executionId);
+  const racedAnswer = async (seed = 83) => {
+    const scenario = await orderAwaitingAnswer(seed);
+    const answer = answerTo(scenario.toInventory, scenario.executionId);
 
-    ran.length = 0;
-    await built.lattice.deliverTogether(answer);
-    return { ...built, answer };
+    executorRuns.length = 0;
+    await scenario.lattice.deliverTogether(answer);
+    return { ...scenario, answer };
   };
 
   it('runs both, neither being able to see the other', async () => {
-    const { lattice } = await racing();
+    const { lattice } = await racedAnswer();
 
     // the duplicate check cannot save this: at the moment each read the
     // record, the other had written nothing
-    expect(ran).toEqual(['order:followup', 'order:followup']);
+    expect(executorRuns).toEqual(['order:followup', 'order:followup']);
     expect(lattice.transcript.discarded).toEqual([]);
   });
 
   it('commits one of them, and refuses the other', async () => {
-    const { lattice } = await racing();
-    const committed = lattice.transcript.committed.filter(
+    const { lattice } = await racedAnswer();
+    const orderCommits = lattice.transcript.committed.filter(
       ({ row }) => row.source === orderV1.type,
     );
 
-    expect(committed).toHaveLength(2); // the opening round, and one of these
+    expect(orderCommits).toHaveLength(2); // the opening round, and one of these
     expect(lattice.transcript.conflicts).toHaveLength(1);
   });
 
   it('advances the record exactly once, not once per handler', async () => {
-    const { lattice, revision } = await racing();
+    const { lattice, revision } = await racedAnswer();
     expect(Number(orderRow(lattice).casVersion)).toBe(revision + 1);
   });
 
   it('records the answer once, not twice', async () => {
-    const { lattice, answer } = await racing();
-    const held = (orderRow(lattice).inFlightEventMap as [string, unknown][])
-      .filter(([, given]) => given !== null)
-      .map(([asking]) => asking);
+    const { lattice, answer } = await racedAnswer();
+    const answeredRequestIds = (
+      orderRow(lattice).inFlightEventMap as [string, unknown][]
+    )
+      .filter(([, answerEvent]) => answerEvent !== null)
+      .map(([requestId]) => requestId);
 
-    expect(held).toEqual([answer.initid]);
+    expect(answeredRequestIds).toEqual([answer.initid]);
     expect(
       (orderRow(lattice).eventIds as { id: string }[]).filter(
-        (logged) => logged.id === answer.id,
+        (trailEntry) => trailEntry.id === answer.id,
       ),
     ).toHaveLength(1);
   });
 
   it('publishes what one of them produced, and nothing of the other', async () => {
-    const { lattice, answer } = await racing();
+    const { lattice, answer } = await racedAnswer();
 
     // both built a completion for the same caller. One left; the other
     // exists nowhere outside the process that built it.
-    const caused = lattice.transcript.published.filter(
+    const answerEffects = lattice.transcript.published.filter(
       (event) => event.parentid === answer.id,
     );
-    expect(caused).toHaveLength(1);
-    expect(caused[0]?.to).toBe('com.web.checkout');
+    expect(answerEffects).toHaveLength(1);
+    expect(answerEffects[0]?.to).toBe('com.web.checkout');
   });
 
   it('answers the caller exactly once, which is the whole point', async () => {
-    const { lattice } = await racing();
+    const { lattice } = await racedAnswer();
     await lattice.settle();
 
     expect(
@@ -224,7 +229,7 @@ describe('one answer, two handlers, at the same moment', () => {
   });
 
   it('runs the one that lost again, and it is a repeat by then', async () => {
-    const { lattice } = await racing();
+    const { lattice } = await racedAnswer();
 
     // the delivery that lost is redelivered, and the record it now
     // reads holds the very event it carries
@@ -234,11 +239,13 @@ describe('one answer, two handlers, at the same moment', () => {
   });
 
   it('did the work outside Arvo twice, which no commit can take back', async () => {
-    const { lattice } = await racing();
+    const { lattice } = await racedAnswer();
     await lattice.settle();
 
     // two executors ran to the end; one of them is remembered nowhere
-    expect(ran.filter((one) => one === 'order:followup')).toHaveLength(2);
+    expect(executorRuns.filter((run) => run === 'order:followup')).toHaveLength(
+      2,
+    );
     expect(
       lattice.transcript.committed.filter(
         ({ row }) => row.source === orderV1.type,
@@ -247,7 +254,7 @@ describe('one answer, two handlers, at the same moment', () => {
   });
 
   it('holds everything that must hold, once it settles', async () => {
-    const { lattice } = await racing();
+    const { lattice } = await racedAnswer();
     await lattice.settle();
 
     expect(orderRow(lattice).lifecycle).toBe('success');
@@ -255,40 +262,42 @@ describe('one answer, two handlers, at the same moment', () => {
   });
 
   it('comes to the same end whichever of them happened to win', async () => {
-    const ends = [];
+    const endStates = [];
     for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
-      const { lattice } = await racing(seed);
+      const { lattice } = await racedAnswer(seed);
       await lattice.settle();
-      ends.push(
+      endStates.push(
         `${orderRow(lattice).lifecycle}:${orderRow(lattice).casVersion}`,
       );
     }
-    expect(new Set(ends).size).toBe(1);
+    expect(new Set(endStates).size).toBe(1);
   });
 });
 
 describe('one answer, five handlers, at the same moment', () => {
   it('commits one of the five, and the four behind it are repeats', async () => {
-    const built = await asked();
-    const answer = answerTo(built.toInventory, built.executionId);
+    const scenario = await orderAwaitingAnswer();
+    const answer = answerTo(scenario.toInventory, scenario.executionId);
 
-    ran.length = 0;
-    for (let at = 0; at < 5; at += 1) {
-      await built.lattice.deliverTogether(answer);
+    executorRuns.length = 0;
+    for (let round = 0; round < 5; round += 1) {
+      await scenario.lattice.deliverTogether(answer);
     }
-    await built.lattice.settle();
+    await scenario.lattice.settle();
 
     // ten executors ran; one write landed, and every later delivery
     // recognised the event as one already handled
-    expect(Number(orderRow(built.lattice).casVersion)).toBe(built.revision + 1);
-    expect(built.lattice.transcript.discarded.length).toBeGreaterThan(0);
-    expect(built.lattice.transcript.faults).toEqual([]);
+    expect(Number(orderRow(scenario.lattice).casVersion)).toBe(
+      scenario.revision + 1,
+    );
+    expect(scenario.lattice.transcript.discarded.length).toBeGreaterThan(0);
+    expect(scenario.lattice.transcript.faults).toEqual([]);
   });
 });
 
 describe('two different answers at the same moment', () => {
   it('loses neither, the one that was refused collecting its own on the way back', async () => {
-    ran.length = 0;
+    executorRuns.length = 0;
     const lattice = createArvoLattice({
       versions: declareVersions(),
       seed: 91,
@@ -314,10 +323,13 @@ describe('two different answers at the same moment', () => {
         await ctx.build({ type: 'com_payment_charge', data: { amount: 1 } }),
       ];
     });
-    for (const quiet of [inventoryV1.type, paymentV1.type]) {
-      lattice.behave(quiet, async (ctx: WorkerContext<typeof inventoryV1>) => {
-        await ctx.setState({ data: { stage: 'quiet', answers: 0 } });
-      });
+    for (const serviceType of [inventoryV1.type, paymentV1.type]) {
+      lattice.behave(
+        serviceType,
+        async (ctx: WorkerContext<typeof inventoryV1>) => {
+          await ctx.setState({ data: { stage: 'quiet', answers: 0 } });
+        },
+      );
     }
     await lattice.publish(anOrder()).settle();
 
@@ -325,7 +337,7 @@ describe('two different answers at the same moment', () => {
       (event) => event.initid === null && event.parentid !== null,
     );
     const [executionId] = [...lattice.store.entries()].find(
-      ([, held]) => held.source === orderV1.type,
+      ([, storedRow]) => storedRow.source === orderV1.type,
     ) as [string, Record<string, unknown>];
 
     // both read the record at the same revision, so each believes it is
@@ -340,10 +352,10 @@ describe('two different answers at the same moment', () => {
     }
     await lattice.settle();
 
-    const held = (
+    const answeredRequests = (
       orderRow(lattice).inFlightEventMap as [string, unknown][]
-    ).filter(([, given]) => given !== null);
-    expect(held).toHaveLength(2);
+    ).filter(([, answerEvent]) => answerEvent !== null);
+    expect(answeredRequests).toHaveLength(2);
     expect(orderRow(lattice).lifecycle).toBe('success');
     await holdsExceptWhoAnswered(lattice);
   });
@@ -351,34 +363,36 @@ describe('two different answers at the same moment', () => {
 
 describe('one opening event, two handlers, at the same moment', () => {
   it('opens one execution, the second being refused by the store', async () => {
-    ran.length = 0;
-    const lattice = asking();
-    const opening = anOrder('order-raced');
+    executorRuns.length = 0;
+    const lattice = orderLattice();
+    const orderEvent = anOrder('order-raced');
 
-    await lattice.deliverTogether(opening);
+    await lattice.deliverTogether(orderEvent);
 
     // both derived the same execution from the same event, and both
     // tried to create it: a store takes the first and refuses the rest
-    expect(ran.filter((one) => one === 'order:init')).toHaveLength(2);
+    expect(executorRuns.filter((run) => run === 'order:init')).toHaveLength(2);
     expect(lattice.store.size).toBe(1);
     expect(lattice.transcript.conflicts).toHaveLength(1);
   });
 
   it('asks its service once, not once per handler', async () => {
-    const lattice = asking();
+    const lattice = orderLattice();
     await lattice.deliverTogether(anOrder('order-raced'));
     await lattice.settle();
 
-    const asked = lattice.transcript.published.filter(
+    const serviceRequests = lattice.transcript.published.filter(
       (event) => event.initid === null && event.parentid !== null,
     );
-    expect(asked.map((event) => event.type)).toEqual(['com_inventory_reserve']);
+    expect(serviceRequests.map((event) => event.type)).toEqual([
+      'com_inventory_reserve',
+    ]);
   });
 
   it('refuses the loser on its next delivery, a record now existing', async () => {
-    const lattice = asking();
-    const opening = anOrder('order-raced');
-    await lattice.deliverTogether(opening);
+    const lattice = orderLattice();
+    const orderEvent = anOrder('order-raced');
+    await lattice.deliverTogether(orderEvent);
     await lattice.settle();
 
     // nothing of the loser survives: one order, one service it asked
@@ -389,24 +403,26 @@ describe('one opening event, two handlers, at the same moment', () => {
 
 describe('one answer to an execution already finished, twice at once', () => {
   it('refuses both without writing anything over what it ended as', async () => {
-    const built = await asked();
+    const scenario = await orderAwaitingAnswer();
 
     // bring it to an end first
-    built.lattice.inject(answerTo(built.toInventory, built.executionId));
-    await built.lattice.settle();
-    expect(orderRow(built.lattice).lifecycle).toBe('success');
+    scenario.lattice.inject(
+      answerTo(scenario.toInventory, scenario.executionId),
+    );
+    await scenario.lattice.settle();
+    expect(orderRow(scenario.lattice).lifecycle).toBe('success');
 
-    const ended = JSON.stringify(orderRow(built.lattice));
-    const late = answerTo(built.toInventory, built.executionId, {
+    const endedRowJson = JSON.stringify(orderRow(scenario.lattice));
+    const lateAnswer = answerTo(scenario.toInventory, scenario.executionId, {
       id: 'a-very-late-answer',
     });
-    await built.lattice.deliverTogether(late);
+    await scenario.lattice.deliverTogether(lateAnswer);
 
-    expect(JSON.stringify(orderRow(built.lattice))).toBe(ended);
+    expect(JSON.stringify(orderRow(scenario.lattice))).toBe(endedRowJson);
     expect(
-      built.lattice.transcript.faults
+      scenario.lattice.transcript.faults
         .map(({ fault }) => fault.faultKind)
-        .filter((kind) => kind === 'lifecycle_terminal'),
+        .filter((faultKind) => faultKind === 'lifecycle_terminal'),
     ).toHaveLength(2);
   });
 });

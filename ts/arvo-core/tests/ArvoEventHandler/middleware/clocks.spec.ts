@@ -88,7 +88,7 @@ describe('the clock firing, by where it fires', () => {
   it('between the executor returning and the first after part: the return stands, no after runs', async () => {
     const middlewareProgress = createArvoMiddlewareProgress();
     const afterSpy = vi.fn();
-    const executionResult = await runMiddleware({
+    const middlewareOutcome = await runMiddleware({
       layers: [{ id: 'watcher', after: afterSpy }],
       ctx,
       executor: () => {
@@ -98,7 +98,7 @@ describe('the clock firing, by where it fires', () => {
       telemetry: telemetry().telemetry,
       middlewareProgress,
     });
-    expect(executionResult).toEqual({
+    expect(middlewareOutcome).toEqual({
       kind: 'returned',
       emission: [initEvent],
     });

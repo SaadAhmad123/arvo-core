@@ -16,12 +16,12 @@ const contract = new ArvoContract({
   },
 });
 
-const v1 = contract.versions['1.0.0'];
+const version100 = contract.versions['1.0.0'];
 
 const event = (
   type: string,
   data: Record<string, unknown>,
-  dataschema: string = v1.dataschema,
+  dataschema: string = version100.dataschema,
 ) =>
   new ArvoEvent({
     source: 'com.test.suite',
@@ -32,32 +32,34 @@ const event = (
   });
 
 /** The issues of a failed assertion, or a failure if it succeeded. */
-const issuesOf = (
-  attempt: Result<unknown, ArvoContractAssertionError>,
+const assertionIssues = (
+  assertion: Result<unknown, ArvoContractAssertionError>,
 ): readonly { path: string; isBlocking: boolean }[] => {
-  if (attempt.ok) throw new Error('expected the assertion to fail');
-  return attempt.error.issues;
+  if (assertion.ok) throw new Error('expected the assertion to fail');
+  return assertion.error.issues;
 };
 
 /** Every prerequisite failure, by the position it must report. */
 const prerequisites = {
   expectedType: () =>
-    v1.tryAssert(
+    version100.tryAssert(
       event('com_order_create', { items: [] }),
       // @ts-expect-error not a type this version declares
       'com_order_shipped',
     ),
   'event.dataschema': () =>
-    v1.tryAssert(event('com_order_create', { items: [] }, 'noseparator')),
+    version100.tryAssert(
+      event('com_order_create', { items: [] }, 'noseparator'),
+    ),
   'event.dataschema.uri': () =>
-    v1.tryAssert(
+    version100.tryAssert(
       event('com_order_create', { items: [] }, '#/com/other/thing/1.0.0'),
     ),
   'event.dataschema.version': () =>
-    v1.tryAssert(
+    version100.tryAssert(
       event('com_order_create', { items: [] }, '#/com/order/create/1.1.0'),
     ),
-  'event.type': () => v1.tryAssert(event('com_order_cancelled', {})),
+  'event.type': () => version100.tryAssert(event('com_order_cancelled', {})),
 } as const;
 
 const positions = Object.keys(prerequisites) as Array<
@@ -66,19 +68,19 @@ const positions = Object.keys(prerequisites) as Array<
 
 describe('every prerequisite failure reports its own position', () => {
   it.each(positions)('reports %s', (position) => {
-    const issues = issuesOf(prerequisites[position]());
+    const issues = assertionIssues(prerequisites[position]());
     expect(issues[0]?.path).toBe(position);
   });
 
   it('reports five positions distinct from one another', () => {
-    const reported = positions.map(
-      (position) => issuesOf(prerequisites[position]())[0]?.path,
+    const reportedPaths = positions.map(
+      (position) => assertionIssues(prerequisites[position]())[0]?.path,
     );
-    expect(new Set(reported).size).toBe(positions.length);
+    expect(new Set(reportedPaths).size).toBe(positions.length);
   });
 
   it.each(positions)('states that nothing after %s ran', (position) => {
-    const issues = issuesOf(prerequisites[position]());
+    const issues = assertionIssues(prerequisites[position]());
     expect(issues[0]?.isBlocking).toBe(true);
     expect(issues).toHaveLength(1);
   });
@@ -86,8 +88,8 @@ describe('every prerequisite failure reports its own position', () => {
 
 describe('the order the checks run in', () => {
   it('reports an unanswerable request before anything about the event', () => {
-    const issues = issuesOf(
-      v1.tryAssert(
+    const issues = assertionIssues(
+      version100.tryAssert(
         event('com_order_create', { items: [] }, '#/com/other/thing/1.0.0'),
         // @ts-expect-error not a type this version declares
         'com_order_shipped',
@@ -98,15 +100,15 @@ describe('the order the checks run in', () => {
   });
 
   it('reports a malformed dataschema before either of its halves', () => {
-    const issues = issuesOf(
-      v1.tryAssert(event('com_order_cancelled', {}, 'noseparator')),
+    const issues = assertionIssues(
+      version100.tryAssert(event('com_order_cancelled', {}, 'noseparator')),
     );
     expect(issues[0]?.path).toBe('event.dataschema');
   });
 
   it('reports a foreign identifier before an undeclared version', () => {
-    const issues = issuesOf(
-      v1.tryAssert(
+    const issues = assertionIssues(
+      version100.tryAssert(
         event('com_order_create', { items: [] }, '#/com/other/thing/9.9.9'),
       ),
     );
@@ -114,8 +116,8 @@ describe('the order the checks run in', () => {
   });
 
   it('reports a wrong type before the payload', () => {
-    const issues = issuesOf(
-      v1.tryAssert(event('com_order_cancelled', { items: [1] })),
+    const issues = assertionIssues(
+      version100.tryAssert(event('com_order_cancelled', { items: [1] })),
     );
     expect(issues).toHaveLength(1);
     expect(issues[0]?.path).toBe('event.type');
@@ -129,54 +131,59 @@ describe('one error for the whole operation', () => {
     ),
     [
       'event.data',
-      () => v1.tryAssert(event('com_order_create', { items: [1] })),
+      () => version100.tryAssert(event('com_order_create', { items: [1] })),
     ] as const,
   ];
 
-  it.each(everySituation)('arrives as one error for %s', (_position, run) => {
-    const attempt = run();
-    expect(attempt.ok).toBe(false);
-    if (attempt.ok) return;
-    expect(attempt.error).toBeInstanceOf(ArvoContractAssertionError);
-    expect(attempt.error._tag).toBe('ArvoContractAssertionError');
-  });
+  it.each(everySituation)(
+    'arrives as one error for %s',
+    (_position, assertSituation) => {
+      const assertion = assertSituation();
+      expect(assertion.ok).toBe(false);
+      if (assertion.ok) return;
+      expect(assertion.error).toBeInstanceOf(ArvoContractAssertionError);
+      expect(assertion.error._tag).toBe('ArvoContractAssertionError');
+    },
+  );
 
   it('arrives as the same error from a contract', () => {
-    const attempt = contract.tryAssert(
+    const assertion = contract.tryAssert(
       event('com_order_create', { items: [] }, '#/com/order/create/2.0.0'),
     );
-    expect(attempt.ok).toBe(false);
-    if (attempt.ok) return;
-    expect(attempt.error).toBeInstanceOf(ArvoContractAssertionError);
+    expect(assertion.ok).toBe(false);
+    if (assertion.ok) return;
+    expect(assertion.error).toBeInstanceOf(ArvoContractAssertionError);
   });
 
   it('never claims the contract is invalid', () => {
-    const attempt = v1.tryAssert(
+    const assertion = version100.tryAssert(
       event('com_order_create', { items: [] }),
       // @ts-expect-error not a type this version declares
       'com_order_shipped',
     );
-    expect(attempt.ok).toBe(false);
-    if (attempt.ok) return;
-    expect(attempt.error.message).not.toContain('not valid');
-    expect(attempt.error.message).toContain('does not satisfy the contract');
+    expect(assertion.ok).toBe(false);
+    if (assertion.ok) return;
+    expect(assertion.error.message).not.toContain('not valid');
+    expect(assertion.error.message).toContain('does not satisfy the contract');
   });
 
   it('separates a bad expectation from a bad event by position alone', () => {
-    const mine = issuesOf(
-      v1.tryAssert(
+    const expectationIssues = assertionIssues(
+      version100.tryAssert(
         event('com_order_create', { items: [] }),
         // @ts-expect-error not a type this version declares
         'com_order_shipped',
       ),
     );
-    const theirs = issuesOf(v1.tryAssert(event('com_order_cancelled', {})));
-    expect(mine[0]?.path).toBe('expectedType');
-    expect(theirs[0]?.path.startsWith('event.')).toBe(true);
+    const eventIssues = assertionIssues(
+      version100.tryAssert(event('com_order_cancelled', {})),
+    );
+    expect(expectationIssues[0]?.path).toBe('expectedType');
+    expect(eventIssues[0]?.path.startsWith('event.')).toBe(true);
   });
 
   it('throws that same error from the throwing companion', () => {
-    expect(() => v1.assert(event('com_order_cancelled', {}))).toThrow(
+    expect(() => version100.assert(event('com_order_cancelled', {}))).toThrow(
       ArvoContractAssertionError,
     );
     expect(() =>

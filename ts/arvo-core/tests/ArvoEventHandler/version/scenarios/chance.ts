@@ -9,11 +9,11 @@
 
 /** A sequence of draws in `[0, 1)`, the same every time for one seed. */
 export const chanceFrom = (seed: number) => {
-  let held = seed >>> 0;
+  let state = seed >>> 0;
   return () => {
-    held = (held + 0x6d2b79f5) >>> 0;
-    let drawn = Math.imul(held ^ (held >>> 15), 1 | held);
-    drawn = (drawn + Math.imul(drawn ^ (drawn >>> 7), 61 | drawn)) ^ drawn;
-    return ((drawn ^ (drawn >>> 14)) >>> 0) / 4294967296;
+    state = (state + 0x6d2b79f5) >>> 0;
+    let bits = Math.imul(state ^ (state >>> 15), 1 | state);
+    bits = (bits + Math.imul(bits ^ (bits >>> 7), 61 | bits)) ^ bits;
+    return ((bits ^ (bits >>> 14)) >>> 0) / 4294967296;
   };
 };

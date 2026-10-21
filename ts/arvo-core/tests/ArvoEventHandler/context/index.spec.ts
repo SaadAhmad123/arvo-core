@@ -28,7 +28,7 @@ import {
 
 /** What a version declares when it remembers something specific. */
 /** What an execution records against; these tests only carry it. */
-const { telemetry: tracing, span, meter } = telemetry();
+const { telemetry: sharedTelemetry, span, meter } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
@@ -36,7 +36,7 @@ const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 const anyData = z.looseObject({});
 
 /** A schema that fills something in, to show a write reads back as parsed. */
-const withDefault = z.object({
+const defaultingData = z.object({
   orderId: z.string(),
   currency: z.string().default('GBP'),
 });
@@ -46,7 +46,7 @@ type Self = typeof orderVersion;
 type Services = typeof services;
 
 /** The record an execution arrives with, varied per test. */
-const record = <TData extends z.core.$ZodObject = typeof orderData>(
+const stateRecord = <TData extends z.core.$ZodObject = typeof orderData>(
   overrides: Partial<
     ArvoExecutionStateParam<
       TData,
@@ -78,11 +78,11 @@ const record = <TData extends z.core.$ZodObject = typeof orderData>(
     ...overrides,
   });
 
-const base = {
+const baseParam = {
   contracts: { self: orderVersion, services },
   dataSchema: orderData,
   attempt: 0,
-  telemetry: tracing,
+  telemetry: sharedTelemetry,
   options: ARVO_DEFAULT_HANDLER_OPTIONS,
   idempotency: placeholderIdempotencyKeys,
   dependencies: {},
@@ -105,9 +105,9 @@ const onInit = <TData extends z.core.$ZodObject = typeof orderData>(
   overrides: ContextOverrides<TData> = {},
 ) =>
   new ArvoExecutionContext<Self, Services, TData>({
-    ...base,
+    ...baseParam,
     entry: 'init',
-    state: record<TData>(),
+    state: stateRecord<TData>(),
     dataSchema: orderData as unknown as TData,
     ...overrides,
   });
@@ -116,9 +116,9 @@ const onFollowup = <TData extends z.core.$ZodObject = typeof orderData>(
   overrides: ContextOverrides<TData> = {},
 ) =>
   new ArvoExecutionContext<Self, Services, TData>({
-    ...base,
+    ...baseParam,
     entry: 'followup',
-    state: record<TData>({ triggeringEvent: chargedEvent }),
+    state: stateRecord<TData>({ triggeringEvent: chargedEvent }),
     dataSchema: orderData as unknown as TData,
     ...overrides,
   });
@@ -135,10 +135,10 @@ describe('ArvoExecutionContext', async () => {
 
     it('holds an empty set where no service was declared', () => {
       const ctx = new ArvoExecutionContext({
-        ...base,
+        ...baseParam,
         contracts: { self: orderVersion, services: {} },
         entry: 'init',
-        state: record<typeof orderData>() as ArvoContextState<
+        state: stateRecord<typeof orderData>() as ArvoContextState<
           Self,
           Record<string, never>,
           typeof orderData
@@ -148,11 +148,11 @@ describe('ArvoExecutionContext', async () => {
     });
 
     it('copies the services, so a caller mutating theirs cannot change it', () => {
-      const mutable = { payments: services.payments };
+      const callerServices = { payments: services.payments };
       const ctx = onInit({
-        contracts: { self: orderVersion, services: mutable },
+        contracts: { self: orderVersion, services: callerServices },
       });
-      delete (mutable as Record<string, unknown>).payments;
+      delete (callerServices as Record<string, unknown>).payments;
       expect(ctx.contracts.services).toEqual(services);
     });
   });
@@ -175,7 +175,7 @@ describe('ArvoExecutionContext', async () => {
 
     it('reaches a service handler error there like any other event', () => {
       const ctx = onFollowup({
-        state: record({ triggeringEvent: paymentFailedEvent }),
+        state: stateRecord({ triggeringEvent: paymentFailedEvent }),
       });
       expect(ctx.state.triggeringEvent).toBe(paymentFailedEvent);
     });
@@ -205,7 +205,7 @@ describe('ArvoExecutionContext', async () => {
 
   describe('the telemetry it carries', () => {
     it('is the one it was handed, not one it assembled', () => {
-      expect(onInit().telemetry).toBe(tracing);
+      expect(onInit().telemetry).toBe(sharedTelemetry);
     });
 
     it('records against that span', () => {
@@ -217,10 +217,10 @@ describe('ArvoExecutionContext', async () => {
     });
 
     it('logs through what that telemetry logs through', () => {
-      const given = telemetry();
-      const ctx = onInit({ telemetry: given.telemetry });
+      const freshTelemetry = telemetry();
+      const ctx = onInit({ telemetry: freshTelemetry.telemetry });
       ctx.telemetry.logger.info('charging', { amount: 10 });
-      expect(given.emitted).toEqual([
+      expect(freshTelemetry.emitted).toEqual([
         { severityNumber: 9, body: 'charging', attributes: { amount: 10 } },
       ]);
     });
@@ -259,16 +259,16 @@ describe('ArvoExecutionContext', async () => {
     });
 
     it('has what a followup found stored', () => {
-      const stored = { orderId: 'o-1', attempts: 1 };
-      const ctx = onFollowup({ state: record({ data: stored }) });
-      expect(ctx.state.data).toBe(stored);
+      const storedData = { orderId: 'o-1', attempts: 1 };
+      const ctx = onFollowup({ state: stateRecord({ data: storedData }) });
+      expect(ctx.state.data).toBe(storedData);
     });
   });
 
   describe('writing state', async () => {
     it('replaces the data whole, with no merge', async () => {
       const ctx = onFollowup({
-        state: record({ data: { orderId: 'o-1', attempts: 9 } }),
+        state: stateRecord({ data: { orderId: 'o-1', attempts: 9 } }),
       });
       await ctx.setState({ data: { orderId: 'o-2', attempts: 1 } });
       expect(ctx.state.data).toEqual({ orderId: 'o-2', attempts: 1 });
@@ -282,29 +282,33 @@ describe('ArvoExecutionContext', async () => {
 
     it('takes a function given what is remembered now', async () => {
       const ctx = onFollowup({
-        state: record({ data: { orderId: 'o-1', attempts: 1 } }),
+        state: stateRecord({ data: { orderId: 'o-1', attempts: 1 } }),
       });
       await ctx.setState({
         // @ts-expect-error
-        data: (current) => ({ ...current, attempts: current.attempts + 1 }),
+        data: (currentData) => ({
+          ...currentData,
+          // @ts-expect-error
+          attempts: currentData.attempts + 1,
+        }),
       });
       expect(ctx.state.data).toEqual({ orderId: 'o-1', attempts: 2 });
     });
 
     it('gives that function null on the first write', async () => {
       const ctx = onInit();
-      let seen: unknown = 'not called';
+      let receivedData: unknown = 'not called';
       await ctx.setState({
-        data: (current) => {
-          seen = current;
+        data: (currentData) => {
+          receivedData = currentData;
           return { orderId: 'o-1', attempts: 1 };
         },
       });
-      expect(seen).toBeNull();
+      expect(receivedData).toBeNull();
     });
 
     it('reads back what the schema produced, not what was written', async () => {
-      const ctx = onInit({ dataSchema: withDefault });
+      const ctx = onInit({ dataSchema: defaultingData });
       await ctx.setState({ data: { orderId: 'o-1' } });
       expect(ctx.state.data).toEqual({ orderId: 'o-1', currency: 'GBP' });
     });
@@ -319,38 +323,38 @@ describe('ArvoExecutionContext', async () => {
   describe('what a write does to the record', async () => {
     it('mints a new record rather than changing the one it had', async () => {
       const ctx = onInit();
-      const before = ctx.state;
+      const stateBefore = ctx.state;
       await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
-      expect(ctx.state).not.toBe(before);
-      expect(before.data).toBeNull();
+      expect(ctx.state).not.toBe(stateBefore);
+      expect(stateBefore.data).toBeNull();
     });
 
     it('carries everything else across untouched', async () => {
       const ctx = onInit();
-      const before = ctx.state;
+      const stateBefore = ctx.state;
       await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
 
-      expect(ctx.state.subject).toBe(before.subject);
-      expect(ctx.state.executionId).toBe(before.executionId);
-      expect(ctx.state.lifecycle).toBe(before.lifecycle);
-      expect(ctx.state.casVersion).toBe(before.casVersion);
-      expect(ctx.state.eventIds).toEqual(before.eventIds);
-      expect(ctx.state.initEvent).toBe(before.initEvent);
-      expect(ctx.state.triggeringEvent).toBe(before.triggeringEvent);
+      expect(ctx.state.subject).toBe(stateBefore.subject);
+      expect(ctx.state.executionId).toBe(stateBefore.executionId);
+      expect(ctx.state.lifecycle).toBe(stateBefore.lifecycle);
+      expect(ctx.state.casVersion).toBe(stateBefore.casVersion);
+      expect(ctx.state.eventIds).toEqual(stateBefore.eventIds);
+      expect(ctx.state.initEvent).toBe(stateBefore.initEvent);
+      expect(ctx.state.triggeringEvent).toBe(stateBefore.triggeringEvent);
     });
 
     it('leaves the record it was given alone across two writes', async () => {
       const ctx = onInit();
-      const first = ctx.state;
+      const originalState = ctx.state;
       await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
       await ctx.setState({ data: { orderId: 'o-2', attempts: 2 } });
-      expect(first.data).toBeNull();
+      expect(originalState.data).toBeNull();
       expect(ctx.state.data).toEqual({ orderId: 'o-2', attempts: 2 });
     });
   });
 
   describe('writing state the schema rejects', async () => {
-    const rejected = async () => {
+    const rejectedWriteFault = async () => {
       const ctx = onInit();
       try {
         await ctx.setState({ data: { orderId: 42 } as never });
@@ -361,23 +365,25 @@ describe('ArvoExecutionContext', async () => {
     };
 
     it('raises a fault rather than a bare error', async () => {
-      expect(await rejected()).toBeInstanceOf(ArvoHandlerFault);
+      expect(await rejectedWriteFault()).toBeInstanceOf(ArvoHandlerFault);
     });
 
     it('names the fault, so a mechanism need not read the message', async () => {
-      expect((await rejected()).faultKind).toBe('state_schema_rejected');
+      expect((await rejectedWriteFault()).faultKind).toBe(
+        'state_schema_rejected',
+      );
     });
 
     it('says what was wrong and where', async () => {
-      expect((await rejected()).message).toContain('orderId');
+      expect((await rejectedWriteFault()).message).toContain('orderId');
     });
 
     it('reports every rule the value broke, not only the first', async () => {
-      expect((await rejected()).violations.length).toBeGreaterThan(1);
+      expect((await rejectedWriteFault()).violations.length).toBeGreaterThan(1);
     });
 
     it('names the execution it happened on', async () => {
-      const fault = await rejected();
+      const fault = await rejectedWriteFault();
       expect(fault.subject).toBe(initEvent.subject);
       expect(fault.eventId).toBe(initEvent.id);
       expect(fault.executionId).toBe(initEvent.executionid);
@@ -386,13 +392,13 @@ describe('ArvoExecutionContext', async () => {
 
     it('leaves what is remembered as it was, a refused write changing nothing', async () => {
       const ctx = onFollowup({
-        state: record({ data: { orderId: 'o-1', attempts: 1 } }),
+        state: stateRecord({ data: { orderId: 'o-1', attempts: 1 } }),
       });
-      const before = ctx.state;
+      const stateBefore = ctx.state;
       await expect(
         ctx.setState({ data: { orderId: 42 } as never }),
       ).rejects.toBeInstanceOf(ArvoHandlerFault);
-      expect(ctx.state).toBe(before);
+      expect(ctx.state).toBe(stateBefore);
       expect(ctx.state.data).toEqual({ orderId: 'o-1', attempts: 1 });
     });
 
@@ -409,62 +415,76 @@ describe('ArvoExecutionContext', async () => {
     });
 
     it('carries the event a caller would be sent if this were abandoned', async () => {
-      expect(typeof (await rejected()).abandonmentEvent).toBe('string');
+      expect(typeof (await rejectedWriteFault()).abandonmentEvent).toBe(
+        'string',
+      );
     });
 
     it('writes that event out, so a mechanism publishes it as it stands', async () => {
-      const event = JSON.parse((await rejected()).abandonmentEvent as string);
+      const event = JSON.parse(
+        (await rejectedWriteFault()).abandonmentEvent as string,
+      );
       expect(event.to).toBe(initEvent.source);
       expect(event.executionid).toBe(initEvent.executionid);
       expect(event.subject).toBe(initEvent.subject);
     });
 
     it('makes it this version handler error, so a caller can read it', async () => {
-      const event = JSON.parse((await rejected()).abandonmentEvent as string);
+      const event = JSON.parse(
+        (await rejectedWriteFault()).abandonmentEvent as string,
+      );
       expect(event.type).toBe(orderVersion.error.type);
       expect(event.dataschema).toBe(orderVersion.dataschema);
     });
 
     it('completes rather than opening anything, so it carries the init event', async () => {
-      const event = JSON.parse((await rejected()).abandonmentEvent as string);
+      const event = JSON.parse(
+        (await rejectedWriteFault()).abandonmentEvent as string,
+      );
       expect(event.initid).toBe(initEvent.id);
       expect(event.depth).toBe(0);
     });
 
     it('says in that event what went wrong', async () => {
-      const event = JSON.parse((await rejected()).abandonmentEvent as string);
+      const event = JSON.parse(
+        (await rejectedWriteFault()).abandonmentEvent as string,
+      );
       expect(event.data.error_message).toContain('orderId');
     });
 
     it('carries the record a mechanism would commit alongside it', async () => {
-      expect(typeof (await rejected()).abandonmentState).toBe('string');
+      expect(typeof (await rejectedWriteFault()).abandonmentState).toBe(
+        'string',
+      );
     });
 
     it('marks that record failed, carrying the fault own message as the reason', async () => {
-      const fault = await rejected();
-      const record = JSON.parse(fault.abandonmentState as string);
-      expect(record.lifecycle).toBe('failure');
-      expect(record.lifecycleDescription).toBe(fault.message);
+      const fault = await rejectedWriteFault();
+      const abandonmentRecord = JSON.parse(fault.abandonmentState as string);
+      expect(abandonmentRecord.lifecycle).toBe('failure');
+      expect(abandonmentRecord.lifecycleDescription).toBe(fault.message);
     });
 
     it('logs the abandonment event on that record as emitted', async () => {
-      const fault = await rejected();
-      const record = JSON.parse(fault.abandonmentState as string);
+      const fault = await rejectedWriteFault();
+      const abandonmentRecord = JSON.parse(fault.abandonmentState as string);
       const event = JSON.parse(fault.abandonmentEvent as string);
-      expect(record.eventIds.at(-1)).toEqual({
+      expect(abandonmentRecord.eventIds.at(-1)).toEqual({
         id: event.id,
         direction: 'emitted',
       });
     });
 
     it('keeps the revision an opening execution was built at, no record having been read', async () => {
-      const record = JSON.parse((await rejected()).abandonmentState as string);
-      expect(record.casVersion).toBe(0);
+      const abandonmentRecord = JSON.parse(
+        (await rejectedWriteFault()).abandonmentState as string,
+      );
+      expect(abandonmentRecord.casVersion).toBe(0);
     });
 
     it('leaves the rest of that record as the execution stood', async () => {
       const ctx = onFollowup({
-        state: record({ data: { orderId: 'o-1', attempts: 1 } }),
+        state: stateRecord({ data: { orderId: 'o-1', attempts: 1 } }),
       });
       let fault: ArvoHandlerFault | undefined;
       try {
@@ -472,13 +492,15 @@ describe('ArvoExecutionContext', async () => {
       } catch (thrown) {
         fault = thrown as ArvoHandlerFault;
       }
-      const abandoned = JSON.parse(fault?.abandonmentState as string);
-      expect(abandoned.data).toEqual({ orderId: 'o-1', attempts: 1 });
-      expect(abandoned.executionId).toBe(ctx.state.executionId);
+      const abandonmentRecord = JSON.parse(fault?.abandonmentState as string);
+      expect(abandonmentRecord.data).toEqual({ orderId: 'o-1', attempts: 1 });
+      expect(abandonmentRecord.executionId).toBe(ctx.state.executionId);
     });
 
     it('carries no event where one could not be built, the fault still raised', async () => {
-      const ctx = onInit({ state: record({ source: 'not a valid source!!' }) });
+      const ctx = onInit({
+        state: stateRecord({ source: 'not a valid source!!' }),
+      });
       let fault: ArvoHandlerFault | undefined;
       try {
         await ctx.setState({ data: { orderId: 42 } as never });
@@ -492,11 +514,11 @@ describe('ArvoExecutionContext', async () => {
 
     it('does not abandon anything by being raised', async () => {
       const ctx = onInit();
-      const before = ctx.state;
+      const stateBefore = ctx.state;
       await expect(
         ctx.setState({ data: { orderId: 42 } as never }),
       ).rejects.toThrow();
-      expect(ctx.state).toBe(before);
+      expect(ctx.state).toBe(stateBefore);
       expect(ctx.state.lifecycle).toBe('waiting');
     });
 
@@ -522,10 +544,10 @@ describe('ArvoExecutionContext', async () => {
 
     it.each(['contracts', 'entry', 'attempt', 'dataSchema'])(
       'cannot have its %s replaced',
-      (member) => {
+      (memberName) => {
         const ctx = onInit();
         expect(() => {
-          (ctx as unknown as Record<string, unknown>)[member] = 'anything';
+          (ctx as unknown as Record<string, unknown>)[memberName] = 'anything';
         }).toThrow();
       },
     );
@@ -533,7 +555,7 @@ describe('ArvoExecutionContext', async () => {
     it('cannot have state assigned directly, only written through setState', () => {
       const ctx = onInit();
       expect(() => {
-        (ctx as unknown as Record<string, unknown>).state = record();
+        (ctx as unknown as Record<string, unknown>).state = stateRecord();
       }).toThrow();
     });
 
@@ -655,8 +677,8 @@ describe('ArvoExecutionContext', async () => {
     });
 
     it('is fresh for every context', async () => {
-      const first = onInit();
-      await first.setMiddleware('tenant', 't-1');
+      const writtenContext = onInit();
+      await writtenContext.setMiddleware('tenant', 't-1');
       expect(onInit().middleware).toEqual({});
     });
 
@@ -740,9 +762,9 @@ describe('ArvoExecutionContext', async () => {
 
     it('abandons nothing by being built', async () => {
       const ctx = onFollowup();
-      const before = ctx.state;
+      const stateBefore = ctx.state;
       await ctx.fault({ faultKind: 'executor_raised', message: 'no' });
-      expect(ctx.state).toBe(before);
+      expect(ctx.state).toBe(stateBefore);
       expect(ctx.state.lifecycle).toBe('waiting');
     });
   });

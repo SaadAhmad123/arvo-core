@@ -28,7 +28,7 @@ import { ScenarioStore } from './store.js';
  */
 
 /** What each execution saw, so a rule about it can be asserted. */
-type Seen = {
+type Observations = {
   dependencies: unknown[];
   hooks: unknown[];
   resolverCalls: {
@@ -44,7 +44,7 @@ type Seen = {
   }[];
 };
 
-const watching = (): Seen => ({
+const noObservations = (): Observations => ({
   dependencies: [],
   hooks: [],
   resolverCalls: [],
@@ -52,7 +52,7 @@ const watching = (): Seen => ({
 });
 
 /** A handler whose executor records everything it was handed. */
-const handlerRecording = (seen: Seen) =>
+const recordingHandler = (observations: Observations) =>
   setupArvoEventHandler({
     contracts: { self: fulfilContract, services: { inventory: inventoryV1 } },
     types: {} as {
@@ -63,8 +63,8 @@ const handlerRecording = (seen: Seen) =>
     .handler('1.0.0', {
       state: z.object({ stage: z.string() }),
       execute: async (ctx) => {
-        seen.dependencies.push(ctx.dependencies);
-        seen.hooks.push(ctx.hooks);
+        observations.dependencies.push(ctx.dependencies);
+        observations.hooks.push(ctx.hooks);
         await ctx.setState({ data: { stage: 'asking' } });
         return ctx.build({
           type: 'com_inventory_reserve',
@@ -77,8 +77,8 @@ const handlerRecording = (seen: Seen) =>
       execute: async () => {},
     })
     .handler('2.0.0', async (ctx) => {
-      seen.dependencies.push(ctx.dependencies);
-      seen.hooks.push(ctx.hooks);
+      observations.dependencies.push(ctx.dependencies);
+      observations.hooks.push(ctx.hooks);
       return ctx.build({
         type: 'evt_order_shipped',
         data: { tracking: 't-1' },
@@ -95,7 +95,7 @@ const anOrder = (subject = 'order-1') =>
   });
 
 /** A store that records what it was asked, and by whom. */
-const storeWatching = (seen: Seen) => {
+const watchedStore = (observations: Observations) => {
   const store = new ScenarioStore();
   return {
     store,
@@ -104,7 +104,7 @@ const storeWatching = (seen: Seen) => {
       attempt: number;
       telemetry: unknown;
     }) => {
-      seen.resolverCalls.push({
+      observations.resolverCalls.push({
         executionId: param.executionId,
         attempt: param.attempt,
         hadTelemetry: param.telemetry !== undefined,
@@ -114,8 +114,8 @@ const storeWatching = (seen: Seen) => {
   };
 };
 
-const answering = (
-  opened: { state: JSONObject; events: readonly { id: string }[] },
+const inventoryAnswer = (
+  openingOutcome: { state: JSONObject; events: readonly { id: string }[] },
   subject = 'order-1',
 ) =>
   createArvoEventFactory(inventoryV1).createOutput({
@@ -123,85 +123,87 @@ const answering = (
     source: inventoryV1.type,
     subject,
     to: fulfilContract.type,
-    executionid: String(opened.state.executionId),
-    initid: opened.events[0]?.id,
-    parentid: opened.events[0]?.id,
+    executionid: String(openingOutcome.state.executionId),
+    initid: openingOutcome.events[0]?.id,
+    parentid: openingOutcome.events[0]?.id,
     data: { held: 1 },
   });
 
 describe('the way a handler reaches a store', () => {
   it('is asked once per execution, under one identifier', async () => {
-    const seen = watching();
-    const { store, resolver } = storeWatching(seen);
-    const handler = handlerRecording(seen);
+    const observations = noObservations();
+    const { store, resolver } = watchedStore(observations);
+    const handler = recordingHandler(observations);
 
-    const opened = await handler.execute({
+    const openingOutcome = await handler.execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
     });
-    if (opened.kind !== 'produced') throw new Error('nothing was opened');
+    if (openingOutcome.kind !== 'produced')
+      throw new Error('nothing was opened');
 
-    expect(seen.resolverCalls).toHaveLength(1);
-    expect(seen.resolverCalls[0]?.executionId).toBe(
-      String(opened.state.executionId),
+    expect(observations.resolverCalls).toHaveLength(1);
+    expect(observations.resolverCalls[0]?.executionId).toBe(
+      String(openingOutcome.state.executionId),
     );
-    store.commit(opened.state);
+    store.commit(openingOutcome.state);
   });
 
   it('is told which attempt it is, so it may read differently on a retry', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
-    await handlerRecording(seen).execute({
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
+    await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 3,
     });
-    expect(seen.resolverCalls[0]?.attempt).toBe(3);
+    expect(observations.resolverCalls[0]?.attempt).toBe(3);
   });
 
   it('is given somewhere to record, so the read is part of the execution', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
-    await handlerRecording(seen).execute({
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
+    await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
     });
-    expect(seen.resolverCalls[0]?.hadTelemetry).toBe(true);
+    expect(observations.resolverCalls[0]?.hadTelemetry).toBe(true);
   });
 
   it('is asked again on the next execution, never answered from before', async () => {
-    const seen = watching();
-    const { store, resolver } = storeWatching(seen);
-    const handler = handlerRecording(seen);
+    const observations = noObservations();
+    const { store, resolver } = watchedStore(observations);
+    const handler = recordingHandler(observations);
 
-    const opened = await handler.execute({
+    const openingOutcome = await handler.execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
     });
-    if (opened.kind !== 'produced') throw new Error('nothing was opened');
-    store.commit(opened.state);
+    if (openingOutcome.kind !== 'produced')
+      throw new Error('nothing was opened');
+    store.commit(openingOutcome.state);
 
     await handler.execute({
-      event: answering(opened),
+      event: inventoryAnswer(openingOutcome),
       state: resolver,
       attempt: 0,
     });
-    expect(seen.resolverCalls).toHaveLength(2);
+    expect(observations.resolverCalls).toHaveLength(2);
   });
 
   it('refuses a row that is not an object at all', async () => {
-    const handler = handlerRecording(watching());
+    const handler = recordingHandler(noObservations());
     for (const notARow of ['a string', 7, true, []]) {
-      const refused = await handler.tryExecute({
+      const refusal = await handler.tryExecute({
         event: anOrder(),
         state: () => notARow as unknown as JSONObject,
         attempt: 0,
       });
       expect(
-        !refused.ok && refused.error.faultKind,
+        !refusal.ok && refusal.error.faultKind,
         `${JSON.stringify(notARow)} was not refused`,
       ).toBe('record_unexpected');
     }
@@ -210,25 +212,27 @@ describe('the way a handler reaches a store', () => {
 
 describe('what an executor is given to work with', () => {
   it('is absence where nothing was supplied, and says so', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
-    await handlerRecording(seen).execute({
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
+    await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
     });
     // not an empty object standing in for one: a version that declared
     // something and was given none must be able to tell
-    expect(seen.dependencies[0]).toBeNull();
+    expect(observations.dependencies[0]).toBeNull();
   });
 
   it('is what the dependency exposes, and not the dependency', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
-    const given = { note: 'given' } as unknown as ScenarioDependencies;
-    const { dependency } = heldDependencies(given);
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
+    const suppliedDependencies = {
+      note: 'given',
+    } as unknown as ScenarioDependencies;
+    const { dependency } = heldDependencies(suppliedDependencies);
 
-    await handlerRecording(seen).execute({
+    await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
@@ -236,20 +240,20 @@ describe('what an executor is given to work with', () => {
     });
 
     // what it exposes, so an executor cannot reach the lifetime
-    expect(seen.dependencies[0]).toBe(given);
-    expect(seen.dependencies[0]).not.toBe(dependency);
-    expect(seen.dependencies[0]).not.toHaveProperty('open');
-    expect(seen.dependencies[0]).not.toHaveProperty('close');
+    expect(observations.dependencies[0]).toBe(suppliedDependencies);
+    expect(observations.dependencies[0]).not.toBe(dependency);
+    expect(observations.dependencies[0]).not.toHaveProperty('open');
+    expect(observations.dependencies[0]).not.toHaveProperty('close');
   });
 
   it('is opened exactly once for one execution, before the executor', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
     const { dependency, calls } = openedPerExecution(
       () => ({ note: 'built' }) as unknown as ScenarioDependencies,
     );
 
-    await handlerRecording(seen).execute({
+    await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
@@ -258,24 +262,24 @@ describe('what an executor is given to work with', () => {
 
     expect(calls.opened).toHaveLength(1);
     // the executor read it, so it was open by the time it ran
-    expect(seen.dependencies[0]).toEqual({ note: 'built' });
+    expect(observations.dependencies[0]).toEqual({ note: 'built' });
   });
 
   it('is closed exactly once, after the execution has produced its record', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
     const { dependency, calls } = openedPerExecution(
       () => ({ note: 'built' }) as unknown as ScenarioDependencies,
     );
 
-    const produced = await handlerRecording(seen).execute({
+    const outcome = await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
       dependencies: dependency,
     });
 
-    expect(produced.kind).toBe('produced');
+    expect(outcome.kind).toBe('produced');
     expect(calls.closed).toHaveLength(1);
   });
 
@@ -284,46 +288,47 @@ describe('what an executor is given to work with', () => {
     // so a failure to close has nothing left to spoil. It is recorded
     // on the span and goes no further — the caller is told what the
     // execution produced, not that a connection would not go back.
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
     const { dependency, calls } = failingToClose(
       { note: 'built' } as unknown as ScenarioDependencies,
       new Error('the pool had already gone'),
     );
 
-    const produced = await handlerRecording(seen).tryExecute({
+    const outcome = await recordingHandler(observations).tryExecute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
       dependencies: dependency,
     });
 
-    expect(produced.ok && produced.value.kind).toBe('produced');
+    expect(outcome.ok && outcome.value.kind).toBe('produced');
     expect(calls.closed).toHaveLength(1);
   });
 
   it('is opened again for the next execution, never kept from the last', async () => {
-    const seen = watching();
-    const { store, resolver } = storeWatching(seen);
-    const handler = handlerRecording(seen);
-    let built = 0;
+    const observations = noObservations();
+    const { store, resolver } = watchedStore(observations);
+    const handler = recordingHandler(observations);
+    let openCount = 0;
 
     const { dependency } = openedPerExecution(() => {
-      built += 1;
-      return { note: `built-${built}` } as unknown as ScenarioDependencies;
+      openCount += 1;
+      return { note: `built-${openCount}` } as unknown as ScenarioDependencies;
     });
 
-    const opened = await handler.execute({
+    const openingOutcome = await handler.execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
       dependencies: dependency,
     });
-    if (opened.kind !== 'produced') throw new Error('nothing was opened');
-    store.commit(opened.state);
+    if (openingOutcome.kind !== 'produced')
+      throw new Error('nothing was opened');
+    store.commit(openingOutcome.state);
 
     await handler.execute({
-      event: answering(opened),
+      event: inventoryAnswer(openingOutcome),
       state: resolver,
       attempt: 0,
       dependencies: dependency,
@@ -332,19 +337,19 @@ describe('what an executor is given to work with', () => {
     // the same object twice, and a different thing held each time —
     // which is why a supplier may keep the object and must not keep
     // what it holds
-    expect(built).toBe(2);
-    expect(seen.dependencies[0]).not.toBe(seen.dependencies[1]);
+    expect(openCount).toBe(2);
+    expect(observations.dependencies[0]).not.toBe(observations.dependencies[1]);
   });
 
   it('is told what caused this execution, and which attempt it is', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
     const order = anOrder();
     const { dependency, calls } = openedPerExecution(
       () => ({}) as unknown as ScenarioDependencies,
     );
 
-    await handlerRecording(seen).execute({
+    await recordingHandler(observations).execute({
       event: order,
       state: resolver,
       attempt: 2,
@@ -356,45 +361,46 @@ describe('what an executor is given to work with', () => {
   });
 
   it('is told the execution it is for, and where that execution records', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
     const { dependency, calls } = openedPerExecution(
       () => ({}) as unknown as ScenarioDependencies,
     );
 
-    const produced = await handlerRecording(seen).execute({
+    const outcome = await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
       dependencies: dependency,
     });
-    if (produced.kind !== 'produced') throw new Error('nothing was produced');
+    if (outcome.kind !== 'produced') throw new Error('nothing was produced');
 
-    expect(calls.opened[0]?.executionId).toBe(produced.state.executionId);
+    expect(calls.opened[0]?.executionId).toBe(outcome.state.executionId);
     expect(calls.opened[0]?.telemetry).toBeDefined();
     // closed for the same execution it was opened for
-    expect(calls.closed[0]?.executionId).toBe(produced.state.executionId);
+    expect(calls.closed[0]?.executionId).toBe(outcome.state.executionId);
   });
 
   it('sees absence where the execution had no record yet, and the record where it did', async () => {
-    const seen = watching();
-    const { store, resolver } = storeWatching(seen);
-    const handler = handlerRecording(seen);
+    const observations = noObservations();
+    const { store, resolver } = watchedStore(observations);
+    const handler = recordingHandler(observations);
     const { dependency, calls } = openedPerExecution(
       () => ({}) as unknown as ScenarioDependencies,
     );
 
-    const opened = await handler.execute({
+    const openingOutcome = await handler.execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
       dependencies: dependency,
     });
-    if (opened.kind !== 'produced') throw new Error('nothing was opened');
-    store.commit(opened.state);
+    if (openingOutcome.kind !== 'produced')
+      throw new Error('nothing was opened');
+    store.commit(openingOutcome.state);
 
     await handler.execute({
-      event: answering(opened),
+      event: inventoryAnswer(openingOutcome),
       state: resolver,
       attempt: 0,
       dependencies: dependency,
@@ -407,53 +413,55 @@ describe('what an executor is given to work with', () => {
 
 describe('whatever the mechanism exposes to an executor', () => {
   it('is absence where nothing was exposed, and says so', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
-    await handlerRecording(seen).execute({
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
+    await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
     });
-    expect(seen.hooks[0]).toBeNull();
+    expect(observations.hooks[0]).toBeNull();
   });
 
   it('is passed through exactly as it was given, uninterpreted', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
-    const exposed = { scheduler: { at: 1 }, whatever: Symbol('opaque') };
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
+    const exposedHooks = { scheduler: { at: 1 }, whatever: Symbol('opaque') };
 
-    await handlerRecording(seen).execute({
+    await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
-      hooks: exposed,
+      hooks: exposedHooks,
     });
-    expect(seen.hooks[0]).toBe(exposed);
+    expect(observations.hooks[0]).toBe(exposedHooks);
   });
 
   it('is passed through even where it is not an object at all', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
-    await handlerRecording(seen).execute({
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
+    await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
       hooks: 'whatever this mechanism means' as never,
     });
-    expect(seen.hooks[0]).toBe('whatever this mechanism means');
+    expect(observations.hooks[0]).toBe('whatever this mechanism means');
   });
 
   it('never reaches the record either', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
-    const ran = await handlerRecording(seen).execute({
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
+    const outcome = await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
       hooks: { secret: 'nothing may store this' },
     });
-    if (ran.kind !== 'produced') throw new Error('nothing was opened');
-    expect(JSON.stringify(ran.state)).not.toContain('nothing may store this');
+    if (outcome.kind !== 'produced') throw new Error('nothing was opened');
+    expect(JSON.stringify(outcome.state)).not.toContain(
+      'nothing may store this',
+    );
   });
 
   it('is the executor s problem where reading one fails', async () => {
@@ -478,23 +486,25 @@ describe('whatever the mechanism exposes to an executor', () => {
       .handler('2.0.0', async () => {})
       .build();
 
-    const brittle = {} as { brittle: string };
-    Object.defineProperty(brittle, 'brittle', {
+    const brittleHooks = {} as { brittle: string };
+    Object.defineProperty(brittleHooks, 'brittle', {
       get() {
         throw new Error('this hook cannot be read');
       },
     });
 
     // the work failed, which is a conclusion rather than a fault
-    const ran = await handler.execute({
+    const outcome = await handler.execute({
       event: anOrder(),
       state: new ScenarioStore().resolver,
       attempt: 0,
-      hooks: brittle,
+      hooks: brittleHooks,
     });
-    expect(ran.kind).toBe('produced');
-    expect(ran.kind === 'produced' && ran.state.lifecycle).toBe('error');
-    expect(ran.kind === 'produced' && ran.events[0]?.type).toBe(
+    expect(outcome.kind).toBe('produced');
+    expect(outcome.kind === 'produced' && outcome.state.lifecycle).toBe(
+      'error',
+    );
+    expect(outcome.kind === 'produced' && outcome.events[0]?.type).toBe(
       fulfilV1.error.type,
     );
   });
@@ -502,12 +512,12 @@ describe('whatever the mechanism exposes to an executor', () => {
 
 describe('what one execution cannot leave behind for the next', () => {
   it('holds nothing of what it was supplied, across three executions', async () => {
-    const seen = watching();
-    const { store, resolver } = storeWatching(seen);
-    const handler = handlerRecording(seen);
+    const observations = noObservations();
+    const { store, resolver } = watchedStore(observations);
+    const handler = recordingHandler(observations);
 
     for (const subject of ['order-a', 'order-b', 'order-c']) {
-      const ran = await handler.execute({
+      const outcome = await handler.execute({
         event: anOrder(subject),
         state: resolver,
         attempt: 0,
@@ -516,15 +526,15 @@ describe('what one execution cannot leave behind for the next', () => {
         } as unknown as ScenarioDependencies).dependency,
         hooks: { ticket: subject },
       });
-      if (ran.kind === 'produced') store.commit(ran.state);
+      if (outcome.kind === 'produced') store.commit(outcome.state);
     }
 
-    expect(seen.dependencies).toEqual([
+    expect(observations.dependencies).toEqual([
       { note: 'order-a' },
       { note: 'order-b' },
       { note: 'order-c' },
     ]);
-    expect(seen.hooks).toEqual([
+    expect(observations.hooks).toEqual([
       { ticket: 'order-a' },
       { ticket: 'order-b' },
       { ticket: 'order-c' },
@@ -532,9 +542,9 @@ describe('what one execution cannot leave behind for the next', () => {
   });
 
   it('holds nothing of either on the handler itself', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
-    const handler = handlerRecording(seen);
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
+    const handler = recordingHandler(observations);
 
     await handler.execute({
       event: anOrder(),
@@ -562,7 +572,7 @@ describe('what an executor is told where nothing was supplied', () => {
    */
 
   /** A handler whose executor refuses to run without what it declared. */
-  const handlerNeeding = () =>
+  const strictHandler = () =>
     setupArvoEventHandler({
       contracts: { self: fulfilContract, services: { inventory: inventoryV1 } },
       types: {} as {
@@ -597,7 +607,7 @@ describe('what an executor is told where nothing was supplied', () => {
       .build();
 
   /** A handler whose executor works either way, and records which. */
-  const handlerDegrading = (seen: { had: (boolean | null)[] }) =>
+  const degradingHandler = (observations: { had: (boolean | null)[] }) =>
     setupArvoEventHandler({
       contracts: { self: fulfilContract, services: { inventory: inventoryV1 } },
       types: {} as {
@@ -608,7 +618,7 @@ describe('what an executor is told where nothing was supplied', () => {
       .handler('1.0.0', {
         state: z.object({ stage: z.string() }),
         execute: async (ctx) => {
-          seen.had.push(ctx.dependencies !== null);
+          observations.had.push(ctx.dependencies !== null);
           await ctx.setState({ data: { stage: 'asking' } });
           return ctx.build({
             type: 'com_inventory_reserve',
@@ -626,64 +636,66 @@ describe('what an executor is told where nothing was supplied', () => {
       .build();
 
   it('reads absence where a declared dependency was not supplied', async () => {
-    const seen = { had: [] as (boolean | null)[] };
-    const { resolver } = storeWatching(watching());
+    const observations = { had: [] as (boolean | null)[] };
+    const { resolver } = watchedStore(noObservations());
 
-    const ran = await handlerDegrading(seen).execute({
+    const outcome = await degradingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
     });
 
     // entered, not refused: the protocol does not decide this
-    expect(ran.kind).toBe('produced');
-    expect(seen.had[0]).toBe(false);
+    expect(outcome.kind).toBe('produced');
+    expect(observations.had[0]).toBe(false);
   });
 
   it('lets an executor that cannot proceed fail, naming what was missing', async () => {
-    const { resolver } = storeWatching(watching());
+    const { resolver } = watchedStore(noObservations());
 
-    const refused = await handlerNeeding().tryExecute({
+    const refusal = await strictHandler().tryExecute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
     });
 
-    expect(refused.ok).toBe(false);
-    if (refused.ok) return;
-    expect(refused.error.faultKind).toBe('executor_raised');
-    expect(refused.error.message).toContain('needs a catalogue');
+    expect(refusal.ok).toBe(false);
+    if (refusal.ok) return;
+    expect(refusal.error.faultKind).toBe('executor_raised');
+    expect(refusal.error.message).toContain('needs a catalogue');
     // its own choice, so no further attempt is in prospect
-    expect(refused.error.retry).toBeNull();
+    expect(refusal.error.retry).toBeNull();
   });
 
   it('lets an executor that can proceed carry on', async () => {
-    const seen = { had: [] as (boolean | null)[] };
-    const { resolver } = storeWatching(watching());
-    const given = heldDependencies({} as ScenarioDependencies).dependency;
+    const observations = { had: [] as (boolean | null)[] };
+    const { resolver } = watchedStore(noObservations());
+    const suppliedDependency = heldDependencies(
+      {} as ScenarioDependencies,
+    ).dependency;
 
-    const ran = await handlerDegrading(seen).execute({
+    const outcome = await degradingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
-      dependencies: given,
+      dependencies: suppliedDependency,
     });
 
-    expect(ran.kind).toBe('produced');
-    expect(seen.had[0]).toBe(true);
+    expect(outcome.kind).toBe('produced');
+    expect(observations.had[0]).toBe(true);
   });
 
   it('reads absence where the mechanism exposed nothing', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
 
-    await handlerRecording(seen).execute({
+    await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
     });
 
-    expect(seen.hooks[0]).toBeNull();
+    expect(observations.hooks[0]).toBeNull();
   });
 
   it('reads a declared member that was not supplied as absent', async () => {
@@ -693,28 +705,28 @@ describe('what an executor is told where nothing was supplied', () => {
      * an edge. A member that did not arrive is absent for the same
      * reason the whole thing can be.
      */
-    const seen = { had: [] as (boolean | null)[] };
-    const { resolver } = storeWatching(watching());
+    const observations = { had: [] as (boolean | null)[] };
+    const { resolver } = watchedStore(noObservations());
 
-    const partial = heldDependencies({
+    const partialDependency = heldDependencies({
       behave: undefined,
     } as ScenarioDependencies).dependency;
 
-    const ran = await handlerDegrading(seen).execute({
+    const outcome = await degradingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
-      dependencies: partial,
+      dependencies: partialDependency,
     });
 
     // the object arrived, so this is not the null case
-    expect(ran.kind).toBe('produced');
-    expect(seen.had[0]).toBe(true);
+    expect(outcome.kind).toBe('produced');
+    expect(observations.had[0]).toBe(true);
   });
 
   it('lets an executor decide per member, not once for the whole', async () => {
-    const asked: (string | undefined)[] = [];
-    const { resolver } = storeWatching(watching());
+    const optionalMembers: (string | undefined)[] = [];
+    const { resolver } = watchedStore(noObservations());
 
     const handler = setupArvoEventHandler({
       contracts: {
@@ -737,7 +749,7 @@ describe('what an executor is told where nothing was supplied', () => {
             });
           }
           // and one it can
-          asked.push(ctx.dependencies.optional);
+          optionalMembers.push(ctx.dependencies.optional);
           await ctx.setState({ data: { stage: 'asking' } });
           return ctx.build({
             type: 'com_inventory_reserve',
@@ -755,20 +767,20 @@ describe('what an executor is told where nothing was supplied', () => {
       .build();
 
     // the member it needs, and not the one it does not
-    const ran = await handler.execute({
+    const outcome = await handler.execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
       dependencies: heldDependencies({ needed: 'here' }).dependency,
     });
 
-    expect(ran.kind).toBe('produced');
-    expect(asked[0]).toBeUndefined();
+    expect(outcome.kind).toBe('produced');
+    expect(optionalMembers[0]).toBeUndefined();
 
     // And the other way round: the one it needs is missing. A mechanism
     // that knowingly carries less than a version declared says so here,
     // which is the one place that knows its coverage is partial.
-    const refused = await handler.tryExecute({
+    const refusal = await handler.tryExecute({
       event: anOrder('order-2'),
       state: resolver,
       attempt: 0,
@@ -780,16 +792,16 @@ describe('what an executor is told where nothing was supplied', () => {
       }>,
     });
 
-    expect(refused.ok).toBe(false);
-    if (refused.ok) return;
-    expect(refused.error.message).toContain('needs `needed`');
+    expect(refusal.ok).toBe(false);
+    if (refusal.ok) return;
+    expect(refusal.error.message).toContain('needs `needed`');
   });
 
   it('reads an empty set deliberately exposed as supplied, not as absence', async () => {
-    const seen = watching();
-    const { resolver } = storeWatching(seen);
+    const observations = noObservations();
+    const { resolver } = watchedStore(observations);
 
-    await handlerRecording(seen).execute({
+    await recordingHandler(observations).execute({
       event: anOrder(),
       state: resolver,
       attempt: 0,
@@ -797,7 +809,7 @@ describe('what an executor is told where nothing was supplied', () => {
     });
 
     // the distinction the empty-object substitution destroyed
-    expect(seen.hooks[0]).not.toBeNull();
-    expect(seen.hooks[0]).toEqual({});
+    expect(observations.hooks[0]).not.toBeNull();
+    expect(observations.hooks[0]).toEqual({});
   });
 });

@@ -28,12 +28,12 @@ describe('traceContextFromSpan', () => {
     it('distinguishes the two by traceId being a string, not by duck-typing spanContext', () => {
       // A Span exposes spanContext(); a SpanContext exposes traceId. An object
       // carrying both must be read as the SpanContext it declares itself to be.
-      const ambiguous = {
+      const ambiguousSpan = {
         ...spanContext({ traceId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }),
         spanContext: () =>
           spanContext({ traceId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' }),
       } as unknown as SpanContext;
-      expect(traceContextFromSpan(ambiguous).traceparent).toContain('aaaa');
+      expect(traceContextFromSpan(ambiguousSpan).traceparent).toContain('aaaa');
     });
   });
 
@@ -59,10 +59,12 @@ describe('traceContextFromSpan', () => {
 
   describe('tracestate', () => {
     it('serializes a traceState when one is present', () => {
-      const context = spanContext({
+      const spanContextWithState = spanContext({
         traceState: { serialize: () => 'vendor=value' },
       } as Partial<SpanContext>);
-      expect(traceContextFromSpan(context).tracestate).toBe('vendor=value');
+      expect(traceContextFromSpan(spanContextWithState).tracestate).toBe(
+        'vendor=value',
+      );
     });
 
     it('is null when no traceState is present', () => {
@@ -70,10 +72,10 @@ describe('traceContextFromSpan', () => {
     });
 
     it('is null when serialize returns an empty string, which carries no state', () => {
-      const context = spanContext({
+      const spanContextWithState = spanContext({
         traceState: { serialize: () => '' },
       } as Partial<SpanContext>);
-      expect(traceContextFromSpan(context).tracestate).toBe('');
+      expect(traceContextFromSpan(spanContextWithState).tracestate).toBe('');
     });
   });
 });

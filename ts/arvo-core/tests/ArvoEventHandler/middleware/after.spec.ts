@@ -99,18 +99,18 @@ describe('an after part that throws', () => {
   });
 
   it('still lets every other after part run', async () => {
-    const executionResult: string[] = [];
+    const afterPartOrder: string[] = [];
     await runToProduced([
-      { id: 'outer', after: () => void executionResult.push('outer') },
+      { id: 'outer', after: () => void afterPartOrder.push('outer') },
       {
         id: 'thrower',
         after: () => {
           throw new Error('boom');
         },
       },
-      { id: 'inner', after: () => void executionResult.push('inner') },
+      { id: 'inner', after: () => void afterPartOrder.push('inner') },
     ]);
-    expect(executionResult).toEqual(['inner', 'outer']);
+    expect(afterPartOrder).toEqual(['inner', 'outer']);
   });
 });
 

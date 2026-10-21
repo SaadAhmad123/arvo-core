@@ -18,7 +18,7 @@ import {
 } from '../fixtures.js';
 
 /** What an execution records against; these tests only carry it. */
-const { telemetry: tracing } = telemetry();
+const { telemetry: sharedTelemetry } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
@@ -34,8 +34,8 @@ type InitOverrides = Partial<
   >
 >;
 
-const opened = (overrides: InitOverrides = {}) => {
-  const state = createInitArvoExecutionState<
+const openingContext = (overrides: InitOverrides = {}) => {
+  const stateCreation = createInitArvoExecutionState<
     typeof orderVersion,
     typeof services,
     typeof orderData
@@ -45,14 +45,14 @@ const opened = (overrides: InitOverrides = {}) => {
     executionId: EXECUTION_ID,
     parentExecutionId: initEvent.executionid,
   });
-  if (!state.ok) throw state.error;
+  if (!stateCreation.ok) throw stateCreation.error;
   return new ArvoExecutionContext({
     contracts: { self: orderVersion, services },
-    state: state.value,
+    state: stateCreation.value,
     entry: 'init',
     dataSchema: orderData,
     attempt: 0,
-    telemetry: tracing,
+    telemetry: sharedTelemetry,
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     idempotency: placeholderIdempotencyKeys,
     dependencies: {},
@@ -62,7 +62,7 @@ const opened = (overrides: InitOverrides = {}) => {
 };
 
 /** The resolved options, with the bounds a test cares about replaced. */
-const bounded = (
+const boundedOptions = (
   overrides: Partial<ArvoEventHandlerOptions>,
 ): ArvoEventHandlerOptions => ({
   ...ARVO_DEFAULT_HANDLER_OPTIONS,
@@ -71,62 +71,72 @@ const bounded = (
 
 describe('seeing the depth limit before crossing it', () => {
   it('says there is room where the execution sits well short', () => {
-    expect(opened({ options: bounded({ maxDepth: 10 }) }).atMaxDepth).toBe(
-      false,
-    );
+    expect(
+      openingContext({ options: boundedOptions({ maxDepth: 10 }) }).atMaxDepth,
+    ).toBe(false);
   });
 
   it('says there is none where one more step would reach the maximum', () => {
-    expect(opened({ options: bounded({ maxDepth: 1 }) }).atMaxDepth).toBe(true);
+    expect(
+      openingContext({ options: boundedOptions({ maxDepth: 1 }) }).atMaxDepth,
+    ).toBe(true);
   });
 
   it('says there is none where the execution already sits at the maximum', () => {
-    expect(opened({ options: bounded({ maxDepth: 0 }) }).atMaxDepth).toBe(true);
+    expect(
+      openingContext({ options: boundedOptions({ maxDepth: 0 }) }).atMaxDepth,
+    ).toBe(true);
   });
 
   it('is judged against what a service emission would carry, not this depth', () => {
     // This execution sits at 0, so an emission would sit at 1: room under a
     // maximum of 2, none under a maximum of 1.
-    expect(opened({ options: bounded({ maxDepth: 2 }) }).atMaxDepth).toBe(
-      false,
-    );
-    expect(opened({ options: bounded({ maxDepth: 1 }) }).atMaxDepth).toBe(true);
+    expect(
+      openingContext({ options: boundedOptions({ maxDepth: 2 }) }).atMaxDepth,
+    ).toBe(false);
+    expect(
+      openingContext({ options: boundedOptions({ maxDepth: 1 }) }).atMaxDepth,
+    ).toBe(true);
   });
 });
 
 describe('how long an executor has left', () => {
   describe('the clock on this attempt', () => {
     it('starts at the whole run timeout, the clock starting where the executor does', () => {
-      const ctx = opened({ options: bounded({ runTimeout: 10_000 }) });
+      const ctx = openingContext({
+        options: boundedOptions({ runTimeout: 10_000 }),
+      });
       expect(ctx.timeRemaining.run).toBeLessThanOrEqual(10_000);
       expect(ctx.timeRemaining.run).toBeGreaterThan(9_900);
     });
 
     it('counts from the moment the executor was entered', () => {
-      const before = Date.now();
-      const ctx = opened();
-      expect(ctx.enteredAt).toBeGreaterThanOrEqual(before);
+      const timeBefore = Date.now();
+      const ctx = openingContext();
+      expect(ctx.enteredAt).toBeGreaterThanOrEqual(timeBefore);
       expect(ctx.enteredAt).toBeLessThanOrEqual(Date.now());
     });
 
     it('falls as the executor runs', async () => {
-      const ctx = opened({ options: bounded({ runTimeout: 10_000 }) });
-      const first = ctx.timeRemaining.run as number;
+      const ctx = openingContext({
+        options: boundedOptions({ runTimeout: 10_000 }),
+      });
+      const runRemainingBefore = ctx.timeRemaining.run as number;
       await new Promise((resolve) => setTimeout(resolve, 25));
-      expect(ctx.timeRemaining.run as number).toBeLessThan(first);
+      expect(ctx.timeRemaining.run as number).toBeLessThan(runRemainingBefore);
     });
 
     it('goes negative once the attempt has overrun', async () => {
-      const ctx = opened({
-        options: bounded({ runTimeout: 1, executionTimeout: 1 }),
+      const ctx = openingContext({
+        options: boundedOptions({ runTimeout: 1, executionTimeout: 1 }),
       });
       await new Promise((resolve) => setTimeout(resolve, 25));
       expect(ctx.timeRemaining.run as number).toBeLessThan(0);
     });
 
     it('is unbounded where the version set no run timeout', () => {
-      const ctx = opened({
-        options: bounded({ runTimeout: null, executionTimeout: null }),
+      const ctx = openingContext({
+        options: boundedOptions({ runTimeout: null, executionTimeout: null }),
       });
       expect(ctx.timeRemaining.run).toBeNull();
     });
@@ -134,12 +144,15 @@ describe('how long an executor has left', () => {
 
   describe('the clock on the whole execution', () => {
     it('is unbounded where the version set none', () => {
-      expect(opened().timeRemaining.execution).toBeNull();
+      expect(openingContext().timeRemaining.execution).toBeNull();
     });
 
     it('is what is left of it, measured from the event that opened it', () => {
-      const ctx = opened({
-        options: bounded({ runTimeout: 1_000, executionTimeout: 3_600_000 }),
+      const ctx = openingContext({
+        options: boundedOptions({
+          runTimeout: 1_000,
+          executionTimeout: 3_600_000,
+        }),
       });
       const elapsed = Date.now() - Date.parse(initEvent.time);
       expect(ctx.timeRemaining.execution).toBeLessThanOrEqual(
@@ -151,27 +164,34 @@ describe('how long an executor has left', () => {
     });
 
     it('is negative where the execution has already outlived it', () => {
-      const ctx = opened({
-        options: bounded({ runTimeout: 1, executionTimeout: 1 }),
+      const ctx = openingContext({
+        options: boundedOptions({ runTimeout: 1, executionTimeout: 1 }),
       });
       expect(ctx.timeRemaining.execution as number).toBeLessThan(0);
     });
   });
 
   it('is read afresh on every call, so a long executor sees it fall', async () => {
-    const ctx = opened({
-      options: bounded({ runTimeout: 10_000, executionTimeout: 3_600_000 }),
+    const ctx = openingContext({
+      options: boundedOptions({
+        runTimeout: 10_000,
+        executionTimeout: 3_600_000,
+      }),
     });
-    const first = ctx.timeRemaining;
+    const remainingBefore = ctx.timeRemaining;
     await new Promise((resolve) => setTimeout(resolve, 25));
-    const later = ctx.timeRemaining;
+    const remainingAfter = ctx.timeRemaining;
 
-    expect(later.run as number).toBeLessThan(first.run as number);
-    expect(later.execution as number).toBeLessThan(first.execution as number);
+    expect(remainingAfter.run as number).toBeLessThan(
+      remainingBefore.run as number,
+    );
+    expect(remainingAfter.execution as number).toBeLessThan(
+      remainingBefore.execution as number,
+    );
   });
 
   it('cannot be replaced by an executor', () => {
-    const ctx = opened();
+    const ctx = openingContext();
     expect(() => {
       (ctx as unknown as Record<string, unknown>).timeRemaining = {};
     }).toThrow();
@@ -183,13 +203,13 @@ describe('how long an executor has left', () => {
 
 describe('ending an execution deliberately', () => {
   it('leaves it at rest', () => {
-    const ctx = opened();
+    const ctx = openingContext();
     ctx.cancel('the customer withdrew the order');
     expect(ctx.state.lifecycle).toBe('cancelled');
   });
 
   it('carries the reason on what it remembers', () => {
-    const ctx = opened();
+    const ctx = openingContext();
     ctx.cancel('the customer withdrew the order');
     expect(ctx.state.lifecycleDescription).toBe(
       'the customer withdrew the order',
@@ -197,22 +217,22 @@ describe('ending an execution deliberately', () => {
   });
 
   it('mints a new record rather than changing the one it had', () => {
-    const ctx = opened();
-    const before = ctx.state;
+    const ctx = openingContext();
+    const stateBefore = ctx.state;
     ctx.cancel('no longer wanted');
-    expect(ctx.state).not.toBe(before);
-    expect(before.lifecycle).toBe('idle');
+    expect(ctx.state).not.toBe(stateBefore);
+    expect(stateBefore.lifecycle).toBe('idle');
   });
 
   it('leaves everything else as the execution stood', async () => {
-    const ctx = opened();
+    const ctx = openingContext();
     await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
-    const before = ctx.state;
+    const stateBefore = ctx.state;
     ctx.cancel('no longer wanted');
 
-    expect(ctx.state.data).toEqual(before.data);
-    expect(ctx.state.executionId).toBe(before.executionId);
-    expect(ctx.state.eventIds).toEqual(before.eventIds);
-    expect(ctx.state.casVersion).toBe(before.casVersion);
+    expect(ctx.state.data).toEqual(stateBefore.data);
+    expect(ctx.state.executionId).toBe(stateBefore.executionId);
+    expect(ctx.state.eventIds).toEqual(stateBefore.eventIds);
+    expect(ctx.state.casVersion).toBe(stateBefore.casVersion);
   });
 });

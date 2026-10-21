@@ -20,7 +20,7 @@ const AT_ONCE = 100;
 /** Waits a moment chosen per call, so executions interleave. */
 const waitRandomly = () => sleep(Math.random() * 4);
 
-const answerFrom = (
+const readAnswer = (
   executionResult: Awaited<ReturnType<typeof executeOrder>>,
 ): { subject: string; orderId: string } | null => {
   if (!executionResult.ok || executionResult.value.kind !== 'produced')
@@ -35,8 +35,8 @@ const answerFrom = (
 
 const executeManyOrders = (handler: ReturnType<typeof orderHandler>) =>
   Promise.all(
-    Array.from({ length: AT_ONCE }, (_, index) =>
-      executeOrder(handler, { event: orderRequest(`order-${index}`) }),
+    Array.from({ length: AT_ONCE }, (_, orderIndex) =>
+      executeOrder(handler, { event: orderRequest(`order-${orderIndex}`) }),
     ),
   );
 
@@ -61,7 +61,7 @@ describe('a shared layer writing middleware data', () => {
         });
       },
     });
-    const answers = (await executeManyOrders(handler)).map(answerFrom);
+    const answers = (await executeManyOrders(handler)).map(readAnswer);
     expect(
       answers.every(
         (answer) => answer !== null && answer.orderId === answer.subject,

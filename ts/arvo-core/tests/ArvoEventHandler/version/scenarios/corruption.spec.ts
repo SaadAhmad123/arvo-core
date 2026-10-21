@@ -28,7 +28,7 @@ import { createArvoLattice } from './lattice.js';
  * rather than refused.
  */
 
-const telemetryFor = () =>
+const executionTelemetry = () =>
   new ArvoExecutionContextTelemetry({
     span: trace.getTracer('corruption').startSpan('execution'),
     meter: null,
@@ -50,7 +50,7 @@ const anOrder = (subject = 'order-1') =>
  * once and a row from a finished execution is not the row this file is
  * about.
  */
-const waiting = async () => {
+const awaitingReview = async () => {
   const lattice = createArvoLattice({ versions: declareVersions(), seed: 29 });
   lattice.behave(orderV1.type, async (ctx: OrderContext) => {
     if (ctx.entry === 'followup') {
@@ -70,24 +70,24 @@ const waiting = async () => {
   await lattice.publish(anOrder()).settle();
 
   const [executionId, row] = [...lattice.store.entries()].find(
-    ([, held]) => held.source === orderV1.type,
+    ([, storedRow]) => storedRow.source === orderV1.type,
   ) as [string, JSONObject];
-  const asked = lattice.parked.get('human_review')?.[0] as ArvoEvent;
+  const reviewRequest = lattice.parked.get('human_review')?.[0] as ArvoEvent;
 
-  return { lattice, executionId, row, asked };
+  return { lattice, executionId, row, reviewRequest };
 };
 
 /** What a person decides, as an answer to what that order asked for. */
-const answerTo = (asked: ArvoEvent, executionId: string) =>
+const answerTo = (reviewRequest: ArvoEvent, executionId: string) =>
   createArvoEventFactory(reviewV1).createOutput({
     type: 'evt_review_decided',
     source: reviewV1.type,
-    subject: asked.subject,
+    subject: reviewRequest.subject,
     to: orderV1.type,
     executionid: executionId,
-    parentid: asked.id,
-    initid: asked.id,
-    depth: asked.depth,
+    parentid: reviewRequest.id,
+    initid: reviewRequest.id,
+    depth: reviewRequest.depth,
     data: { approved: true },
   });
 
@@ -96,21 +96,21 @@ const answerTo = (asked: ArvoEvent, executionId: string) =>
  * test needs — the row and the execution it belongs to coming from one
  * run, since a row from another would be refused for that first.
  */
-const resumedWith = async (
-  becomes: (row: JSONObject) => unknown,
+const faultOnResume = async (
+  corruptRow: (row: JSONObject) => unknown,
 ): Promise<ArvoHandlerFault> => {
-  const { executionId, row, asked } = await waiting();
+  const { executionId, row, reviewRequest } = await awaitingReview();
   const versions = declareVersions();
   try {
     await versions[orderV1.type]?.['1.0.0']?.execute({
       entry: 'followup',
-      event: answerTo(asked, executionId),
-      state: becomes(row),
+      event: answerTo(reviewRequest, executionId),
+      state: corruptRow(row),
       executionId,
       attempt: 0,
       dependencies: null,
       hooks: {},
-      telemetry: telemetryFor(),
+      telemetry: executionTelemetry(),
     } as never);
   } catch (thrown) {
     return thrown as ArvoHandlerFault;
@@ -120,119 +120,121 @@ const resumedWith = async (
 
 describe('a row that is not a record', () => {
   it('is refused where it does not read at all', async () => {
-    const refused = await resumedWith(() => 'not a row');
-    expect(refused.faultKind).toBe('record_invalid');
-    expect(refused.abandonmentEvent).toBeNull();
-    expect(refused.abandonmentState).toBeNull();
+    const fault = await faultOnResume(() => 'not a row');
+    expect(fault.faultKind).toBe('record_invalid');
+    expect(fault.abandonmentEvent).toBeNull();
+    expect(fault.abandonmentState).toBeNull();
   });
 
   it('is refused where it holds nothing a record holds', async () => {
-    const refused = await resumedWith(() => ({ nothing: 'much' }));
-    expect(refused.faultKind).toBe('record_event_unrestorable');
+    const fault = await faultOnResume(() => ({ nothing: 'much' }));
+    expect(fault.faultKind).toBe('record_event_unrestorable');
   });
 
   it('is refused where an event it holds will not restore', async () => {
-    const refused = await resumedWith((row) => ({
+    const fault = await faultOnResume((row) => ({
       ...row,
       initEvent: { not: 'one' },
     }));
-    expect(refused.faultKind).toBe('record_event_unrestorable');
-    expect(refused.abandonmentEvent).toBeNull();
+    expect(fault.faultKind).toBe('record_event_unrestorable');
+    expect(fault.abandonmentEvent).toBeNull();
   });
 
   it('says nothing about an execution it could not read', async () => {
-    const refused = await resumedWith(() => 'not a row');
-    expect(refused.executionId).not.toBeNull();
-    expect(refused.abandonmentState).toBeNull();
+    const fault = await faultOnResume(() => 'not a row');
+    expect(fault.executionId).not.toBeNull();
+    expect(fault.abandonmentState).toBeNull();
   });
 });
 
 describe('a row that reads, and contradicts itself', () => {
-  const drifted = (overrides: JSONObject) =>
-    resumedWith((row) => ({ ...row, ...overrides }));
+  const faultOnDrift = (overrides: JSONObject) =>
+    faultOnResume((row) => ({ ...row, ...overrides }));
 
   it('is refused where it sits at a level its opening event does not', async () => {
-    const refused = await drifted({ depth: 4 });
-    expect(refused.faultKind).toBe('record_invalid');
-    expect(refused.violations.some((broken) => broken.includes('depth'))).toBe(
-      true,
-    );
+    const fault = await faultOnDrift({ depth: 4 });
+    expect(fault.faultKind).toBe('record_invalid');
+    expect(
+      fault.violations.some((violation) => violation.includes('depth')),
+    ).toBe(true);
   });
 
   it('is refused where it names a workflow its opening event does not', async () => {
-    const refused = await drifted({ subject: 'another-workflow' });
+    const fault = await faultOnDrift({ subject: 'another-workflow' });
     expect(
-      refused.violations.some((broken) => broken.includes('subject')),
+      fault.violations.some((violation) => violation.includes('subject')),
     ).toBe(true);
   });
 
   it('is refused where it names a caller its opening event does not', async () => {
-    const refused = await drifted({ parentExecutionId: 'somebody-else' });
+    const fault = await faultOnDrift({ parentExecutionId: 'somebody-else' });
     expect(
-      refused.violations.some((broken) => broken.includes('parentExecutionId')),
+      fault.violations.some((violation) =>
+        violation.includes('parentExecutionId'),
+      ),
     ).toBe(true);
   });
 
   it('is refused where it awaits something it never sent', async () => {
-    const refused = await drifted({
+    const fault = await faultOnDrift({
       inFlightEventMap: [['never-sent', null]],
     });
     expect(
-      refused.violations.some((broken) => broken.includes('never-sent')),
+      fault.violations.some((violation) => violation.includes('never-sent')),
     ).toBe(true);
   });
 
   it('is refused where it does not hold the event that opened it', async () => {
-    const refused = await resumedWith((row) => ({
+    const fault = await faultOnResume((row) => ({
       ...row,
       eventIds: (row.eventIds as { id: string; direction: string }[]).filter(
-        (logged) => logged.direction === 'emitted',
+        (trailEntry) => trailEntry.direction === 'emitted',
       ),
     }));
     expect(
-      refused.violations.some((broken) => broken.includes('eventIds')),
+      fault.violations.some((violation) => violation.includes('eventIds')),
     ).toBe(true);
   });
 
   it('reports every field that drifted, not the first', async () => {
-    const refused = await drifted({ depth: 4, subject: 'another-workflow' });
-    expect(refused.violations.length).toBeGreaterThanOrEqual(2);
+    const fault = await faultOnDrift({ depth: 4, subject: 'another-workflow' });
+    expect(fault.violations.length).toBeGreaterThanOrEqual(2);
   });
 
   it('still answers the caller, the record having read back', async () => {
-    const refused = await drifted({ depth: 4 });
-    expect(typeof refused.abandonmentEvent).toBe('string');
-    expect(typeof refused.abandonmentState).toBe('string');
+    const fault = await faultOnDrift({ depth: 4 });
+    expect(typeof fault.abandonmentEvent).toBe('string');
+    expect(typeof fault.abandonmentState).toBe('string');
   });
 });
 
 describe('a row from a deployment that knows more than this one', () => {
   it('is accepted, a reader refusing what it does not know being worse', async () => {
-    const { lattice, executionId, row, asked } = await waiting();
+    const { lattice, executionId, row, reviewRequest } = await awaitingReview();
     const versions = declareVersions();
 
-    const written = await versions[orderV1.type]?.['1.0.0']?.execute({
+    const response = await versions[orderV1.type]?.['1.0.0']?.execute({
       entry: 'followup',
-      event: answerTo(asked, executionId),
+      event: answerTo(reviewRequest, executionId),
       // a field a later envelope added, which this reader has never seen
       state: { ...row, somethingNewer: { added: 'later' } },
       executionId,
       attempt: 0,
       dependencies: null,
       hooks: {},
-      telemetry: telemetryFor(),
+      telemetry: executionTelemetry(),
     } as never);
 
-    expect(written?.kind).toBe('produced');
+    expect(response?.kind).toBe('produced');
     expect(lattice.transcript.faults).toEqual([]);
   });
 });
 
 describe('a crash between committing and publishing', () => {
-  const crashing = async (rate: number, seed: number) => {
+  const crashingLattice = async (crashRate: number, seed: number) => {
     const lattice = createArvoLattice({
       versions: declareVersions(),
-      chaos: { crashBeforePublish: rate },
+      chaos: { crashBeforePublish: crashRate },
       seed,
     });
     await lattice.publish(anOrder()).settle();
@@ -240,7 +242,7 @@ describe('a crash between committing and publishing', () => {
   };
 
   it('holds what was committed, and publishes it on recovery', async () => {
-    const lattice = await crashing(1, 2);
+    const lattice = await crashingLattice(1, 2);
     expect(lattice.store.size).toBe(1);
     expect(lattice.holding).toBe(2);
 
@@ -249,29 +251,29 @@ describe('a crash between committing and publishing', () => {
   });
 
   it('sends the very events that were committed, not events built again', async () => {
-    const lattice = await crashing(1, 2);
-    const held = [...lattice.transcript.fromExecutions];
+    const lattice = await crashingLattice(1, 2);
+    const committedEventIds = [...lattice.transcript.fromExecutions];
     await lattice.recover().settle();
 
-    const sent = lattice.transcript.published.map((event) => event.id);
-    for (const id of held) expect(sent).toContain(id);
+    const publishedIds = lattice.transcript.published.map((event) => event.id);
+    for (const id of committedEventIds) expect(publishedIds).toContain(id);
   });
 
   it('reaches the same end as a run that never crashed', async () => {
-    const crashed = await crashing(0.5, 44);
-    while (crashed.holding > 0) await crashed.recover().settle();
-    const clean = await crashing(0, 44);
+    const crashedLattice = await crashingLattice(0.5, 44);
+    while (crashedLattice.holding > 0) await crashedLattice.recover().settle();
+    const cleanLattice = await crashingLattice(0, 44);
 
-    const resting = (lattice: Awaited<ReturnType<typeof crashing>>) =>
+    const endStates = (lattice: Awaited<ReturnType<typeof crashingLattice>>) =>
       [...lattice.store.values()]
         .map((row) => `${row.source}:${row.lifecycle}:${row.casVersion}`)
         .sort();
 
-    expect(resting(crashed)).toEqual(resting(clean));
+    expect(endStates(crashedLattice)).toEqual(endStates(cleanLattice));
   });
 
   it('discards a committed event republished after it was processed', async () => {
-    const lattice = await crashing(0, 6);
+    const lattice = await crashingLattice(0, 6);
     // only what a handler receives can be discarded by one: the order's
     // own answer goes to whoever opened it, which is not a handler here
     const answers = lattice.transcript.published.filter(
@@ -279,7 +281,7 @@ describe('a crash between committing and publishing', () => {
     );
 
     // recovery publishing again what a receiver already processed
-    for (const again of answers) lattice.inject(again);
+    for (const answer of answers) lattice.inject(answer);
     await lattice.settle();
 
     expect(lattice.transcript.discarded).toHaveLength(answers.length);
@@ -287,7 +289,7 @@ describe('a crash between committing and publishing', () => {
   });
 
   it('holds everything that must hold, through a crash and a recovery', async () => {
-    const lattice = await crashing(0.5, 44);
+    const lattice = await crashingLattice(0.5, 44);
     while (lattice.holding > 0) await lattice.recover().settle();
     await checkInvariants(lattice);
   });

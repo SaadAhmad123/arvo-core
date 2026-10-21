@@ -7,7 +7,7 @@ import { ArvoEventHandlerSetup } from '../../src/ArvoEventHandler/setup.js';
 import { setupArvoEventHandler } from '../../src/factories/setupArvoEventHandler.js';
 import { orderContract } from './fixtures.js';
 
-const twoVersions = new ArvoContract({
+const twoVersionContract = new ArvoContract({
   type: 'com_report_build',
   versions: {
     '1.0.0': { input: z.object({ of: z.string() }), outputs: {} },
@@ -16,61 +16,68 @@ const twoVersions = new ArvoContract({
 });
 
 const executor = async () => {};
-const valid = () =>
+const completeDeclaration = () =>
   setupArvoEventHandler({ contracts: { self: orderContract } }).handler(
     '1.0.0',
     executor,
   );
-const refused = () =>
-  setupArvoEventHandler({ contracts: { self: twoVersions } }).handler(
+const incompleteDeclaration = () =>
+  setupArvoEventHandler({ contracts: { self: twoVersionContract } }).handler(
     '1.0.0',
     executor,
   );
 
 describe('the two ways to finish a declaration', () => {
   it('both produce a handler from a declaration that works', () => {
-    expect(valid().build()).toBeInstanceOf(ArvoEventHandler);
-    const reported = valid().tryBuild();
-    expect(reported.ok && reported.value).toBeInstanceOf(ArvoEventHandler);
+    expect(completeDeclaration().build()).toBeInstanceOf(ArvoEventHandler);
+    const tryBuildResult = completeDeclaration().tryBuild();
+    expect(tryBuildResult.ok && tryBuildResult.value).toBeInstanceOf(
+      ArvoEventHandler,
+    );
   });
 
   it('produce handlers that agree on what they hold', () => {
-    const thrown = valid().build();
-    const reported = valid().tryBuild();
-    expect(reported.ok && reported.value.contracts.self).toBe(
-      thrown.contracts.self,
+    const handler = completeDeclaration().build();
+    const tryBuildResult = completeDeclaration().tryBuild();
+    expect(tryBuildResult.ok && tryBuildResult.value.contracts.self).toBe(
+      handler.contracts.self,
     );
-    expect(reported.ok && [...reported.value.versions.keys()]).toEqual([
-      ...thrown.versions.keys(),
-    ]);
+    expect(
+      tryBuildResult.ok && [...tryBuildResult.value.versions.keys()],
+    ).toEqual([...handler.versions.keys()]);
   });
 
   it('build a different handler each time, rather than one shared', () => {
-    expect(valid().build()).not.toBe(valid().build());
+    expect(completeDeclaration().build()).not.toBe(
+      completeDeclaration().build(),
+    );
   });
 });
 
 describe('a declaration that is refused', () => {
   it('throws from build', () => {
-    expect(() => refused().build()).toThrow(ArvoEventHandlerValidationError);
+    expect(() => incompleteDeclaration().build()).toThrow(
+      ArvoEventHandlerValidationError,
+    );
   });
 
   it('reports from tryBuild rather than throwing', () => {
-    const reported = refused().tryBuild();
-    expect(reported.ok).toBe(false);
+    const tryBuildResult = incompleteDeclaration().tryBuild();
+    expect(tryBuildResult.ok).toBe(false);
   });
 
   it('reports the same issues either way', () => {
     let thrownError: ArvoEventHandlerValidationError | null = null;
     try {
-      refused().build();
+      incompleteDeclaration().build();
     } catch (thrown) {
       thrownError = thrown as ArvoEventHandlerValidationError;
     }
-    const reported = refused().tryBuild();
+    const tryBuildResult = incompleteDeclaration().tryBuild();
     expect(
-      !reported.ok && reported.error.issues.map((one) => one.path),
-    ).toEqual(thrownError?.issues.map((one) => one.path));
+      !tryBuildResult.ok &&
+        tryBuildResult.error.issues.map((issue) => issue.path),
+    ).toEqual(thrownError?.issues.map((issue) => issue.path));
   });
 });
 
@@ -78,28 +85,30 @@ describe('a failure that is not a refused declaration', () => {
   it('goes up as it arrived, rather than becoming a reported issue', () => {
     // a declaration that cannot be read at all is not a declaration rule
     // being broken, so the reported error type must not claim it is
-    const broken = Object.create(
+    const unreadableSetup = Object.create(
       ArvoEventHandlerSetup.prototype,
     ) as ArvoEventHandlerSetup;
-    Object.defineProperty(broken, 'contracts', {
+    Object.defineProperty(unreadableSetup, 'contracts', {
       get() {
         throw new TypeError('the declaration could not be read');
       },
     });
-    expect(() => broken.tryBuild()).toThrow(TypeError);
+    expect(() => unreadableSetup.tryBuild()).toThrow(TypeError);
   });
 });
 
 describe('what building leaves the declaration as', () => {
   it('leaves the chain unchanged, so it can be built again', () => {
-    const chain = valid();
+    const chain = completeDeclaration();
     chain.build();
     expect(chain.versions).toHaveLength(1);
     expect(chain.build()).toBeInstanceOf(ArvoEventHandler);
   });
 
   it('leaves a chain unchanged by a further version being added to it', () => {
-    const chain = setupArvoEventHandler({ contracts: { self: twoVersions } })
+    const chain = setupArvoEventHandler({
+      contracts: { self: twoVersionContract },
+    })
       .handler('1.0.0', executor)
       .handler('1.1.0', executor);
     const branch = chain.handler('1.0.0', executor);

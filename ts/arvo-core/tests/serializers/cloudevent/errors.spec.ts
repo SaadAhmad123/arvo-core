@@ -182,12 +182,12 @@ describe('CloudEventTransformationError', () => {
     });
 
     it('preserves an ErrorOptions cause independently of detail.cause', () => {
-      const underlying = new Error('root cause');
+      const rootCause = new Error('root cause');
       const error = new CloudEventTransformationError(
         { kind: 'strict', issues: [] },
-        { cause: underlying },
+        { cause: rootCause },
       );
-      expect(error.cause).toBe(underlying);
+      expect(error.cause).toBe(rootCause);
     });
   });
 });
