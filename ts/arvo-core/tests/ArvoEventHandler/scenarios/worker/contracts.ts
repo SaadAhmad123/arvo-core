@@ -63,7 +63,7 @@ export type ChargeBehaviour = 'succeeds' | 'errors';
  */
 const waitForSubject = (subject: string): number =>
   [...subject].reduce(
-    (characterSum, character) => characterSum + character.charCodeAt(0),
+    (characterSum, character) => characterSum + (character.codePointAt(0) ?? 0),
     0,
   ) % 3;
 
