@@ -21,7 +21,7 @@ export const layerShapeIssues = (
       new ErrorIssue({
         path,
         message:
-          'is not a layer: a layer is an object with a string `id`, and optionally `before` and `after`',
+          'is not a valid middleware: a middleware is an object with a string `id`, and optional `before` and `after` functions',
         received: candidate,
       }),
     ];
@@ -33,7 +33,8 @@ export const layerShapeIssues = (
     issues.push(
       new ErrorIssue({
         path,
-        message: 'is not a layer: its `id` must be a string',
+        message:
+          'is not a valid middleware: its `id` must be a string naming it',
         received: id,
       }),
     );
@@ -46,7 +47,7 @@ export const layerShapeIssues = (
       issues.push(
         new ErrorIssue({
           path: `${path}.${hookName}`,
-          message: `must be something to call, or left out`,
+          message: 'must be a function, or left out',
           received: hook,
         }),
       );
