@@ -1,33 +1,45 @@
 import { describe, expect, it } from 'vitest';
 import type { IArvoEventHandlerMiddleware } from '../../../src/ArvoEventHandler/types/middleware.js';
-import { answering, logging, openOne, orderHandler, sleep } from './fixture.js';
+import {
+  answeringExecutor,
+  createPartLog,
+  executeOrder,
+  orderHandler,
+  sleep,
+} from './fixture.js';
 
 /** Order and shape, at sizes from none to many. */
 
 describe('the order, at every size', () => {
   it.each([0, 1, 2, 50, 500])(
     'is exact with %i declared layers',
-    async (count) => {
-      const { log, layer, execute } = logging();
-      const ids = Array.from({ length: count }, (_, index) => `l${index}`);
-      const ran = await openOne(
-        orderHandler({ execute, middleware: ids.map((id) => layer(id)) }),
+    async (layerCount) => {
+      const { partLog, loggingLayer, loggingExecutor } = createPartLog();
+      const layerIds = Array.from(
+        { length: layerCount },
+        (_, index) => `l${index}`,
       );
-      expect(ran.ok).toBe(true);
-      expect(log).toEqual([
-        ...ids.map((id) => `${id}.before`),
+      const executionResult = await executeOrder(
+        orderHandler({
+          execute: loggingExecutor,
+          middleware: layerIds.map((layerId) => loggingLayer(layerId)),
+        }),
+      );
+      expect(executionResult.ok).toBe(true);
+      expect(partLog).toEqual([
+        ...layerIds.map((layerId) => `${layerId}.before`),
         'executor',
-        ...[...ids].reverse().map((id) => `${id}.after`),
+        ...[...layerIds].reverse().map((layerId) => `${layerId}.after`),
       ]);
     },
   );
 
   it('is exact with only supplied layers', async () => {
-    const { log, layer, execute } = logging();
-    await openOne(orderHandler({ execute }), {
-      middleware: [layer('a'), layer('b')],
+    const { partLog, loggingLayer, loggingExecutor } = createPartLog();
+    await executeOrder(orderHandler({ execute: loggingExecutor }), {
+      middleware: [loggingLayer('a'), loggingLayer('b')],
     });
-    expect(log).toEqual([
+    expect(partLog).toEqual([
       'a.before',
       'b.before',
       'executor',
@@ -37,14 +49,14 @@ describe('the order, at every size', () => {
   });
 
   it('passes over a layer with neither part among others', async () => {
-    const { log, layer, execute } = logging();
-    await openOne(
+    const { partLog, loggingLayer, loggingExecutor } = createPartLog();
+    await executeOrder(
       orderHandler({
-        execute,
-        middleware: [layer('a'), { id: 'empty' }, layer('b')],
+        execute: loggingExecutor,
+        middleware: [loggingLayer('a'), { id: 'empty' }, loggingLayer('b')],
       }),
     );
-    expect(log).toEqual([
+    expect(partLog).toEqual([
       'a.before',
       'b.before',
       'executor',
@@ -54,59 +66,61 @@ describe('the order, at every size', () => {
   });
 
   it('happens in time as well as in sequence', async () => {
-    const stamps: [string, number][] = [];
-    const stamped = (id: string): IArvoEventHandlerMiddleware => ({
-      id,
+    const partStamps: [string, number][] = [];
+    const stampedLayer = (layerId: string): IArvoEventHandlerMiddleware => ({
+      id: layerId,
       before: async () => {
-        stamps.push([`${id}.before`, performance.now()]);
+        partStamps.push([`${layerId}.before`, performance.now()]);
         await sleep(1);
       },
       after: async () => {
-        stamps.push([`${id}.after`, performance.now()]);
+        partStamps.push([`${layerId}.after`, performance.now()]);
         await sleep(1);
       },
     });
-    await openOne(
+    await executeOrder(
       orderHandler({
-        middleware: [stamped('a'), stamped('b')],
+        middleware: [stampedLayer('a'), stampedLayer('b')],
         execute: async (ctx) => {
-          stamps.push(['executor', performance.now()]);
-          return answering(ctx);
+          partStamps.push(['executor', performance.now()]);
+          return answeringExecutor(ctx);
         },
       }),
     );
-    const times = stamps.map(([, at]) => at);
-    expect(times).toEqual([...times].sort((x, y) => x - y));
+    const stampTimes = partStamps.map(([, at]) => at);
+    expect(stampTimes).toEqual(
+      [...stampTimes].sort((earlierTime, laterTime) => earlierTime - laterTime),
+    );
   });
 });
 
 describe('one layer on several handlers', () => {
   it('serves both, holding nothing of either', async () => {
-    const seen: string[] = [];
-    const shared: IArvoEventHandlerMiddleware = {
+    const seenSubjects: string[] = [];
+    const sharedLayer: IArvoEventHandlerMiddleware = {
       id: 'shared',
-      before: (ctx) => void seen.push(ctx.state.subject),
+      before: (ctx) => void seenSubjects.push(ctx.state.subject),
     };
-    await openOne(orderHandler({ middleware: [shared] }));
-    await openOne(orderHandler({ middleware: [shared] }));
-    expect(seen).toHaveLength(2);
+    await executeOrder(orderHandler({ middleware: [sharedLayer] }));
+    await executeOrder(orderHandler({ middleware: [sharedLayer] }));
+    expect(seenSubjects).toHaveLength(2);
   });
 });
 
 describe('time a before part takes', () => {
   it('is time the executor no longer has', async () => {
-    let remaining: number | null = null;
-    await openOne(
+    let remainingRunMs: number | null = null;
+    await executeOrder(
       orderHandler({
         runTimeout: 500,
         middleware: [{ id: 'slow', before: () => sleep(60) }],
         execute: async (ctx) => {
-          remaining = ctx.timeRemaining.run;
-          return answering(ctx);
+          remainingRunMs = ctx.timeRemaining.run;
+          return answeringExecutor(ctx);
         },
       }),
     );
-    expect(remaining).not.toBeNull();
-    expect(remaining as unknown as number).toBeLessThanOrEqual(500 - 55);
+    expect(remainingRunMs).not.toBeNull();
+    expect(remainingRunMs as unknown as number).toBeLessThanOrEqual(500 - 55);
   });
 });

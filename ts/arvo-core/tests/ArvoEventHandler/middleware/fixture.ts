@@ -27,7 +27,7 @@ import { orderContract, orderVersion, paymentVersion } from '../fixtures.js';
 export const orderState = z.object({ stage: z.string() });
 
 /** A store the handler reaches through, as a mechanism would supply one. */
-export const storing = () => {
+export const createInMemoryStore = () => {
   const rows = new Map<string, JSONObject>();
   return {
     rows,
@@ -42,7 +42,7 @@ export const storing = () => {
 };
 
 /** An event opening an execution of the order handler. */
-export const anOrder = (subject = 'order-1') =>
+export const orderRequest = (subject = 'order-1') =>
   createArvoEventFactory(orderVersion).createInput({
     source: 'com.web.checkout',
     subject,
@@ -73,10 +73,10 @@ export const recordingSpan = () => {
       traceFlags: 1,
     }),
   } as unknown as Span;
-  let started = 0;
+  let spansStarted = 0;
   const tracer = {
     startSpan: () => {
-      started += 1;
+      spansStarted += 1;
       return span;
     },
   } as unknown as Tracer;
@@ -84,14 +84,14 @@ export const recordingSpan = () => {
     tracer,
     events,
     /** How many spans the handler opened. */
-    started: () => started,
+    spansStarted: () => spansStarted,
     /** The marks, by name, with the layer each named. */
     marks: () =>
       events
-        .filter((each) => each.name.includes('middleware'))
-        .map((each) => [
-          each.name.replace(/^.*stage\./, ''),
-          each.attributes['middleware.id'],
+        .filter((spanEvent) => spanEvent.name.includes('middleware'))
+        .map((spanEvent) => [
+          spanEvent.name.replace(/^.*stage\./, ''),
+          spanEvent.attributes['middleware.id'],
         ]),
   };
 };
@@ -105,7 +105,7 @@ export type OrderExecutor = (
   >,
 ) => ArvoExecutorEmission | Promise<ArvoExecutorEmission>;
 
-export const answering: OrderExecutor = async (ctx) => {
+export const answeringExecutor: OrderExecutor = async (ctx) => {
   await ctx.setState({ data: { stage: 'answered' } });
   return ctx.build({
     type: 'com_order_created',
@@ -140,19 +140,19 @@ export const orderHandler = (
   })
     .handler('1.0.0', {
       state: orderState,
-      execute: (param.execute ?? answering) as never,
+      execute: (param.execute ?? answeringExecutor) as never,
     })
     .build();
 
 /** Runs one opening execution and says what came back, fault included. */
-export const openOne = async (
+export const executeOrder = async (
   handler: ReturnType<typeof orderHandler>,
   param: {
     middleware?: readonly ArvoEventHandlerMiddlewareEntry[];
     event?: Parameters<
       ReturnType<typeof orderHandler>['tryExecute']
     >[0]['event'];
-    store?: ReturnType<typeof storing>;
+    store?: ReturnType<typeof createInMemoryStore>;
     dependencies?: IArvoEventHandlerDependency;
     attempt?: number;
   } = {},
@@ -160,22 +160,22 @@ export const openOne = async (
   | { ok: true; value: ArvoEventHandlerExecuteResponse }
   | { ok: false; error: ArvoHandlerFault }
 > => {
-  const ran = await handler.tryExecute({
-    event: param.event ?? anOrder(),
-    state: (param.store ?? storing()).read(),
+  const executionResult = await handler.tryExecute({
+    event: param.event ?? orderRequest(),
+    state: (param.store ?? createInMemoryStore()).read(),
     attempt: param.attempt ?? 0,
     ...(param.middleware === undefined ? {} : { middleware: param.middleware }),
     ...(param.dependencies === undefined
       ? {}
       : { dependencies: param.dependencies as never }),
   });
-  return ran;
+  return executionResult;
 };
 
 /** A log every part of every layer writes to, in the order things happened. */
-export const logging = () => {
-  const log: string[] = [];
-  const layer = (
+export const createPartLog = () => {
+  const partLog: string[] = [];
+  const loggingLayer = (
     id: string,
     parts: { before?: boolean; after?: boolean } = {
       before: true,
@@ -183,14 +183,16 @@ export const logging = () => {
     },
   ): IArvoEventHandlerMiddleware => ({
     id,
-    ...(parts.before ? { before: () => void log.push(`${id}.before`) } : {}),
-    ...(parts.after ? { after: () => void log.push(`${id}.after`) } : {}),
+    ...(parts.before
+      ? { before: () => void partLog.push(`${id}.before`) }
+      : {}),
+    ...(parts.after ? { after: () => void partLog.push(`${id}.after`) } : {}),
   });
-  const execute: OrderExecutor = async (ctx) => {
-    log.push('executor');
-    return answering(ctx);
+  const loggingExecutor: OrderExecutor = async (ctx) => {
+    partLog.push('executor');
+    return answeringExecutor(ctx);
   };
-  return { log, layer, execute };
+  return { partLog, loggingLayer, loggingExecutor };
 };
 
 /** Waits, so a clock can run out. */
@@ -198,7 +200,7 @@ export const sleep = (ms: number) =>
   new Promise<void>((settle) => setTimeout(settle, ms));
 
 /** The executor that asks the payment service twice, then answers once both reply. */
-export const askingTwice: OrderExecutor = async (ctx) => {
+export const askingPaymentTwiceExecutor: OrderExecutor = async (ctx) => {
   if (ctx.state.triggeringEvent.type === 'com_order_create') {
     await ctx.setState({ data: { stage: 'asking' } });
     return [
@@ -206,11 +208,11 @@ export const askingTwice: OrderExecutor = async (ctx) => {
       await ctx.build({ type: 'com_payment_charge', data: { amount: 2 } }),
     ];
   }
-  return answering(ctx);
+  return answeringExecutor(ctx);
 };
 
 /** What the payment service answers one request with. */
-export const answerTo = (
+export const paymentAnswerFor = (
   request: { id: string; subject: string },
   executionId: string,
 ) =>

@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import type { IArvoEventHandlerMiddleware } from '../../../src/ArvoEventHandler/types/middleware.js';
 import { orderVersion } from '../fixtures.js';
 import {
-  anOrder,
-  answering,
-  logging,
-  openOne,
+  answeringExecutor,
+  createInMemoryStore,
+  createPartLog,
+  executeOrder,
   orderHandler,
+  orderRequest,
   recordingSpan,
   sleep,
-  storing,
 } from './fixture.js';
 
 /**
@@ -17,40 +17,44 @@ import {
  * execution, and timed.
  */
 
-const layer = (id: string): IArvoEventHandlerMiddleware => ({ id });
+const layerNamed = (id: string): IArvoEventHandlerMiddleware => ({ id });
 
 describe('an execution with no layers anywhere', () => {
   it('produces exactly what it produced before layers existed', async () => {
-    const ran = await openOne(orderHandler());
-    expect(ran.ok && ran.value.kind).toBe('produced');
+    const executionResult = await executeOrder(orderHandler());
+    expect(executionResult.ok && executionResult.value.kind).toBe('produced');
     expect(
-      ran.ok && ran.value.kind === 'produced' && ran.value.events[0]?.type,
+      executionResult.ok &&
+        executionResult.value.kind === 'produced' &&
+        executionResult.value.events[0]?.type,
     ).toBe('com_order_created');
   });
 
   it('is the same with an empty list supplied', async () => {
-    const ran = await openOne(orderHandler(), { middleware: [] });
-    expect(ran.ok && ran.value.kind).toBe('produced');
+    const executionResult = await executeOrder(orderHandler(), {
+      middleware: [],
+    });
+    expect(executionResult.ok && executionResult.value.kind).toBe('produced');
   });
 
   it('marks no layer on the span', async () => {
-    const probe = recordingSpan();
-    await openOne(orderHandler({ tracer: probe.tracer }));
-    expect(probe.marks()).toEqual([]);
+    const spanRecorder = recordingSpan();
+    await executeOrder(orderHandler({ tracer: spanRecorder.tracer }));
+    expect(spanRecorder.marks()).toEqual([]);
   });
 });
 
 describe('the order layers run in, through the handler', () => {
   it('runs supplied before declared, then the executor, then the reverse', async () => {
-    const { log, layer: logged, execute } = logging();
+    const { partLog, loggingLayer, loggingExecutor } = createPartLog();
     const handler = orderHandler({
-      execute,
-      middleware: [logged('declared_1'), logged('declared_2')],
+      execute: loggingExecutor,
+      middleware: [loggingLayer('declared_1'), loggingLayer('declared_2')],
     });
-    await openOne(handler, {
-      middleware: [logged('supplied_1'), logged('supplied_2')],
+    await executeOrder(handler, {
+      middleware: [loggingLayer('supplied_1'), loggingLayer('supplied_2')],
     });
-    expect(log).toEqual([
+    expect(partLog).toEqual([
       'supplied_1.before',
       'supplied_2.before',
       'declared_1.before',
@@ -64,21 +68,28 @@ describe('the order layers run in, through the handler', () => {
   });
 
   it('runs declared layers for every execution, and supplied ones for theirs only', async () => {
-    const { log, layer: logged, execute } = logging();
-    const handler = orderHandler({ execute, middleware: [logged('declared')] });
-    await openOne(handler, {
-      middleware: [logged('supplied')],
-      event: anOrder('a'),
+    const { partLog, loggingLayer, loggingExecutor } = createPartLog();
+    const handler = orderHandler({
+      execute: loggingExecutor,
+      middleware: [loggingLayer('declared')],
     });
-    await openOne(handler, { event: anOrder('b') });
-    expect(log.filter((line) => line.startsWith('supplied'))).toHaveLength(2);
-    expect(log.filter((line) => line.startsWith('declared'))).toHaveLength(4);
+    await executeOrder(handler, {
+      middleware: [loggingLayer('supplied')],
+      event: orderRequest('a'),
+    });
+    await executeOrder(handler, { event: orderRequest('b') });
+    expect(
+      partLog.filter((logLine) => logLine.startsWith('supplied')),
+    ).toHaveLength(2);
+    expect(
+      partLog.filter((logLine) => logLine.startsWith('declared')),
+    ).toHaveLength(4);
   });
 });
 
 describe('what a before part can do to what the executor sees', () => {
   it('writes state the executor reads', async () => {
-    let seen: unknown;
+    let seenValue: unknown;
     const handler = orderHandler({
       middleware: [
         {
@@ -93,47 +104,47 @@ describe('what a before part can do to what the executor sees', () => {
         },
       ],
       execute: async (ctx) => {
-        seen = ctx.state.data?.stage;
-        return answering(ctx);
+        seenValue = ctx.state.data?.stage;
+        return answeringExecutor(ctx);
       },
     });
-    await openOne(handler);
-    expect(seen).toBe('set-by-layer');
+    await executeOrder(handler);
+    expect(seenValue).toBe('set-by-layer');
   });
 
   it('leaves middleware data the executor reads', async () => {
-    let seen: unknown;
+    let seenValue: unknown;
     const handler = orderHandler({
       middleware: [
         { id: 'tenant', before: (ctx) => ctx.setMiddleware('tenant', 't-1') },
       ],
       execute: async (ctx) => {
-        seen = ctx.middleware.tenant;
-        return answering(ctx);
+        seenValue = ctx.middleware.tenant;
+        return answeringExecutor(ctx);
       },
     });
-    await openOne(handler);
-    expect(seen).toBe('t-1');
+    await executeOrder(handler);
+    expect(seenValue).toBe('t-1');
   });
 
   it('leaves middleware data an inner layer reads', async () => {
-    let seen: unknown;
+    let seenValue: unknown;
     const handler = orderHandler({
       middleware: [
         {
           id: 'inner',
           before: (ctx) => {
-            seen = ctx.middleware.from_outside;
+            seenValue = ctx.middleware.from_outside;
           },
         },
       ],
     });
-    await openOne(handler, {
+    await executeOrder(handler, {
       middleware: [
         { id: 'outer', before: (ctx) => ctx.setMiddleware('from_outside', 42) },
       ],
     });
-    expect(seen).toBe(42);
+    expect(seenValue).toBe(42);
   });
 
   it('keeps middleware data out of the record produced', async () => {
@@ -145,10 +156,12 @@ describe('what a before part can do to what the executor sees', () => {
         },
       ],
     });
-    const ran = await openOne(handler);
+    const executionResult = await executeOrder(handler);
     expect(
       JSON.stringify(
-        ran.ok && ran.value.kind === 'produced' && ran.value.state,
+        executionResult.ok &&
+          executionResult.value.kind === 'produced' &&
+          executionResult.value.state,
       ),
     ).not.toContain('not-in-the-record');
   });
@@ -156,9 +169,9 @@ describe('what a before part can do to what the executor sees', () => {
 
 describe('a before part that fails, through the handler', () => {
   it('becomes the handler error event where it throws', async () => {
-    const execute = vi.fn(answering);
+    const executorSpy = vi.fn(answeringExecutor);
     const handler = orderHandler({
-      execute,
+      execute: executorSpy,
       middleware: [
         {
           id: 'broken',
@@ -168,12 +181,15 @@ describe('a before part that fails, through the handler', () => {
         },
       ],
     });
-    const ran = await openOne(handler);
-    expect(ran.ok).toBe(true);
-    const produced = ran.ok && ran.value.kind === 'produced' ? ran.value : null;
-    expect(produced?.events[0]?.type).toBe(orderVersion.error.type);
-    expect(produced?.state.lifecycle).toBe('error');
-    expect(execute).not.toHaveBeenCalled();
+    const executionResult = await executeOrder(handler);
+    expect(executionResult.ok).toBe(true);
+    const producedValue =
+      executionResult.ok && executionResult.value.kind === 'produced'
+        ? executionResult.value
+        : null;
+    expect(producedValue?.events[0]?.type).toBe(orderVersion.error.type);
+    expect(producedValue?.state.lifecycle).toBe('error');
+    expect(executorSpy).not.toHaveBeenCalled();
   });
 
   it('stays a fault where it raises one through the context', async () => {
@@ -191,10 +207,12 @@ describe('a before part that fails, through the handler', () => {
         },
       ],
     });
-    const ran = await openOne(handler);
-    expect(ran.ok).toBe(false);
-    expect(!ran.ok && ran.error.faultKind).toBe('executor_raised');
-    expect(!ran.ok && ran.error.retry).toBeNull();
+    const executionResult = await executeOrder(handler);
+    expect(executionResult.ok).toBe(false);
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'executor_raised',
+    );
+    expect(!executionResult.ok && executionResult.error.retry).toBeNull();
   });
 
   it('keeps the retry verdict the layer chose', async () => {
@@ -211,8 +229,8 @@ describe('a before part that fails, through the handler', () => {
         },
       ],
     });
-    const ran = await openOne(handler);
-    expect(!ran.ok && ran.error.retry).not.toBeNull();
+    const executionResult = await executeOrder(handler);
+    expect(!executionResult.ok && executionResult.error.retry).not.toBeNull();
   });
 });
 
@@ -228,9 +246,11 @@ describe('an after part, through the handler', () => {
         },
       ],
     });
-    const ran = await openOne(handler);
+    const executionResult = await executeOrder(handler);
     expect(
-      ran.ok && ran.value.kind === 'produced' && ran.value.state.lifecycle,
+      executionResult.ok &&
+        executionResult.value.kind === 'produced' &&
+        executionResult.value.state.lifecycle,
     ).toBe('success');
   });
 
@@ -248,14 +268,14 @@ describe('an after part, through the handler', () => {
         },
       ],
     });
-    const ran = await openOne(handler);
-    expect(ran.ok).toBe(true);
+    const executionResult = await executeOrder(handler);
+    expect(executionResult.ok).toBe(true);
   });
 
   it('marks the failure on the span', async () => {
-    const probe = recordingSpan();
+    const spanRecorder = recordingSpan();
     const handler = orderHandler({
-      tracer: probe.tracer,
+      tracer: spanRecorder.tracer,
       middleware: [
         {
           id: 'noisy',
@@ -265,85 +285,100 @@ describe('an after part, through the handler', () => {
         },
       ],
     });
-    await openOne(handler);
-    expect(probe.marks()).toContainEqual(['middleware_after_failed', 'noisy']);
+    await executeOrder(handler);
+    expect(spanRecorder.marks()).toContainEqual([
+      'middleware_after_failed',
+      'noisy',
+    ]);
   });
 
   it('does not run where the executor threw', async () => {
-    const after = vi.fn();
+    const afterSpy = vi.fn();
     const handler = orderHandler({
-      middleware: [{ id: 'watcher', after }],
+      middleware: [{ id: 'watcher', after: afterSpy }],
       execute: () => {
         throw new Error('executor broke');
       },
     });
-    await openOne(handler);
-    expect(after).not.toHaveBeenCalled();
+    await executeOrder(handler);
+    expect(afterSpy).not.toHaveBeenCalled();
   });
 
   it('sees a return that validation then refuses, and changes nothing about it', async () => {
-    let seen: unknown;
+    let seenValue: unknown;
     const handler = orderHandler({
       middleware: [
         {
           id: 'watcher',
           after: (_ctx, emission) => {
-            seen = emission;
+            seenValue = emission;
           },
         },
       ],
       execute: () => 'not an event' as never,
     });
-    const ran = await openOne(handler);
-    expect(seen).toBe('not an event');
-    expect(!ran.ok && ran.error.faultKind).toBe('emission_not_permitted');
+    const executionResult = await executeOrder(handler);
+    expect(seenValue).toBe('not an event');
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'emission_not_permitted',
+    );
   });
 });
 
 describe('supplied identifiers', () => {
   it('refuses one a declared layer already carries, before anything runs', async () => {
-    const execute = vi.fn(answering);
-    const before = vi.fn();
+    const executorSpy = vi.fn(answeringExecutor);
+    const beforeSpy = vi.fn();
     const handler = orderHandler({
-      execute,
-      middleware: [{ id: 'same', before }],
+      execute: executorSpy,
+      middleware: [{ id: 'same', before: beforeSpy }],
     });
-    const ran = await openOne(handler, { middleware: [layer('same')] });
-    expect(!ran.ok && ran.error.faultKind).toBe('middleware_conflict');
-    expect(!ran.ok && ran.error.retry).toBeNull();
-    expect(!ran.ok && ran.error.message).toContain('same');
-    expect(before).not.toHaveBeenCalled();
-    expect(execute).not.toHaveBeenCalled();
+    const executionResult = await executeOrder(handler, {
+      middleware: [layerNamed('same')],
+    });
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'middleware_conflict',
+    );
+    expect(!executionResult.ok && executionResult.error.retry).toBeNull();
+    expect(!executionResult.ok && executionResult.error.message).toContain(
+      'same',
+    );
+    expect(beforeSpy).not.toHaveBeenCalled();
+    expect(executorSpy).not.toHaveBeenCalled();
   });
 
   it('refuses two supplied layers with one identifier', async () => {
-    const ran = await openOne(orderHandler(), {
-      middleware: [layer('twice'), layer('twice')],
+    const executionResult = await executeOrder(orderHandler(), {
+      middleware: [layerNamed('twice'), layerNamed('twice')],
     });
-    expect(!ran.ok && ran.error.faultKind).toBe('middleware_conflict');
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'middleware_conflict',
+    );
   });
 
   it('carries the pair a mechanism would abandon with', async () => {
-    const ran = await openOne(orderHandler(), {
-      middleware: [layer('twice'), layer('twice')],
+    const executionResult = await executeOrder(orderHandler(), {
+      middleware: [layerNamed('twice'), layerNamed('twice')],
     });
-    expect(!ran.ok && ran.error.abandonmentEvent).not.toBeNull();
+    expect(
+      !executionResult.ok && executionResult.error.abandonmentEvent,
+    ).not.toBeNull();
   });
 });
 
 describe('a way to make a layer', () => {
   it('is called once for each execution, declared', async () => {
-    const make = vi.fn(() => layer('made'));
-    const handler = orderHandler({ middleware: [make] });
-    await openOne(handler, { event: anOrder('a') });
-    await openOne(handler, { event: anOrder('b') });
-    expect(make).toHaveBeenCalledTimes(2);
+    const makeLayer = vi.fn(() => layerNamed('made'));
+    const handler = orderHandler({ middleware: [makeLayer] });
+    await executeOrder(handler, { event: orderRequest('a') });
+    await executeOrder(handler, { event: orderRequest('b') });
+    expect(makeLayer).toHaveBeenCalledTimes(2);
   });
 
   it('is called once for the execution it was supplied to', async () => {
-    const make = vi.fn(() => layer('made'));
-    await openOne(orderHandler(), { middleware: [make] });
-    expect(make).toHaveBeenCalledTimes(1);
+    const makeLayer = vi.fn(() => layerNamed('made'));
+    await executeOrder(orderHandler(), { middleware: [makeLayer] });
+    expect(makeLayer).toHaveBeenCalledTimes(1);
   });
 
   it('gives each execution its own instance, which may hold what it learns', async () => {
@@ -363,21 +398,21 @@ describe('a way to make a layer', () => {
       }
     }
     const handler = orderHandler({ middleware: [() => new Stopwatch()] });
-    await openOne(handler, { event: anOrder('a') });
-    await openOne(handler, { event: anOrder('b') });
+    await executeOrder(handler, { event: orderRequest('a') });
+    await executeOrder(handler, { event: orderRequest('b') });
     expect(instances).toHaveLength(2);
     expect(instances[0]).not.toBe(instances[1]);
-    expect((instances as Stopwatch[]).every((each) => each.took >= 0)).toBe(
-      true,
-    );
+    expect(
+      (instances as Stopwatch[]).every((spanEvent) => spanEvent.took >= 0),
+    ).toBe(true);
   });
 
   it('may be asynchronous', async () => {
-    const before = vi.fn();
-    await openOne(orderHandler(), {
-      middleware: [async () => ({ id: 'async', before })],
+    const beforeSpy = vi.fn();
+    await executeOrder(orderHandler(), {
+      middleware: [async () => ({ id: 'async', before: beforeSpy })],
     });
-    expect(before).toHaveBeenCalledTimes(1);
+    expect(beforeSpy).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -394,60 +429,74 @@ describe('a way to make a layer', () => {
     ['rejects', () => Promise.reject(new Error('later'))],
   ])(
     'fails the execution as no further attempt fixes, where it %s',
-    async (_label, make) => {
-      const execute = vi.fn(answering);
-      const ran = await openOne(orderHandler({ execute }), {
-        middleware: [make as never],
-      });
-      expect(!ran.ok && ran.error.faultKind).toBe(
+    async (_label, makeLayer) => {
+      const executorSpy = vi.fn(answeringExecutor);
+      const executionResult = await executeOrder(
+        orderHandler({ execute: executorSpy }),
+        {
+          middleware: [makeLayer as never],
+        },
+      );
+      expect(!executionResult.ok && executionResult.error.faultKind).toBe(
         'middleware_instantiation_failed',
       );
-      expect(!ran.ok && ran.error.retry).toBeNull();
-      expect(execute).not.toHaveBeenCalled();
+      expect(!executionResult.ok && executionResult.error.retry).toBeNull();
+      expect(executorSpy).not.toHaveBeenCalled();
     },
   );
 
   it('is refused where what it makes repeats an identifier', async () => {
-    const ran = await openOne(orderHandler({ middleware: [layer('same')] }), {
-      middleware: [() => layer('same')],
-    });
-    expect(!ran.ok && ran.error.faultKind).toBe('middleware_conflict');
+    const executionResult = await executeOrder(
+      orderHandler({ middleware: [layerNamed('same')] }),
+      {
+        middleware: [() => layerNamed('same')],
+      },
+    );
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'middleware_conflict',
+    );
   });
 });
 
 describe('the run clock over the layers', () => {
   it('runs out in a slow before part as a run timeout, the executor never entered', async () => {
-    const execute = vi.fn(answering);
+    const executorSpy = vi.fn(answeringExecutor);
     const handler = orderHandler({
       runTimeout: 20,
-      execute,
+      execute: executorSpy,
       middleware: [{ id: 'slow', before: () => sleep(80) }],
     });
-    const ran = await openOne(handler);
-    expect(!ran.ok && ran.error.faultKind).toBe('run_timeout');
+    const executionResult = await executeOrder(handler);
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'run_timeout',
+    );
     await sleep(80);
-    expect(execute).not.toHaveBeenCalled();
+    expect(executorSpy).not.toHaveBeenCalled();
   });
 
   it('runs out in a slow after part with the executor return standing', async () => {
-    const probe = recordingSpan();
-    const later = vi.fn();
+    const spanRecorder = recordingSpan();
+    const skippedAfterPart = vi.fn();
     const handler = orderHandler({
       runTimeout: 30,
-      tracer: probe.tracer,
+      tracer: spanRecorder.tracer,
       middleware: [
-        { id: 'later', after: later },
+        { id: 'later', after: skippedAfterPart },
         { id: 'slow', after: () => sleep(120) },
       ],
     });
-    const ran = await openOne(handler);
+    const executionResult = await executeOrder(handler);
     expect(
-      ran.ok && ran.value.kind === 'produced' && ran.value.state.lifecycle,
+      executionResult.ok &&
+        executionResult.value.kind === 'produced' &&
+        executionResult.value.state.lifecycle,
     ).toBe('success');
     await sleep(150);
-    expect(later).not.toHaveBeenCalled();
+    expect(skippedAfterPart).not.toHaveBeenCalled();
     expect(
-      probe.events.some((each) => each.name.endsWith('middleware_after_cut')),
+      spanRecorder.events.some((spanEvent) =>
+        spanEvent.name.endsWith('middleware_after_cut'),
+      ),
     ).toBe(true);
   });
 
@@ -457,68 +506,82 @@ describe('the run clock over the layers', () => {
       executionTimeout: 60,
       middleware: [{ id: 'slow', after: () => sleep(120) }],
     });
-    const ran = await openOne(handler, { event: anOrder() });
-    expect(ran.ok).toBe(true);
+    const executionResult = await executeOrder(handler, {
+      event: orderRequest(),
+    });
+    expect(executionResult.ok).toBe(true);
   });
 
   it('cuts nothing where the run clock is unbounded', async () => {
-    const after = vi.fn();
+    const afterSpy = vi.fn();
     const handler = orderHandler({
       runTimeout: null,
       executionTimeout: null,
       middleware: [
-        { id: 'checked', after },
+        { id: 'checked', after: afterSpy },
         { id: 'slow', after: () => sleep(40) },
       ],
     });
-    await openOne(handler);
-    expect(after).toHaveBeenCalledTimes(1);
+    await executeOrder(handler);
+    expect(afterSpy).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('where layers do not run', () => {
   it('runs none where the gate refuses the event', async () => {
-    const before = vi.fn();
-    const store = storing();
-    const handler = orderHandler({ middleware: [{ id: 'watch', before }] });
-    const order = anOrder();
+    const beforeSpy = vi.fn();
+    const store = createInMemoryStore();
+    const handler = orderHandler({
+      middleware: [{ id: 'watch', before: beforeSpy }],
+    });
+    const orderEvent = orderRequest();
 
-    const first = await openOne(handler, { store, event: order });
-    if (first.ok && first.value.kind === 'produced')
-      store.commit(first.value.state);
-    expect(before).toHaveBeenCalledTimes(1);
+    const firstResult = await executeOrder(handler, {
+      store,
+      event: orderEvent,
+    });
+    if (firstResult.ok && firstResult.value.kind === 'produced')
+      store.commit(firstResult.value.state);
+    expect(beforeSpy).toHaveBeenCalledTimes(1);
 
     // the same opening event again: an execution exists, so the gate refuses it
-    const repeat = await openOne(handler, { store, event: order });
-    expect(!repeat.ok && repeat.error.faultKind).toBe('record_unexpected');
-    expect(before).toHaveBeenCalledTimes(1);
+    const repeatedResult = await executeOrder(handler, {
+      store,
+      event: orderEvent,
+    });
+    expect(!repeatedResult.ok && repeatedResult.error.faultKind).toBe(
+      'record_unexpected',
+    );
+    expect(beforeSpy).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('the span', () => {
   it('is one span however many layers there are', async () => {
-    const probe = recordingSpan();
-    const many = Array.from({ length: 50 }, (_, index) => ({
+    const spanRecorder = recordingSpan();
+    const manyLayers = Array.from({ length: 50 }, (_, index) => ({
       id: `l${index}`,
       before: () => undefined,
       after: () => undefined,
     }));
-    await openOne(orderHandler({ tracer: probe.tracer, middleware: many }));
-    expect(probe.started()).toBe(1);
+    await executeOrder(
+      orderHandler({ tracer: spanRecorder.tracer, middleware: manyLayers }),
+    );
+    expect(spanRecorder.spansStarted()).toBe(1);
   });
 
   it('marks each part entered and returned, by identifier, in order', async () => {
-    const probe = recordingSpan();
-    await openOne(
+    const spanRecorder = recordingSpan();
+    await executeOrder(
       orderHandler({
-        tracer: probe.tracer,
+        tracer: spanRecorder.tracer,
         middleware: [
           { id: 'declared', before: () => undefined, after: () => undefined },
         ],
       }),
       { middleware: [{ id: 'supplied', before: () => undefined }] },
     );
-    expect(probe.marks()).toEqual([
+    expect(spanRecorder.marks()).toEqual([
       ['middleware_before_entered', 'supplied'],
       ['middleware_before_returned', 'supplied'],
       ['middleware_before_entered', 'declared'],

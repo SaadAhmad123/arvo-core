@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ArvoEvent } from '../../../src/ArvoEvent/index.js';
 import type { IArvoEventHandlerMiddleware } from '../../../src/ArvoEventHandler/types/middleware.js';
-import { openOne, orderHandler, recordingSpan, sleep } from './fixture.js';
+import { executeOrder, orderHandler, recordingSpan, sleep } from './fixture.js';
 
 /**
  * After parts that misbehave, every way one can.
@@ -11,17 +11,21 @@ import { openOne, orderHandler, recordingSpan, sleep } from './fixture.js';
  */
 
 /** What an execution produced, or a failure to say why it did not. */
-const produced = async (middleware: IArvoEventHandlerMiddleware[]) => {
-  const probe = recordingSpan();
-  const ran = await openOne(orderHandler({ tracer: probe.tracer, middleware }));
-  if (!ran.ok || ran.value.kind !== 'produced') {
-    throw new Error(`expected produced, got ${JSON.stringify(ran)}`);
+const runToProduced = async (middleware: IArvoEventHandlerMiddleware[]) => {
+  const spanRecorder = recordingSpan();
+  const executionResult = await executeOrder(
+    orderHandler({ tracer: spanRecorder.tracer, middleware }),
+  );
+  if (!executionResult.ok || executionResult.value.kind !== 'produced') {
+    throw new Error(
+      `expected produced, got ${JSON.stringify(executionResult)}`,
+    );
   }
-  return { ...ran.value, probe };
+  return { ...executionResult.value, probe: spanRecorder };
 };
 
 /** What an untouched execution produces, to compare against. */
-const baseline = async () => produced([]);
+const runWithoutLayers = async () => runToProduced([]);
 
 describe('an after part that throws', () => {
   it.each([
@@ -34,12 +38,12 @@ describe('an after part that throws', () => {
     ['a frozen object', Object.freeze({ reason: 'boom' })],
   ])(
     'leaves the outcome as it was, having thrown %s',
-    async (_label, value) => {
-      const { state, events } = await produced([
+    async (_label, thrownValue) => {
+      const { state, events } = await runToProduced([
         {
           id: 'thrower',
           after: () => {
-            throw value;
+            throw thrownValue;
           },
         },
       ]);
@@ -49,14 +53,14 @@ describe('an after part that throws', () => {
   );
 
   it('leaves the outcome as it was where it rejects', async () => {
-    const { state } = await produced([
+    const { state } = await runToProduced([
       { id: 'rejecter', after: () => Promise.reject(new Error('later')) },
     ]);
     expect(state.lifecycle).toBe('success');
   });
 
   it('leaves the outcome as it was where it raises a fault through the context', async () => {
-    const { state, probe } = await produced([
+    const { state, probe: spanRecorder } = await runToProduced([
       {
         id: 'faulter',
         after: async (ctx) => {
@@ -69,14 +73,14 @@ describe('an after part that throws', () => {
       },
     ]);
     expect(state.lifecycle).toBe('success');
-    expect(probe.marks()).toContainEqual([
+    expect(spanRecorder.marks()).toContainEqual([
       'middleware_after_failed',
       'faulter',
     ]);
   });
 
   it('names what was thrown on the span', async () => {
-    const { probe } = await produced([
+    const { probe: spanRecorder } = await runToProduced([
       {
         id: 'thrower',
         after: () => {
@@ -84,10 +88,10 @@ describe('an after part that throws', () => {
         },
       },
     ]);
-    const mark = probe.events.find((each) =>
-      each.name.endsWith('middleware_after_failed'),
+    const failureMark = spanRecorder.events.find((spanEvent) =>
+      spanEvent.name.endsWith('middleware_after_failed'),
     );
-    expect(mark?.attributes).toMatchObject({
+    expect(failureMark?.attributes).toMatchObject({
       'middleware.id': 'thrower',
       'error.name': 'RangeError',
       'error.message': 'out of range',
@@ -95,42 +99,42 @@ describe('an after part that throws', () => {
   });
 
   it('still lets every other after part run', async () => {
-    const ran: string[] = [];
-    await produced([
-      { id: 'outer', after: () => void ran.push('outer') },
+    const executionResult: string[] = [];
+    await runToProduced([
+      { id: 'outer', after: () => void executionResult.push('outer') },
       {
         id: 'thrower',
         after: () => {
           throw new Error('boom');
         },
       },
-      { id: 'inner', after: () => void ran.push('inner') },
+      { id: 'inner', after: () => void executionResult.push('inner') },
     ]);
-    expect(ran).toEqual(['inner', 'outer']);
+    expect(executionResult).toEqual(['inner', 'outer']);
   });
 });
 
 describe('an after part that tries to change what was returned', () => {
   it('cannot add to the list', async () => {
-    let failure: unknown;
-    const { events } = await produced([
+    let mutationError: unknown;
+    const { events } = await runToProduced([
       {
         id: 'adder',
         after: (_ctx, emission) => {
           try {
             (emission as ArvoEvent[]).push(null as never);
           } catch (raised) {
-            failure = raised;
+            mutationError = raised;
           }
         },
       },
     ]);
-    expect(failure).toBeInstanceOf(TypeError);
+    expect(mutationError).toBeInstanceOf(TypeError);
     expect(events).toHaveLength(1);
   });
 
   it('cannot empty the list', async () => {
-    const { events } = await produced([
+    const { events } = await runToProduced([
       {
         id: 'emptier',
         after: (_ctx, emission) => {
@@ -142,8 +146,8 @@ describe('an after part that tries to change what was returned', () => {
   });
 
   it('cannot change an event in it', async () => {
-    let failure: unknown;
-    const { events } = await produced([
+    let mutationError: unknown;
+    const { events } = await runToProduced([
       {
         id: 'editor',
         after: (_ctx, emission) => {
@@ -152,12 +156,12 @@ describe('an after part that tries to change what was returned', () => {
               (emission as ArvoEvent[])[0] as unknown as Record<string, unknown>
             ).to = 'somewhere_else';
           } catch (raised) {
-            failure = raised;
+            mutationError = raised;
           }
         },
       },
     ]);
-    expect(failure).toBeInstanceOf(TypeError);
+    expect(mutationError).toBeInstanceOf(TypeError);
     expect(events[0]?.to).not.toBe('somewhere_else');
   });
 
@@ -165,20 +169,20 @@ describe('an after part that tries to change what was returned', () => {
     ['an event of its own', (ctx: never) => (ctx as { state: unknown }).state],
     ['a promise of events', () => Promise.resolve([])],
     ['false', () => false],
-  ])('is ignored where it returns %s', async (_label, returned) => {
-    const base = await baseline();
-    const { events } = await produced([
-      { id: 'returner', after: returned as never },
+  ])('is ignored where it returns %s', async (_label, layerReturn) => {
+    const untouchedRun = await runWithoutLayers();
+    const { events } = await runToProduced([
+      { id: 'returner', after: layerReturn as never },
     ]);
     expect(events.map((event) => event.type)).toEqual(
-      base.events.map((event) => event.type),
+      untouchedRun.events.map((event) => event.type),
     );
   });
 });
 
 describe('an after part that writes through the context', () => {
   it('cannot change what is remembered: the record is the one the executor returned with', async () => {
-    const { state, probe } = await produced([
+    const { state, probe: spanRecorder } = await runToProduced([
       {
         id: 'late_writer',
         after: async (ctx) => {
@@ -192,14 +196,14 @@ describe('an after part that writes through the context', () => {
     ]);
     expect((state.data as { stage: string }).stage).toBe('answered');
     expect(
-      probe.events.some((each) =>
-        each.name.endsWith('middleware_after_write_discarded'),
+      spanRecorder.events.some((spanEvent) =>
+        spanEvent.name.endsWith('middleware_after_write_discarded'),
       ),
     ).toBe(true);
   });
 
   it('cannot cancel an execution the executor has already concluded', async () => {
-    const { state } = await produced([
+    const { state } = await runToProduced([
       {
         id: 'late_canceller',
         after: (ctx) => {
@@ -213,17 +217,19 @@ describe('an after part that writes through the context', () => {
   });
 
   it('may write middleware data, which nothing reads by then', async () => {
-    const { state } = await produced([
+    const { state } = await runToProduced([
       { id: 'scribbler', after: (ctx) => ctx.setMiddleware('late', true) },
     ]);
     expect(state.lifecycle).toBe('success');
   });
 
   it('marks nothing discarded where it wrote nothing', async () => {
-    const { probe } = await produced([{ id: 'quiet', after: () => undefined }]);
+    const { probe: spanRecorder } = await runToProduced([
+      { id: 'quiet', after: () => undefined },
+    ]);
     expect(
-      probe.events.some((each) =>
-        each.name.endsWith('middleware_after_write_discarded'),
+      spanRecorder.events.some((spanEvent) =>
+        spanEvent.name.endsWith('middleware_after_write_discarded'),
       ),
     ).toBe(false);
   });
@@ -231,33 +237,37 @@ describe('an after part that writes through the context', () => {
 
 describe('an after part that never finishes', () => {
   it('is cut by the run clock, the outcome standing and the rest skipped', async () => {
-    const later = vi.fn();
-    const probe = recordingSpan();
-    const ran = await openOne(
+    const skippedAfterPart = vi.fn();
+    const spanRecorder = recordingSpan();
+    const executionResult = await executeOrder(
       orderHandler({
         runTimeout: 25,
-        tracer: probe.tracer,
+        tracer: spanRecorder.tracer,
         middleware: [
-          { id: 'later', after: later },
+          { id: 'later', after: skippedAfterPart },
           { id: 'forever', after: () => new Promise<void>(() => undefined) },
         ],
       }),
     );
     expect(
-      ran.ok && ran.value.kind === 'produced' && ran.value.state.lifecycle,
+      executionResult.ok &&
+        executionResult.value.kind === 'produced' &&
+        executionResult.value.state.lifecycle,
     ).toBe('success');
-    expect(later).not.toHaveBeenCalled();
+    expect(skippedAfterPart).not.toHaveBeenCalled();
     expect(
-      probe.events.some((each) => each.name.endsWith('middleware_after_cut')),
+      spanRecorder.events.some((spanEvent) =>
+        spanEvent.name.endsWith('middleware_after_cut'),
+      ),
     ).toBe(true);
   });
 
   it('records nothing for what it does once it has been cut', async () => {
-    const probe = recordingSpan();
-    await openOne(
+    const spanRecorder = recordingSpan();
+    await executeOrder(
       orderHandler({
         runTimeout: 20,
-        tracer: probe.tracer,
+        tracer: spanRecorder.tracer,
         middleware: [
           {
             id: 'straggler',
@@ -270,7 +280,7 @@ describe('an after part that never finishes', () => {
       }),
     );
     await sleep(80);
-    expect(probe.marks()).not.toContainEqual([
+    expect(spanRecorder.marks()).not.toContainEqual([
       'middleware_after_failed',
       'straggler',
     ]);

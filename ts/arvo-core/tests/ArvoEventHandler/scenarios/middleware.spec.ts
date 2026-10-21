@@ -25,26 +25,26 @@ import { checkHandlerInvariants } from './invariants.js';
  */
 
 /** Records every layer part that ran, and what it saw. */
-const watching = () => {
-  const seen = {
+const createLayerWatch = () => {
+  const observations = {
     supplied: 0,
     tenants: [] as { subject: string; tenant: unknown }[],
     timed: 0,
   };
 
-  const tenant: IArvoEventHandlerMiddleware = {
+  const tenantLayer: IArvoEventHandlerMiddleware = {
     id: 'tenant',
     before: (ctx) =>
       ctx.setMiddleware('tenant', `tenant-of-${ctx.state.subject}`),
     after: (ctx) => {
-      seen.tenants.push({
+      observations.tenants.push({
         subject: ctx.state.subject,
         tenant: ctx.middleware.tenant,
       });
     },
   };
 
-  const stopwatch = () => {
+  const stopwatchFactory = () => {
     let startedAt = 0;
     return {
       id: 'stopwatch',
@@ -52,42 +52,46 @@ const watching = () => {
         startedAt = performance.now();
       },
       after: () => {
-        if (performance.now() >= startedAt) seen.timed += 1;
+        if (performance.now() >= startedAt) observations.timed += 1;
       },
     } satisfies IArvoEventHandlerMiddleware;
   };
 
-  const supplied: IArvoEventHandlerMiddleware = {
+  const suppliedLayer: IArvoEventHandlerMiddleware = {
     id: 'harness',
     before: (_ctx: ArvoExecutionContext) => {
-      seen.supplied += 1;
+      observations.supplied += 1;
     },
   };
 
-  return { seen, declared: [tenant, stopwatch], supplied: [supplied] };
+  return {
+    seen: observations,
+    declared: [tenantLayer, stopwatchFactory],
+    supplied: [suppliedLayer],
+  };
 };
 
 const latticeWithLayers = (
-  watch: ReturnType<typeof watching>,
+  layerWatch: ReturnType<typeof createLayerWatch>,
   options: { chaos?: boolean; seed?: number } = {},
 ) =>
   new ArvoLattice({
     versions: {},
     handlers: {
       [fulfilContract.type]: declareHandler({
-        middleware: watch.declared,
+        middleware: layerWatch.declared,
       }) as never,
       [inventoryV1.type]: declareInventoryWorker() as never,
       [paymentV1.type]: declarePaymentWorker() as never,
     },
-    middleware: watch.supplied,
+    middleware: layerWatch.supplied,
     ...(options.chaos
       ? { chaos: { duplicate: 0.2, shuffle: true, loseRace: 0.1 } }
       : {}),
     ...(options.seed === undefined ? {} : { seed: options.seed }),
   });
 
-const orders = [
+const orderFactories = [
   (subject: string) =>
     createArvoEventFactory(fulfilV1).createInput({
       source: 'com.web.checkout',
@@ -113,38 +117,44 @@ const orders = [
 
 describe('layers around the three-version handler', () => {
   it('carries every order through, at every version, each layer seeing its own execution', async () => {
-    const watch = watching();
-    const lattice = latticeWithLayers(watch);
-    for (let at = 0; at < 9; at += 1) {
-      lattice.publish(orders[at % 3]?.(`order-${at}`) as never);
+    const layerWatch = createLayerWatch();
+    const lattice = latticeWithLayers(layerWatch);
+    for (let orderIndex = 0; orderIndex < 9; orderIndex += 1) {
+      lattice.publish(
+        orderFactories[orderIndex % 3]?.(`order-${orderIndex}`) as never,
+      );
     }
     await lattice.settle();
 
     expect(lattice.transcript.faults).toEqual([]);
     await checkHandlerInvariants(lattice);
-    expect(watch.seen.tenants.length).toBeGreaterThan(0);
-    for (const { subject, tenant } of watch.seen.tenants) {
-      expect(tenant).toBe(`tenant-of-${subject}`);
+    expect(layerWatch.seen.tenants.length).toBeGreaterThan(0);
+    for (const { subject, tenant: tenantLayer } of layerWatch.seen.tenants) {
+      expect(tenantLayer).toBe(`tenant-of-${subject}`);
     }
-    expect(watch.seen.timed).toBe(watch.seen.tenants.length);
-    expect(watch.seen.supplied).toBeGreaterThanOrEqual(
-      watch.seen.tenants.length,
+    expect(layerWatch.seen.timed).toBe(layerWatch.seen.tenants.length);
+    expect(layerWatch.seen.supplied).toBeGreaterThanOrEqual(
+      layerWatch.seen.tenants.length,
     );
   });
 
   it.each([1, 7, 42])(
     'holds every invariant under chaos, seed %i',
     async (seed) => {
-      const watch = watching();
-      const lattice = latticeWithLayers(watch, { chaos: true, seed });
-      for (let at = 0; at < 12; at += 1) {
-        lattice.publish(orders[at % 3]?.(`order-${seed}-${at}`) as never);
+      const layerWatch = createLayerWatch();
+      const lattice = latticeWithLayers(layerWatch, { chaos: true, seed });
+      for (let orderIndex = 0; orderIndex < 12; orderIndex += 1) {
+        lattice.publish(
+          orderFactories[orderIndex % 3]?.(
+            `order-${seed}-${orderIndex}`,
+          ) as never,
+        );
       }
       await lattice.settle();
 
       await checkHandlerInvariants(lattice);
-      for (const { subject, tenant } of watch.seen.tenants) {
-        expect(tenant).toBe(`tenant-of-${subject}`);
+      for (const { subject, tenant: tenantLayer } of layerWatch.seen.tenants) {
+        expect(tenantLayer).toBe(`tenant-of-${subject}`);
       }
     },
   );

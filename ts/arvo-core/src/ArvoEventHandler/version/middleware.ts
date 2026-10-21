@@ -1,6 +1,6 @@
 import type { PromiseAble } from '../../types.js';
 import type { ArvoExecutionContextTelemetry } from '../context/telemetry/index.js';
-import { describeUnlikeLayer } from '../helpers/check-middleware.js';
+import { layerShapeIssues } from '../helpers/check-middleware.js';
 import type { ArvoExecutorEmission } from '../types/execute.js';
 import type {
   ArvoEventHandlerMiddlewareEntry,
@@ -36,7 +36,7 @@ export type ArvoMiddlewareProgress = {
   /** When the executor returned, or `null` where it has not. */
   returnedAt: number | null;
   /** What it returned. Meaningful only once `returnedAt` is set. */
-  returned: ArvoExecutorEmission;
+  emission: ArvoExecutorEmission;
 };
 
 /** A run of the chain that has not started. */
@@ -44,14 +44,14 @@ export const createArvoMiddlewareProgress = (): ArvoMiddlewareProgress => ({
   outran: false,
   executorStartedAt: null,
   returnedAt: null,
-  returned: undefined,
+  emission: undefined,
 });
 
-/** What a failure is, for a span attribute. */
-const describeRaised = (raised: unknown) =>
-  raised instanceof Error
-    ? { 'error.name': raised.name, 'error.message': raised.message }
-    : { 'error.name': typeof raised, 'error.message': String(raised) };
+/** What was thrown, as span attributes. */
+const describeThrown = (thrown: unknown) =>
+  thrown instanceof Error
+    ? { 'error.name': thrown.name, 'error.message': thrown.message }
+    : { 'error.name': typeof thrown, 'error.message': String(thrown) };
 
 /**
  * Every layer an execution will run, in the order it will run them, or
@@ -80,57 +80,59 @@ export const resolveMiddleware = async (
     };
   }
 
-  const listed = [
+  const entriesInOrder = [
     ...(supplied ?? []).map((entry, index) => ({
       entry,
-      at: `supplied middleware[${index}]`,
+      position: `supplied middleware[${index}]`,
     })),
     ...(declared ?? []).map((entry, index) => ({
       entry,
-      at: `declared middleware[${index}]`,
+      position: `declared middleware[${index}]`,
     })),
   ];
 
-  if (listed.length === 0) return null;
+  if (entriesInOrder.length === 0) return null;
 
   const layers: IArvoEventHandlerMiddleware[] = [];
-  const firstAt = new Map<string, string>();
+  const firstPositionById = new Map<string, string>();
 
-  for (const { entry, at } of listed) {
-    let offered: unknown = entry;
+  for (const { entry, position } of entriesInOrder) {
+    let candidate: unknown = entry;
     if (typeof entry === 'function') {
       try {
-        offered = await entry();
-      } catch (raised) {
-        const cause = raised instanceof Error ? raised.message : String(raised);
+        candidate = await entry();
+      } catch (thrown) {
+        const cause = thrown instanceof Error ? thrown.message : String(thrown);
         return {
           faultKind: 'middleware_instantiation_failed',
-          message: `${at} is a way to make a layer, and calling it failed: ${cause}. No layer ran`,
+          message: `${position} is a way to make a layer, and calling it failed: ${cause}. No layer ran`,
           cause,
-          violations: [`${at}: ${cause}`],
+          violations: [`${position}: ${cause}`],
         };
       }
     }
 
-    const unlike = describeUnlikeLayer(offered, at);
-    if (unlike.length > 0) {
+    const shapeIssues = layerShapeIssues(candidate, position);
+    if (shapeIssues.length > 0) {
       return {
         faultKind: 'middleware_instantiation_failed',
-        message: `${at} did not yield a layer: ${unlike.map((issue) => issue.toString()).join('; ')}. No layer ran`,
-        violations: unlike.map((issue) => issue.toString()),
+        message: `${position} did not yield a layer: ${shapeIssues.map((issue) => issue.toString()).join('; ')}. No layer ran`,
+        violations: shapeIssues.map((issue) => issue.toString()),
       };
     }
 
-    const layer = offered as IArvoEventHandlerMiddleware;
-    const already = firstAt.get(layer.id);
-    if (already !== undefined) {
+    const layer = candidate as IArvoEventHandlerMiddleware;
+    const earlierPosition = firstPositionById.get(layer.id);
+    if (earlierPosition !== undefined) {
       return {
         faultKind: 'middleware_conflict',
-        message: `two layers in this execution carry the identifier "${layer.id}" — ${already} and ${at} — and identifiers must be unique. No layer ran`,
-        violations: [`${at}.id: repeats "${layer.id}" from ${already}`],
+        message: `two layers in this execution carry the identifier "${layer.id}" — ${earlierPosition} and ${position} — and identifiers must be unique. No layer ran`,
+        violations: [
+          `${position}.id: repeats "${layer.id}" from ${earlierPosition}`,
+        ],
       };
     }
-    firstAt.set(layer.id, at);
+    firstPositionById.set(layer.id, position);
     layers.push(layer);
   }
 
@@ -144,7 +146,7 @@ export const resolveMiddleware = async (
  * @param param.ctx - Handed to every part and to the executor, unchanged.
  * @param param.executor - The version's own business code.
  * @param param.telemetry - Where each part is marked.
- * @param param.progress - Shared with whatever times this run.
+ * @param param.middlewareProgress - Shared with whatever times this run.
  * @returns How the executor's entry ended, exactly as the executor alone
  * would report it: `returned` or `raised`. `outran` is never reported
  * here; that is the clock's to say.
@@ -154,14 +156,15 @@ export const runMiddleware = async <TContext>(param: {
   ctx: TContext;
   executor: (ctx: TContext) => PromiseAble<ArvoExecutorEmission>;
   telemetry: ArvoExecutionContextTelemetry;
-  progress: ArvoMiddlewareProgress;
+  middlewareProgress: ArvoMiddlewareProgress;
 }): Promise<ArvoExecutorRun> => {
-  const { ctx, telemetry, progress } = param;
+  const { ctx, telemetry, middlewareProgress } = param;
   const layers = param.layers ?? [];
 
   try {
     for (const layer of layers) {
-      if (progress.outran) return { kind: 'raised', raised: undefined };
+      if (middlewareProgress.outran)
+        return { kind: 'raised', raised: undefined };
       if (layer.before === undefined) continue;
       markStage(telemetry, 'middleware_before_entered', {
         'middleware.id': layer.id,
@@ -172,44 +175,44 @@ export const runMiddleware = async <TContext>(param: {
       });
     }
 
-    if (progress.outran) return { kind: 'raised', raised: undefined };
-    progress.executorStartedAt = Date.now();
-    const returned = await param.executor(ctx);
-    progress.returnedAt = Date.now();
-    progress.returned = returned;
-  } catch (raised) {
-    return { kind: 'raised', raised };
+    if (middlewareProgress.outran) return { kind: 'raised', raised: undefined };
+    middlewareProgress.executorStartedAt = Date.now();
+    const executorEmission = await param.executor(ctx);
+    middlewareProgress.returnedAt = Date.now();
+    middlewareProgress.emission = executorEmission;
+  } catch (thrown) {
+    return { kind: 'raised', raised: thrown };
   }
 
-  const emission: Readonly<ArvoExecutorEmission> = Array.isArray(
-    progress.returned,
+  const readOnlyEmission: Readonly<ArvoExecutorEmission> = Array.isArray(
+    middlewareProgress.emission,
   )
-    ? Object.freeze(progress.returned)
-    : progress.returned;
+    ? Object.freeze(middlewareProgress.emission)
+    : middlewareProgress.emission;
 
   for (const layer of [...layers].reverse()) {
-    if (progress.outran) break;
+    if (middlewareProgress.outran) break;
     if (layer.after === undefined) continue;
     markStage(telemetry, 'middleware_after_entered', {
       'middleware.id': layer.id,
     });
     try {
-      await layer.after(ctx as never, emission);
-      if (!progress.outran) {
+      await layer.after(ctx as never, readOnlyEmission);
+      if (!middlewareProgress.outran) {
         markStage(telemetry, 'middleware_after_returned', {
           'middleware.id': layer.id,
         });
       }
-    } catch (raised) {
+    } catch (thrown) {
       // An outcome already decided is not undone by what follows it.
-      if (!progress.outran) {
+      if (!middlewareProgress.outran) {
         markStage(telemetry, 'middleware_after_failed', {
           'middleware.id': layer.id,
-          ...describeRaised(raised),
+          ...describeThrown(thrown),
         });
       }
     }
   }
 
-  return { kind: 'returned', returned: progress.returned };
+  return { kind: 'returned', returned: middlewareProgress.emission };
 };

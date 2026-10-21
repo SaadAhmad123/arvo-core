@@ -23,71 +23,87 @@ import { initEvent, telemetry } from '../fixtures.js';
 const ctx = { stand: 'in' } as unknown as ArvoExecutionContext;
 
 /** A log every part writes to, in the order things happened. */
-const logged = () => {
-  const log: string[] = [];
-  const layer = (
-    id: string,
+const createPartLog = () => {
+  const partLog: string[] = [];
+  const layerNamed = (
+    layerId: string,
     parts: { before?: boolean; after?: boolean } = {
       before: true,
       after: true,
     },
   ): IArvoEventHandlerMiddleware => ({
-    id,
-    ...(parts.before ? { before: () => void log.push(`${id}.before`) } : {}),
-    ...(parts.after ? { after: () => void log.push(`${id}.after`) } : {}),
+    id: layerId,
+    ...(parts.before
+      ? { before: () => void partLog.push(`${layerId}.before`) }
+      : {}),
+    ...(parts.after
+      ? { after: () => void partLog.push(`${layerId}.after`) }
+      : {}),
   });
-  const executor = (returned: ArvoExecutorEmission = [initEvent]) =>
+  const loggingExecutorFor = (returned: ArvoExecutorEmission = [initEvent]) =>
     vi.fn(() => {
-      log.push('executor');
+      partLog.push('executor');
       return returned;
     });
-  return { log, layer, executor };
+  return { log: partLog, layer: layerNamed, executor: loggingExecutorFor };
 };
 
-const run = (
+const runChain = (
   layers: readonly IArvoEventHandlerMiddleware[] | null,
-  executor: (c: ArvoExecutionContext) => unknown,
-  progress: ArvoMiddlewareProgress = createArvoMiddlewareProgress(),
-  traced = telemetry().telemetry,
+  loggingExecutorFor: (executionContext: ArvoExecutionContext) => unknown,
+  middlewareProgress: ArvoMiddlewareProgress = createArvoMiddlewareProgress(),
+  executionTelemetry = telemetry().telemetry,
 ) =>
   runMiddleware({
     layers,
     ctx,
-    executor: executor as (c: ArvoExecutionContext) => ArvoExecutorEmission,
-    telemetry: traced,
-    progress,
+    executor: loggingExecutorFor as (
+      executionContext: ArvoExecutionContext,
+    ) => ArvoExecutorEmission,
+    telemetry: executionTelemetry,
+    middlewareProgress,
   });
 
 describe('with no layers', () => {
   it('runs the executor alone and reports what it returned', async () => {
-    const { executor } = logged();
-    const ran = await run(null, executor());
-    expect(ran).toEqual({ kind: 'returned', returned: [initEvent] });
+    const { executor: loggingExecutorFor } = createPartLog();
+    const executionResult = await runChain(null, loggingExecutorFor());
+    expect(executionResult).toEqual({
+      kind: 'returned',
+      returned: [initEvent],
+    });
   });
 
   it('runs it exactly once', async () => {
-    const { executor } = logged();
-    const exec = executor();
-    await run([], exec);
-    expect(exec).toHaveBeenCalledTimes(1);
+    const { executor: loggingExecutorFor } = createPartLog();
+    const executorSpy = loggingExecutorFor();
+    await runChain([], executorSpy);
+    expect(executorSpy).toHaveBeenCalledTimes(1);
   });
 
   it('notes when the executor started and returned', async () => {
-    const progress = createArvoMiddlewareProgress();
-    const { executor } = logged();
-    await run(null, executor(), progress);
-    expect(progress.executorStartedAt).toBeTypeOf('number');
-    expect(progress.returnedAt).toBeGreaterThanOrEqual(
-      progress.executorStartedAt as number,
+    const middlewareProgress = createArvoMiddlewareProgress();
+    const { executor: loggingExecutorFor } = createPartLog();
+    await runChain(null, loggingExecutorFor(), middlewareProgress);
+    expect(middlewareProgress.executorStartedAt).toBeTypeOf('number');
+    expect(middlewareProgress.returnedAt).toBeGreaterThanOrEqual(
+      middlewareProgress.executorStartedAt as number,
     );
   });
 });
 
 describe('the order layers run in', () => {
   it('runs before parts in order, then the executor, then after parts in reverse', async () => {
-    const { log, layer, executor } = logged();
-    await run([layer('a'), layer('b'), layer('c')], executor());
-    expect(log).toEqual([
+    const {
+      log: partLog,
+      layer: layerNamed,
+      executor: loggingExecutorFor,
+    } = createPartLog();
+    await runChain(
+      [layerNamed('a'), layerNamed('b'), layerNamed('c')],
+      loggingExecutorFor(),
+    );
+    expect(partLog).toEqual([
       'a.before',
       'b.before',
       'c.before',
@@ -99,114 +115,125 @@ describe('the order layers run in', () => {
   });
 
   it('skips the part a layer does not have', async () => {
-    const { log, layer, executor } = logged();
-    await run(
+    const {
+      log: partLog,
+      layer: layerNamed,
+      executor: loggingExecutorFor,
+    } = createPartLog();
+    await runChain(
       [
-        layer('a', { before: true }),
-        layer('b', { after: true }),
-        layer('c', {}),
+        layerNamed('a', { before: true }),
+        layerNamed('b', { after: true }),
+        layerNamed('c', {}),
       ],
-      executor(),
+      loggingExecutorFor(),
     );
-    expect(log).toEqual(['a.before', 'executor', 'b.after']);
+    expect(partLog).toEqual(['a.before', 'executor', 'b.after']);
   });
 
   it('keeps the order across many layers', async () => {
-    const { log, layer, executor } = logged();
-    const ids = Array.from({ length: 500 }, (_, index) => `l${index}`);
-    await run(
-      ids.map((id) => layer(id)),
-      executor(),
+    const {
+      log: partLog,
+      layer: layerNamed,
+      executor: loggingExecutorFor,
+    } = createPartLog();
+    const layerIds = Array.from({ length: 500 }, (_, index) => `l${index}`);
+    await runChain(
+      layerIds.map((layerId) => layerNamed(layerId)),
+      loggingExecutorFor(),
     );
-    expect(log).toEqual([
-      ...ids.map((id) => `${id}.before`),
+    expect(partLog).toEqual([
+      ...layerIds.map((layerId) => `${layerId}.before`),
       'executor',
-      ...[...ids].reverse().map((id) => `${id}.after`),
+      ...[...layerIds].reverse().map((layerId) => `${layerId}.after`),
     ]);
   });
 
   it('waits for a part that is asynchronous before running the next', async () => {
-    const log: string[] = [];
-    const slow: IArvoEventHandlerMiddleware = {
+    const partLog: string[] = [];
+    const slowLayer: IArvoEventHandlerMiddleware = {
       id: 'slow',
       before: async () => {
         await new Promise((settle) => setTimeout(settle, 5));
-        log.push('slow.before');
+        partLog.push('slow.before');
       },
     };
-    await run([slow], () => {
-      log.push('executor');
+    await runChain([slowLayer], () => {
+      partLog.push('executor');
     });
-    expect(log).toEqual(['slow.before', 'executor']);
+    expect(partLog).toEqual(['slow.before', 'executor']);
   });
 });
 
 describe('what each part is given', () => {
   it('gives every part the same context the executor is given', async () => {
-    const seen: unknown[] = [];
-    const layer: IArvoEventHandlerMiddleware = {
+    const seenValues: unknown[] = [];
+    const layerNamed: IArvoEventHandlerMiddleware = {
       id: 'seer',
-      before: (c) => void seen.push(c),
-      after: (c) => void seen.push(c),
+      before: (executionContext) => void seenValues.push(executionContext),
+      after: (executionContext) => void seenValues.push(executionContext),
     };
-    await run([layer], (c) => {
-      seen.push(c);
+    await runChain([layerNamed], (executionContext) => {
+      seenValues.push(executionContext);
     });
-    expect(seen).toEqual([ctx, ctx, ctx]);
-    expect(seen.every((each) => each === ctx)).toBe(true);
+    expect(seenValues).toEqual([ctx, ctx, ctx]);
+    expect(seenValues.every((seenContext) => seenContext === ctx)).toBe(true);
   });
 
   it('gives an after part what the executor returned', async () => {
-    let seen: unknown;
-    await run(
+    let seenValues: unknown;
+    await runChain(
       [
         {
           id: 'a',
-          after: (_c, emission) => {
-            seen = emission;
+          after: (_ctx, emission) => {
+            seenValues = emission;
           },
         },
       ],
       () => [initEvent],
     );
-    expect(seen).toEqual([initEvent]);
+    expect(seenValues).toEqual([initEvent]);
   });
 
   it('gives an after part a list nothing can change', async () => {
-    let attempt: unknown;
-    const ran = await run(
+    let pushError: unknown;
+    const executionResult = await runChain(
       [
         {
           id: 'a',
-          after: (_c, emission) => {
+          after: (_ctx, emission) => {
             try {
               (emission as unknown[]).push('extra');
             } catch (raised) {
-              attempt = raised;
+              pushError = raised;
             }
           },
         },
       ],
       () => [initEvent],
     );
-    expect(attempt).toBeInstanceOf(TypeError);
-    expect(ran).toEqual({ kind: 'returned', returned: [initEvent] });
+    expect(pushError).toBeInstanceOf(TypeError);
+    expect(executionResult).toEqual({
+      kind: 'returned',
+      returned: [initEvent],
+    });
   });
 
   it('gives an after part nothing where the executor returned nothing', async () => {
-    let seen: unknown = 'unset';
-    await run(
+    let seenValues: unknown = 'unset';
+    await runChain(
       [
         {
           id: 'a',
-          after: (_c, emission) => {
-            seen = emission;
+          after: (_ctx, emission) => {
+            seenValues = emission;
           },
         },
       ],
       () => undefined,
     );
-    expect(seen).toBeUndefined();
+    expect(seenValues).toBeUndefined();
   });
 
   it('calls each part as a method of its layer', async () => {
@@ -220,34 +247,38 @@ describe('what each part is given', () => {
         this.calls += 1;
       }
     }
-    const counter = new Counter();
-    await run([counter], () => undefined);
-    expect(counter.calls).toBe(2);
+    const counterLayer = new Counter();
+    await runChain([counterLayer], () => undefined);
+    expect(counterLayer.calls).toBe(2);
   });
 });
 
 describe('a before part that fails', () => {
   it('stops everything after it and reports what it raised', async () => {
-    const { log, layer, executor } = logged();
-    const boom = new Error('boom');
-    const exec = executor();
-    const ran = await run(
+    const {
+      log: partLog,
+      layer: layerNamed,
+      executor: loggingExecutorFor,
+    } = createPartLog();
+    const beforeError = new Error('boom');
+    const executorSpy = loggingExecutorFor();
+    const executionResult = await runChain(
       [
-        layer('a'),
+        layerNamed('a'),
         {
           id: 'b',
           before: () => {
-            throw boom;
+            throw beforeError;
           },
-          after: () => void log.push('b.after'),
+          after: () => void partLog.push('b.after'),
         },
-        layer('c'),
+        layerNamed('c'),
       ],
-      exec,
+      executorSpy,
     );
-    expect(ran).toEqual({ kind: 'raised', raised: boom });
-    expect(log).toEqual(['a.before']);
-    expect(exec).not.toHaveBeenCalled();
+    expect(executionResult).toEqual({ kind: 'raised', raised: beforeError });
+    expect(partLog).toEqual(['a.before']);
+    expect(executorSpy).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -256,67 +287,73 @@ describe('a before part that fails', () => {
     ['nothing', undefined],
     ['null', null],
     ['a plain object', { reason: 'x' }],
-  ])('reports %s raised as it was raised', async (_label, value) => {
-    const ran = await run(
+  ])('reports %s raised as it was raised', async (_label, thrownValue) => {
+    const executionResult = await runChain(
       [
         {
           id: 'a',
           before: () => {
-            throw value;
+            throw thrownValue;
           },
         },
       ],
       () => undefined,
     );
-    expect(ran).toEqual({ kind: 'raised', raised: value });
+    expect(executionResult).toEqual({ kind: 'raised', raised: thrownValue });
   });
 
   it('reports a rejected promise as raised too', async () => {
-    const boom = new Error('later');
-    const ran = await run(
-      [{ id: 'a', before: () => Promise.reject(boom) }],
+    const beforeError = new Error('later');
+    const executionResult = await runChain(
+      [{ id: 'a', before: () => Promise.reject(beforeError) }],
       () => undefined,
     );
-    expect(ran).toEqual({ kind: 'raised', raised: boom });
+    expect(executionResult).toEqual({ kind: 'raised', raised: beforeError });
   });
 });
 
 describe('an executor that fails', () => {
   it('runs no after part', async () => {
-    const { log, layer } = logged();
-    const boom = new Error('executor failed');
-    const ran = await run([layer('a'), layer('b')], () => {
-      throw boom;
-    });
-    expect(ran).toEqual({ kind: 'raised', raised: boom });
-    expect(log).toEqual(['a.before', 'b.before']);
+    const { log: partLog, layer: layerNamed } = createPartLog();
+    const beforeError = new Error('executor failed');
+    const executionResult = await runChain(
+      [layerNamed('a'), layerNamed('b')],
+      () => {
+        throw beforeError;
+      },
+    );
+    expect(executionResult).toEqual({ kind: 'raised', raised: beforeError });
+    expect(partLog).toEqual(['a.before', 'b.before']);
   });
 });
 
 describe('an after part that fails', () => {
   it('leaves what the executor returned standing, and still runs the rest', async () => {
-    const { log, layer } = logged();
-    const ran = await run(
+    const { log: partLog, layer: layerNamed } = createPartLog();
+    const executionResult = await runChain(
       [
-        layer('a'),
+        layerNamed('a'),
         {
           id: 'b',
           after: () => {
             throw new Error('after failed');
           },
         },
-        layer('c'),
+        layerNamed('c'),
       ],
       () => [initEvent],
     );
-    expect(ran).toEqual({ kind: 'returned', returned: [initEvent] });
-    expect(log).toEqual(['a.before', 'c.before', 'c.after', 'a.after']);
+    expect(executionResult).toEqual({
+      kind: 'returned',
+      returned: [initEvent],
+    });
+    expect(partLog).toEqual(['a.before', 'c.before', 'c.after', 'a.after']);
   });
 
   it('records the failure on the span, naming the layer', async () => {
-    const traced = telemetry().telemetry;
-    const marked = vi.spyOn(traced, 'addEvent');
-    await run(
+    const executionTelemetry = telemetry().telemetry;
+    const addEventSpy = vi.spyOn(executionTelemetry, 'addEvent');
+    await runChain(
       [
         {
           id: 'noisy',
@@ -327,9 +364,9 @@ describe('an after part that fails', () => {
       ],
       () => undefined,
       createArvoMiddlewareProgress(),
-      traced,
+      executionTelemetry,
     );
-    expect(marked).toHaveBeenCalledWith(
+    expect(addEventSpy).toHaveBeenCalledWith(
       'stage.middleware_after_failed',
       expect.objectContaining({
         'middleware.id': 'noisy',
@@ -342,26 +379,33 @@ describe('an after part that fails', () => {
     ['a string', 'nope'],
     ['nothing', undefined],
     ['a rejected promise', 'rejected'],
-  ])('contains %s thrown from an after part', async (label, value) => {
-    const ran = await run(
-      [
-        {
-          id: 'a',
-          after: () => {
-            if (label === 'a rejected promise') return Promise.reject(value);
-            throw value;
+  ])(
+    'contains %s thrown from an after part',
+    async (caseLabel, thrownValue) => {
+      const executionResult = await runChain(
+        [
+          {
+            id: 'a',
+            after: () => {
+              if (caseLabel === 'a rejected promise')
+                return Promise.reject(thrownValue);
+              throw thrownValue;
+            },
           },
-        },
-      ],
-      () => [initEvent],
-    );
-    expect(ran).toEqual({ kind: 'returned', returned: [initEvent] });
-  });
+        ],
+        () => [initEvent],
+      );
+      expect(executionResult).toEqual({
+        kind: 'returned',
+        returned: [initEvent],
+      });
+    },
+  );
 });
 
 describe('what a layer returns', () => {
   it('is never read, from either part', async () => {
-    const ran = await run(
+    const executionResult = await runChain(
       [
         {
           id: 'a',
@@ -371,56 +415,59 @@ describe('what a layer returns', () => {
       ],
       () => [initEvent],
     );
-    expect(ran).toEqual({ kind: 'returned', returned: [initEvent] });
+    expect(executionResult).toEqual({
+      kind: 'returned',
+      returned: [initEvent],
+    });
   });
 });
 
 describe('once the clock has fired', () => {
   it('runs nothing further in the before parts, and not the executor', async () => {
-    const progress = createArvoMiddlewareProgress();
-    const exec = vi.fn();
-    const after = vi.fn();
-    const pending = run(
+    const middlewareProgress = createArvoMiddlewareProgress();
+    const executorSpy = vi.fn();
+    const afterSpy = vi.fn();
+    const pendingRun = runChain(
       [
         {
           id: 'slow',
           before: async () => {
-            progress.outran = true;
+            middlewareProgress.outran = true;
           },
         },
-        { id: 'next', before: after },
+        { id: 'next', before: afterSpy },
       ],
-      exec,
-      progress,
+      executorSpy,
+      middlewareProgress,
     );
-    await pending;
-    expect(after).not.toHaveBeenCalled();
-    expect(exec).not.toHaveBeenCalled();
+    await pendingRun;
+    expect(afterSpy).not.toHaveBeenCalled();
+    expect(executorSpy).not.toHaveBeenCalled();
   });
 
   it('runs no further after part, and records nothing for one still running', async () => {
-    const progress = createArvoMiddlewareProgress();
-    const traced = telemetry().telemetry;
-    const marked = vi.spyOn(traced, 'addEvent');
-    const later = vi.fn();
-    await run(
+    const middlewareProgress = createArvoMiddlewareProgress();
+    const executionTelemetry = telemetry().telemetry;
+    const addEventSpy = vi.spyOn(executionTelemetry, 'addEvent');
+    const laterLayerSpy = vi.fn();
+    await runChain(
       [
-        { id: 'later', after: later },
+        { id: 'later', after: laterLayerSpy },
         {
           id: 'cut',
           after: () => {
-            progress.outran = true;
+            middlewareProgress.outran = true;
             throw new Error('too late to matter');
           },
         },
       ],
       () => [initEvent],
-      progress,
-      traced,
+      middlewareProgress,
+      executionTelemetry,
     );
-    expect(later).not.toHaveBeenCalled();
+    expect(laterLayerSpy).not.toHaveBeenCalled();
     expect(
-      marked.mock.calls.some(
+      addEventSpy.mock.calls.some(
         ([name]) => name === 'stage.middleware_after_failed',
       ),
     ).toBe(false);
@@ -429,19 +476,19 @@ describe('once the clock has fired', () => {
 
 describe('the marks it leaves', () => {
   it('marks each part entered and returned, by identifier', async () => {
-    const traced = telemetry().telemetry;
-    const marked = vi.spyOn(traced, 'addEvent');
-    await run(
+    const executionTelemetry = telemetry().telemetry;
+    const addEventSpy = vi.spyOn(executionTelemetry, 'addEvent');
+    await runChain(
       [{ id: 'both', before: () => undefined, after: () => undefined }],
       () => undefined,
       createArvoMiddlewareProgress(),
-      traced,
+      executionTelemetry,
     );
-    const names = marked.mock.calls.map(([name, attributes]) => [
+    const markNames = addEventSpy.mock.calls.map(([name, attributes]) => [
       name,
       (attributes as Record<string, unknown> | undefined)?.['middleware.id'],
     ]);
-    expect(names).toEqual([
+    expect(markNames).toEqual([
       ['stage.middleware_before_entered', 'both'],
       ['stage.middleware_before_returned', 'both'],
       ['stage.middleware_after_entered', 'both'],
@@ -451,14 +498,16 @@ describe('the marks it leaves', () => {
 });
 
 describe('resolving what was listed into layers', () => {
-  const layer = (id: string): IArvoEventHandlerMiddleware => ({ id });
+  const layerNamed = (layerId: string): IArvoEventHandlerMiddleware => ({
+    id: layerId,
+  });
 
   it('puts supplied layers before declared ones', async () => {
-    const supplied = layer('supplied');
-    const declared = layer('declared');
-    expect(await resolveMiddleware([supplied], [declared])).toEqual([
+    const supplied = layerNamed('supplied');
+    const declaredLayer = layerNamed('declared');
+    expect(await resolveMiddleware([supplied], [declaredLayer])).toEqual([
       supplied,
-      declared,
+      declaredLayer,
     ]);
   });
 
@@ -467,55 +516,61 @@ describe('resolving what was listed into layers', () => {
   });
 
   it('calls a way to make one, once, and uses what it returns', async () => {
-    const made = layer('made');
-    const make = vi.fn(() => made);
-    expect(await resolveMiddleware(null, [make])).toEqual([made]);
-    expect(make).toHaveBeenCalledTimes(1);
+    const madeLayer = layerNamed('made');
+    const makeLayer = vi.fn(() => madeLayer);
+    expect(await resolveMiddleware(null, [makeLayer])).toEqual([madeLayer]);
+    expect(makeLayer).toHaveBeenCalledTimes(1);
   });
 
   it('waits for a way to make one that is asynchronous', async () => {
-    const made = layer('made');
-    expect(await resolveMiddleware([async () => made], null)).toEqual([made]);
+    const madeLayer = layerNamed('made');
+    expect(await resolveMiddleware([async () => madeLayer], null)).toEqual([
+      madeLayer,
+    ]);
   });
 
   it('makes a fresh one on every resolution', async () => {
-    let made = 0;
-    const make = () =>
-      ({ id: `made`, n: ++made }) as IArvoEventHandlerMiddleware;
-    const first = (await resolveMiddleware(null, [make])) as unknown[];
-    const second = (await resolveMiddleware(null, [make])) as unknown[];
-    expect(first[0]).not.toBe(second[0]);
+    let madeLayer = 0;
+    const makeLayer = () =>
+      ({ id: `made`, n: ++madeLayer }) as IArvoEventHandlerMiddleware;
+    const firstResolution = (await resolveMiddleware(null, [
+      makeLayer,
+    ])) as unknown[];
+    const secondResolution = (await resolveMiddleware(null, [
+      makeLayer,
+    ])) as unknown[];
+    expect(firstResolution[0]).not.toBe(secondResolution[0]);
   });
 
   it('refuses a way to make one that throws, naming what it threw', async () => {
-    const resolved = await resolveMiddleware(null, [
+    const resolution = await resolveMiddleware(null, [
       () => {
         throw new Error('no config');
       },
     ]);
-    expect(resolved).toMatchObject({
+    expect(resolution).toMatchObject({
       faultKind: 'middleware_instantiation_failed',
       cause: 'no config',
     });
   });
 
   it('refuses a way to make one that throws something other than an error, naming it', async () => {
-    const resolved = await resolveMiddleware(null, [
+    const resolution = await resolveMiddleware(null, [
       () => {
         throw 'no config';
       },
     ]);
-    expect(resolved).toMatchObject({
+    expect(resolution).toMatchObject({
       faultKind: 'middleware_instantiation_failed',
       cause: 'no config',
     });
   });
 
   it('refuses a way to make one that rejects', async () => {
-    const resolved = await resolveMiddleware(null, [
+    const resolution = await resolveMiddleware(null, [
       () => Promise.reject(new Error('later')),
     ]);
-    expect(resolved).toMatchObject({
+    expect(resolution).toMatchObject({
       faultKind: 'middleware_instantiation_failed',
     });
   });
@@ -526,56 +581,64 @@ describe('resolving what was listed into layers', () => {
     ['an object with no identifier', {}],
     ['an identifier that is not a string', { id: 1 }],
     ['a before part that is not callable', { id: 'x', before: 'soon' }],
-  ])('refuses a way to make one that returns %s', async (_label, value) => {
-    const resolved = await resolveMiddleware(null, [
-      (() => value) as unknown as ArvoEventHandlerMiddlewareEntry,
-    ]);
-    expect(resolved).toMatchObject({
-      faultKind: 'middleware_instantiation_failed',
-    });
-  });
+  ])(
+    'refuses a way to make one that returns %s',
+    async (_label, thrownValue) => {
+      const resolution = await resolveMiddleware(null, [
+        (() => thrownValue) as unknown as ArvoEventHandlerMiddlewareEntry,
+      ]);
+      expect(resolution).toMatchObject({
+        faultKind: 'middleware_instantiation_failed',
+      });
+    },
+  );
 
   it('refuses a supplied entry that is not a layer', async () => {
-    const resolved = await resolveMiddleware(
+    const resolution = await resolveMiddleware(
       [{ id: 3 } as unknown as IArvoEventHandlerMiddleware],
       null,
     );
-    expect(resolved).toMatchObject({
+    expect(resolution).toMatchObject({
       faultKind: 'middleware_instantiation_failed',
     });
   });
 
   it('refuses two layers with one identifier, naming it', async () => {
-    const resolved = await resolveMiddleware([layer('same')], [layer('same')]);
-    expect(resolved).toMatchObject({ faultKind: 'middleware_conflict' });
-    expect((resolved as { message: string }).message).toContain('same');
+    const resolution = await resolveMiddleware(
+      [layerNamed('same')],
+      [layerNamed('same')],
+    );
+    expect(resolution).toMatchObject({ faultKind: 'middleware_conflict' });
+    expect((resolution as { message: string }).message).toContain('same');
   });
 
   it('refuses a made layer whose identifier another carries', async () => {
-    const resolved = await resolveMiddleware(
-      [layer('same')],
-      [() => layer('same')],
+    const resolution = await resolveMiddleware(
+      [layerNamed('same')],
+      [() => layerNamed('same')],
     );
-    expect(resolved).toMatchObject({ faultKind: 'middleware_conflict' });
+    expect(resolution).toMatchObject({ faultKind: 'middleware_conflict' });
   });
 
   it('refuses the same instance supplied twice', async () => {
-    const once = layer('once');
-    expect(await resolveMiddleware([once, once], null)).toMatchObject({
-      faultKind: 'middleware_conflict',
-    });
+    const sameLayer = layerNamed('once');
+    expect(await resolveMiddleware([sameLayer, sameLayer], null)).toMatchObject(
+      {
+        faultKind: 'middleware_conflict',
+      },
+    );
   });
 
   it('does not call a later way to make one once an earlier entry is refused', async () => {
-    const later = vi.fn(() => layer('later'));
+    const laterLayerSpy = vi.fn(() => layerNamed('later'));
     await resolveMiddleware(
       [
         () => {
           throw new Error('first fails');
         },
       ],
-      [later],
+      [laterLayerSpy],
     );
-    expect(later).not.toHaveBeenCalled();
+    expect(laterLayerSpy).not.toHaveBeenCalled();
   });
 });

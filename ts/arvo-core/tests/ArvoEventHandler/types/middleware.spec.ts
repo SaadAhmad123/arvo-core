@@ -49,7 +49,7 @@ describe('a layer', () => {
       new Both(),
       new Neither(),
     ];
-    expect(layers.map((layer) => layer.id)).toEqual([
+    expect(layers.map((literalLayer) => literalLayer.id)).toEqual([
       'before_only',
       'after_only',
       'both',
@@ -98,12 +98,12 @@ describe('a layer', () => {
   });
 
   it('returns nothing from either part', () => {
-    const wrong = {
+    const invalidLayer = {
       id: 'wrong',
       // @ts-expect-error a before part returns nothing
       before: () => 1,
     } satisfies IArvoEventHandlerMiddleware<'wrong'>;
-    expect(wrong.id).toBe('wrong');
+    expect(invalidLayer.id).toBe('wrong');
   });
 });
 

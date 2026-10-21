@@ -18,19 +18,19 @@ import { orderContract } from '../fixtures.js';
 
 describe('what the compiler holds a layer to', () => {
   it('keeps a declared identifier as its literal', () => {
-    const layer = {
+    const literalLayer = {
       id: 'literal' as const,
     } satisfies IArvoEventHandlerMiddleware<'literal'>;
-    expectTypeOf(layer.id).toEqualTypeOf<'literal'>();
+    expectTypeOf(literalLayer.id).toEqualTypeOf<'literal'>();
   });
 
   it('refuses a part that returns a value', () => {
-    const wrong: IArvoEventHandlerMiddleware = {
+    const invalidLayer: IArvoEventHandlerMiddleware = {
       id: 'wrong',
       // @ts-expect-error an after part returns nothing
       after: () => 'value',
     };
-    expect(wrong.id).toBe('wrong');
+    expect(invalidLayer.id).toBe('wrong');
   });
 
   it('reads middleware data as values to narrow, never as anything', () => {
@@ -40,17 +40,17 @@ describe('what the compiler holds a layer to', () => {
   });
 
   it('refuses a write through what reads middleware data', () => {
-    const write = (ctx: ArvoExecutionContext) => {
+    const writeThroughReadMember = (ctx: ArvoExecutionContext) => {
       // @ts-expect-error the read member is read-only
       ctx.middleware.anything = 1;
     };
-    expect(write).toBeTypeOf('function');
+    expect(writeThroughReadMember).toBeTypeOf('function');
   });
 });
 
 describe('where layers are listed', () => {
   it('is optional on the declaration, and never null', () => {
-    const omitted: Pick<
+    const paramWithoutMiddleware: Pick<
       ArvoEventHandlerSetupParam<
         typeof orderContract,
         Record<string, never>,
@@ -59,28 +59,28 @@ describe('where layers are listed', () => {
       >,
       'middleware'
     > = {};
-    expect(omitted).toEqual({});
+    expect(paramWithoutMiddleware).toEqual({});
     // a caller no compiler saw is still handled: null reads as none
-    const built = setupArvoEventHandler({
+    const builtHandler = setupArvoEventHandler({
       contracts: { self: orderContract },
       // @ts-expect-error null is not a way to say there are none — omit it
       middleware: null,
     })
       .handler('1.0.0', async () => undefined)
       .build();
-    expect(built.middleware).toBeNull();
+    expect(builtHandler.middleware).toBeNull();
   });
 
   it('is optional on an execution, and never null', () => {
-    const omitted: Pick<
+    const paramWithoutMiddleware: Pick<
       ArvoEventHandlerExecuteParam<
         Record<string, never>,
         Record<string, never>
       >,
       'middleware'
     > = {};
-    expect(omitted).toEqual({});
-    const nulled: Pick<
+    expect(paramWithoutMiddleware).toEqual({});
+    const paramWithNullMiddleware: Pick<
       ArvoEventHandlerExecuteParam<
         Record<string, never>,
         Record<string, never>
@@ -90,7 +90,7 @@ describe('where layers are listed', () => {
       // @ts-expect-error null is not a way to say there are none — omit it
       middleware: null,
     };
-    expect(nulled).toBeDefined();
+    expect(paramWithNullMiddleware).toBeDefined();
   });
 
   it('takes a layer or a way to make one, and nothing else', () => {
@@ -101,12 +101,12 @@ describe('where layers are listed', () => {
     ];
     expect(entries).toHaveLength(3);
     // @ts-expect-error a string is not a layer
-    const wrong: ArvoEventHandlerMiddlewareEntry = 'layer';
-    expect(wrong).toBe('layer');
+    const invalidLayer: ArvoEventHandlerMiddlewareEntry = 'layer';
+    expect(invalidLayer).toBe('layer');
   });
 
   it('refuses a layer typed for different dependencies than the handler declares', () => {
-    const forPayments: IArvoEventHandlerMiddleware<
+    const paymentsLayer: IArvoEventHandlerMiddleware<
       'for_payments',
       never,
       never,
@@ -117,40 +117,40 @@ describe('where layers are listed', () => {
       contracts: { self: orderContract },
       types: {} as { dependencies: { db: { query: () => void } } },
       // @ts-expect-error this layer expects a gateway the handler does not declare
-      middleware: [forPayments],
+      middleware: [paymentsLayer],
     });
-    expect(forPayments.id).toBe('for_payments');
+    expect(paymentsLayer.id).toBe('for_payments');
   });
 });
 
 describe('layers listed on a handler', () => {
   it('leave the dependencies the handler declared as declared', () => {
-    const generic: IArvoEventHandlerMiddleware = { id: 'generic' };
+    const genericLayer: IArvoEventHandlerMiddleware = { id: 'generic' };
     setupArvoEventHandler({
       contracts: { self: orderContract },
       types: {} as {
         dependencies: { db: { query: (sql: string) => string[] } };
       },
-      middleware: [generic, () => generic],
+      middleware: [genericLayer, () => genericLayer],
     }).handler('1.0.0', async (ctx) => {
       expectTypeOf(ctx.dependencies?.db?.query).toEqualTypeOf<
         ((sql: string) => string[]) | undefined
       >();
     });
-    expect(generic.id).toBe('generic');
+    expect(genericLayer.id).toBe('generic');
   });
 
   it('leave the hooks the handler declared as declared', () => {
-    const generic: IArvoEventHandlerMiddleware = { id: 'generic' };
+    const genericLayer: IArvoEventHandlerMiddleware = { id: 'generic' };
     setupArvoEventHandler({
       contracts: { self: orderContract },
       types: {} as { mechanismHooks: { scheduler: { now: () => number } } },
-      middleware: [generic],
+      middleware: [genericLayer],
     }).handler('1.0.0', async (ctx) => {
       expectTypeOf(ctx.hooks?.scheduler?.now).toEqualTypeOf<
         (() => number) | undefined
       >();
     });
-    expect(generic.id).toBe('generic');
+    expect(genericLayer.id).toBe('generic');
   });
 });

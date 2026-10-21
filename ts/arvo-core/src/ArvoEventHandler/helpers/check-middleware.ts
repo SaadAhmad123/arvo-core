@@ -8,26 +8,26 @@ import type { ArvoEventHandlerMiddlewareEntry } from '../types/middleware.js';
  * parts it has are things to call. Read here rather than trusted from the
  * type, because a list of layers may arrive from code no compiler saw.
  *
- * @param offered - The value offered as a layer.
+ * @param candidate - The value offered as a layer.
  * @param path - Where it sits, for the issue to name.
  * @returns One issue per thing wrong with it; empty where it is a layer.
  */
-export const describeUnlikeLayer = (
-  offered: unknown,
+export const layerShapeIssues = (
+  candidate: unknown,
   path: string,
 ): ErrorIssue[] => {
-  if (typeof offered !== 'object' || offered === null) {
+  if (typeof candidate !== 'object' || candidate === null) {
     return [
       new ErrorIssue({
         path,
         message:
           'is not a layer: a layer is an object with a string `id`, and optionally `before` and `after`',
-        received: offered,
+        received: candidate,
       }),
     ];
   }
 
-  const { id, before, after } = offered as Record<string, unknown>;
+  const { id, before, after } = candidate as Record<string, unknown>;
   const issues: ErrorIssue[] = [];
   if (typeof id !== 'string') {
     issues.push(
@@ -38,16 +38,16 @@ export const describeUnlikeLayer = (
       }),
     );
   }
-  for (const [part, value] of [
+  for (const [partName, part] of [
     ['before', before],
     ['after', after],
   ] as const) {
-    if (value !== undefined && typeof value !== 'function') {
+    if (part !== undefined && typeof part !== 'function') {
       issues.push(
         new ErrorIssue({
-          path: `${path}.${part}`,
+          path: `${path}.${partName}`,
           message: `must be something to call, or left out`,
-          received: value,
+          received: part,
         }),
       );
     }
@@ -83,27 +83,27 @@ export const checkMiddleware = (
     ];
   }
   const issues: ErrorIssue[] = [];
-  const firstAt = new Map<string, number>();
+  const firstIndexById = new Map<string, number>();
 
   middleware.forEach((entry, index) => {
     if (typeof entry === 'function') return;
 
     const path = `middleware[${index}]`;
-    const unlike = describeUnlikeLayer(entry, path);
-    if (unlike.length > 0) {
-      issues.push(...unlike);
+    const shapeIssues = layerShapeIssues(entry, path);
+    if (shapeIssues.length > 0) {
+      issues.push(...shapeIssues);
       return;
     }
 
-    const already = firstAt.get(entry.id);
-    if (already === undefined) {
-      firstAt.set(entry.id, index);
+    const earlierIndex = firstIndexById.get(entry.id);
+    if (earlierIndex === undefined) {
+      firstIndexById.set(entry.id, index);
       return;
     }
     issues.push(
       new ErrorIssue({
         path: `${path}.id`,
-        message: `repeats the identifier "${entry.id}", already declared at middleware[${already}]. Two layers in one execution cannot share an identifier`,
+        message: `repeats the identifier "${entry.id}", already declared at middleware[${earlierIndex}]. Two layers in one execution cannot share an identifier`,
       }),
     );
   });

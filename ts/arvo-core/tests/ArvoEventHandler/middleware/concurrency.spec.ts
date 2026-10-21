@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { IArvoEventHandlerMiddleware } from '../../../src/ArvoEventHandler/types/middleware.js';
-import { anOrder, answering, openOne, orderHandler, sleep } from './fixture.js';
+import {
+  answeringExecutor,
+  executeOrder,
+  orderHandler,
+  orderRequest,
+  sleep,
+} from './fixture.js';
 
 /**
  * Many executions at once through one handler.
@@ -12,13 +18,14 @@ import { anOrder, answering, openOne, orderHandler, sleep } from './fixture.js';
 const AT_ONCE = 100;
 
 /** Waits a moment chosen per call, so executions interleave. */
-const jitter = () => sleep(Math.random() * 4);
+const waitRandomly = () => sleep(Math.random() * 4);
 
-const answerOf = (
-  ran: Awaited<ReturnType<typeof openOne>>,
+const answerFrom = (
+  executionResult: Awaited<ReturnType<typeof executeOrder>>,
 ): { subject: string; orderId: string } | null => {
-  if (!ran.ok || ran.value.kind !== 'produced') return null;
-  const event = ran.value.events[0];
+  if (!executionResult.ok || executionResult.value.kind !== 'produced')
+    return null;
+  const event = executionResult.value.events[0];
   if (event === undefined) return null;
   return {
     subject: event.subject,
@@ -26,27 +33,27 @@ const answerOf = (
   };
 };
 
-const runMany = (handler: ReturnType<typeof orderHandler>) =>
+const executeManyOrders = (handler: ReturnType<typeof orderHandler>) =>
   Promise.all(
     Array.from({ length: AT_ONCE }, (_, index) =>
-      openOne(handler, { event: anOrder(`order-${index}`) }),
+      executeOrder(handler, { event: orderRequest(`order-${index}`) }),
     ),
   );
 
 describe('a shared layer writing middleware data', () => {
   it('keeps each execution its own data', async () => {
-    const shared: IArvoEventHandlerMiddleware = {
+    const sharedLayer: IArvoEventHandlerMiddleware = {
       id: 'shared',
       before: async (ctx) => {
-        await jitter();
+        await waitRandomly();
         await ctx.setMiddleware('marker', ctx.state.subject);
-        await jitter();
+        await waitRandomly();
       },
     };
     const handler = orderHandler({
-      middleware: [shared],
+      middleware: [sharedLayer],
       execute: async (ctx) => {
-        await jitter();
+        await waitRandomly();
         await ctx.setState({ data: { stage: 'answered' } });
         return ctx.build({
           type: 'com_order_created',
@@ -54,9 +61,11 @@ describe('a shared layer writing middleware data', () => {
         });
       },
     });
-    const answers = (await runMany(handler)).map(answerOf);
+    const answers = (await executeManyOrders(handler)).map(answerFrom);
     expect(
-      answers.every((one) => one !== null && one.orderId === one.subject),
+      answers.every(
+        (answer) => answer !== null && answer.orderId === answer.subject,
+      ),
     ).toBe(true);
   });
 });
@@ -66,45 +75,48 @@ describe('a layer made per execution, holding what it learns on itself', () => {
     const handler = orderHandler({
       middleware: [
         () => {
-          let held = '';
+          let heldSubject = '';
           return {
             id: 'made',
             before: async (ctx) => {
-              held = ctx.state.subject;
-              await jitter();
+              heldSubject = ctx.state.subject;
+              await waitRandomly();
             },
             after: async (ctx) => {
-              await jitter();
-              if (held !== ctx.state.subject) {
-                throw new Error(`held ${held} for ${ctx.state.subject}`);
+              await waitRandomly();
+              if (heldSubject !== ctx.state.subject) {
+                throw new Error(`held ${heldSubject} for ${ctx.state.subject}`);
               }
             },
           } satisfies IArvoEventHandlerMiddleware;
         },
       ],
       execute: async (ctx) => {
-        await jitter();
-        return answering(ctx);
+        await waitRandomly();
+        return answeringExecutor(ctx);
       },
     });
-    const results = await runMany(handler);
+    const executionResults = await executeManyOrders(handler);
     expect(
-      results.every((ran) => ran.ok && ran.value.kind === 'produced'),
+      executionResults.every(
+        (executionResult) =>
+          executionResult.ok && executionResult.value.kind === 'produced',
+      ),
     ).toBe(true);
   });
 
   it('is made exactly once per execution', async () => {
-    let made = 0;
+    let layersMade = 0;
     const handler = orderHandler({
       middleware: [
         () => {
-          made += 1;
+          layersMade += 1;
           return { id: 'made' };
         },
       ],
     });
-    await runMany(handler);
-    expect(made).toBe(AT_ONCE);
+    await executeManyOrders(handler);
+    expect(layersMade).toBe(AT_ONCE);
   });
 });
 
@@ -115,20 +127,20 @@ describe('a shared layer that keeps one execution on itself, against the rule', 
       subject = '';
       async before(ctx: { state: { subject: string } }) {
         this.subject = ctx.state.subject;
-        await jitter();
+        await waitRandomly();
       }
     }
-    const careless = new Careless();
-    let mixed = 0;
+    const carelessLayer = new Careless();
+    let mixedUpCount = 0;
     const handler = orderHandler({
-      middleware: [careless as never],
+      middleware: [carelessLayer as never],
       execute: async (ctx) => {
-        await jitter();
-        if (careless.subject !== ctx.state.subject) mixed += 1;
-        return answering(ctx);
+        await waitRandomly();
+        if (carelessLayer.subject !== ctx.state.subject) mixedUpCount += 1;
+        return answeringExecutor(ctx);
       },
     });
-    await runMany(handler);
-    expect(mixed).toBeGreaterThan(0);
+    await executeManyOrders(handler);
+    expect(mixedUpCount).toBeGreaterThan(0);
   });
 });

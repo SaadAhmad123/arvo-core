@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/index.js';
-import { answering, openOne, orderHandler } from './fixture.js';
+import { answeringExecutor, executeOrder, orderHandler } from './fixture.js';
 
 /**
  * Middleware data, attacked through its keys and its values.
@@ -9,20 +9,20 @@ import { answering, openOne, orderHandler } from './fixture.js';
  * the path the data exists for.
  */
 
-const through = async (
+const writeThenRead = async (
   write: (ctx: ArvoExecutionContext) => Promise<void>,
-  read: (ctx: ArvoExecutionContext) => void,
+  readBack: (ctx: ArvoExecutionContext) => void,
 ) => {
-  const ran = await openOne(
+  const executionResult = await executeOrder(
     orderHandler({
       middleware: [{ id: 'writer', before: write }],
       execute: async (ctx) => {
-        read(ctx as unknown as ArvoExecutionContext);
-        return answering(ctx);
+        readBack(ctx as unknown as ArvoExecutionContext);
+        return answeringExecutor(ctx);
       },
     }),
   );
-  return ran;
+  return executionResult;
 };
 
 describe('keys that are names every object has', () => {
@@ -33,22 +33,25 @@ describe('keys that are names every object has', () => {
     'toString',
     'hasOwnProperty',
     'valueOf',
-  ])('stores %s as itself and pollutes nothing', async (key) => {
-    let read: unknown;
-    const ran = await through(
-      (ctx) => ctx.setMiddleware(key, 'stored'),
+  ])('stores %s as itself and pollutes nothing', async (reservedKey) => {
+    let readBack: unknown;
+    const executionResult = await writeThenRead(
+      (ctx) => ctx.setMiddleware(reservedKey, 'stored'),
       (ctx) => {
-        read = Object.getOwnPropertyDescriptor(ctx.middleware, key)?.value;
+        readBack = Object.getOwnPropertyDescriptor(
+          ctx.middleware,
+          reservedKey,
+        )?.value;
       },
     );
-    expect(ran.ok).toBe(true);
-    expect(read).toBe('stored');
+    expect(executionResult.ok).toBe(true);
+    expect(readBack).toBe('stored');
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
     expect(Object.getPrototypeOf({})).toBe(Object.prototype);
   });
 
   it('cannot reach the prototype through a value shaped like one', async () => {
-    await through(
+    await writeThenRead(
       (ctx) => ctx.setMiddleware('__proto__', { polluted: true }),
       () => undefined,
     );
@@ -72,62 +75,64 @@ describe('values of every kind', () => {
     ['a map', new Map([['a', 1]])],
   ])(
     'holds %s by reference and reads it back identical',
-    async (_label, value) => {
-      let read: unknown;
-      await through(
-        (ctx) => ctx.setMiddleware('value', value),
+    async (_label, storedValue) => {
+      let readBack: unknown;
+      await writeThenRead(
+        (ctx) => ctx.setMiddleware('value', storedValue),
         (ctx) => {
-          read = ctx.middleware.value;
+          readBack = ctx.middleware.value;
         },
       );
-      expect(read).toBe(value);
+      expect(readBack).toBe(storedValue);
     },
   );
 
   it('holds a cyclic value without trying to serialize it', async () => {
-    const cyclic: Record<string, unknown> = {};
-    cyclic.self = cyclic;
-    let read: unknown;
-    const ran = await through(
-      (ctx) => ctx.setMiddleware('cyclic', cyclic),
+    const cyclicValue: Record<string, unknown> = {};
+    cyclicValue.self = cyclicValue;
+    let readBack: unknown;
+    const executionResult = await writeThenRead(
+      (ctx) => ctx.setMiddleware('cyclic', cyclicValue),
       (ctx) => {
-        read = ctx.middleware.cyclic;
+        readBack = ctx.middleware.cyclic;
       },
     );
-    expect(ran.ok).toBe(true);
-    expect(read).toBe(cyclic);
+    expect(executionResult.ok).toBe(true);
+    expect(readBack).toBe(cyclicValue);
   });
 
   it('holds the context itself without it reaching the record', async () => {
-    const ran = await through(
+    const executionResult = await writeThenRead(
       (ctx) => ctx.setMiddleware('ctx', ctx),
       () => undefined,
     );
-    expect(ran.ok).toBe(true);
-    const record =
-      ran.ok && ran.value.kind === 'produced' ? ran.value.state : null;
-    expect(JSON.stringify(record)).not.toContain('"ctx"');
+    expect(executionResult.ok).toBe(true);
+    const producedRecord =
+      executionResult.ok && executionResult.value.kind === 'produced'
+        ? executionResult.value.state
+        : null;
+    expect(JSON.stringify(producedRecord)).not.toContain('"ctx"');
   });
 
   it('freezes what reads it, not what it holds: a layer may change its own stored object', async () => {
-    const owned = { count: 0 };
-    let read: unknown;
-    await through(
+    const ownedObject = { count: 0 };
+    let readBack: unknown;
+    await writeThenRead(
       async (ctx) => {
-        await ctx.setMiddleware('owned', owned);
-        owned.count += 1;
+        await ctx.setMiddleware('owned', ownedObject);
+        ownedObject.count += 1;
       },
       (ctx) => {
-        read = (ctx.middleware.owned as { count: number }).count;
+        readBack = (ctx.middleware.owned as { count: number }).count;
       },
     );
-    expect(read).toBe(1);
+    expect(readBack).toBe(1);
   });
 });
 
 describe('a key written twice, through the handler', () => {
   it('is a non-retryable middleware conflict, by whichever layer wrote second', async () => {
-    const ran = await openOne(
+    const executionResult = await executeOrder(
       orderHandler({
         middleware: [
           { id: 'inner', before: (ctx) => ctx.setMiddleware('tenant', 'b') },
@@ -139,13 +144,17 @@ describe('a key written twice, through the handler', () => {
         ],
       },
     );
-    expect(!ran.ok && ran.error.faultKind).toBe('middleware_conflict');
-    expect(!ran.ok && ran.error.message).toContain('tenant');
-    expect(!ran.ok && ran.error.retry).toBeNull();
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'middleware_conflict',
+    );
+    expect(!executionResult.ok && executionResult.error.message).toContain(
+      'tenant',
+    );
+    expect(!executionResult.ok && executionResult.error.retry).toBeNull();
   });
 
   it('is a conflict where the first write was nothing at all', async () => {
-    const ran = await openOne(
+    const executionResult = await executeOrder(
       orderHandler({
         middleware: [
           {
@@ -158,21 +167,25 @@ describe('a key written twice, through the handler', () => {
         ],
       }),
     );
-    expect(!ran.ok && ran.error.faultKind).toBe('middleware_conflict');
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'middleware_conflict',
+    );
   });
 
   it('is a conflict where the executor writes a key a layer already wrote', async () => {
-    const ran = await openOne(
+    const executionResult = await executeOrder(
       orderHandler({
         middleware: [
           { id: 'layer', before: (ctx) => ctx.setMiddleware('k', 1) },
         ],
         execute: async (ctx) => {
           await ctx.setMiddleware('k', 2);
-          return answering(ctx);
+          return answeringExecutor(ctx);
         },
       }),
     );
-    expect(!ran.ok && ran.error.faultKind).toBe('middleware_conflict');
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'middleware_conflict',
+    );
   });
 });

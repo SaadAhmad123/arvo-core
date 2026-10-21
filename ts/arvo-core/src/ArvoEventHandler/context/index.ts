@@ -126,7 +126,7 @@ export class ArvoExecutionContext<
   #state: ArvoContextState<TSelf, TServices, TDataSchema>;
 
   // no prototype: a key such as `__proto__` is stored as itself
-  readonly #middleware: Record<string, unknown> = Object.create(null);
+  readonly #middlewareData: Record<string, unknown> = Object.create(null);
 
   constructor(
     param: ArvoExecutionContextParam<
@@ -211,7 +211,9 @@ export class ArvoExecutionContext<
    * whatever the layers chose, so narrow what you read.
    */
   get middleware(): Readonly<Record<string, unknown>> {
-    return Object.freeze(Object.assign(Object.create(null), this.#middleware));
+    return Object.freeze(
+      Object.assign(Object.create(null), this.#middlewareData),
+    );
   }
 
   /**
@@ -228,14 +230,14 @@ export class ArvoExecutionContext<
    * there is left as it was.
    */
   async setMiddleware(key: string, value: unknown): Promise<void> {
-    if (Object.hasOwn(this.#middleware, key)) {
+    if (Object.hasOwn(this.#middlewareData, key)) {
       throw await this.fault({
         faultKind: 'middleware_conflict',
         message: `"${key}" was already written to ctx.middleware during this execution, so a second write to it was refused. Two layers are using the same key; give each its own`,
         violations: [`middleware.${key}: already written`],
       });
     }
-    this.#middleware[key] = value;
+    this.#middlewareData[key] = value;
   }
 
   /**

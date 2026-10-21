@@ -5,7 +5,13 @@ import {
   runMiddleware,
 } from '../../../src/ArvoEventHandler/version/middleware.js';
 import { initEvent, telemetry } from '../fixtures.js';
-import { anOrder, answering, openOne, orderHandler, sleep } from './fixture.js';
+import {
+  answeringExecutor,
+  executeOrder,
+  orderHandler,
+  orderRequest,
+  sleep,
+} from './fixture.js';
 
 /**
  * The run clock at every boundary of the chain.
@@ -20,30 +26,32 @@ const ctx = {} as ArvoExecutionContext;
 
 describe('the clock firing, by where it fires', () => {
   it('during the first before part: a run timeout, nothing else entered', async () => {
-    const second = vi.fn();
-    const execute = vi.fn(answering);
-    const ran = await openOne(
+    const secondBeforePart = vi.fn();
+    const executorSpy = vi.fn(answeringExecutor);
+    const executionResult = await executeOrder(
       orderHandler({
         runTimeout: 20,
-        execute,
+        execute: executorSpy,
         middleware: [
           { id: 'first', before: () => sleep(60) },
-          { id: 'second', before: second },
+          { id: 'second', before: secondBeforePart },
         ],
       }),
     );
-    expect(!ran.ok && ran.error.faultKind).toBe('run_timeout');
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'run_timeout',
+    );
     await sleep(60);
-    expect(second).not.toHaveBeenCalled();
-    expect(execute).not.toHaveBeenCalled();
+    expect(secondBeforePart).not.toHaveBeenCalled();
+    expect(executorSpy).not.toHaveBeenCalled();
   });
 
   it('during a later before part: a run timeout, the executor never entered', async () => {
-    const execute = vi.fn(answering);
-    const ran = await openOne(
+    const executorSpy = vi.fn(answeringExecutor);
+    const executionResult = await executeOrder(
       orderHandler({
         runTimeout: 20,
-        execute,
+        execute: executorSpy,
         middleware: [
           { id: 'first', before: () => undefined },
           { id: 'second', before: () => undefined },
@@ -51,65 +59,74 @@ describe('the clock firing, by where it fires', () => {
         ],
       }),
     );
-    expect(!ran.ok && ran.error.faultKind).toBe('run_timeout');
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'run_timeout',
+    );
     await sleep(60);
-    expect(execute).not.toHaveBeenCalled();
+    expect(executorSpy).not.toHaveBeenCalled();
   });
 
   it('during the executor: a run timeout, no after part run', async () => {
-    const after = vi.fn();
-    const ran = await openOne(
+    const afterSpy = vi.fn();
+    const executionResult = await executeOrder(
       orderHandler({
         runTimeout: 20,
-        middleware: [{ id: 'watcher', after }],
-        execute: async (c) => {
+        middleware: [{ id: 'watcher', after: afterSpy }],
+        execute: async (executionContext) => {
           await sleep(60);
-          return answering(c);
+          return answeringExecutor(executionContext);
         },
       }),
     );
-    expect(!ran.ok && ran.error.faultKind).toBe('run_timeout');
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'run_timeout',
+    );
     await sleep(60);
-    expect(after).not.toHaveBeenCalled();
+    expect(afterSpy).not.toHaveBeenCalled();
   });
 
   it('between the executor returning and the first after part: the return stands, no after runs', async () => {
-    const progress = createArvoMiddlewareProgress();
-    const after = vi.fn();
-    const ran = await runMiddleware({
-      layers: [{ id: 'watcher', after }],
+    const middlewareProgress = createArvoMiddlewareProgress();
+    const afterSpy = vi.fn();
+    const executionResult = await runMiddleware({
+      layers: [{ id: 'watcher', after: afterSpy }],
       ctx,
       executor: () => {
-        progress.outran = true;
+        middlewareProgress.outran = true;
         return [initEvent];
       },
       telemetry: telemetry().telemetry,
-      progress,
+      middlewareProgress,
     });
-    expect(ran).toEqual({ kind: 'returned', returned: [initEvent] });
-    expect(after).not.toHaveBeenCalled();
+    expect(executionResult).toEqual({
+      kind: 'returned',
+      returned: [initEvent],
+    });
+    expect(afterSpy).not.toHaveBeenCalled();
   });
 
   it('during the first after part to run: the return stands, the rest skipped', async () => {
-    const outer = vi.fn();
-    const ran = await openOne(
+    const outerAfterPart = vi.fn();
+    const executionResult = await executeOrder(
       orderHandler({
         runTimeout: 25,
         middleware: [
-          { id: 'outer', after: outer },
+          { id: 'outer', after: outerAfterPart },
           { id: 'inner', after: () => sleep(80) },
         ],
       }),
     );
     expect(
-      ran.ok && ran.value.kind === 'produced' && ran.value.state.lifecycle,
+      executionResult.ok &&
+        executionResult.value.kind === 'produced' &&
+        executionResult.value.state.lifecycle,
     ).toBe('success');
     await sleep(80);
-    expect(outer).not.toHaveBeenCalled();
+    expect(outerAfterPart).not.toHaveBeenCalled();
   });
 
   it('during the last after part to run: the return stands', async () => {
-    const ran = await openOne(
+    const executionResult = await executeOrder(
       orderHandler({
         runTimeout: 25,
         middleware: [
@@ -119,63 +136,70 @@ describe('the clock firing, by where it fires', () => {
       }),
     );
     expect(
-      ran.ok && ran.value.kind === 'produced' && ran.value.state.lifecycle,
+      executionResult.ok &&
+        executionResult.value.kind === 'produced' &&
+        executionResult.value.state.lifecycle,
     ).toBe('success');
   });
 
   it('after everything finished: no effect at all', async () => {
-    const after = vi.fn();
-    const ran = await openOne(
-      orderHandler({ runTimeout: 200, middleware: [{ id: 'quick', after }] }),
+    const afterSpy = vi.fn();
+    const executionResult = await executeOrder(
+      orderHandler({
+        runTimeout: 200,
+        middleware: [{ id: 'quick', after: afterSpy }],
+      }),
     );
-    expect(ran.ok).toBe(true);
-    expect(after).toHaveBeenCalledTimes(1);
+    expect(executionResult.ok).toBe(true);
+    expect(afterSpy).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('an unbounded run clock', () => {
   it('cuts no slow after part', async () => {
-    const outer = vi.fn();
-    await openOne(
+    const outerAfterPart = vi.fn();
+    await executeOrder(
       orderHandler({
         runTimeout: null,
         executionTimeout: null,
         middleware: [
-          { id: 'outer', after: outer },
+          { id: 'outer', after: outerAfterPart },
           { id: 'slow', after: () => sleep(50) },
         ],
       }),
     );
-    expect(outer).toHaveBeenCalledTimes(1);
+    expect(outerAfterPart).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('the execution clock', () => {
   it('crossed by a slow before part: refused for time, the broader verdict', async () => {
-    const execute = vi.fn(answering);
-    const ran = await openOne(
+    const executorSpy = vi.fn(answeringExecutor);
+    const executionResult = await executeOrder(
       orderHandler({
         runTimeout: 30,
         executionTimeout: 30,
-        execute,
+        execute: executorSpy,
         middleware: [{ id: 'slow', before: () => sleep(80) }],
       }),
-      { event: anOrder() },
+      { event: orderRequest() },
     );
-    expect(!ran.ok && ran.error.faultKind).toBe('execution_timeout');
-    expect(!ran.ok && ran.error.retry).toBeNull();
-    expect(execute).not.toHaveBeenCalled();
+    expect(!executionResult.ok && executionResult.error.faultKind).toBe(
+      'execution_timeout',
+    );
+    expect(!executionResult.ok && executionResult.error.retry).toBeNull();
+    expect(executorSpy).not.toHaveBeenCalled();
   });
 
   it('crossed only by a slow after part: not refused', async () => {
-    const ran = await openOne(
+    const executionResult = await executeOrder(
       orderHandler({
         runTimeout: 40,
         executionTimeout: 40,
         middleware: [{ id: 'slow', after: () => sleep(100) }],
       }),
-      { event: anOrder() },
+      { event: orderRequest() },
     );
-    expect(ran.ok).toBe(true);
+    expect(executionResult.ok).toBe(true);
   });
 });

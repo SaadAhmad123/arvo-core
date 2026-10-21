@@ -337,10 +337,14 @@ export class ArvoEventHandlerVersion<
     });
 
     // judged before any layer runs, so a refusal leaves nothing half-done
-    const layers = await resolveMiddleware(param.middleware, this.#middleware);
-    if (layers !== null && 'faultKind' in layers) {
-      throw await this.#faultFor(param, collected, layers);
+    const layersOrRefusal = await resolveMiddleware(
+      param.middleware,
+      this.#middleware,
+    );
+    if (layersOrRefusal !== null && 'faultKind' in layersOrRefusal) {
+      throw await this.#faultFor(param, collected, layersOrRefusal);
     }
+    const layers = layersOrRefusal;
 
     const ctx = new ArvoExecutionContext<
       TSelf,
@@ -368,54 +372,53 @@ export class ArvoEventHandlerVersion<
       awaiting: collected.inFlightEventMap.size,
     });
 
-    const { entered, progress, concluded } = await this.#enterExecutor(
-      ctx,
-      layers,
-    );
-    const executorMs =
-      progress.executorStartedAt === null
+    const { executorRun, middlewareProgress, readRecordAtExecutorReturn } =
+      await this.#enterExecutor(ctx, layers);
+    const executorDurationMs =
+      middlewareProgress.executorStartedAt === null
         ? 0
-        : (progress.returnedAt ?? Date.now()) - progress.executorStartedAt;
-    markExecutorRan(param.telemetry, this.contracts.self, executorMs);
+        : (middlewareProgress.returnedAt ?? Date.now()) -
+          middlewareProgress.executorStartedAt;
+    markExecutorRan(param.telemetry, this.contracts.self, executorDurationMs);
     if (layers !== null) {
       markMiddlewareRan(
         param.telemetry,
         this.contracts.self,
-        Date.now() - ctx.enteredAt - executorMs,
+        Date.now() - ctx.enteredAt - executorDurationMs,
       );
     }
-    markStage(param.telemetry, `executor_${entered.kind}`);
+    markStage(param.telemetry, `executor_${executorRun.kind}`);
 
-    if (entered.kind === 'outran') {
+    if (executorRun.kind === 'outran') {
       throw await this.#faultFor(param, ctx.state, this.#refuseForTime(ctx));
     }
-    if (entered.kind === 'raised') {
-      if (entered.raised instanceof ArvoHandlerFault) {
-        if (this.#ownFault(entered.raised, ctx)) throw entered.raised;
+    if (executorRun.kind === 'raised') {
+      if (executorRun.raised instanceof ArvoHandlerFault) {
+        if (this.#ownFault(executorRun.raised, ctx)) throw executorRun.raised;
 
         throw await this.#faultFor(param, ctx.state, {
           faultKind: 'executor_raised',
-          message: `your executor for ${this.#contractAtVersion} raised a fault belonging to another execution (${entered.raised.subject}), which nothing sound can do — a fault describes the execution it was built in, and acting on this one would end that execution for an event that is not its own`,
+          message: `your executor for ${this.#contractAtVersion} raised a fault belonging to another execution (${executorRun.raised.subject}), which nothing sound can do — a fault describes the execution it was built in, and acting on this one would end that execution for an event that is not its own`,
           violations: [],
-          cause: entered.raised.message,
+          cause: executorRun.raised.message,
           retryable: false,
         });
       }
-      return this.#reportFailedWork(param, ctx.state, entered.raised);
+      return this.#reportFailedWork(param, ctx.state, executorRun.raised);
     }
 
     // read at the executor's return: after parts change neither verdict
-    const atReturn = concluded();
+    const recordAtExecutorReturn = readRecordAtExecutorReturn();
     await this.#refuseOnClocks(
       param,
       ctx,
-      atReturn,
-      progress.returnedAt as number,
+      recordAtExecutorReturn,
+      middlewareProgress.returnedAt as number,
     );
 
-    const batch = collectBatch(entered.returned);
+    const batch = collectBatch(executorRun.returned);
     if (batch === null) {
-      throw await this.#faultFor(param, atReturn, {
+      throw await this.#faultFor(param, recordAtExecutorReturn, {
         faultKind: 'emission_not_permitted',
         message: `your executor for ${this.#contractAtVersion} returned something that is not an event: it must return an ArvoEvent, an array of them, or nothing at all. Build events with ctx.build()`,
         violations: [],
@@ -429,16 +432,16 @@ export class ArvoEventHandlerVersion<
       batch,
     );
     if (batchRefusal !== null) {
-      throw await this.#faultFor(param, atReturn, batchRefusal);
+      throw await this.#faultFor(param, recordAtExecutorReturn, batchRefusal);
     }
     markStage(param.telemetry, 'returns_judged', { emitted: batch.length });
 
-    const unanswered = this.#refuseSilentCancel(atReturn, batch);
+    const unanswered = this.#refuseSilentCancel(recordAtExecutorReturn, batch);
     if (unanswered !== null) {
-      throw await this.#faultFor(param, atReturn, unanswered);
+      throw await this.#faultFor(param, recordAtExecutorReturn, unanswered);
     }
 
-    return this.#produce(param, atReturn, batch);
+    return this.#produce(param, recordAtExecutorReturn, batch);
   }
 
   /** The record this execution runs against, built or restored. */
@@ -825,40 +828,56 @@ export class ArvoEventHandlerVersion<
     >,
     layers: readonly IArvoEventHandlerMiddleware[] | null,
   ): Promise<{
-    entered: ArvoExecutorRun;
-    progress: ArvoMiddlewareProgress;
-    concluded: () => ArvoContextState<TSelf, TServices, TDataSchema>;
+    executorRun: ArvoExecutorRun;
+    middlewareProgress: ArvoMiddlewareProgress;
+    readRecordAtExecutorReturn: () => ArvoContextState<
+      TSelf,
+      TServices,
+      TDataSchema
+    >;
   }> {
-    const progress = createArvoMiddlewareProgress();
+    const middlewareProgress = createArvoMiddlewareProgress();
     // the record as the executor left it: nothing an after part writes may reach it
-    let atReturn: ArvoContextState<TSelf, TServices, TDataSchema> | null = null;
+    let recordAtExecutorReturn: ArvoContextState<
+      TSelf,
+      TServices,
+      TDataSchema
+    > | null = null;
     // read only where the executor returned, which is where it was set
-    const concluded = () =>
-      atReturn as ArvoContextState<TSelf, TServices, TDataSchema>;
-    const executor = async (
-      entering: typeof ctx,
+    const readRecordAtExecutorReturn = () =>
+      recordAtExecutorReturn as ArvoContextState<TSelf, TServices, TDataSchema>;
+    const executorKeepingItsRecord = async (
+      contextGivenToExecutor: typeof ctx,
     ): Promise<ArvoExecutorEmission> => {
-      const returned = await this.#executor(entering);
-      atReturn = entering.state;
-      return returned;
+      const executorEmission = await this.#executor(contextGivenToExecutor);
+      recordAtExecutorReturn = contextGivenToExecutor.state;
+      return executorEmission;
     };
 
     // One clock over the before parts, the executor and the after parts.
-    const running = runMiddleware({
+    const chainRun = runMiddleware({
       layers,
       ctx,
-      executor,
+      executor: executorKeepingItsRecord,
       telemetry: ctx.telemetry,
-      progress,
-    }).then((entered) => {
-      if (atReturn !== null && ctx.state !== atReturn && !progress.outran) {
+      middlewareProgress,
+    }).then((executorRun) => {
+      if (
+        recordAtExecutorReturn !== null &&
+        ctx.state !== recordAtExecutorReturn &&
+        !middlewareProgress.outran
+      ) {
         markStage(ctx.telemetry, 'middleware_after_write_discarded');
       }
-      return entered;
+      return executorRun;
     });
 
     if (this.options.runTimeout === null) {
-      return { entered: await running, progress, concluded };
+      return {
+        executorRun: await chainRun,
+        middlewareProgress,
+        readRecordAtExecutorReturn,
+      };
     }
 
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -870,20 +889,25 @@ export class ArvoEventHandlerVersion<
     });
 
     try {
-      const entered = await Promise.race([running, clock]);
-      if (entered.kind !== 'outran') return { entered, progress, concluded };
+      const executorRun = await Promise.race([chainRun, clock]);
+      if (executorRun.kind !== 'outran') {
+        return { executorRun, middlewareProgress, readRecordAtExecutorReturn };
+      }
 
-      progress.outran = true;
+      middlewareProgress.outran = true;
       // ran out in an after part: the executor's return stands
-      if (progress.returnedAt !== null) {
+      if (middlewareProgress.returnedAt !== null) {
         markStage(ctx.telemetry, 'middleware_after_cut');
         return {
-          entered: { kind: 'returned', returned: progress.returned },
-          progress,
-          concluded,
+          executorRun: {
+            kind: 'returned',
+            returned: middlewareProgress.emission,
+          },
+          middlewareProgress,
+          readRecordAtExecutorReturn,
         };
       }
-      return { entered, progress, concluded };
+      return { executorRun, middlewareProgress, readRecordAtExecutorReturn };
     } finally {
       clearTimeout(timer);
     }
