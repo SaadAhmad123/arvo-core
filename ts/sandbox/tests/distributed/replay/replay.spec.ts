@@ -8,6 +8,7 @@ import {
   restoreStock,
 } from '../../../src/distributed/replay/clear.js';
 import {
+  byCodePoint,
   comparablePayload,
   comparableRecord,
 } from '../../../src/distributed/replay/comparison.js';
@@ -117,7 +118,7 @@ describe('a run replayed from its record alone', () => {
     tape.steps.map((step) =>
       step.emitted
         .map((payload) => JSON.stringify(comparablePayload(payload)))
-        .sort(),
+        .sort(byCodePoint),
     );
 
   // ---------------------------------------------------------------- 12.1

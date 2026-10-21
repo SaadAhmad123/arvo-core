@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { IArvoEventHandlerMiddleware } from '../../../src/ArvoEventHandler/types/middleware.js';
+import { chanceFrom } from '../version/scenarios/chance.js';
 import {
   answeringExecutor,
   executeOrder,
@@ -17,8 +18,11 @@ import {
 
 const AT_ONCE = 100;
 
+/** The waits, drawn from one seed, so every run interleaves from the same sequence. */
+const nextWaitFraction = chanceFrom(16);
+
 /** Waits a moment chosen per call, so executions interleave. */
-const waitRandomly = () => sleep(Math.random() * 4);
+const waitRandomly = () => sleep(nextWaitFraction() * 4);
 
 const readAnswer = (
   executionResult: Awaited<ReturnType<typeof executeOrder>>,

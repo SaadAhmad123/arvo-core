@@ -1,6 +1,7 @@
 import { type ArvoEvent, createArvoEventFactory } from 'arvo-core';
 import { inventoryCheckV1 } from '../../../src/distributed/handler/com_inventory_check/contract.js';
 import type { InjectedFailure } from '../../../src/distributed/shared/delivery-middleware.js';
+import { uniqueSuffix } from './unique-suffix.js';
 
 /**
  * Failures injected through a layer, and what the protocol must make of
@@ -14,7 +15,7 @@ import type { InjectedFailure } from '../../../src/distributed/shared/delivery-m
 export const anInventoryCheck = (label: string): ArvoEvent =>
   createArvoEventFactory(inventoryCheckV1).createInput({
     source: 'com.test.injection',
-    subject: `inject-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    subject: `inject-${label}-${Date.now()}-${uniqueSuffix(6)}`,
     to: inventoryCheckV1.type,
     data: { sku: 'sku-1', wanted: 1 },
   });

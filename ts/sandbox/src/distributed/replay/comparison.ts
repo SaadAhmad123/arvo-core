@@ -42,7 +42,7 @@ const MINTED = ['id', 'time', 'traceparent', 'tracestate'] as const;
  * canonical order so two runs of it can be compared, and a locale-aware
  * order would make that comparison depend on the machine it ran on.
  */
-const byCodePoint = (one: string, two: string): number =>
+export const byCodePoint = (one: string, two: string): number =>
   one < two ? -1 : one > two ? 1 : 0;
 
 /** One event, with what was minted for it set aside. */

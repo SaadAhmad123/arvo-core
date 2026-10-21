@@ -175,18 +175,14 @@ export const executeOrder = async (
 /** A log every part of every layer writes to, in the order things happened. */
 export const createPartLog = () => {
   const partLog: string[] = [];
-  const loggingLayer = (
-    id: string,
-    parts: { before?: boolean; after?: boolean } = {
-      before: true,
-      after: true,
-    },
-  ): IArvoEventHandlerMiddleware => ({
+  const loggingLayer = (id: string): IArvoEventHandlerMiddleware => ({
     id,
-    ...(parts.before
-      ? { before: () => void partLog.push(`${id}.before`) }
-      : {}),
-    ...(parts.after ? { after: () => void partLog.push(`${id}.after`) } : {}),
+    before: () => {
+      partLog.push(`${id}.before`);
+    },
+    after: () => {
+      partLog.push(`${id}.after`);
+    },
   });
   const loggingExecutor: OrderExecutor = async (ctx) => {
     partLog.push('executor');

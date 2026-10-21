@@ -5,6 +5,7 @@ import {
   orderFulfilContract,
   orderFulfilV1,
 } from '../../../src/distributed/handler/com_order_fulfil/contract.js';
+import { byCodePoint } from '../../../src/distributed/replay/comparison.js';
 import {
   answerFromOutside,
   startRun,
@@ -114,9 +115,9 @@ describe('one run under Temporal', () => {
 
   it('answers its caller once the person has decided', () => {
     expect(answered.kind).toBe('answered');
-    expect(answered.events.map((event) => event.eventType).sort()).toEqual([
-      'evt_order_fulfilled',
-    ]);
+    expect(
+      answered.events.map((event) => event.eventType).sort(byCodePoint),
+    ).toEqual(['evt_order_fulfilled']);
   });
 
   it('addressed its answer to whoever started the run', () => {
