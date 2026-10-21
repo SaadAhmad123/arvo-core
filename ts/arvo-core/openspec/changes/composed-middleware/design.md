@@ -30,10 +30,63 @@ const middleware = attempt.value;
 
 The version makes one call and has one failure path. Inside, the factory does two steps in order and stops at the first that fails:
 
-1. `resolveMiddleware` calls the factories;
+1. `tryResolveMiddleware` calls the factories;
 2. the constructor checks the layers.
 
-**`resolveMiddleware` has one job:** call each factory once and put what it returned in that entry's place. Factories can be async, so this step is async, which is why the whole factory returns an `AsyncResult`. It stays a function of its own, called only by the factory.
+**`tryResolveMiddleware` has one job:** call each factory once and put what it returned in that entry's place. Factories can be async, so this step is async, which is why the whole factory returns an `AsyncResult`. It stays a function of its own, called only by the factory.
+
+```ts
+/** Every entry with each factory replaced by what it made, in the order given. */
+export type ArvoResolvedMiddleware = {
+  /** Resolved entries, or the value supplied when it was not a list: the constructor refuses that. */
+  supplied: unknown;
+  declared: readonly unknown[];
+};
+
+export const tryResolveMiddleware = async (
+  supplied: unknown,
+  declared: readonly ArvoEventHandlerMiddlewareEntry[] | null,
+): AsyncResult<ArvoResolvedMiddleware, ArvoComposedMiddlewareValidationError> => {
+  const resolvedSupplied: unknown[] = [];
+  const resolvedDeclared: unknown[] = [];
+  const lists = [
+    // not a list: passed through untouched, for the constructor to refuse
+    { listName: 'supplied', entries: Array.isArray(supplied) ? supplied : [], into: resolvedSupplied },
+    { listName: 'declared', entries: declared ?? [], into: resolvedDeclared },
+  ];
+
+  for (const { listName, entries, into } of lists) {
+    for (const [entryIndex, middlewareEntry] of entries.entries()) {
+      if (typeof middlewareEntry !== 'function') {
+        into.push(middlewareEntry);
+        continue;
+      }
+      try {
+        into.push(await middlewareEntry());
+      } catch (thrown) {
+        // the first factory that throws stops resolution: later ones are not called
+        return fromNeverthrow(
+          err(
+            new ArvoComposedMiddlewareValidationError(
+              'middleware_instantiation_failed',
+              'A way to make a layer failed, so no layer ran.',
+              [new ErrorIssue({ path: `${listName} middleware[${entryIndex}]`, message: 'calling it failed', received: thrown })],
+              { cause: thrown },
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  const suppliedWasAList = supplied === undefined || supplied === null || Array.isArray(supplied);
+  return fromNeverthrow(ok({ supplied: suppliedWasAList ? resolvedSupplied : supplied, declared: resolvedDeclared }));
+};
+```
+
+- **Supplied entries are made before declared ones,** one at a time, in the order given, as the layers will run.
+- **Omitted and empty both resolve to an empty list.** Supplied middleware that is not a list comes back unchanged, and none of its entries is made.
+- **It knows nothing about layers.** A factory that returns something that is not a layer is not its concern: the constructor refuses it.
 
 **The constructor holds every rule about the layers:** supplied middleware must be a list, every entry must be a layer, and no two layers may share an identifier. It knows which list each entry came from, so its messages name `supplied middleware[i]` and `declared middleware[i]` exactly as today.
 
@@ -44,13 +97,13 @@ The version makes one call and has one failure path. Inside, the factory does tw
 
 So one refusal lists every bad entry, or else every duplicate, never both: a duplicate cannot be judged among entries that are not all layers. Supplied middleware that is not a list blocks only its own positions; the declared entries are still checked.
 
-**Both steps fail the same way.** Each fails with `ArvoComposedMiddlewareValidationError`: `resolveMiddleware` returns it as `Err` through neverthrow, the constructor throws it, and the factory hands either back as its own `Err`. The error follows `ArvoEventValidatorError`, which already does this job for events: it carries every issue and the fault kind it becomes (`middleware_instantiation_failed` or `middleware_conflict`), so the version raises the fault without deciding anything again. `refusalFrom` copies the error's fault kind and message and renders its issues as the violations, which `#faultFor` already takes.
+**Both steps fail the same way.** Each fails with `ArvoComposedMiddlewareValidationError`: `tryResolveMiddleware` returns it as `Err` in an `AsyncResult`, the constructor throws it, and the factory hands either back as its own `Err`. The error follows `ArvoEventValidatorError`, which already does this job for events: it carries every issue and the fault kind it becomes (`middleware_instantiation_failed` or `middleware_conflict`), so the version raises the fault without deciding anything again. `refusalFrom` copies the error's fault kind and message and renders its issues as the violations, which `#faultFor` already takes.
 
 ```ts
 export const tryCreateArvoComposedMiddleware = async (
   param: ArvoComposedMiddlewareParam,
 ): AsyncResult<ArvoComposedMiddleware, ArvoComposedMiddlewareValidationError> => {
-  const resolution = await resolveMiddleware(param.supplied, param.declared);
+  const resolution = await tryResolveMiddleware(param.supplied, param.declared);
   if (!resolution.ok) return resolution;
   try {
     return fromNeverthrow(ok(new ArvoComposedMiddleware({ resolved: resolution.value, abortSignal: param.abortSignal })));
@@ -82,8 +135,8 @@ One more difference: where several entries are wrong, today's refusal names only
 In every case the execution is still refused, it is not retried, and no layer part runs. The spec already describes this order: *A Layer, Or A Way To Make One* calls every factory before any layer runs, and applies the identifier rule to what they return.
 
 *Alternatives considered:*
-- **Keep the checks in `resolveMiddleware`** and build the composite from layers already known to be valid. Rejected: it leaves the rules about layers outside the class that runs them.
-- **Call `resolveMiddleware` from the version, then a synchronous factory.** Rejected: the version would hold two calls and two failure paths for one step, building its layers.
+- **Keep the checks in `tryResolveMiddleware`** and build the composite from layers already known to be valid. Rejected: it leaves the rules about layers outside the class that runs them.
+- **Call `tryResolveMiddleware` from the version, then a synchronous factory.** Rejected: the version would hold two calls and two failure paths for one step, building its layers.
 
 ### The composite itself leaves nothing in telemetry
 

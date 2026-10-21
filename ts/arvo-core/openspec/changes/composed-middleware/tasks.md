@@ -8,7 +8,7 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 ## 2. Resolution that only resolves
 
 - [ ] 2.1 Write `tests/.../composed-middleware/resolve.spec.ts`: each factory is called once and replaced by what it returned; layers pass through untouched; resolution stops at the first factory that throws, returning `Err` naming its position as a failed instantiation; supplied middleware that is not a list passes through untouched; omitted and empty both resolve to empty lists.
-- [ ] 2.2 Move `resolveMiddleware` into `src/.../composed-middleware/resolve.ts`, returning a neverthrow `Result` of `{ supplied, declared }`. **Replaces** today's `resolveMiddleware` in `src/ArvoEventHandler/version/middleware.ts`: its shape check, identifier check and list check leave it for group 3.
+- [ ] 2.2 Move `resolveMiddleware` into `src/.../composed-middleware/resolve.ts` as `tryResolveMiddleware`, returning an `AsyncResult` of `{ supplied, declared }`, built through neverthrow and `fromNeverthrow`. **Replaces** today's `resolveMiddleware` in `src/ArvoEventHandler/version/middleware.ts`: its shape check, identifier check and list check leave it for group 3.
 
 ## 3. The composite
 
