@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import {
   type ArvoEvent,
   ArvoEventSerializer,
@@ -17,6 +18,7 @@ import {
   type InjectedFailure,
 } from '../../../src/distributed/shared/delivery-middleware.js';
 import type { Expected } from './injection.js';
+import { uniqueSuffix } from './unique-suffix.js';
 
 /**
  * Many workflows at once, each with a failure of its own injected through
@@ -80,7 +82,7 @@ export const chaosSeed = (specName: string): number => {
   const fromEnvironment = Number(process.env.CHAOS_SEED);
   const seed = Number.isInteger(fromEnvironment)
     ? fromEnvironment
-    : Math.floor(Math.random() * 2 ** 31);
+    : randomInt(2 ** 31);
   console.info(
     `[middleware chaos] ${specName}: seed ${seed} (reproduce with CHAOS_SEED=${seed})`,
   );
@@ -275,7 +277,7 @@ export const planChaos = (param: {
     drawn[position] = drawn[swapWith] ?? drawn[position];
     drawn[swapWith] = held ?? drawn[swapWith];
   }
-  const runMark = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+  const runMark = `${Date.now()}${uniqueSuffix(4)}`;
   return drawn.map((chaosCase, position) => ({
     chaosCase,
     event: aShortCheck(
@@ -302,7 +304,7 @@ export const failuresOf = (
 export const aChaosWalk = (label: string): ArvoEvent =>
   createArvoEventFactory(categoryWalkV1).createInput({
     source: CHAOS_CALLER,
-    subject: `chaos-walk-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    subject: `chaos-walk-${label}-${Date.now()}-${uniqueSuffix(6)}`,
     to: categoryWalkV1.type,
     data: { category: WALK_ROOT, remaining: WALK_BELOW_ROOT.length },
   });
