@@ -99,11 +99,25 @@ The TSDoc rules above govern the package's **public export surface** — what `s
 
 ### Naming
 
-**Every name says what the thing is, read on its own.** Files, exported symbols, internal helpers, parameters and locals alike — a reader who has not seen the surrounding code should be able to tell what a name holds from the name.
+**Every name says what the thing is, read on its own.** Files, exported symbols, methods, internal helpers, parameters, locals, loop variables, caught values, and the helpers and fixtures in `tests/` alike — a reader who has not seen the surrounding code should be able to tell what a name holds from the name.
 
-That rules out the short cryptic forms a writer reaches for when a name is only ever read beside its own definition: a preposition or pronoun standing in for a noun (`at`, `of`, `whose`, `which`), a single letter, an abbreviation that is not already the domain's own word. A parameter naming a position in a declaration is `declaredAt` or `path`, not `at`; a function rendering a map key into the path segment addressing it is `pathSegmentForKey`, not `at`.
+**The rule is the intent, not a list of words.** A name fails whenever its meaning has to be borrowed from somewhere else — the line above it, the expression that produced it, the loop it sits in, the function it belongs to. The forms below are where that happens most often, and they are examples of the failure, not its boundary: a name that fails the same way without appearing here fails all the same.
+
+- **A preposition, pronoun or relative word standing in for a noun:** `at`, `of`, `on`, `by`, `in`, `from`, `it`, `that`, `whose`, `which`. Each names a relationship and leaves out what is related. A position in a declaration is `declaredAt` or `path`, not `at`; a function rendering a map key into the path segment addressing it is `pathSegmentForKey`, not `at`.
+- **A word for quantity, order or position with nothing it counts or orders:** `one`, `each`, `first`, `last`, `rest`, `other`, `already`, `next`, `previous`. `firstAt` says something came first and not what; `firstPositionById` says both.
+- **A verb or participle standing in for the thing it acted on:** `offered`, `listed`, `entered`, `concluded`, `resolved`, `raised`, `done`. A value is named for what it is, not for what happened to it on the way in.
+- **A word too general to say anything here:** `data`, `info`, `item`, `value`, `result`, `obj`, `thing`, `temp`, `progress` on its own — unless it is the domain's own word for exactly this, as `data` is for an event's payload.
+- **A single letter, or an abbreviation that is not the domain's own word.** A one-line arrow whose parameter is its whole body still names it: `(event) => event.id`, never `(e) => e.id`.
+
+**Two short names are kept, deliberately, because each is the package's own word for exactly one thing:**
+- `ctx` — the execution context, as the public API and every example spell it.
+- `param` — the single object a function takes, as every function in this package spells it.
+
+**A caught value is `thrown`** — what was thrown — never `raised`, `e` or `err`.
 
 Descriptive is not the same as verbose. The test is whether the name answers *what is this* without the line below it, not whether it is long. Prefer the shortest name that still passes.
+
+**The check, before a name is committed:** cover everything on the line except the name and its type, and ask what it holds. If the answer needs anything you covered, rename it. Fix it in the change that introduces it — a name is cheapest to change before anything else reads it, and a poor name left in place is copied by the next writer as precedent.
 
 ### Errors
 
