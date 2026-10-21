@@ -25,15 +25,26 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 ## 5. The version on the composite
 
-- [ ] 5.1 Write the new behaviour into `tests/ArvoEventHandler/middleware/`, through the public surface: each row of the design's table of what a caller could notice, a refusal naming every bad entry, and late marks carrying `middleware.aborted`.
-- [ ] 5.2 Update `tests/ArvoEventHandler/middleware/telemetry.spec.ts` and every other assertion on exact mark attributes for the new `middleware.aborted` attribute, and `tests/ArvoEventHandler/middleware/clocks.spec.ts` for the removed progress object.
-- [ ] 5.3 Write `tests/ArvoEventHandler/version/middleware-refusal.spec.ts`, then add `refusalFrom` in `src/ArvoEventHandler/version/middleware-refusal.ts`: each error becomes a refusal with its own fault kind and message, the validation error's issues as the violations, and the resolution error's position and cause.
-- [ ] 5.4 In `src/ArvoEventHandler/version/index.ts`, build the layers with one call to `tryCreateArvoComposedMiddleware`, turn its `Err` into the fault through `refusalFrom` and `#faultFor`, and run before, the executor and after inside one function raced against the run clock, aborting the signal on expiry. **Replaces** `#enterExecutor`'s executor wrapper and `readRecordAtExecutorReturn`. The duration metrics read the version's own timings, and the middleware one is recorded only where the resolved lists hold a layer.
-- [ ] 5.5 **Delete** `runMiddleware`, `ArvoMiddlewareProgress` and `createArvoMiddlewareProgress`, and with them `src/ArvoEventHandler/version/middleware.ts`. `describeThrown`, used by both the composite and `refusalFrom`, moves to `src/ArvoEventHandler/helpers/describe-thrown.ts`.
-- [ ] 5.6 **Delete** `tests/ArvoEventHandler/version/middleware.spec.ts`, after confirming each of its cases has a counterpart in groups 2 to 4.
-- [ ] 5.7 Every other test under `tests/ArvoEventHandler/` passes without edits beyond 5.1 and 5.2.
+- [x] 5.1 Write the new behaviour into `tests/ArvoEventHandler/middleware/`, through the public surface: each row of the design's table of what a caller could notice, a refusal naming every bad entry, and late marks carrying `middleware.aborted`.
+- [x] 5.2 Update `tests/ArvoEventHandler/middleware/telemetry.spec.ts` and every other assertion on exact mark attributes for the new `middleware.aborted` attribute, and `tests/ArvoEventHandler/middleware/clocks.spec.ts` for the removed progress object.
+- [x] 5.3 Write `tests/ArvoEventHandler/version/middleware-refusal.spec.ts`, then add `refusalFrom` in `src/ArvoEventHandler/version/middleware-refusal.ts`: each error becomes a refusal with its own fault kind and message, the validation error's issues as the violations, and the resolution error's position and cause.
+- [x] 5.4 In `src/ArvoEventHandler/version/index.ts`, build the layers with one call to `tryCreateArvoComposedMiddleware`, turn its `Err` into the fault through `refusalFrom` and `#faultFor`, and run before, the executor and after inside one function raced against the run clock, aborting the signal on expiry. **Replaces** `#enterExecutor`'s executor wrapper and `readRecordAtExecutorReturn`. The duration metrics read the version's own timings, and the middleware one is recorded only where the resolved lists hold a layer.
+- [x] 5.5 **Delete** `runMiddleware`, `ArvoMiddlewareProgress` and `createArvoMiddlewareProgress`, and with them `src/ArvoEventHandler/version/middleware.ts`. `describeThrown` stays beside the composite, its only user: `refusalFrom` needs the thrown value as text, not as span attributes.
+- [x] 5.6 **Delete** `tests/ArvoEventHandler/version/middleware.spec.ts`, after confirming each of its cases has a counterpart in groups 2 to 4.
+- [x] 5.7 Every other test under `tests/ArvoEventHandler/` passes without edits beyond 5.1 and 5.2.
 
 ## 6. Proof
 
-- [ ] 6.1 Full suite with coverage at 100% bar the guards already uncovered, lint and typecheck clean, `pnpm build` clean.
-- [ ] 6.2 The sandbox, built against the new package: typecheck, lint and the whole suite, the Temporal and DBOS tests included.
+- [x] 6.1 Full suite with coverage at 100% bar the guards already uncovered, lint and typecheck clean, `pnpm build` clean.
+- [x] 6.2 The sandbox, built against the new package: typecheck, lint and the whole suite, the Temporal and DBOS tests included.
+
+## 7. Breaking it on purpose
+
+Every case asserts what the protocol promises, whatever is thrown at it: a before failure reaches the caller unchanged, an after failure never changes the outcome and never escapes, a refusal is a fault rather than a raw error, and nothing is left as an unhandled rejection.
+
+- [ ] 7.1 Write `tests/ArvoEventHandler/version/composed-middleware/hostile-layers.spec.ts`: layers whose `id`, `before` or `after` getters throw, or return something different on a second read; Proxies that throw on every access; frozen, sealed and null-prototype layers; ids such as `__proto__`, `constructor`, empty and very long; parts that return thenables, never settle, or settle after the clock; thrown values that cannot be printed, such as null-prototype objects, objects whose `toString` throws, Symbols, `undefined`, and Errors whose `message` getter throws.
+- [ ] 7.2 Write `tests/ArvoEventHandler/version/composed-middleware/hostile-lists.spec.ts` for resolution and the factory: sparse arrays, arrays whose element getters throw, Proxy arrays, array subclasses, frozen arrays, factories that return thenables or functions or another entry's instance, a factory that throws a value that cannot be printed, and lists of many thousands of entries.
+- [ ] 7.3 Write `tests/ArvoEventHandler/middleware/chaos.spec.ts` through the public surface: seeded random stacks of layers with random parts, failures, delays, middleware-data writes including conflicts, state writes in either part and run clocks, run many executions at once, and check every invariant above on each, plus that the record produced is the one at the executor's return and that each layer a factory made served one execution.
+- [ ] 7.4 Fix whatever 7.1 to 7.3 break, each fix test-first, every change under `src/` shown for review before its commit.
+- [ ] 7.5 In `ts/sandbox`, chaos under Temporal, DBOS and the plain loop: many workflows at once with random injected middleware failures, factories failing intermittently, slow and hanging after parts against the run clock, retryable before faults recovering through retries, and workers stopped mid-chain. Every workflow ends where the protocol says, and the records and published events agree across mechanisms.
+- [ ] 7.6 Proof again: full suite with coverage, lint, typecheck, build, and the whole sandbox suite.

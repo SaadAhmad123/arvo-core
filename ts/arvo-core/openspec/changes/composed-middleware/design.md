@@ -116,7 +116,7 @@ The wording of every refusal changes too. In every case the execution is still r
 
 Only the layers inside the composite are marked: each part's entered, returned and failed marks, by the layer's own `id`, with `middleware.aborted` saying whether the run clock had fired. The composite's `id` never appears in a mark, and calling the composite opens no span and records nothing of its own.
 
-The middleware-duration metric measures time spent in layers. As today, it is recorded only where there is at least one layer. The version knows that from the lists it passed in, so the composite needs no member to say it.
+The middleware-duration metric measures time spent in layers. As today, it is recorded only where there is at least one layer. The composite says how many through a `count` getter, `{ total, supplied, declared }`, a fresh value on each read, and the version records the metric where `count.total` is above zero.
 
 ### The run clock reaches the composite as an `AbortSignal`
 
@@ -128,6 +128,7 @@ class ArvoComposedMiddleware implements IArvoEventHandlerMiddleware<'arvo.compos
     declared: readonly IArvoEventHandlerMiddleware[];
     abortSignal: AbortSignal;
   });                                    // throws ArvoComposedMiddlewareValidationError on a refusal
+  get count(): { total: number; supplied: number; declared: number };
   before(ctx): Promise<void>;           // throws what a before part threw
   after(ctx, emission): Promise<void>;  // never throws
 }
@@ -271,7 +272,7 @@ try {
 }
 ```
 
-The race decides the outcome, and the signal stops further work: a promise cannot be cancelled, so `run()` carries on in the background, but no layer part starts once the signal is aborted. `returnedAt` says where the clock fired, so the version knows whether the executor's return stands, exactly as today. The executor wrapper and `readRecordAtExecutorReturn` disappear, because the record is captured where the executor returns.
+A returned run carries the moment the executor returned, so the version reads it from the run itself. The race decides the outcome, and the signal stops further work: a promise cannot be cancelled, so `run()` carries on in the background, but no layer part starts once the signal is aborted. `returnedAt` says where the clock fired, so the version knows whether the executor's return stands, exactly as today. The executor wrapper and `readRecordAtExecutorReturn` disappear, because the record is captured where the executor returns.
 
 ### Implements the layer interface, and stays internal
 
@@ -284,6 +285,8 @@ Two rules keep this safe, and both are recorded in the class's TSDoc:
 If either rule is ever relaxed, the uniqueness check has to look inside composites, or inner identifiers would escape it. That is a decision for the change that relaxes the rule.
 
 The version never calls `new` itself: it goes through `tryCreateArvoComposedMiddleware`, as consumers go through factories everywhere else in the package.
+
+**Typed for the version's own context, with one approved cast.** The composite and its factory carry the five type parameters of the layer interface, and the version instantiates them with its own contract, services, state schema, dependencies and hooks, so `before(ctx)` and `after(ctx, emission)` take the version's real context without a cast. The layers inside are typed as a handler declares them, for every version's context, because one declared layer serves every version. `setState` makes a context invariant in its state schema, so neither type is assignable to the other. The composite resolves that once, in a private method handing the context to its layers, with the reason beside it: what a layer writes through `setState` is still checked against the version's schema. This is the one cast the change makes, approved under the rule against cast shortcuts in the package's `AGENTS.md`, and it sits where the mismatch originates, so no caller sees it.
 
 *Alternative considered:* a plain class that does not implement the interface, which removes the nesting question entirely. Rejected: the nesting question only arises if the composite becomes public, and the type-level guarantee is worth having now.
 
