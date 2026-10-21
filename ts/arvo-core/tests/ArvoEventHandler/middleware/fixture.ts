@@ -177,8 +177,12 @@ export const createPartLog = () => {
   const partLog: string[] = [];
   const loggingLayer = (id: string): IArvoEventHandlerMiddleware => ({
     id,
-    before: () => void partLog.push(`${id}.before`),
-    after: () => void partLog.push(`${id}.after`),
+    before: () => {
+      partLog.push(`${id}.before`);
+    },
+    after: () => {
+      partLog.push(`${id}.after`);
+    },
   });
   const loggingExecutor: OrderExecutor = async (ctx) => {
     partLog.push('executor');
