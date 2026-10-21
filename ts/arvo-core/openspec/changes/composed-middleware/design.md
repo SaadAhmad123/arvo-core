@@ -97,6 +97,28 @@ So one refusal lists every bad entry, or else every duplicate, never both: a dup
 
 `tryResolveMiddleware` returns the first as `Err`, the constructor throws the second, and the factory hands either back as its own `Err`. Both carry their fault kind, so the version raises the fault without deciding anything again: `refusalFrom` copies the fault kind and message, and renders the violations, the validation error's issues or the resolution error's one position, into the shape `#faultFor` already takes. Both carry a `_tag`, and both live in `composed-middleware/errors.ts`.
 
+`refusalFrom` lives beside the version, in `src/ArvoEventHandler/version/middleware-refusal.ts`, not beside the composite: the refusal is the version's shape, so the composite's files know nothing of faults. It copies and decides nothing:
+
+```ts
+export const refusalFrom = (
+  error: ArvoComposedMiddlewareResolutionError | ArvoComposedMiddlewareValidationError,
+): ArvoGateRefusal =>
+  error instanceof ArvoComposedMiddlewareResolutionError
+    ? {
+        faultKind: error.faultKind,                 // always middleware_instantiation_failed
+        message: error.message,                     // names the position and what was thrown
+        violations: [`${error.position}: ${describeThrown(error.cause)}`],
+        cause: describeThrown(error.cause),
+      }
+    : {
+        faultKind: error.faultKind,                 // middleware_instantiation_failed or middleware_conflict
+        message: error.message,                     // built from every issue
+        violations: error.issues.map((issue) => issue.toString()),
+      };
+```
+
+`#faultFor` then passes the refusal to `createArvoHandlerFault`, unchanged: the fault gains the execution, the event it answers and the abandonment pair, and both kinds come out non-retryable because neither is among the kinds safe to retry. All of this happens before the context is built, so no layer part ran and the executor was not entered.
+
 ```ts
 export const tryCreateArvoComposedMiddleware = async (
   param: ArvoComposedMiddlewareParam,

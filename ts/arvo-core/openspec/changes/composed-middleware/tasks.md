@@ -27,10 +27,11 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 - [ ] 5.1 Write the new behaviour into `tests/ArvoEventHandler/middleware/`, through the public surface: each row of the design's table of what a caller could notice, a refusal naming every bad entry, and late marks carrying `middleware.aborted`.
 - [ ] 5.2 Update `tests/ArvoEventHandler/middleware/telemetry.spec.ts` and every other assertion on exact mark attributes for the new `middleware.aborted` attribute, and `tests/ArvoEventHandler/middleware/clocks.spec.ts` for the removed progress object.
-- [ ] 5.3 In `src/ArvoEventHandler/version/index.ts`, build the layers with one call to `tryCreateArvoComposedMiddleware`, turn its `Err` into the fault through `#faultFor`, and run before, the executor and after inside one function raced against the run clock, aborting the signal on expiry. **Replaces** `#enterExecutor`'s executor wrapper and `readRecordAtExecutorReturn`. The duration metrics read the version's own timings, and the middleware one is recorded only where the resolved lists hold a layer.
-- [ ] 5.4 **Delete** `runMiddleware`, `ArvoMiddlewareProgress` and `createArvoMiddlewareProgress`, and with them `src/ArvoEventHandler/version/middleware.ts`. `describeThrown` moves beside the composite.
-- [ ] 5.5 **Delete** `tests/ArvoEventHandler/version/middleware.spec.ts`, after confirming each of its cases has a counterpart in groups 2 to 4.
-- [ ] 5.6 Every other test under `tests/ArvoEventHandler/` passes without edits beyond 5.1 and 5.2.
+- [ ] 5.3 Write `tests/ArvoEventHandler/version/middleware-refusal.spec.ts`, then add `refusalFrom` in `src/ArvoEventHandler/version/middleware-refusal.ts`: each error becomes a refusal with its own fault kind and message, the validation error's issues as the violations, and the resolution error's position and cause.
+- [ ] 5.4 In `src/ArvoEventHandler/version/index.ts`, build the layers with one call to `tryCreateArvoComposedMiddleware`, turn its `Err` into the fault through `refusalFrom` and `#faultFor`, and run before, the executor and after inside one function raced against the run clock, aborting the signal on expiry. **Replaces** `#enterExecutor`'s executor wrapper and `readRecordAtExecutorReturn`. The duration metrics read the version's own timings, and the middleware one is recorded only where the resolved lists hold a layer.
+- [ ] 5.5 **Delete** `runMiddleware`, `ArvoMiddlewareProgress` and `createArvoMiddlewareProgress`, and with them `src/ArvoEventHandler/version/middleware.ts`. `describeThrown`, used by both the composite and `refusalFrom`, moves to `src/ArvoEventHandler/helpers/describe-thrown.ts`.
+- [ ] 5.6 **Delete** `tests/ArvoEventHandler/version/middleware.spec.ts`, after confirming each of its cases has a counterpart in groups 2 to 4.
+- [ ] 5.7 Every other test under `tests/ArvoEventHandler/` passes without edits beyond 5.1 and 5.2.
 
 ## 6. Proof
 
