@@ -218,7 +218,7 @@ export const deliverOnce = async (
         // give back.
         dependencies: new PostgresCatalogue(scope.pool),
         // Outside the handlers' own layers, as ADR-016 orders them.
-        middleware: deliveryMiddleware('replay'),
+        middleware: deliveryMiddleware('replay', triggeringEvent),
       }),
   );
 

@@ -285,7 +285,7 @@ const deliver = async (
         // give back.
         dependencies: new PostgresCatalogue(scope.pool),
         // Outside the handlers' own layers, as ADR-016 orders them.
-        middleware: deliveryMiddleware('dbos'),
+        middleware: deliveryMiddleware('dbos', triggeringEvent),
       }),
   );
 
