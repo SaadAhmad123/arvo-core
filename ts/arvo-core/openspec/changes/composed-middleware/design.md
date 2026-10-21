@@ -15,7 +15,7 @@ See proposal.md for why. Today the version calls `runMiddleware({ layers, ctx, e
 
 ## Decisions
 
-### One async factory: resolve, then construct
+### One async factory: check the lists, resolve, construct
 
 ```ts
 const abortController = new AbortController();
@@ -28,144 +28,95 @@ if (!attempt.ok) throw await this.#faultFor(param, collectedRecord, refusalFrom(
 const middleware = attempt.value;
 ```
 
-The version makes one call and has one failure path. Inside, the factory does two steps in order and stops at the first that fails:
+The version makes one call and has one failure path. Inside, `tryCreateArvoComposedMiddleware` (`composed-middleware/factory.ts`) takes three steps and stops at the first that fails:
 
-1. `tryResolveMiddleware` calls the factories;
-2. the constructor checks the layers.
+1. **Both lists must be arrays.** Omitted means none. A side that is not an array, possible only from a caller no compiler saw, is the validation error, and nothing is made.
+2. **`tryResolveMiddleware` calls every factory.** A factory that throws is the resolution error.
+3. **The constructor judges the layers.** A broken rule is the validation error. Anything else the constructor throws goes up as thrown, following `tryCreateArvoEvent`.
 
-**`tryResolveMiddleware` has one job:** call each factory once and put what it returned in that entry's place. Factories can be async, so this step is async, which is why the whole factory returns an `AsyncResult`. It stays a function of its own, called only by the factory.
+No throwing `createArvoComposedMiddleware` is added, because the constructor already is that form. The factory, the errors and the class live in `composed-middleware/`, not in `src/factories/`, since none of them is exported.
+
+**Resolution** (`composed-middleware/resolve.ts`) takes two arrays and has one job: call each factory once and put what it returned in its place.
 
 ```ts
-/** Every entry with each factory replaced by what it made, in the order given. */
-export type ArvoResolvedMiddleware = {
-  /** Resolved entries, or the value supplied when it was not a list: the constructor refuses that. */
-  supplied: unknown;
-  declared: readonly unknown[];
-};
-
-export const tryResolveMiddleware = async (
-  supplied: unknown,
-  declared: readonly ArvoEventHandlerMiddlewareEntry[] | null,
-): AsyncResult<ArvoResolvedMiddleware, ArvoComposedMiddlewareResolutionError> => {
-  const resolvedSupplied: unknown[] = [];
-  const resolvedDeclared: unknown[] = [];
-  const lists = [
-    // not a list: passed through untouched, for the constructor to refuse
-    { listName: 'supplied', entries: Array.isArray(supplied) ? supplied : [], into: resolvedSupplied },
-    { listName: 'declared', entries: declared ?? [], into: resolvedDeclared },
-  ];
-
-  for (const { listName, entries, into } of lists) {
-    for (const [entryIndex, middlewareEntry] of entries.entries()) {
-      if (typeof middlewareEntry !== 'function') {
-        into.push(middlewareEntry);
-        continue;
-      }
-      try {
-        into.push(await middlewareEntry());
-      } catch (thrown) {
-        // the first factory that throws stops resolution: later ones are not called
-        return fromNeverthrow(
-          err(new ArvoComposedMiddlewareResolutionError({ position: `${listName} middleware[${entryIndex}]`, thrown })),
-        );
-      }
-    }
-  }
-
-  const suppliedWasAList = supplied === undefined || supplied === null || Array.isArray(supplied);
-  return fromNeverthrow(ok({ supplied: suppliedWasAList ? resolvedSupplied : supplied, declared: resolvedDeclared }));
-};
+const resolveList = async (entries: readonly ArvoEventHandlerMiddlewareEntry[], source: ArvoMiddlewareSource) =>
+  NeverthrowResult.combine(
+    await Promise.all(
+      entries.map(async (middlewareEntry, entryIndex) => {
+        if (typeof middlewareEntry !== 'function') return ok(middlewareEntry);
+        try {
+          return ok(await middlewareEntry());
+        } catch (thrown) {
+          return err(new ArvoComposedMiddlewareResolutionError({ position: middlewarePosition(source, entryIndex), thrown }));
+        }
+      }),
+    ),
+  );
 ```
 
-- **Supplied entries are made before declared ones,** one at a time, in the order given, as the layers will run.
-- **Omitted and empty both resolve to an empty list.** Supplied middleware that is not a list comes back unchanged, and none of its entries is made.
-- **It knows nothing about layers.** A factory that returns something that is not a layer is not its concern: the constructor refuses it.
+- **Supplied resolves before declared.** Within a list the factories run concurrently, and the first in the list that threw is the one reported. Where a supplied factory throws, the declared list is not resolved.
+- **Each entry resolves to a neverthrow Result,** and `combine` returns the first failure, so there is no cast and no unreachable branch.
+- **It knows nothing about layers.** The result is typed as `IArvoEventHandlerMiddleware[]`, as the entry type promises; the constructor checks it.
 
-**The constructor holds every rule about the layers:** supplied middleware must be a list, every entry must be a layer, and no two layers may share an identifier. It knows which list each entry came from, so its messages name `supplied middleware[i]` and `declared middleware[i]` exactly as today.
+**The constructor** takes `{ supplied, declared, abortSignal }`, both lists typed as `IArvoEventHandlerMiddleware[]`. It joins them in run order, supplied first, and its private `#validate` judges them in two passes, following *Validation* in `project.md`:
 
-**The constructor reports every problem, in two passes,** following *Validation* in `project.md`:
+1. **Shape.** Every entry must be a valid middleware. Every failure is collected, the refusal is `middleware_instantiation_failed`, and each issue is blocking: duplicate ids are checked only once every middleware is valid.
+2. **Ids.** Every repeated id is collected, each naming both positions, and the refusal is `middleware_conflict`.
 
-1. **Shape.** Supplied middleware must be a list, and every entry, supplied and declared, must be a layer. Every failure is collected. If there is any, the refusal is `middleware_instantiation_failed`, and each issue carries a `blockingReason`: identifiers cannot be compared until every entry is a layer.
-2. **Identifiers.** Only when every entry is a layer: every repeated identifier is collected, each naming both positions. If there is any, the refusal is `middleware_conflict`.
+One refusal lists every bad entry, or else every duplicate, never both.
 
-So one refusal lists every bad entry, or else every duplicate, never both: a duplicate cannot be judged among entries that are not all layers. Supplied middleware that is not a list blocks only its own positions; the declared entries are still checked.
+**Each failure has its own error** (`composed-middleware/errors.ts`), both with a `_tag` and the fault kind they become:
 
-**Each step has its own error, because each fails for a different reason.**
+- **`ArvoComposedMiddlewareResolutionError`**: a factory threw. It carries the position and keeps what was thrown as its `cause`. Its fault kind is always `middleware_instantiation_failed`.
+- **`ArvoComposedMiddlewareValidationError`**: a list is not an array, or the layers break a rule. It follows `ArvoEventValidatorError`: it carries every issue, builds its message from them, and carries `middleware_instantiation_failed` or `middleware_conflict`.
 
-- **`ArvoComposedMiddlewareResolutionError`**: a factory threw. Nothing was checked; code failed. It carries the entry's position and what was thrown, as its `cause`, and its message names both, as today's does: `supplied middleware[1] is a way to make a layer, and calling it failed: <cause>. No layer ran`. Its fault kind is always `middleware_instantiation_failed`.
-- **`ArvoComposedMiddlewareValidationError`**: the layers broke a rule. It follows `ArvoEventValidatorError`, which already does this job for events: it carries every issue, builds its message from them, and carries the fault kind it becomes, `middleware_instantiation_failed` for a shape problem or `middleware_conflict` for a repeated identifier.
+**Every message is written for the person who wrote the middleware.** Positions read as their own code does, through `middlewarePosition` (`composed-middleware/position.ts`): `execute({ middleware })[1]`, `setupArvoEventHandler({ middleware })[0].before`. Each message says the execution was not run, that no middleware ran, and what to fix:
 
-`tryResolveMiddleware` returns the first as `Err`, the constructor throws the second, and the factory hands either back as its own `Err`. Both carry their fault kind, so the version raises the fault without deciding anything again: `refusalFrom` copies the fault kind and message, and renders the violations, the validation error's issues or the resolution error's one position, into the shape `#faultFor` already takes. Both carry a `_tag`, and both live in `composed-middleware/errors.ts`.
+```text
+This execution was not run: two or more of its middleware share an id. No middleware ran and the handler was not called.
+The following problem was found:
+  - setupArvoEventHandler({ middleware })[0].id: has the id "tenant", which execute({ middleware })[0] already uses. Every middleware in one execution needs its own id: rename one of them
+```
 
-`refusalFrom` lives beside the version, in `src/ArvoEventHandler/version/middleware-refusal.ts`, not beside the composite: the refusal is the version's shape, so the composite's files know nothing of faults. It copies and decides nothing:
+The shared shape check in `helpers/check-middleware.ts` says "middleware", not "layer", in the same voice, which reaches a handler's build-time errors too. It stays in `helpers/`: the build-time check owns it and the composite reuses it.
+
+**The errors become a fault beside the version.** `refusalFrom` lives in `src/ArvoEventHandler/version/middleware-refusal.ts`, so the composite's files know nothing of faults. It copies and decides nothing:
 
 ```ts
 export const refusalFrom = (
   error: ArvoComposedMiddlewareResolutionError | ArvoComposedMiddlewareValidationError,
-): ArvoGateRefusal =>
-  error instanceof ArvoComposedMiddlewareResolutionError
-    ? {
-        faultKind: error.faultKind,                 // always middleware_instantiation_failed
-        message: error.message,                     // names the position and what was thrown
-        violations: [`${error.position}: ${describeThrown(error.cause)}`],
-        cause: describeThrown(error.cause),
-      }
-    : {
-        faultKind: error.faultKind,                 // middleware_instantiation_failed or middleware_conflict
-        message: error.message,                     // built from every issue
-        violations: error.issues.map((issue) => issue.toString()),
-      };
-```
-
-`#faultFor` then passes the refusal to `createArvoHandlerFault`, unchanged: the fault gains the execution, the event it answers and the abandonment pair, and both kinds come out non-retryable because neither is among the kinds safe to retry. All of this happens before the context is built, so no layer part ran and the executor was not entered.
-
-```ts
-export const tryCreateArvoComposedMiddleware = async (
-  param: ArvoComposedMiddlewareParam,
-): AsyncResult<
-  ArvoComposedMiddleware,
-  ArvoComposedMiddlewareResolutionError | ArvoComposedMiddlewareValidationError
-> => {
-  const resolution = await tryResolveMiddleware(param.supplied, param.declared);
-  if (!resolution.ok) return resolution;
-  try {
-    return fromNeverthrow(ok(new ArvoComposedMiddleware({ resolved: resolution.value, abortSignal: param.abortSignal })));
-  } catch (thrown) {
-    if (thrown instanceof ArvoComposedMiddlewareValidationError) {
-      return fromNeverthrow(err(thrown));
-    }
-    throw thrown;
+): ArvoGateRefusal => {
+  if (error instanceof ArvoComposedMiddlewareValidationError) {
+    return { faultKind: error.faultKind, message: error.message, violations: error.issues.map((issue) => issue.toString()) };
   }
+  const thrownMessage = error.cause instanceof Error ? error.cause.message : String(error.cause);
+  return { faultKind: error.faultKind, message: error.message, violations: [`${error.position}: ${thrownMessage}`], cause: thrownMessage };
 };
 ```
 
-Around the constructor, the factory follows `tryCreateArvoEvent`: only the validation error becomes `Err`, and anything else is a bug that goes up as it arrived. No throwing `createArvoComposedMiddleware` is added, because the constructor already is that form. The factory and the error live beside the class, not in `src/factories/`, since none of them is exported.
+`#faultFor` then passes the refusal to `createArvoHandlerFault`, unchanged: the fault gains the execution, the event it answers and the abandonment pair, and both kinds come out non-retryable because neither is among the kinds safe to retry. The version builds the composite before it builds the context, so a refusal leaves nothing half-done: no layer part ran and the executor was not entered.
 
-The version builds the composite before it builds the context, so a refusal still leaves nothing half-done.
-
-**What a caller could notice.** Today each entry is made and checked before the next one. Now all of them are made first, and checked after. Three things follow:
+**What a caller could notice.** Today each entry is made and checked before the next one. Now every factory in a list is made first, and the checks run after:
 
 | Situation | Today | After this change |
 |---|---|---|
-| The supplied middleware is not a list | Refused at once. No factory is called. | The handler's own factories are called first, then the execution is refused. |
-| An early entry is not a layer, and a later entry is a factory | Refused at the early entry. The later factory is not called. | The later factory is called, then the execution is refused. |
-| An early entry is not a layer, and a later factory throws | The early entry is reported. | The throwing factory is reported. |
+| An early entry is not a middleware, and a later entry is a factory | Refused at the early entry. The later factory is not called. | The later factory is called, then the execution is refused. |
+| An early entry is not a middleware, and a later factory throws | The early entry is reported. | The throwing factory is reported. |
+| A factory throws, and later factories in the same list | The later ones are not called. | They are called, since a list resolves concurrently. |
+| Several entries are wrong | Only the first is named. | Every one is named. |
 
-Resolution stops at the first factory that throws, so the factories after it are not called.
-
-One more difference: where several entries are wrong, today's refusal names only the first, and the new one names all of them. Its message is built from the issues, as every validation error in the package builds its message, so the wording changes too.
-
-In every case the execution is still refused, it is not retried, and no layer part runs. The spec already describes this order: *A Layer, Or A Way To Make One* calls every factory before any layer runs, and applies the identifier rule to what they return.
+The wording of every refusal changes too. In every case the execution is still refused, it is not retried, and no layer part runs. The spec already describes this order: *A Layer, Or A Way To Make One* calls every factory before any layer runs, and applies the identifier rule to what they return.
 
 *Alternatives considered:*
 - **Keep the checks in `tryResolveMiddleware`** and build the composite from layers already known to be valid. Rejected: it leaves the rules about layers outside the class that runs them.
 - **Call `tryResolveMiddleware` from the version, then a synchronous factory.** Rejected: the version would hold two calls and two failure paths for one step, building its layers.
+- **Resolve one factory at a time.** Rejected for the simpler concurrent map: the spec asks only that each factory run once before any layer, and factories are meant to be cheap, since anything with an open and a close is a dependency.
 
 ### The composite itself leaves nothing in telemetry
 
 Only the layers inside the composite are marked: each part's entered, returned and failed marks, by the layer's own `id`, with `middleware.aborted` saying whether the run clock had fired. The composite's `id` never appears in a mark, and calling the composite opens no span and records nothing of its own.
 
-The middleware-duration metric measures time spent in layers. As today, it is recorded only where there is at least one layer. The version knows that from the resolved lists, so the composite needs no member to say it.
+The middleware-duration metric measures time spent in layers. As today, it is recorded only where there is at least one layer. The version knows that from the lists it passed in, so the composite needs no member to say it.
 
 ### The run clock reaches the composite as an `AbortSignal`
 
@@ -173,7 +124,8 @@ The middleware-duration metric measures time spent in layers. As today, it is re
 class ArvoComposedMiddleware implements IArvoEventHandlerMiddleware<'arvo.composed'> {
   readonly id = 'arvo.composed';
   constructor(param: {
-    resolved: { supplied: unknown; declared: readonly unknown[] | null };
+    supplied: readonly IArvoEventHandlerMiddleware[];
+    declared: readonly IArvoEventHandlerMiddleware[];
     abortSignal: AbortSignal;
   });                                    // throws ArvoComposedMiddlewareValidationError on a refusal
   before(ctx): Promise<void>;           // throws what a before part threw
