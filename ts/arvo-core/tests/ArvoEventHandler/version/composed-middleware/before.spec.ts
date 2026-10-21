@@ -81,6 +81,35 @@ describe('before', () => {
       ),
     ).toBe(false);
   });
+
+  describe('before, with parts that take time or return something', () => {
+    it('waits for an asynchronous part before starting the next', async () => {
+      const { markingContext } = createMarkingContext();
+      const partOrder: string[] = [];
+      await composeLayers([
+        {
+          id: 'slow',
+          before: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            partOrder.push('slow');
+          },
+        },
+        { id: 'fast', before: () => void partOrder.push('fast') },
+      ]).before(markingContext as never);
+      expect(partOrder).toEqual(['slow', 'fast']);
+    });
+
+    it('reads nothing a part returns', async () => {
+      const { markingContext } = createMarkingContext();
+      const returningLayer = {
+        id: 'returner',
+        before: () => ({ type: 'evt_smuggled' }),
+      } as unknown as IArvoEventHandlerMiddleware;
+      await expect(
+        composeLayers([returningLayer]).before(markingContext as never),
+      ).resolves.toBeUndefined();
+    });
+  });
 });
 
 describe('a before part that throws', () => {

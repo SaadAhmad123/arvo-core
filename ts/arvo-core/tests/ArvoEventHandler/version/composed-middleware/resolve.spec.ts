@@ -83,6 +83,17 @@ describe('ways to make a layer', () => {
     expect(startOrder).toEqual(['slow', 'fast']);
     expect(finishOrder).toEqual(['fast', 'slow']);
   });
+
+  describe('a way to make a layer, resolved again', () => {
+    it('makes a fresh layer every time', async () => {
+      const makeLayer = () => layerNamed('made');
+      const firstResolution = await resolvedOrThrow([], [makeLayer]);
+      const secondResolution = await resolvedOrThrow([], [makeLayer]);
+      expect(firstResolution.declared[0]).not.toBe(
+        secondResolution.declared[0],
+      );
+    });
+  });
 });
 
 describe('a way to make a layer that throws', () => {

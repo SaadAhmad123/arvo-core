@@ -262,7 +262,7 @@ describe('an after part that never finishes', () => {
     ).toBe(true);
   });
 
-  it('records nothing for what it does once it has been cut', async () => {
+  it('still marks what it does once it has been cut, as happening after the clock fired', async () => {
     const spanRecorder = recordingSpan();
     await executeOrder(
       orderHandler({
@@ -280,9 +280,13 @@ describe('an after part that never finishes', () => {
       }),
     );
     await sleep(80);
-    expect(spanRecorder.marks()).not.toContainEqual([
-      'middleware_after_failed',
-      'straggler',
-    ]);
+    const lateFailure = spanRecorder.events.find((spanEvent) =>
+      spanEvent.name.endsWith('middleware_after_failed'),
+    );
+    expect(lateFailure?.attributes).toMatchObject({
+      'middleware.id': 'straggler',
+      'middleware.aborted': true,
+      'error.message': 'far too late',
+    });
   });
 });

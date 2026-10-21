@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/index.js';
-import {
-  createArvoMiddlewareProgress,
-  runMiddleware,
-} from '../../../src/ArvoEventHandler/version/middleware.js';
+import { ArvoComposedMiddleware } from '../../../src/ArvoEventHandler/version/composed-middleware/index.js';
 import { initEvent, telemetry } from '../fixtures.js';
 import {
   answeringExecutor,
@@ -22,7 +19,7 @@ import {
  * sets, which is deterministic.
  */
 
-const ctx = {} as ArvoExecutionContext;
+const ctx = { telemetry: telemetry().telemetry } as ArvoExecutionContext;
 
 describe('the clock firing, by where it fires', () => {
   it('during the first before part: a run timeout, nothing else entered', async () => {
@@ -85,23 +82,16 @@ describe('the clock firing, by where it fires', () => {
     expect(afterSpy).not.toHaveBeenCalled();
   });
 
-  it('between the executor returning and the first after part: the return stands, no after runs', async () => {
-    const middlewareProgress = createArvoMiddlewareProgress();
+  it('between the executor returning and the first after part: no after part runs', async () => {
+    const runClock = new AbortController();
     const afterSpy = vi.fn();
-    const middlewareOutcome = await runMiddleware({
-      layers: [{ id: 'watcher', after: afterSpy }],
-      ctx,
-      executor: () => {
-        middlewareProgress.outran = true;
-        return [initEvent];
-      },
-      telemetry: telemetry().telemetry,
-      middlewareProgress,
+    const middleware = new ArvoComposedMiddleware({
+      supplied: [{ id: 'watcher', after: afterSpy }],
+      declared: [],
+      abortSignal: runClock.signal,
     });
-    expect(middlewareOutcome).toEqual({
-      kind: 'returned',
-      emission: [initEvent],
-    });
+    runClock.abort(); // the clock fires in the instant the executor returned
+    await middleware.after(ctx, [initEvent]);
     expect(afterSpy).not.toHaveBeenCalled();
   });
 

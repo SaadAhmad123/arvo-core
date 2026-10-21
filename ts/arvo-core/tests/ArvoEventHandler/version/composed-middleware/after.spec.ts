@@ -97,6 +97,22 @@ describe('after', () => {
       ),
     ).toBe(true);
   });
+
+  describe('after, with a part that returns something', () => {
+    it('reads nothing it returns', async () => {
+      const { markingContext } = createMarkingContext();
+      const returningLayer = {
+        id: 'returner',
+        after: () => ({ type: 'evt_smuggled' }),
+      } as unknown as IArvoEventHandlerMiddleware;
+      await expect(
+        composeLayers([returningLayer]).after(
+          markingContext as never,
+          undefined,
+        ),
+      ).resolves.toBeUndefined();
+    });
+  });
 });
 
 describe('an after part that throws', () => {

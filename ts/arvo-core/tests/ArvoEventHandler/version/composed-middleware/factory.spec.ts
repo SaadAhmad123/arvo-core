@@ -93,3 +93,37 @@ describe('anything else the constructor throws', () => {
     await expect(createFrom([unreadableLayer], [])).rejects.toBe(readFailure);
   });
 });
+
+describe('a way to make a layer that makes something else', () => {
+  it.each([
+    ['nothing', undefined],
+    ['null', null],
+    ['an object with no id', {}],
+    ['an id that is not a string', { id: 1 }],
+    ['a before that is not a function', { id: 'x', before: 'soon' }],
+  ])('is refused where it makes %s', async (_label, madeValue) => {
+    const attempt = await createFrom([], [() => madeValue]);
+    expect(!attempt.ok && attempt.error).toBeInstanceOf(
+      ArvoComposedMiddlewareValidationError,
+    );
+    expect(!attempt.ok && attempt.error.faultKind).toBe(
+      'middleware_instantiation_failed',
+    );
+  });
+
+  it('is refused as a conflict where what it makes repeats another id', async () => {
+    const attempt = await createFrom(
+      [{ id: 'audit' }],
+      [() => ({ id: 'audit' })],
+    );
+    expect(!attempt.ok && attempt.error.faultKind).toBe('middleware_conflict');
+  });
+});
+
+describe('one instance supplied twice', () => {
+  it('is refused as a conflict', async () => {
+    const sameLayer = { id: 'same' };
+    const attempt = await createFrom([sameLayer, sameLayer], []);
+    expect(!attempt.ok && attempt.error.faultKind).toBe('middleware_conflict');
+  });
+});

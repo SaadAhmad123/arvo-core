@@ -59,18 +59,18 @@ export class ArvoComposedMiddleware<
 {
   readonly id = 'arvo.composed' as const;
 
-  /** The layers, in the order their before parts run. */
-  readonly #layers: readonly IArvoEventHandlerMiddleware<
-    string,
-    TSelf,
-    TServices,
-    TDataSchema,
-    TDependencies,
-    TMechanismHooks
-  >[];
+  /**
+   * The layers, in the order their before parts run, typed as a handler
+   * declares them: for any version's context.
+   */
+  readonly #layers: readonly IArvoEventHandlerMiddleware[];
 
   /** Aborted by the version when the run clock fires. */
   readonly #abortSignal: AbortSignal;
+
+  /** How many layers came from each list. */
+  readonly #suppliedCount: number;
+  readonly #declaredCount: number;
 
   /**
    * @param param.supplied - The supplied layers, in the order given.
@@ -86,30 +86,34 @@ export class ArvoComposedMiddleware<
     abortSignal: AbortSignal;
   }) {
     const positionedEntries = [
-      ...param.supplied.map((candidate, entryIndex) => ({
-        candidate: candidate as unknown,
+      ...param.supplied.map((layer, entryIndex) => ({
+        layer,
         position: middlewarePosition('supplied', entryIndex),
       })),
-      ...param.declared.map((candidate, entryIndex) => ({
-        candidate: candidate as unknown,
+      ...param.declared.map((layer, entryIndex) => ({
+        layer,
         position: middlewarePosition('declared', entryIndex),
       })),
     ];
 
     this.#validate(positionedEntries);
 
-    this.#layers = positionedEntries.map(
-      ({ candidate }) =>
-        candidate as IArvoEventHandlerMiddleware<
-          string,
-          TSelf,
-          TServices,
-          TDataSchema,
-          TDependencies,
-          TMechanismHooks
-        >,
-    );
+    this.#layers = positionedEntries.map(({ layer }) => layer);
     this.#abortSignal = param.abortSignal;
+    this.#suppliedCount = param.supplied.length;
+    this.#declaredCount = param.declared.length;
+  }
+
+  /**
+   * How many layers this execution runs: those supplied with it, those
+   * declared on the handler, and both together. A fresh value on each read.
+   */
+  get count(): { total: number; supplied: number; declared: number } {
+    return {
+      total: this.#suppliedCount + this.#declaredCount,
+      supplied: this.#suppliedCount,
+      declared: this.#declaredCount,
+    };
   }
 
   /**
@@ -121,12 +125,16 @@ export class ArvoComposedMiddleware<
    * is not a layer, or else every repeated identifier.
    */
   #validate(
-    positionedEntries: readonly { candidate: unknown; position: string }[],
+    positionedEntries: readonly {
+      layer: IArvoEventHandlerMiddleware;
+      position: string;
+    }[],
   ): void {
     // identifiers are compared only once every entry is known to be a layer
     const shapeIssues: ErrorIssue[] = [];
-    for (const { candidate, position } of positionedEntries) {
-      shapeIssues.push(...layerShapeIssues(candidate, position));
+    // a caller no compiler saw may have handed over anything as a layer
+    for (const { layer, position } of positionedEntries) {
+      shapeIssues.push(...layerShapeIssues(layer, position));
     }
     if (shapeIssues.length > 0) {
       throw new ArvoComposedMiddlewareValidationError(
@@ -146,8 +154,8 @@ export class ArvoComposedMiddleware<
 
     const conflictIssues: ErrorIssue[] = [];
     const firstPositionById = new Map<string, string>();
-    for (const { candidate, position } of positionedEntries) {
-      const layerId = (candidate as IArvoEventHandlerMiddleware).id;
+    for (const { layer, position } of positionedEntries) {
+      const layerId = layer.id;
       const earlierPosition = firstPositionById.get(layerId);
       if (earlierPosition === undefined) {
         firstPositionById.set(layerId, position);
@@ -189,7 +197,7 @@ export class ArvoComposedMiddleware<
       if (this.#abortSignal.aborted) return;
       if (layer.before === undefined) continue;
       this.#markPart(ctx, 'middleware_before_entered', layer);
-      await layer.before(ctx);
+      await layer.before(this.#contextForLayers(ctx));
       this.#markPart(ctx, 'middleware_before_returned', layer);
     }
   }
@@ -221,7 +229,7 @@ export class ArvoComposedMiddleware<
       if (layer.after === undefined) continue;
       this.#markPart(ctx, 'middleware_after_entered', layer);
       try {
-        await layer.after(ctx, readOnlyEmission);
+        await layer.after(this.#contextForLayers(ctx), readOnlyEmission);
         this.#markPart(ctx, 'middleware_after_returned', layer);
       } catch (thrown) {
         // never rethrow: an after part cannot change the outcome
@@ -233,6 +241,26 @@ export class ArvoComposedMiddleware<
         );
       }
     }
+  }
+
+  /**
+   * This version's context, as the layers are typed to receive it.
+   *
+   * A layer is typed for every version's context, this one for its own
+   * state schema, and `setState` makes neither assignable to the other.
+   * Safe because what a layer writes through `setState` is still checked
+   * against this version's schema.
+   */
+  #contextForLayers(
+    ctx: ArvoExecutionContext<
+      TSelf,
+      TServices,
+      TDataSchema,
+      TDependencies,
+      TMechanismHooks
+    >,
+  ): ArvoExecutionContext {
+    return ctx as unknown as ArvoExecutionContext;
   }
 
   /** Marks one part of one layer, with whether the run clock had fired. */

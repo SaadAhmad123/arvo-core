@@ -1,8 +1,15 @@
 import { err, ok } from 'neverthrow';
+import type * as z from 'zod/v4/core';
+import type { VersionedArvoContract } from '../../../ArvoContract/versioned/index.js';
 import { fromNeverthrow } from '../../../result.js';
 import type { AsyncResult } from '../../../types.js';
 import { ErrorIssue } from '../../../utils/error-issue.js';
 import type { ArvoEventHandlerMiddlewareEntry } from '../../types/middleware.js';
+import type { ArvoServiceMap } from '../../types/services.js';
+import type {
+  ArvoDependencies,
+  ArvoMechanismHooks,
+} from '../../types/supplied.js';
 import {
   type ArvoComposedMiddlewareResolutionError,
   ArvoComposedMiddlewareValidationError,
@@ -26,15 +33,30 @@ export type ArvoComposedMiddlewareParam = {
  * rest where it fails: both sides must be lists, every way to make a layer
  * is then called, and the composite's constructor then judges the layers.
  *
+ * The type parameters are the context the composite will be handed: the
+ * version's own contract, services, state schema, dependencies and hooks.
+ *
  * @param param - The entries on each side, and the run clock's signal.
  * @returns The composite; a validation error where a side is not a list
  * or the layers break a rule; a resolution error where a way to make a
  * layer threw. Anything else the constructor throws goes up as thrown.
  */
-export const tryCreateArvoComposedMiddleware = async (
+export const tryCreateArvoComposedMiddleware = async <
+  TSelf extends VersionedArvoContract = VersionedArvoContract,
+  TServices extends ArvoServiceMap = ArvoServiceMap,
+  TDataSchema extends z.$ZodObject = z.$ZodObject,
+  TDependencies extends ArvoDependencies = ArvoDependencies,
+  TMechanismHooks extends ArvoMechanismHooks = ArvoMechanismHooks,
+>(
   param: ArvoComposedMiddlewareParam,
 ): AsyncResult<
-  ArvoComposedMiddleware,
+  ArvoComposedMiddleware<
+    TSelf,
+    TServices,
+    TDataSchema,
+    TDependencies,
+    TMechanismHooks
+  >,
   ArvoComposedMiddlewareResolutionError | ArvoComposedMiddlewareValidationError
 > => {
   // a caller no compiler saw may pass anything; omitted means none
@@ -76,7 +98,13 @@ export const tryCreateArvoComposedMiddleware = async (
   try {
     return fromNeverthrow(
       ok(
-        new ArvoComposedMiddleware({
+        new ArvoComposedMiddleware<
+          TSelf,
+          TServices,
+          TDataSchema,
+          TDependencies,
+          TMechanismHooks
+        >({
           supplied: resolution.value.supplied,
           declared: resolution.value.declared,
           abortSignal: param.abortSignal,
