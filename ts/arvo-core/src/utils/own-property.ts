@@ -7,7 +7,7 @@
  * key was declared rather than whether something came back, or a crafted
  * name resolves to a value nobody ever wrote.
  *
- * @param from - The map to read.
+ * @param record - The map to read.
  * @param key - The key to read, which may be anything at all.
  * @returns What it holds, or `null` where it holds nothing of its own.
  *
@@ -17,6 +17,7 @@
  * ```
  */
 export const readOwnProperty = <TValue>(
-  from: Readonly<Record<string, TValue>>,
+  record: Readonly<Record<string, TValue>>,
   key: string,
-): TValue | null => (Object.hasOwn(from, key) ? (from[key] as TValue) : null);
+): TValue | null =>
+  Object.hasOwn(record, key) ? (record[key] as TValue) : null;

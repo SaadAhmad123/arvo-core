@@ -26,22 +26,22 @@ export const checkVersions = (
   declaredVersions: readonly string[],
 ): ErrorIssue[] => {
   const issues: ErrorIssue[] = [];
-  const declaredTimes = new Map<string, number>();
+  const declarationCounts = new Map<string, number>();
   for (const version of declaredVersions) {
-    declaredTimes.set(version, (declaredTimes.get(version) ?? 0) + 1);
+    declarationCounts.set(version, (declarationCounts.get(version) ?? 0) + 1);
   }
 
   // keyed, so every repeat of one version is one issue rather than one
   // issue per repeat under the same path; insertion order is declaration
   // order
-  for (const [version, times] of declaredTimes) {
+  for (const [version, declarationCount] of declarationCounts) {
     const path = `versions${pathSegmentForKey(version)}`;
 
-    if (times > 1) {
+    if (declarationCount > 1) {
       issues.push(
         new ErrorIssue({
           path,
-          message: `is declared ${times} times — a version runs under exactly one executor, and nothing would choose among them`,
+          message: `is declared ${declarationCount} times — a version runs under exactly one executor, and nothing would choose among them`,
         }),
       );
       continue;
@@ -58,7 +58,7 @@ export const checkVersions = (
   }
 
   for (const version of Object.keys(contract.versions)) {
-    if (declaredTimes.has(version)) continue;
+    if (declarationCounts.has(version)) continue;
     issues.push(
       new ErrorIssue({
         path: `versions${pathSegmentForKey(version)}`,

@@ -63,10 +63,10 @@ export class ArvoEventValidator<
   validateInput(
     event: ArvoEvent,
   ): Result<ArvoEventOrigin, ArvoEventValidatorError> {
-    const resolved = this.resolveInput(event);
-    if (!resolved.ok) return resolved;
-    const checked = this.checkInput(event, resolved.value);
-    return checked === null ? resolved : fromNeverthrow(err(checked));
+    const origin = this.resolveInput(event);
+    if (!origin.ok) return origin;
+    const refusal = this.checkInput(event, origin.value);
+    return refusal === null ? origin : fromNeverthrow(err(refusal));
   }
 
   /**
@@ -84,22 +84,22 @@ export class ArvoEventValidator<
   resolveInput(
     event: ArvoEvent,
   ): Result<ArvoEventOrigin, ArvoEventValidatorError> {
-    const named = readDataschema(event.dataschema);
-    if (!named.ok) return this.#unclaimed(event);
+    const dataschemaParts = readDataschema(event.dataschema);
+    if (!dataschemaParts.ok) return this.#refuseUnclaimed(event);
 
-    const { uri, version } = named.value;
+    const { uri, version } = dataschemaParts.value;
     if (uri !== this.contracts.self.uri) {
-      return this.#answering(event, this.#serviceAt(uri), version);
+      return this.#originForAnswer(event, this.#serviceForUri(uri), version);
     }
 
     // The one overlap: this contract is both what the handler implements
     // and something it may send to, so the uri names two roles and only
     // the type says which. Legitimate because a contract's input type
     // matches neither its outputs nor its handler error type.
-    const selfAsService = this.#serviceAt(uri);
+    const selfAsService = this.#serviceForUri(uri);
     if (selfAsService !== null && event.type !== this.contracts.self.type) {
       return this.#answers(selfAsService, event.type)
-        ? this.#answering(event, selfAsService, version)
+        ? this.#originForAnswer(event, selfAsService, version)
         : this.#refuse(
             'event_unclassifiable',
             `${event.type} is neither what ${uri} takes in nor anything it answers with, so nothing says whether this opens an execution or answers one`,
@@ -113,16 +113,19 @@ export class ArvoEventValidator<
           );
     }
 
-    return this.#opening(event, version);
+    return this.#originForOpening(event, version);
   }
 
   /** An event read as one opening an execution of the contract. */
-  #opening(
+  #originForOpening(
     event: ArvoEvent,
     version: string,
   ): Result<ArvoEventOrigin, ArvoEventValidatorError> {
-    const declared = readOwnProperty(this.contracts.self.versions, version);
-    if (declared === null) {
+    const versionContract = readOwnProperty(
+      this.contracts.self.versions,
+      version,
+    );
+    if (versionContract === null) {
       return this.#refuse(
         'event_unclassifiable',
         `${this.contracts.self.uri} declares no version ${version}, so nothing would run this`,
@@ -137,17 +140,21 @@ export class ArvoEventValidator<
     }
 
     return fromNeverthrow(
-      ok({ source: 'self', version: declared.version, contract: declared }),
+      ok({
+        source: 'self',
+        version: versionContract.version,
+        contract: versionContract,
+      }),
     );
   }
 
   /** An event read as one a declared service answered with. */
-  #answering(
+  #originForAnswer(
     event: ArvoEvent,
     service: VersionedArvoContract | null,
     version: string,
   ): Result<ArvoEventOrigin, ArvoEventValidatorError> {
-    if (service === null) return this.#unclaimed(event);
+    if (service === null) return this.#refuseUnclaimed(event);
 
     // A response names its own service's version, and this handler
     // declared exactly one. Any other is two deployments that have drifted
@@ -187,12 +194,12 @@ export class ArvoEventValidator<
     event: ArvoEvent,
     origin: ArvoEventOrigin,
   ): ArvoEventValidatorError | null {
-    const receivable =
+    const schema =
       origin.source === 'self'
-        ? this.#takenIn(origin.contract, event.type)
-        : this.#answeredWith(origin.contract, event.type);
+        ? this.#inputSchemaFor(origin.contract, event.type)
+        : this.#answerSchemaFor(origin.contract, event.type);
 
-    if (receivable === null) {
+    if (schema === null) {
       return this.#refusal(
         'type_not_receivable',
         origin.source === 'self'
@@ -211,18 +218,18 @@ export class ArvoEventValidator<
       );
     }
 
-    const judged = z.safeParse(receivable as z.$ZodType, event.data);
-    if (judged.success) return null;
+    const validation = z.safeParse(schema as z.$ZodType, event.data);
+    if (validation.success) return null;
 
-    const fieldOf = (issue: { path: PropertyKey[] }) =>
+    const issuePath = (issue: { path: PropertyKey[] }) =>
       issue.path.join('.') || '(root)';
     return this.#refusal(
       'event_schema_rejected',
       `the payload of ${event.type} does not satisfy ${event.dataschema}.`,
-      judged.error.issues.map(
+      validation.error.issues.map(
         (issue) =>
           new ErrorIssue({
-            path: `data.${fieldOf(issue)}`,
+            path: `data.${issuePath(issue)}`,
             message: issue.message,
           }),
       ),
@@ -230,12 +237,12 @@ export class ArvoEventValidator<
   }
 
   /** The schema for what a contract takes in, where this type is it. */
-  #takenIn(contract: VersionedArvoContract, type: string): unknown {
+  #inputSchemaFor(contract: VersionedArvoContract, type: string): unknown {
     return type === contract.type ? contract.input : null;
   }
 
   /** The schema for what a contract answers with, where this type is one. */
-  #answeredWith(contract: VersionedArvoContract, type: string): unknown {
+  #answerSchemaFor(contract: VersionedArvoContract, type: string): unknown {
     if (type === contract.error.type) return contract.error.schema;
     return readOwnProperty(contract.outputs, type);
   }
@@ -269,7 +276,7 @@ export class ArvoEventValidator<
           ],
         );
       }
-      return this.#checked(event, service.input, {
+      return this.#checkOutputPayload(event, service.input, {
         source: 'service',
         version: service.version,
         contract: service,
@@ -277,7 +284,7 @@ export class ArvoEventValidator<
     }
 
     const ownVersion = this.#selfVersionOf(event);
-    if (ownVersion === null) return this.#unclaimed(event);
+    if (ownVersion === null) return this.#refuseUnclaimed(event);
 
     const version = this.contracts.self.versions[ownVersion];
     if (event.type === version.error.type) {
@@ -309,7 +316,7 @@ export class ArvoEventValidator<
       );
     }
 
-    return this.#checked(event, schema, {
+    return this.#checkOutputPayload(event, schema, {
       source: 'self',
       version: ownVersion,
       contract: version,
@@ -318,12 +325,12 @@ export class ArvoEventValidator<
 
   /** The version of the implemented contract an event names, if any. */
   #selfVersionOf(event: ArvoEvent): ArvoSemanticVersion | null {
-    const found = Object.keys(this.contracts.self.versions).find(
+    const selfVersion = Object.keys(this.contracts.self.versions).find(
       (version) =>
         this.contracts.self.versions[version as ArvoSemanticVersion]
           .dataschema === event.dataschema,
     );
-    return (found as ArvoSemanticVersion | undefined) ?? null;
+    return (selfVersion as ArvoSemanticVersion | undefined) ?? null;
   }
 
   /** The declared service an event names, if any. */
@@ -344,7 +351,7 @@ export class ArvoEventValidator<
   }
 
   /** The service declared for a contract, whichever version it was declared at. */
-  #serviceAt(uri: string): VersionedArvoContract | null {
+  #serviceForUri(uri: string): VersionedArvoContract | null {
     return (
       Object.values(this.contracts.services).find(
         (service) => service.uri === uri,
@@ -353,7 +360,7 @@ export class ArvoEventValidator<
   }
 
   /** An event whose `dataschema` names nothing this handler declared. */
-  #unclaimed(
+  #refuseUnclaimed(
     event: ArvoEvent,
   ): Result<ArvoEventOrigin, ArvoEventValidatorError> {
     return this.#refuse(
@@ -374,25 +381,25 @@ export class ArvoEventValidator<
   }
 
   /** An event's payload judged against the schema its type selects. */
-  #checked(
+  #checkOutputPayload(
     event: ArvoEvent,
     schema: unknown,
     origin: ArvoEventOrigin,
   ): Result<ArvoEventOrigin, ArvoEventValidatorError> {
-    const result = z.safeParse(schema as z.$ZodType, event.data);
-    if (result.success) return fromNeverthrow(ok(origin));
+    const validation = z.safeParse(schema as z.$ZodType, event.data);
+    if (validation.success) return fromNeverthrow(ok(origin));
 
-    const fieldOf = (issue: { path: PropertyKey[] }) =>
+    const issuePath = (issue: { path: PropertyKey[] }) =>
       issue.path.join('.') || '(root)';
     // Only what is leaving reaches here: what arrives is judged by
     // `checkInput`, which reports an arriving payload as its own kind.
     return this.#refuse(
       'emission_schema_rejected',
       `the payload of ${event.type} does not satisfy ${event.dataschema}.`,
-      result.error.issues.map(
+      validation.error.issues.map(
         (issue) =>
           new ErrorIssue({
-            path: `data.${fieldOf(issue)}`,
+            path: `data.${issuePath(issue)}`,
             message: issue.message,
           }),
       ),

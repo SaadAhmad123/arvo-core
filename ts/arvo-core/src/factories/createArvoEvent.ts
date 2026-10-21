@@ -86,7 +86,7 @@ export const createArvoEvent = <
 >(
   param: PartialExcept<ArvoEventParam<T, D>, Required>,
 ): ArvoEvent<T, D> => {
-  const built = tryCreateArvoEvent<T, D>(param);
-  if (built.ok) return built.value;
-  throw built.error;
+  const attempt = tryCreateArvoEvent<T, D>(param);
+  if (attempt.ok) return attempt.value;
+  throw attempt.error;
 };

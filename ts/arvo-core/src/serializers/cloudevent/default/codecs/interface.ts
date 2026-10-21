@@ -5,6 +5,6 @@
  * whether that's a reportable issue.
  */
 export interface ICodec<T, E> {
-  encode(value: T): E;
-  decode(value: E): T | null;
+  encode(decodedValue: T): E;
+  decode(encodedValue: E): T | null;
 }

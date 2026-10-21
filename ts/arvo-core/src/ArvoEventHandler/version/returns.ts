@@ -46,7 +46,7 @@ export const refuseBatch = <TSelf extends VersionedArvoContract>(
 ): ArvoGateRefusal | null => {
   const violations: string[] = [];
   let faultKind: ArvoGateRefusal['faultKind'] = 'emission_not_permitted';
-  let completions = 0;
+  let completionCount = 0;
 
   for (const event of batch) {
     const target = resolveEmissionTarget(self, services, event.type);
@@ -58,8 +58,8 @@ export const refuseBatch = <TSelf extends VersionedArvoContract>(
     }
 
     if (target.role === 'completion') {
-      completions += 1;
-      if (completions > 1) {
+      completionCount += 1;
+      if (completionCount > 1) {
         violations.push(
           `${event.type}: is a second answer to the caller, who awaits exactly one`,
         );
@@ -79,11 +79,11 @@ export const refuseBatch = <TSelf extends VersionedArvoContract>(
       target.role === 'service'
         ? target.contract.input
         : target.contract.outputs[event.type];
-    const checked = z.safeParse(schema as z.$ZodType, event.data);
-    if (!checked.success) {
+    const validation = z.safeParse(schema as z.$ZodType, event.data);
+    if (!validation.success) {
       faultKind = 'emission_schema_rejected';
       violations.push(
-        `${event.type}: ${checked.error.issues
+        `${event.type}: ${validation.error.issues
           .map(
             (issue) =>
               `data.${issue.path.join('.') || '(root)'} ${issue.message}`,
@@ -94,11 +94,12 @@ export const refuseBatch = <TSelf extends VersionedArvoContract>(
   }
 
   if (violations.length === 0) return null;
-  const howMany = violations.length === 1 ? 'one' : `${violations.length}`;
-  const outOf = batch.length === 1 ? 'the event' : `the ${batch.length} events`;
+  const faultyCount = violations.length === 1 ? 'one' : `${violations.length}`;
+  const batchDescription =
+    batch.length === 1 ? 'the event' : `the ${batch.length} events`;
   return {
     faultKind,
-    message: `${howMany} of ${outOf} your executor for ${self.type}@${self.version} returned cannot be emitted, so none of them were. Each one at fault is listed`,
+    message: `${faultyCount} of ${batchDescription} your executor for ${self.type}@${self.version} returned cannot be emitted, so none of them were. Each one at fault is listed`,
     violations,
   };
 };
@@ -132,15 +133,15 @@ export const settleRecord = <
   batch: readonly ArvoEvent[],
 ): TState => {
   const requests: ArvoEvent[] = [];
-  let answered = false;
+  let answersCaller = false;
 
   for (const event of batch) {
     const target = resolveEmissionTarget(self, services, event.type);
     if (target?.role === 'service') requests.push(event);
-    if (target?.role === 'completion') answered = true;
+    if (target?.role === 'completion') answersCaller = true;
   }
 
-  const awaiting =
+  const inFlightEventMap =
     requests.length > 0
       ? new Map(requests.map((event) => [event.id, null]))
       : state.inFlightEventMap;
@@ -148,19 +149,19 @@ export const settleRecord = <
   const isSink =
     Object.keys(self.outputs).length === 0 &&
     Object.keys(services).length === 0;
-  const outstanding = [...awaiting.values()].includes(null);
+  const hasOutstandingRequest = [...inFlightEventMap.values()].includes(null);
 
   const lifecycleReached = (): ArvoExecutionLifecycle => {
     if (state.lifecycle === 'cancelled') return 'cancelled';
-    if (answered || (batch.length === 0 && isSink)) return 'success';
-    if (requests.length > 0 || outstanding) return 'waiting';
+    if (answersCaller || (batch.length === 0 && isSink)) return 'success';
+    if (requests.length > 0 || hasOutstandingRequest) return 'waiting';
     return 'idle';
   };
   const lifecycle = lifecycleReached();
 
   return mutateState(state, {
     lifecycle,
-    inFlightEventMap: awaiting,
+    inFlightEventMap: inFlightEventMap,
     eventIds: [
       ...state.eventIds,
       ...batch.map((event) => ({
@@ -184,22 +185,22 @@ export const writeRecord = async <TDataSchema extends z.$ZodObject>(
   dataSchema: TDataSchema,
   state: ArvoExecutionState<TDataSchema>,
 ): AsyncResult<JSONObject, ArvoGateRefusal> => {
-  const written = await new ArvoExecutionStateSerializer(
+  const serialization = await new ArvoExecutionStateSerializer(
     dataSchema,
   ).trySerialize(state);
 
-  if (!written.ok) {
+  if (!serialization.ok) {
     return fromNeverthrow(
       err({
         faultKind: 'state_not_serializable',
-        message: `what your executor wrote through ctx.setState() cannot be turned into JSON, so this execution cannot be stored: ${written.error.message}. A Date, a class instance, or something that refers back to itself does this`,
+        message: `what your executor wrote through ctx.setState() cannot be turned into JSON, so this execution cannot be stored: ${serialization.error.message}. A Date, a class instance, or something that refers back to itself does this`,
         violations: [],
-        cause: written.error.message,
+        cause: serialization.error.message,
       } as const),
     );
   }
 
-  return fromNeverthrow(ok(JSON.parse(written.value) as JSONObject));
+  return fromNeverthrow(ok(JSON.parse(serialization.value) as JSONObject));
 };
 
 /**

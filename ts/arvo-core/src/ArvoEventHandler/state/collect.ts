@@ -28,11 +28,7 @@ export const collectResponse = <TState extends ArvoExecutionState>(
   state: TState,
   event: ArvoEvent,
 ): TState => {
-  const awaiting = new Map(state.inFlightEventMap);
-  awaiting.set(event.initid as string, event);
-  return logEvent(
-    mutateState(state, { inFlightEventMap: awaiting }),
-    event,
-    'received',
-  );
+  const inFlightEventMap = new Map(state.inFlightEventMap);
+  inFlightEventMap.set(event.initid as string, event);
+  return logEvent(mutateState(state, { inFlightEventMap }), event, 'received');
 };

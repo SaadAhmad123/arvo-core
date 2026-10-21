@@ -56,8 +56,8 @@ export class ArvoExecutionContextLogger {
     if (logger === null) return;
 
     recording(() => {
-      const bound = trace.setSpan(otelContext.active(), this.span);
-      otelContext.with(bound, () => {
+      const contextWithSpan = trace.setSpan(otelContext.active(), this.span);
+      otelContext.with(contextWithSpan, () => {
         logger.emit({ severityNumber: severity, body, attributes });
       });
     });

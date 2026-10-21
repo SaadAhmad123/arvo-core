@@ -71,17 +71,17 @@ export const createArvoEventHandlerVersion = <
     TMechanismHooks
   >,
 ): ArvoCreatedVersion<TSelf, TServices, TDependencies, TMechanismHooks> => {
-  const written =
+  const fullDeclaration =
     typeof declaration === 'function' ? { execute: declaration } : declaration;
 
   return {
     version,
-    state: written.state ?? ARVO_NO_STATE_SCHEMA,
-    declaresState: written.state !== undefined,
-    options: written.options ?? null,
+    state: fullDeclaration.state ?? ARVO_NO_STATE_SCHEMA,
+    declaresState: fullDeclaration.state !== undefined,
+    options: fullDeclaration.options ?? null,
     // checked against this version's own types just above; what the chain
     // holds cannot name them for every version at once
-    execute: written.execute as ArvoAccumulatedVersion['execute'],
+    execute: fullDeclaration.execute as ArvoAccumulatedVersion['execute'],
     // the binding to this declaration is for the compiler alone, so the
     // value carries nothing for it
   } as unknown as ArvoCreatedVersion<

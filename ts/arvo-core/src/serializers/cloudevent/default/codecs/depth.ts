@@ -8,7 +8,7 @@ export class DepthCodec implements ICodec<number, string> {
     return BigInt(depth).toString();
   }
 
-  decode(value: string): number | null {
-    return DEPTH_GRAMMAR.test(value) ? Number(value) : null;
+  decode(encodedDepth: string): number | null {
+    return DEPTH_GRAMMAR.test(encodedDepth) ? Number(encodedDepth) : null;
   }
 }

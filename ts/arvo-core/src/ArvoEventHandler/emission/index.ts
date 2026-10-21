@@ -48,15 +48,15 @@ export const tryBuildEmittedEvent = <
   TServices extends ArvoServiceMap,
   TParam extends ArvoEmissionParam<TSelf, TServices>,
 >(
-  context: ArvoEmissionContext<TSelf, TServices>,
+  emissionContext: ArvoEmissionContext<TSelf, TServices>,
   param: TParam,
 ): Result<
   ArvoEmittedEvent<TSelf, TServices, TParam['type']>,
   ArvoEmissionRefusal
 > => {
   const target = resolveEmissionTarget(
-    context.self,
-    context.services,
+    emissionContext.self,
+    emissionContext.services,
     param.type,
   );
   if (target === null) {
@@ -69,7 +69,7 @@ export const tryBuildEmittedEvent = <
     );
   }
 
-  const state = context.state;
+  const state = emissionContext.state;
   const fields = {
     ...addressingFor(target, state),
     source: state.source,
@@ -77,8 +77,8 @@ export const tryBuildEmittedEvent = <
     parentid: state.triggeringEvent.id,
     baggage: state.triggeringEvent.baggage,
     executionunits: param.executionunits ?? 0,
-    traceparent: context.telemetry.traceparent ?? undefined,
-    tracestate: context.telemetry.tracestate ?? undefined,
+    traceparent: emissionContext.telemetry.traceparent ?? undefined,
+    tracestate: emissionContext.telemetry.tracestate ?? undefined,
     ...param.unsafe,
   };
 
@@ -88,11 +88,11 @@ export const tryBuildEmittedEvent = <
   // on a path it asked to leave.
   const factory = createArvoEventFactory(target.contract, {
     domainCtx: {
-      selfContract: context.self,
+      selfContract: emissionContext.self,
       triggeringEvent: state.triggeringEvent,
     },
   });
-  const built =
+  const attempt =
     target.role === 'service'
       ? factory.tryCreateInput({
           ...fields,
@@ -106,19 +106,19 @@ export const tryBuildEmittedEvent = <
           domain: param.domain,
         });
 
-  if (built.ok) {
+  if (attempt.ok) {
     // The factory types its output off whichever contract was chosen at
     // runtime; the param's own type already fixes which that is.
     return fromNeverthrow(
-      ok(built.value as ArvoEmittedEvent<TSelf, TServices, TParam['type']>),
+      ok(attempt.value as ArvoEmittedEvent<TSelf, TServices, TParam['type']>),
     );
   }
 
   return fromNeverthrow(
     err({
       faultKind: 'emission_schema_rejected',
-      message: built.error.message,
-      violations: built.error.issues.map((issue) => issue.toString()),
+      message: attempt.error.message,
+      violations: attempt.error.issues.map((issue) => issue.toString()),
     } as const),
   );
 };

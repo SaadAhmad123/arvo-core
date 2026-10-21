@@ -60,13 +60,13 @@ export const buildOutput = <
 
   const schema = contract.outputs[param.type] as V['outputs'][E];
 
-  const checked = checkPayload<V['outputs'][E]>(
+  const payloadCheck = checkPayload<V['outputs'][E]>(
     schema,
     param.data,
     `outputs[${param.type}]`,
   );
 
-  if (!checked.ok) return fromNeverthrow(err(checked.error));
+  if (!payloadCheck.ok) return fromNeverthrow(err(payloadCheck.error));
 
   // `type` stays in `fields`: it is the event's own, and the caller chose it.
   const { data: _data, domain, ...fields } = param;
@@ -75,6 +75,6 @@ export const buildOutput = <
     ...fields,
     dataschema: contract.dataschema,
     domain: domainFor(contract, domain, options),
-    data: checked.value,
+    data: payloadCheck.value,
   });
 };

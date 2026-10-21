@@ -135,13 +135,17 @@ export class ArvoContract<
     AssertedArvoEvent<keyof M & ArvoSemanticVersion>,
     ArvoContractAssertionError
   > {
-    const parts = readDataschema(event.dataschema);
-    if (!parts.ok) return assertionFailure([parts.error]);
+    const dataschemaParts = readDataschema(event.dataschema);
+    if (!dataschemaParts.ok) return assertionFailure([dataschemaParts.error]);
 
-    const version = parts.value.version as keyof M & ArvoSemanticVersion;
+    const version = dataschemaParts.value.version as keyof M &
+      ArvoSemanticVersion;
     if (!Object.hasOwn(this.versions, version)) {
       return assertionFailure([
-        unknownVersionIssue(parts.value.version, Object.keys(this.versions)),
+        unknownVersionIssue(
+          dataschemaParts.value.version,
+          Object.keys(this.versions),
+        ),
       ]);
     }
 
@@ -157,29 +161,32 @@ export class ArvoContract<
    * this contract declares, or does not satisfy the version it names.
    */
   assert(event: ArvoEvent): AssertedArvoEvent<keyof M & ArvoSemanticVersion> {
-    const result = this.tryAssert(event);
-    if (result.ok) return result.value;
-    throw result.error;
+    const attempt = this.tryAssert(event);
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 
   constructor(param: ArvoContractParam<T, M>) {
-    const result = validateArvoContract(param);
-    if (result.blocked) throw new ArvoContractValidationError(result.issues);
-    const { value, issues } = result;
+    const validation = validateArvoContract(param);
+    if (validation.blocked)
+      throw new ArvoContractValidationError(validation.issues);
+    const { value: normalizedContract, issues } = validation;
     if (issues.length > 0) throw new ArvoContractValidationError(issues);
 
-    this.type = value.type as T;
-    this.uri = value.uri;
-    this.description = value.description;
-    this.domain = value.domain;
-    this.metadata = Object.freeze({ ...value.metadata });
+    this.type = normalizedContract.type as T;
+    this.uri = normalizedContract.uri;
+    this.description = normalizedContract.description;
+    this.domain = normalizedContract.domain;
+    this.metadata = Object.freeze({ ...normalizedContract.metadata });
 
     const versions: Record<
       string,
       VersionedArvoContract<T, ArvoSemanticVersion, ArvoContractVersionParam>
     > = {};
 
-    for (const [version, definition] of Object.entries(value.versions)) {
+    for (const [version, definition] of Object.entries(
+      normalizedContract.versions,
+    )) {
       versions[version] = new VersionedArvoContract({
         type: this.type,
         version: version as ArvoSemanticVersion,

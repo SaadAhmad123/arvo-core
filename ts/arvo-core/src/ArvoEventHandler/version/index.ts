@@ -159,9 +159,9 @@ export class ArvoEventHandlerVersion<
     TMechanismHooks
   >;
 
-  readonly #depth: ArvoEventDepthValidator;
+  readonly #depthValidator: ArvoEventDepthValidator;
 
-  readonly #middleware:
+  readonly #declaredMiddleware:
     | readonly ArvoEventHandlerMiddlewareEntry<
         VersionedArvoContract,
         TServices,
@@ -193,9 +193,9 @@ export class ArvoEventHandlerVersion<
     this.dataSchema = param.state;
     this.declaresState = param.declaresState;
     this.#executor = param.execute;
-    this.#middleware = param.middleware;
+    this.#declaredMiddleware = param.middleware;
     this.#contractAtVersion = `${param.contracts.self.type}@${param.contracts.self.version}`;
-    this.#depth = new ArvoEventDepthValidator({
+    this.#depthValidator = new ArvoEventDepthValidator({
       maxDepth: param.options.maxDepth,
       contractAtVersion: this.#contractAtVersion,
     });
@@ -279,14 +279,14 @@ export class ArvoEventHandlerVersion<
     // to close it — including a return validation refusal and a record
     // that would not serialize, both of which happen after the executor.
     try {
-      return await this.#runOpened(param, record, dependencies);
+      return await this.#runWithDependencies(param, record, dependencies);
     } finally {
       await this.#closeDependencies(param, scope);
     }
   }
 
   /** Everything from the collection to the record, with dependencies open. */
-  async #runOpened(
+  async #runWithDependencies(
     param: ArvoEventHandlerVersionExecuteParam<
       TSelf,
       TServices,
@@ -297,7 +297,7 @@ export class ArvoEventHandlerVersion<
     record: ArvoContextState<TSelf, TServices, TDataSchema>,
     dependencies: Partial<TDependencies> | null,
   ): Promise<ArvoEventHandlerExecuteResponse> {
-    const collected =
+    const collectedRecord =
       param.entry === 'followup'
         ? collectResponse(record, param.event)
         : record;
@@ -311,15 +311,15 @@ export class ArvoEventHandlerVersion<
       markCollection(
         param.telemetry,
         this.contracts.self,
-        collected.inFlightEventMap.size,
+        collectedRecord.inFlightEventMap.size,
       );
     }
 
-    if (param.entry === 'followup' && !this.#isJoined(collected)) {
+    if (param.entry === 'followup' && !this.#isJoined(collectedRecord)) {
       markStage(param.telemetry, 'collection_partial', {
-        awaiting: collected.inFlightEventMap.size,
+        awaiting: collectedRecord.inFlightEventMap.size,
       });
-      return this.#produce(param, collected, []);
+      return this.#produce(param, collectedRecord, []);
     }
 
     // Derived from the record rather than remembered on it: nothing is
@@ -331,18 +331,18 @@ export class ArvoEventHandlerVersion<
     // member has to be a plain property to be worth having, so the one
     // await happens on the way in.
     const idempotency = await arvoIdempotencyKeysFor({
-      subject: collected.subject,
-      executionId: collected.executionId,
-      deliveredEventId: collected.triggeringEvent.id,
+      subject: collectedRecord.subject,
+      executionId: collectedRecord.executionId,
+      deliveredEventId: collectedRecord.triggeringEvent.id,
     });
 
     // judged before any layer runs, so a refusal leaves nothing half-done
     const layersOrRefusal = await resolveMiddleware(
       param.middleware,
-      this.#middleware,
+      this.#declaredMiddleware,
     );
     if (layersOrRefusal !== null && 'faultKind' in layersOrRefusal) {
-      throw await this.#faultFor(param, collected, layersOrRefusal);
+      throw await this.#faultFor(param, collectedRecord, layersOrRefusal);
     }
     const layers = layersOrRefusal;
 
@@ -357,7 +357,7 @@ export class ArvoEventHandlerVersion<
         self: this.contracts.self,
         services: this.contracts.services,
       },
-      state: collected,
+      state: collectedRecord,
       dataSchema: this.dataSchema,
       entry: param.entry,
       attempt: param.attempt,
@@ -369,7 +369,7 @@ export class ArvoEventHandlerVersion<
     });
 
     markStage(param.telemetry, 'executor_entered', {
-      awaiting: collected.inFlightEventMap.size,
+      awaiting: collectedRecord.inFlightEventMap.size,
     });
 
     const { executorRun, middlewareProgress, readRecordAtExecutorReturn } =
@@ -394,7 +394,7 @@ export class ArvoEventHandlerVersion<
     }
     if (executorRun.kind === 'raised') {
       if (executorRun.thrown instanceof ArvoHandlerFault) {
-        if (this.#ownFault(executorRun.thrown, ctx)) throw executorRun.thrown;
+        if (this.#isOwnFault(executorRun.thrown, ctx)) throw executorRun.thrown;
 
         throw await this.#faultFor(param, ctx.state, {
           faultKind: 'executor_raised',
@@ -436,9 +436,16 @@ export class ArvoEventHandlerVersion<
     }
     markStage(param.telemetry, 'returns_judged', { emitted: batch.length });
 
-    const unanswered = this.#refuseSilentCancel(recordAtExecutorReturn, batch);
-    if (unanswered !== null) {
-      throw await this.#faultFor(param, recordAtExecutorReturn, unanswered);
+    const silentCancelRefusal = this.#refuseSilentCancel(
+      recordAtExecutorReturn,
+      batch,
+    );
+    if (silentCancelRefusal !== null) {
+      throw await this.#faultFor(
+        param,
+        recordAtExecutorReturn,
+        silentCancelRefusal,
+      );
     }
 
     return this.#produce(param, recordAtExecutorReturn, batch);
@@ -455,7 +462,7 @@ export class ArvoEventHandlerVersion<
     >,
   ): Promise<ArvoContextState<TSelf, TServices, TDataSchema>> {
     if (param.state === null) {
-      const opened = createInitArvoExecutionState<
+      const openingRecord = createInitArvoExecutionState<
         TSelf,
         TServices,
         TDataSchema
@@ -465,17 +472,17 @@ export class ArvoEventHandlerVersion<
         executionId: param.executionId,
         parentExecutionId: param.event.executionid,
       });
-      if (opened.ok) return opened.value;
+      if (openingRecord.ok) return openingRecord.value;
 
       throw await this.#unreadableRecordFault(param, {
         faultKind: 'record_invalid',
-        message: `this event could not open an execution of ${this.#contractAtVersion}, so nothing was stored or emitted: ${opened.error.message}`,
+        message: `this event could not open an execution of ${this.#contractAtVersion}, so nothing was stored or emitted: ${openingRecord.error.message}`,
         violations: [],
-        cause: opened.error.message,
+        cause: openingRecord.error.message,
       });
     }
 
-    const restored = await createFollowupArvoExecutionState<
+    const restoredRecord = await createFollowupArvoExecutionState<
       TSelf,
       TServices,
       TDataSchema
@@ -486,16 +493,16 @@ export class ArvoEventHandlerVersion<
       executionId: param.executionId,
     });
 
-    if (!restored.ok) {
-      throw await this.#refuseStoredRow(param, restored.error);
+    if (!restoredRecord.ok) {
+      throw await this.#refuseStoredRow(param, restoredRecord.error);
     }
 
     // A version that declared nothing to remember has a record carrying
     // none. Anything stored under it was written by something that is
     // not this version, and reading it would be reading state under a
     // schema that was never its own.
-    if (!this.declaresState && restored.value.data !== null) {
-      throw await this.#faultFor(param, restored.value, {
+    if (!this.declaresState && restoredRecord.value.data !== null) {
+      throw await this.#faultFor(param, restoredRecord.value, {
         faultKind: 'record_invalid',
         message: `this execution of ${this.#contractAtVersion} remembers nothing, so its record carries no state — and this one does. Declare a state schema for this version, or find what wrote it`,
         violations: [
@@ -509,10 +516,10 @@ export class ArvoEventHandlerVersion<
     // mistake one layer up — and one worth refusing rather than running,
     // because running it would remember this execution under a schema
     // that was never its own.
-    if (restored.value.version !== this.contracts.self.version) {
-      throw await this.#faultFor(param, restored.value, {
+    if (restoredRecord.value.version !== this.contracts.self.version) {
+      throw await this.#faultFor(param, restoredRecord.value, {
         faultKind: 'version_not_declared',
-        message: `this execution belongs to ${this.contracts.self.type}@${restored.value.version} and was handed to the executor for ${this.#contractAtVersion}, which is not its own and will not resume it`,
+        message: `this execution belongs to ${this.contracts.self.type}@${restoredRecord.value.version} and was handed to the executor for ${this.#contractAtVersion}, which is not its own and will not resume it`,
         violations: [],
       });
     }
@@ -520,16 +527,18 @@ export class ArvoEventHandlerVersion<
     // The record's own copies of what the init event says are checked
     // before anything compares the record with the event that arrived: a
     // record that contradicts itself is corrupt, and reads as corrupt.
-    const disagreements = await disagreementsWithInitEvent(restored.value);
+    const disagreements = await disagreementsWithInitEvent(
+      restoredRecord.value,
+    );
     if (disagreements.length > 0) {
-      throw await this.#faultFor(param, restored.value, {
+      throw await this.#faultFor(param, restoredRecord.value, {
         faultKind: 'record_invalid',
         message: `the stored state for this execution of ${this.#contractAtVersion} disagrees with the event that opened it, so it is corrupt and will not be resumed. The fields that disagree are listed`,
         violations: disagreements,
       });
     }
 
-    return restored.value;
+    return restoredRecord.value;
   }
 
   /**
@@ -576,7 +585,7 @@ export class ArvoEventHandlerVersion<
       return this.#unreadableRecordFault(param, refusal);
     }
 
-    const addressable = await createFollowupArvoExecutionState<
+    const addressableRecord = await createFollowupArvoExecutionState<
       TSelf,
       TServices,
       z.$ZodObject
@@ -587,8 +596,8 @@ export class ArvoEventHandlerVersion<
       executionId: param.executionId,
     });
 
-    return addressable.ok
-      ? this.#faultFor(param, addressable.value, refusal)
+    return addressableRecord.ok
+      ? this.#faultFor(param, addressableRecord.value, refusal)
       : this.#unreadableRecordFault(param, refusal);
   }
 
@@ -645,42 +654,42 @@ export class ArvoEventHandlerVersion<
     >,
     record: ArvoExecutionState,
   ): ArvoGateRefusal | 'seen' | null {
-    const depth = this.#depth.validateInput(param.event);
-    if (!depth.ok) {
+    const depthCheck = this.#depthValidator.validateInput(param.event);
+    if (!depthCheck.ok) {
       return {
-        faultKind: depth.error.faultKind,
-        message: depth.error.message,
-        violations: depth.error.issues.map((issue) => issue.toString()),
+        faultKind: depthCheck.error.faultKind,
+        message: depthCheck.error.message,
+        violations: depthCheck.error.issues.map((issue) => issue.toString()),
       };
     }
 
-    const onFollowup = param.entry === 'followup';
-    if (onFollowup && alreadySeen(record, param.event)) return 'seen';
+    const isFollowup = param.entry === 'followup';
+    if (isFollowup && alreadySeen(record, param.event)) return 'seen';
 
-    const terminal = onFollowup ? refuseTerminal(record) : null;
-    if (terminal !== null) return terminal;
+    const terminalRefusal = isFollowup ? refuseTerminal(record) : null;
+    if (terminalRefusal !== null) return terminalRefusal;
 
-    const outlived = refuseOutlived(
+    const outlivedRefusal = refuseOutlived(
       this.#contractAtVersion,
       record.initEvent,
       this.options.executionTimeout,
       Date.now(),
     );
-    if (outlived !== null) return outlived;
+    if (outlivedRefusal !== null) return outlivedRefusal;
 
-    const misaddressed = refuseMisaddressed(
+    const misaddressedRefusal = refuseMisaddressed(
       this.contracts.self,
       param.event,
-      onFollowup ? record : null,
+      isFollowup ? record : null,
     );
-    if (misaddressed !== null) return misaddressed;
+    if (misaddressedRefusal !== null) return misaddressedRefusal;
 
     // After the record has had its say and before the collection is read,
     // which is where the event's own type and payload belong.
-    const unreceivable = param.checkEvent?.() ?? null;
-    if (unreceivable !== null) return unreceivable;
+    const unreceivableRefusal = param.checkEvent?.() ?? null;
+    if (unreceivableRefusal !== null) return unreceivableRefusal;
 
-    return onFollowup ? refuseUnawaited(record, param.event) : null;
+    return isFollowup ? refuseUnawaited(record, param.event) : null;
   }
 
   /** What the executor is given to work with, by value or from a factory. */
@@ -763,7 +772,7 @@ export class ArvoEventHandlerVersion<
   ): ArvoGateRefusal | null {
     if (record.lifecycle !== 'cancelled') return null;
 
-    const answered = batch.some(
+    const answersCaller = batch.some(
       (event) =>
         resolveEmissionTarget(
           this.contracts.self,
@@ -771,7 +780,7 @@ export class ArvoEventHandlerVersion<
           event.type,
         )?.role === 'completion',
     );
-    if (answered) return null;
+    if (answersCaller) return null;
 
     return {
       faultKind: 'execution_cancelled',
@@ -788,7 +797,7 @@ export class ArvoEventHandlerVersion<
    * somewhere it could not have come from, and a mechanism acting on it
    * would end an execution that has nothing to do with this event.
    */
-  #ownFault(
+  #isOwnFault(
     fault: ArvoHandlerFault,
     ctx: ArvoExecutionContext<
       TSelf,
@@ -929,13 +938,13 @@ export class ArvoEventHandlerVersion<
       TMechanismHooks
     >,
   ): ArvoGateRefusal {
-    const outlived = refuseOutlived(
+    const outlivedRefusal = refuseOutlived(
       this.#contractAtVersion,
       ctx.state.initEvent,
       this.options.executionTimeout,
       Date.now(),
     );
-    if (outlived !== null) return outlived;
+    if (outlivedRefusal !== null) return outlivedRefusal;
 
     return {
       faultKind: 'run_timeout',
@@ -970,21 +979,24 @@ export class ArvoEventHandlerVersion<
   ): Promise<void> {
     // The execution clock is read first so that where both have expired
     // the broader verdict is the one reported.
-    const outlived = refuseOutlived(
+    const outlivedRefusal = refuseOutlived(
       this.#contractAtVersion,
       record.initEvent,
       this.options.executionTimeout,
       returnedAt,
     );
-    if (outlived !== null) {
-      throw await this.#faultFor(param, record, outlived);
+    if (outlivedRefusal !== null) {
+      throw await this.#faultFor(param, record, outlivedRefusal);
     }
 
-    const ranFor = returnedAt - ctx.enteredAt;
-    if (this.options.runTimeout !== null && ranFor >= this.options.runTimeout) {
+    const runDurationMs = returnedAt - ctx.enteredAt;
+    if (
+      this.options.runTimeout !== null &&
+      runDurationMs >= this.options.runTimeout
+    ) {
       throw await this.#faultFor(param, record, {
         faultKind: 'run_timeout',
-        message: `your executor for ${this.#contractAtVersion} returned after ${ranFor}ms, past the ${this.options.runTimeout}ms it is allowed (runTimeout), so what it returned was discarded. Code that blocks rather than awaits cannot be stopped partway`,
+        message: `your executor for ${this.#contractAtVersion} returned after ${runDurationMs}ms, past the ${this.options.runTimeout}ms it is allowed (runTimeout), so what it returned was discarded. Code that blocks rather than awaits cannot be stopped partway`,
         violations: [],
       });
     }
@@ -1010,7 +1022,7 @@ export class ArvoEventHandlerVersion<
   ): Promise<ArvoEventHandlerExecuteResponse> {
     const message = thrown instanceof Error ? thrown.message : String(thrown);
 
-    const answer = buildHandlerErrorEvent(
+    const handlerErrorEvent = buildHandlerErrorEvent(
       this.contracts.self,
       {
         source: record.source,
@@ -1024,7 +1036,7 @@ export class ArvoEventHandlerVersion<
       this.options.handlerErrorDomain,
     );
 
-    if (answer === null) {
+    if (handlerErrorEvent === null) {
       throw await this.#faultFor(param, record, {
         faultKind: 'executor_raised',
         message: `your executor for ${this.#contractAtVersion} failed (${message}), and the error event that would have told the caller could not be built. Nothing was emitted or stored`,
@@ -1033,21 +1045,25 @@ export class ArvoEventHandlerVersion<
       });
     }
 
-    const errored = mutateState(record, {
+    const erroredRecord = mutateState(record, {
       lifecycle: 'error',
       lifecycleDescription: `this executor could not finish the work: ${message}`,
-      eventIds: [...record.eventIds, { id: answer.id, direction: 'emitted' }],
+      eventIds: [
+        ...record.eventIds,
+        { id: handlerErrorEvent.id, direction: 'emitted' },
+      ],
     });
 
-    const written = await writeRecord(
+    const recordWrite = await writeRecord(
       this.dataSchema,
-      atNextRevision(errored, param.entry),
+      atNextRevision(erroredRecord, param.entry),
     );
-    if (!written.ok) throw await this.#faultFor(param, errored, written.error);
+    if (!recordWrite.ok)
+      throw await this.#faultFor(param, erroredRecord, recordWrite.error);
     markStage(param.telemetry, 'record_written');
 
-    param.telemetry.setSpanError(errored.lifecycleDescription as string);
-    param.telemetry.logger.error(errored.lifecycleDescription as string);
+    param.telemetry.setSpanError(erroredRecord.lifecycleDescription as string);
+    param.telemetry.logger.error(erroredRecord.lifecycleDescription as string);
     param.telemetry.metric.count('executions', {
       outcome: 'produced',
       lifecycle: 'error',
@@ -1055,7 +1071,11 @@ export class ArvoEventHandlerVersion<
       'contract.version': this.contracts.self.version,
     });
 
-    return { kind: 'produced', events: [answer], state: written.value };
+    return {
+      kind: 'produced',
+      events: [handlerErrorEvent],
+      state: recordWrite.value,
+    };
   }
 
   /** The events to publish and the record to commit, as one answer. */
@@ -1070,29 +1090,30 @@ export class ArvoEventHandlerVersion<
     record: ArvoContextState<TSelf, TServices, TDataSchema>,
     batch: ArvoEvent[],
   ): Promise<ArvoEventHandlerExecuteResponse> {
-    const settled = settleRecord(
+    const settledRecord = settleRecord(
       this.contracts.self,
       this.contracts.services,
       record,
       batch,
     );
 
-    const written = await recordToCommit(
+    const recordWrite = await recordToCommit(
       this.declaresState,
       this.dataSchema,
-      atNextRevision(settled, param.entry),
+      atNextRevision(settledRecord, param.entry),
     );
-    if (!written.ok) throw await this.#faultFor(param, settled, written.error);
+    if (!recordWrite.ok)
+      throw await this.#faultFor(param, settledRecord, recordWrite.error);
     markStage(param.telemetry, 'record_written');
 
     markOutcome(param.telemetry, {
       outcome: 'produced',
       self: this.contracts.self,
       emitted: batch.length,
-      lifecycle: settled.lifecycle,
+      lifecycle: settledRecord.lifecycle,
     });
 
-    return { kind: 'produced', events: batch, state: written.value };
+    return { kind: 'produced', events: batch, state: recordWrite.value };
   }
 
   /** One refusal as the fault it becomes, built for a caller to throw. */

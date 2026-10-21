@@ -14,7 +14,7 @@ import type { ArvoDomainContext, ArvoDomainInput } from './types.js';
  */
 export const resolveEventDomain = (
   domain: ArvoDomainInput,
-  context: ArvoDomainContext,
+  domainContext: ArvoDomainContext,
 ): string | null => {
   if (typeof domain === 'string') return domain;
 
@@ -22,10 +22,10 @@ export const resolveEventDomain = (
     case ArvoDomain.LOCAL:
       return null;
     case ArvoDomain.FROM_EVENT_CONTRACT:
-      return context.eventContract.domain ?? null;
+      return domainContext.eventContract.domain ?? null;
     case ArvoDomain.FROM_SELF_CONTRACT:
-      return context.selfContract?.domain ?? null;
+      return domainContext.selfContract?.domain ?? null;
     case ArvoDomain.FROM_TRIGGERING_EVENT:
-      return context.triggeringEvent?.domain ?? null;
+      return domainContext.triggeringEvent?.domain ?? null;
   }
 };

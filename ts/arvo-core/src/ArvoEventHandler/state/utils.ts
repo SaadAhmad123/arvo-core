@@ -23,8 +23,8 @@ export type ArvoExecutionStateMutation<TState extends ArvoExecutionState> =
  * A field written as `undefined` is not treated as absent, and the record
  * is refused for it. Data is not checked, a record carrying no schema.
  *
- * @param current - The record as it stands.
- * @param next - The fields to replace.
+ * @param state - The record as it stands.
+ * @param mutation - The fields to replace.
  *
  * @example
  * ```typescript
@@ -37,30 +37,30 @@ export type ArvoExecutionStateMutation<TState extends ArvoExecutionState> =
  * ```
  */
 export const tryMutateState = <TState extends ArvoExecutionState>(
-  current: TState,
-  next: ArvoExecutionStateMutation<TState>,
+  state: TState,
+  mutation: ArvoExecutionStateMutation<TState>,
 ): Result<TState, ArvoExecutionStateValidationError> => {
   try {
     // Named field by field, so a change to the record's shape fails here.
     return fromNeverthrow(
       ok(
         new ArvoExecutionState({
-          data: current.data,
-          subject: current.subject,
-          executionId: current.executionId,
-          parentExecutionId: current.parentExecutionId,
-          depth: current.depth,
-          source: current.source,
-          version: current.version,
-          lifecycle: current.lifecycle,
-          lifecycleDescription: current.lifecycleDescription,
-          initEvent: current.initEvent,
-          triggeringEvent: current.triggeringEvent,
-          eventIds: current.eventIds,
-          inFlightEventMap: current.inFlightEventMap,
-          recordFormatVersion: current.recordFormatVersion,
-          casVersion: current.casVersion,
-          ...next,
+          data: state.data,
+          subject: state.subject,
+          executionId: state.executionId,
+          parentExecutionId: state.parentExecutionId,
+          depth: state.depth,
+          source: state.source,
+          version: state.version,
+          lifecycle: state.lifecycle,
+          lifecycleDescription: state.lifecycleDescription,
+          initEvent: state.initEvent,
+          triggeringEvent: state.triggeringEvent,
+          eventIds: state.eventIds,
+          inFlightEventMap: state.inFlightEventMap,
+          recordFormatVersion: state.recordFormatVersion,
+          casVersion: state.casVersion,
+          ...mutation,
         }) as TState,
       ),
     );
@@ -79,8 +79,8 @@ export const tryMutateState = <TState extends ArvoExecutionState>(
  * A field written as `undefined` is not treated as absent, and the record
  * is refused for it. Data is not checked, a record carrying no schema.
  *
- * @param current - The record as it stands.
- * @param next - The fields to replace.
+ * @param state - The record as it stands.
+ * @param mutation - The fields to replace.
  * @throws {ArvoExecutionStateValidationError} If the new record would be of
  * the wrong shape, naming every field that is wrong.
  *
@@ -91,10 +91,10 @@ export const tryMutateState = <TState extends ArvoExecutionState>(
  * ```
  */
 export const mutateState = <TState extends ArvoExecutionState>(
-  current: TState,
-  next: ArvoExecutionStateMutation<TState>,
+  state: TState,
+  mutation: ArvoExecutionStateMutation<TState>,
 ): TState => {
-  const result = tryMutateState(current, next);
-  if (result.ok) return result.value;
-  throw result.error;
+  const attempt = tryMutateState(state, mutation);
+  if (attempt.ok) return attempt.value;
+  throw attempt.error;
 };

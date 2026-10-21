@@ -115,17 +115,19 @@ export const createFollowupArvoExecutionState = async <
   ArvoExecutionStateSerializerError | ArvoExecutionStateValidationError
 > => {
   const serializer = new ArvoExecutionStateSerializer(param.dataSchema);
-  const stored = await serializer.tryDeserialize(JSON.stringify(param.state));
-  if (!stored.ok) return stored;
+  const deserialization = await serializer.tryDeserialize(
+    JSON.stringify(param.state),
+  );
+  if (!deserialization.ok) return deserialization;
 
-  if (stored.value.executionId !== param.executionId) {
+  if (deserialization.value.executionId !== param.executionId) {
     return fromNeverthrow(
       err(
         new ArvoExecutionStateValidationError([
           new ErrorIssue({
             path: 'executionId',
             message: `does not name the execution this execution is for, ${param.executionId} — the wrong record was read`,
-            received: stored.value.executionId,
+            received: deserialization.value.executionId,
           }),
         ]),
       ),
@@ -136,7 +138,7 @@ export const createFollowupArvoExecutionState = async <
   // has no contracts to say otherwise. A caller's contracts do.
   return fromNeverthrow(
     ok(
-      mutateState(stored.value, {
+      mutateState(deserialization.value, {
         triggeringEvent: param.event,
       }) as ArvoContextState<TSelf, TServices, TDataSchema>,
     ),

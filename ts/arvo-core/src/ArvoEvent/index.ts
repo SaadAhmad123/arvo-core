@@ -67,30 +67,30 @@ export class ArvoEvent<
     // is genuinely a plain-enough object; anything else is passed through
     // unchanged so validateArvoEvent's own top-level guard rejects it
     // cleanly, with one issue naming what it actually is.
-    let raw: unknown = param;
+    let rawFields: unknown = param;
 
     if (param !== null && typeof param === 'object' && !Array.isArray(param)) {
-      const traceInput = param as ArvoEventParam<T, D> & {
+      const paramWithSpan = param as ArvoEventParam<T, D> & {
         span?: Span | SpanContext;
       };
-      const { span, ...rest } = traceInput;
+      const { span, ...untracedFields } = paramWithSpan;
 
-      const withTrace: Record<string, unknown> = { ...rest };
+      const tracedFields: Record<string, unknown> = { ...untracedFields };
       if (span) {
         const trace = traceContextFromSpan(span);
-        withTrace.traceparent = trace.traceparent;
-        withTrace.tracestate = trace.tracestate;
+        tracedFields.traceparent = trace.traceparent;
+        tracedFields.tracestate = trace.tracestate;
       }
-      raw = withTrace;
+      rawFields = tracedFields;
     }
 
-    const result = validateArvoEvent(raw, options);
+    const validation = validateArvoEvent(rawFields, options);
 
-    if (result.issues.length > 0) {
-      throw new ArvoEventValidationError(result.issues);
+    if (validation.issues.length > 0) {
+      throw new ArvoEventValidationError(validation.issues);
     }
 
-    const fields = result.value;
+    const fields = validation.value;
     this.id = fields.id;
     this.parentid = fields.parentid;
     this.initid = fields.initid;
@@ -122,9 +122,9 @@ export class ArvoEvent<
     T extends string = string,
     D extends Record<string, any> = Record<string, any>,
   >(param: unknown, options?: ArvoEventValidationOptions): ArvoEvent<T, D> {
-    const result = ArvoEvent.tryParse<T, D>(param, options);
-    if (result.ok) return result.value;
-    throw result.error;
+    const attempt = ArvoEvent.tryParse<T, D>(param, options);
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 
   /**

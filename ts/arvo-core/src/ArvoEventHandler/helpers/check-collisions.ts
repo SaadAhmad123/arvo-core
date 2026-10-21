@@ -38,34 +38,34 @@ export const checkCollisions = (
 
   const serviceNameByType = new Map<string, string>();
   for (const [localName, service] of Object.entries(services)) {
-    const already = serviceNameByType.get(service.type);
-    if (already === undefined) {
+    const earlierLocalName = serviceNameByType.get(service.type);
+    if (earlierLocalName === undefined) {
       serviceNameByType.set(service.type, localName);
       continue;
     }
     issues.push(
       new ErrorIssue({
         path: `services${pathSegmentForKey(localName)}`,
-        message: `takes in '${service.type}', which '${already}' also takes in. An emitted event is addressed by its type alone, so two services sharing one leave nothing to say which was meant`,
+        message: `takes in '${service.type}', which '${earlierLocalName}' also takes in. An emitted event is addressed by its type alone, so two services sharing one leave nothing to say which was meant`,
       }),
     );
   }
 
-  for (const [version, declared] of Object.entries(contract.versions)) {
+  for (const [version, versionContract] of Object.entries(contract.versions)) {
     const path = `versions${pathSegmentForKey(version)}`;
 
-    for (const output of Object.keys(declared.outputs)) {
-      const localName = serviceNameByType.get(output);
+    for (const outputType of Object.keys(versionContract.outputs)) {
+      const localName = serviceNameByType.get(outputType);
       if (localName === undefined) continue;
       issues.push(
         new ErrorIssue({
           path,
-          message: `answers with '${output}', which the service '${localName}' also takes in. An emitted event is addressed by its type alone, so the handler could not say whether this answers its caller or asks that service`,
+          message: `answers with '${outputType}', which the service '${localName}' also takes in. An emitted event is addressed by its type alone, so the handler could not say whether this answers its caller or asks that service`,
         }),
       );
     }
 
-    const errorType = declared.error.type;
+    const errorType = versionContract.error.type;
     const localName = serviceNameByType.get(errorType);
     if (localName === undefined) continue;
     issues.push(

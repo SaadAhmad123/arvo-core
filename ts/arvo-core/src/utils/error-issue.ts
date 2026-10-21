@@ -13,24 +13,24 @@ export const MAX_DESCRIBED_VALUE_LENGTH = 80;
  * `CloudEventTransformationErrorDetail`'s `cause` alike — so the same value
  * looks the same regardless of which boundary reported it.
  */
-export const describeValue = (value: unknown): string => {
-  if (value === undefined) return 'undefined';
-  if (value === null) return 'null';
-  if (typeof value === 'string') {
-    return truncate(JSON.stringify(value), MAX_DESCRIBED_VALUE_LENGTH);
+export const describeValue = (received: unknown): string => {
+  if (received === undefined) return 'undefined';
+  if (received === null) return 'null';
+  if (typeof received === 'string') {
+    return truncate(JSON.stringify(received), MAX_DESCRIBED_VALUE_LENGTH);
   }
-  if (typeof value === 'number' || typeof value === 'boolean')
-    return String(value);
-  if (typeof value === 'bigint') return `${value}n (bigint)`;
-  if (typeof value === 'function') return 'a function';
-  if (typeof value === 'symbol') return value.toString();
-  if (value instanceof Error) return `${value.name}: ${value.message}`;
-  if (Array.isArray(value)) return `an array of ${value.length}`;
+  if (typeof received === 'number' || typeof received === 'boolean')
+    return String(received);
+  if (typeof received === 'bigint') return `${received}n (bigint)`;
+  if (typeof received === 'function') return 'a function';
+  if (typeof received === 'symbol') return received.toString();
+  if (received instanceof Error) return `${received.name}: ${received.message}`;
+  if (Array.isArray(received)) return `an array of ${received.length}`;
 
   try {
-    const serialized = JSON.stringify(value);
-    if (serialized === undefined) return 'an object';
-    return truncate(serialized, MAX_DESCRIBED_VALUE_LENGTH);
+    const json = JSON.stringify(received);
+    if (json === undefined) return 'an object';
+    return truncate(json, MAX_DESCRIBED_VALUE_LENGTH);
   } catch {
     // Cyclic or otherwise unserializable — the shape is what matters here.
     return 'an object';
@@ -135,14 +135,14 @@ export class ErrorIssue {
    * rather than rendered as `(received undefined)`.
    */
   toString(): string {
-    const received =
+    const receivedClause =
       this.received === undefined
         ? ''
         : ` (received ${describeValue(this.received)})`;
-    const blocking = this.blockingReason
+    const blockingClause = this.blockingReason
       ? ` — nothing after this was checked: ${this.blockingReason}`
       : '';
-    return `${this.path}: ${this.message}${received}${blocking}`;
+    return `${this.path}: ${this.message}${receivedClause}${blockingClause}`;
   }
 }
 
@@ -173,21 +173,21 @@ export class ErrorIssue {
  * so there is nothing to keep in step: the issue that stopped the run is the
  * one that says so, and it already carries the reason in its own rendering.
  *
- * @param message - The heading, already punctuated.
+ * @param heading - The heading, already punctuated.
  * @param issues - Every rule the value broke that was evaluated.
  */
 export const buildErrorIssueMessage = (
-  message: string,
+  heading: string,
   issues: readonly ErrorIssue[],
 ): string => {
-  const note = issues.some((issue) => issue.isBlocking)
+  const incompleteNote = issues.some((issue) => issue.isBlocking)
     ? '\nThis is not the whole list — checking stopped at the problem above.'
     : '';
-  if (issues.length === 0) return `${message}${note}`;
+  if (issues.length === 0) return `${heading}${incompleteNote}`;
   const preamble =
     issues.length === 1
       ? 'The following problem was found:'
       : `The following ${issues.length} problems were found:`;
   const lines = issues.map((issue) => `  - ${issue.toString()}`).join('\n');
-  return `${message}\n${preamble}\n${lines}${note}`;
+  return `${heading}\n${preamble}\n${lines}${incompleteNote}`;
 };

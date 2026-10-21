@@ -64,7 +64,7 @@ export type ArvoContextState<
  */
 export type ArvoDataWrite<TDataSchema extends z.$ZodObject> =
   | z.input<TDataSchema>
-  | ((current: z.output<TDataSchema> | null) => z.input<TDataSchema>);
+  | ((currentData: z.output<TDataSchema> | null) => z.input<TDataSchema>);
 
 /**
  * Everything one execution hands an executor's context.

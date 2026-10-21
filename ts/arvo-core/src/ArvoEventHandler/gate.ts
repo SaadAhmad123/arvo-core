@@ -23,7 +23,7 @@ export type ArvoResolvedEntry = {
 };
 
 /** What an event of each kind states itself to be. */
-const CATEGORY_FOR: Record<ArvoEntryKind, string> = {
+const CATEGORY_BY_ENTRY: Record<ArvoEntryKind, string> = {
   init: ARVO_CATEGORY_INIT,
   followup: ARVO_CATEGORY_COMPLETE,
 };
@@ -46,25 +46,26 @@ const RESERVED_CATEGORIES: ReadonlySet<string> = new Set([
  * Only the two reserved values are consulted: anything else, absence
  * included, states nothing to contradict.
  *
- * @param resolved - What the event was resolved to.
+ * @param resolvedEntry - What the event was resolved to.
  * @param event - The event that arrived.
  * @returns Why it is refused, or `null` where it is not.
  */
 export const refuseMiscategorised = (
-  resolved: ArvoResolvedEntry,
+  resolvedEntry: ArvoResolvedEntry,
   event: ArvoEvent,
 ): ArvoGateRefusal | null => {
-  const stated = event.category;
-  if (stated === null || !RESERVED_CATEGORIES.has(stated)) return null;
+  const statedCategory = event.category;
+  if (statedCategory === null || !RESERVED_CATEGORIES.has(statedCategory))
+    return null;
 
-  const expected = CATEGORY_FOR[resolved.entry];
-  if (stated === expected) return null;
+  const expectedCategory = CATEGORY_BY_ENTRY[resolvedEntry.entry];
+  if (statedCategory === expectedCategory) return null;
 
   return {
     faultKind: 'category_mismatch',
-    message: `${event.type} states it is ${stated}, and ${event.dataschema} makes it ${expected} — whoever sent it and whoever received it disagree about what it is doing, which no further attempt reconciles`,
+    message: `${event.type} states it is ${statedCategory}, and ${event.dataschema} makes it ${expectedCategory} — whoever sent it and whoever received it disagree about what it is doing, which no further attempt reconciles`,
     violations: [
-      `category: must be ${expected} for an event ${resolved.entry === 'init' ? 'opening' : 'answering'} an execution, received ${stated}`,
+      `category: must be ${expectedCategory} for an event ${resolvedEntry.entry === 'init' ? 'opening' : 'answering'} an execution, received ${statedCategory}`,
     ],
   };
 };
@@ -77,18 +78,18 @@ export const refuseMiscategorised = (
  * execution must find the one it names, and an execution this handler has
  * no memory of is not resumed by asking again.
  *
- * @param resolved - What the event was resolved to.
+ * @param resolvedEntry - What the event was resolved to.
  * @param executionId - The identifier the store was asked under.
- * @param stored - What the store held, or `null` where it held nothing.
+ * @param storedRecord - What the store held, or `null` where it held nothing.
  * @returns Why it is refused, or `null` where it is not.
  */
 export const refuseMismatchedPresence = (
-  resolved: ArvoResolvedEntry,
+  resolvedEntry: ArvoResolvedEntry,
   executionId: string,
-  stored: JSONObject | null,
+  storedRecord: JSONObject | null,
 ): ArvoGateRefusal | null => {
-  if (resolved.entry === 'init') {
-    if (stored === null) return null;
+  if (resolvedEntry.entry === 'init') {
+    if (storedRecord === null) return null;
     return {
       faultKind: 'record_unexpected',
       message: `an execution already exists under ${executionId}, and this event opens one — so it has been seen before, and opening a second would fork the work`,
@@ -96,7 +97,7 @@ export const refuseMismatchedPresence = (
     };
   }
 
-  if (stored !== null) return null;
+  if (storedRecord !== null) return null;
   return {
     faultKind: 'record_expected',
     message: `nothing is stored under ${executionId}, and this event answers an execution — so there is no execution to resume, and no further attempt produces one`,

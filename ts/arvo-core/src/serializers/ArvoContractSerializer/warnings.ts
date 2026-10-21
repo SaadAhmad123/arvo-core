@@ -5,10 +5,10 @@ import { ErrorIssue } from '../../utils/error-issue.js';
  * out of it.
  *
  * @param path - The position the constraint occupied.
- * @param what - What was lost, as it should read in a message.
+ * @param loss - What was lost, as it should read in a message.
  */
-export const droppedConstraint = (path: string, what: string): ErrorIssue =>
-  new ErrorIssue({ path, message: `dropped: ${what}` });
+export const droppedConstraint = (path: string, loss: string): ErrorIssue =>
+  new ErrorIssue({ path, message: `dropped: ${loss}` });
 
 /**
  * Records a check that survived the crossing as documentation.
@@ -19,12 +19,12 @@ export const droppedConstraint = (path: string, what: string): ErrorIssue =>
  * looks like data loss; read as nothing at all it looks safe. It is neither.
  *
  * @param path - The position the check occupied.
- * @param what - The check, as it should read in a message.
+ * @param check - The check, as it should read in a message.
  */
-export const demotedCheck = (path: string, what: string): ErrorIssue =>
+export const demotedCheck = (path: string, check: string): ErrorIssue =>
   new ErrorIssue({
     path,
-    message: `kept as documentation only, so nothing enforces it: ${what}`,
+    message: `kept as documentation only, so nothing enforces it: ${check}`,
   });
 
 /**

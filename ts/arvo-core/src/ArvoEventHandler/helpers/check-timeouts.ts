@@ -25,10 +25,10 @@ import type { ArvoEventHandlerOptions } from '../types/options.js';
  * ```
  */
 export const checkTimeouts = (
-  inForce: ArvoEventHandlerOptions,
+  optionsInForce: ArvoEventHandlerOptions,
   declaredAt: string,
 ): ErrorIssue[] => {
-  const { runTimeout, executionTimeout } = inForce;
+  const { runTimeout, executionTimeout } = optionsInForce;
   if (executionTimeout === null) return [];
 
   const path = `${declaredAt}.options.executionTimeout`;

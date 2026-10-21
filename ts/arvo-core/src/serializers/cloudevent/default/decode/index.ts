@@ -9,10 +9,11 @@ export type Decoded = {
 };
 
 /** Whether `data` claims Arvo shape at all, via either marker — the branch point between attempting strict decoding and foreign adaptation. */
-export const claimsArvoShape = (data: CloudEvent): boolean => {
-  const parsed = parseDataContentType(data.datacontenttype);
+export const claimsArvoShape = (cloudEvent: CloudEvent): boolean => {
+  const contentType = parseDataContentType(cloudEvent.datacontenttype);
   return (
-    parsed?.mediaType === ARVO_MEDIA_TYPE || data.dataschema === DATA_SCHEMA
+    contentType?.mediaType === ARVO_MEDIA_TYPE ||
+    cloudEvent.dataschema === DATA_SCHEMA
   );
 };
 

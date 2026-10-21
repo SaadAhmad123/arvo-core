@@ -236,10 +236,10 @@ export class ArvoExecutionState<
     if (isPlainObject(input.data)) {
       // Judged against the schema, never replaced by what it produced: a
       // record read back is what was stored, defaults and all.
-      const checked = z.safeParse(dataschema, input.data);
-      if (!checked.success) {
+      const validation = z.safeParse(dataschema, input.data);
+      if (!validation.success) {
         issues.push(
-          ...checked.error.issues.map(
+          ...validation.error.issues.map(
             (issue) =>
               new ErrorIssue({
                 path: `data.${issue.path.join('.') || '(root)'}`,
@@ -286,8 +286,8 @@ export class ArvoExecutionState<
     input: unknown,
     dataschema: TDataSchema,
   ): ArvoExecutionState<TDataSchema> {
-    const result = ArvoExecutionState.tryBuild(input, dataschema);
-    if (result.ok) return result.value;
-    throw result.error;
+    const attempt = ArvoExecutionState.tryBuild(input, dataschema);
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 }

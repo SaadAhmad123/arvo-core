@@ -31,16 +31,16 @@ const accumulate = (
   version: ArvoSemanticVersion,
   declaration: ArvoAnyVersionInput,
 ): ArvoAccumulatedVersion => {
-  const written =
+  const fullDeclaration =
     typeof declaration === 'function' ? { execute: declaration } : declaration;
   return {
     version,
-    state: written.state ?? ARVO_NO_STATE_SCHEMA,
-    declaresState: written.state !== undefined,
-    options: written.options ?? null,
+    state: fullDeclaration.state ?? ARVO_NO_STATE_SCHEMA,
+    declaresState: fullDeclaration.state !== undefined,
+    options: fullDeclaration.options ?? null,
     // a chain holds versions under differing schemas, so it cannot name
     // this one's; it was checked where it was written
-    execute: written.execute as ArvoAccumulatedVersion['execute'],
+    execute: fullDeclaration.execute as ArvoAccumulatedVersion['execute'],
   };
 };
 
@@ -175,7 +175,7 @@ export class ArvoEventHandlerSetup<
     >,
   ): ArvoEventHandlerSetup<TSelf, TServices, TDependencies, TMechanismHooks>;
   handler(
-    created: ArvoCreatedVersion<
+    createdVersion: ArvoCreatedVersion<
       TSelf,
       TServices,
       TDependencies,
@@ -183,17 +183,20 @@ export class ArvoEventHandlerSetup<
     >,
   ): ArvoEventHandlerSetup<TSelf, TServices, TDependencies, TMechanismHooks>;
   handler(
-    versionOrCreated:
+    versionOrCreatedVersion:
       | (keyof TSelf['versions'] & ArvoSemanticVersion)
       | ArvoCreatedVersion<TSelf, TServices, TDependencies, TMechanismHooks>,
     // the overloads above are what a caller is held to; this signature
     // only has to admit both of them
     declaration?: unknown,
   ): ArvoEventHandlerSetup<TSelf, TServices, TDependencies, TMechanismHooks> {
-    const accumulated =
-      typeof versionOrCreated === 'string'
-        ? accumulate(versionOrCreated, declaration as ArvoAnyVersionInput)
-        : versionOrCreated;
+    const accumulatedVersion =
+      typeof versionOrCreatedVersion === 'string'
+        ? accumulate(
+            versionOrCreatedVersion,
+            declaration as ArvoAnyVersionInput,
+          )
+        : versionOrCreatedVersion;
 
     return new ArvoEventHandlerSetup(
       {
@@ -207,7 +210,7 @@ export class ArvoEventHandlerSetup<
           ? {}
           : { middleware: this.middleware }),
       },
-      [...this.versions, accumulated],
+      [...this.versions, accumulatedVersion],
     );
   }
 
@@ -263,8 +266,8 @@ export class ArvoEventHandlerSetup<
    * ```
    */
   build(): ArvoEventHandler<TSelf, TServices, TDependencies, TMechanismHooks> {
-    const declared = this.tryBuild();
-    if (declared.ok) return declared.value;
-    throw declared.error;
+    const attempt = this.tryBuild();
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 }

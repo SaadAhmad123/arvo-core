@@ -140,7 +140,7 @@ export class ArvoEventHandler<
     | null;
 
   /** What judges an arriving event against the contracts declared. */
-  readonly #events: ArvoEventValidator<TSelf, TServices>;
+  readonly #eventValidator: ArvoEventValidator<TSelf, TServices>;
 
   /**
    * Judges a finished declaration and holds what it accepted.
@@ -163,9 +163,9 @@ export class ArvoEventHandler<
     const contract = setup.contracts.self;
     const services = setup.contracts.services;
 
-    const unreadable = checkContract(contract);
-    if (unreadable.length > 0) {
-      throw new ArvoEventHandlerValidationError(unreadable);
+    const contractIssues = checkContract(contract);
+    if (contractIssues.length > 0) {
+      throw new ArvoEventHandlerValidationError(contractIssues);
     }
 
     const handlerOptions = resolveOptions(
@@ -177,7 +177,7 @@ export class ArvoEventHandler<
       ...checkOptions(setup.options, 'options'),
       ...checkVersions(
         contract,
-        setup.versions.map((declared) => declared.version),
+        setup.versions.map((accumulatedVersion) => accumulatedVersion.version),
       ),
       ...checkServices(services),
       ...checkCollisions(contract, services),
@@ -185,40 +185,48 @@ export class ArvoEventHandler<
     ];
 
     const optionsByVersion = new Map<string, ArvoEventHandlerOptions>();
-    for (const declared of setup.versions) {
-      const declaredAt = `versions${pathSegmentForKey(declared.version)}`;
-      issues.push(...checkOptions(declared.options, `${declaredAt}.options`));
+    for (const accumulatedVersion of setup.versions) {
+      const declaredAt = `versions${pathSegmentForKey(accumulatedVersion.version)}`;
+      issues.push(
+        ...checkOptions(accumulatedVersion.options, `${declaredAt}.options`),
+      );
 
-      const inForce = resolveOptions(declared.options, handlerOptions);
-      issues.push(...checkTimeouts(inForce, declaredAt));
-      optionsByVersion.set(declared.version, inForce);
+      const optionsInForce = resolveOptions(
+        accumulatedVersion.options,
+        handlerOptions,
+      );
+      issues.push(...checkTimeouts(optionsInForce, declaredAt));
+      optionsByVersion.set(accumulatedVersion.version, optionsInForce);
     }
 
     if (issues.length > 0) throw new ArvoEventHandlerValidationError(issues);
 
     // omitted and empty meet here: everything below reads null for none
-    const declared = setup.middleware ?? [];
+    const declaredMiddleware = setup.middleware ?? [];
     const middleware =
-      declared.length === 0 ? null : Object.freeze([...declared]);
+      declaredMiddleware.length === 0
+        ? null
+        : Object.freeze([...declaredMiddleware]);
 
     const versions = new Map<string, ArvoEventHandlerVersion>();
-    for (const declared of setup.versions) {
+    for (const accumulatedVersion of setup.versions) {
       versions.set(
-        declared.version,
+        accumulatedVersion.version,
         new ArvoEventHandlerVersion({
           contracts: {
             self: contract.versions[
-              declared.version as keyof TSelf['versions'] & ArvoSemanticVersion
+              accumulatedVersion.version as keyof TSelf['versions'] &
+                ArvoSemanticVersion
             ],
             services,
           },
           // every version was judged above, so each has one in force
           options: optionsByVersion.get(
-            declared.version,
+            accumulatedVersion.version,
           ) as ArvoEventHandlerOptions,
-          state: declared.state,
-          declaresState: declared.declaresState,
-          execute: declared.execute,
+          state: accumulatedVersion.state,
+          declaresState: accumulatedVersion.declaresState,
+          execute: accumulatedVersion.execute,
           // the map holds a version at its own types, as it does its executor
           middleware: middleware as
             | readonly ArvoEventHandlerMiddlewareEntry[]
@@ -240,7 +248,7 @@ export class ArvoEventHandler<
       meter: setup.telemetry?.meter ?? null,
       logger: setup.telemetry?.logger ?? null,
     });
-    this.#events = new ArvoEventValidator({
+    this.#eventValidator = new ArvoEventValidator({
       contracts: { self: contract, services },
     });
     this.versions = versions as unknown as ArvoVersionMap<
@@ -288,13 +296,13 @@ export class ArvoEventHandler<
   async tryExecute(
     param: ArvoEventHandlerExecuteParam<TDependencies, TMechanismHooks>,
   ): AsyncResult<ArvoEventHandlerExecuteResponse, ArvoHandlerFault> {
-    const joined = continueTraceFromEvent(
+    const continuedTrace = continueTraceFromEvent(
       param.event,
       this.telemetry.tracer,
       `${this.contracts.self.type}.execute`,
     );
     const span =
-      joined?.span ??
+      continuedTrace?.span ??
       this.telemetry.tracer.startSpan(`${this.contracts.self.type}.execute`);
     const telemetry = new ArvoExecutionContextTelemetry({
       span,
@@ -336,9 +344,9 @@ export class ArvoEventHandler<
   async execute(
     param: ArvoEventHandlerExecuteParam<TDependencies, TMechanismHooks>,
   ): Promise<ArvoEventHandlerExecuteResponse> {
-    const ran = await this.tryExecute(param);
-    if (ran.ok) return ran.value;
-    throw ran.error;
+    const execution = await this.tryExecute(param);
+    if (execution.ok) return execution.value;
+    throw execution.error;
   }
 
   /** Every check that must pass, in order, and then the version itself. */
@@ -346,44 +354,59 @@ export class ArvoEventHandler<
     param: ArvoEventHandlerExecuteParam<TDependencies, TMechanismHooks>,
     telemetry: ArvoExecutionContextTelemetry,
   ): Promise<ArvoEventHandlerExecuteResponse> {
-    const placed = this.#resolve(param.event);
-    if ('faultKind' in placed) {
-      throw await this.#refuseUnresolved(param, telemetry, placed);
+    const entryOrRefusal = this.#resolve(param.event);
+    if ('faultKind' in entryOrRefusal) {
+      throw await this.#refuseUnresolved(param, telemetry, entryOrRefusal);
     }
-    const resolved = placed;
+    const resolvedEntry = entryOrRefusal;
     markEntryStage(telemetry, 'event_resolved');
 
-    const miscategorised = refuseMiscategorised(resolved, param.event);
-    if (miscategorised !== null) {
+    const categoryRefusal = refuseMiscategorised(resolvedEntry, param.event);
+    if (categoryRefusal !== null) {
       throw await this.#refuse(
         param,
         telemetry,
-        resolved,
+        resolvedEntry,
         null,
-        miscategorised,
+        categoryRefusal,
       );
     }
     markEntryStage(telemetry, 'category_agreed');
 
-    const executionId = await this.#identify(resolved, param.event);
+    const executionId = await this.#identify(resolvedEntry, param.event);
     describeEntry(telemetry, {
       event: param.event,
-      entry: resolved.entry,
+      entry: resolvedEntry.entry,
       executionId,
       attempt: param.attempt,
       contractType: this.contracts.self.type,
     });
 
-    const stored = await this.#fetch(param, telemetry, resolved, executionId);
+    const storedRecord = await this.#fetch(
+      param,
+      telemetry,
+      resolvedEntry,
+      executionId,
+    );
     markEntryStage(telemetry, 'record_fetched');
 
-    const absent = refuseMismatchedPresence(resolved, executionId, stored);
-    if (absent !== null) {
-      throw await this.#refuse(param, telemetry, resolved, null, absent);
+    const presenceRefusal = refuseMismatchedPresence(
+      resolvedEntry,
+      executionId,
+      storedRecord,
+    );
+    if (presenceRefusal !== null) {
+      throw await this.#refuse(
+        param,
+        telemetry,
+        resolvedEntry,
+        null,
+        presenceRefusal,
+      );
     }
 
-    if (resolved.entry === 'init') {
-      return this.#dispatch(param, telemetry, resolved, executionId, null);
+    if (resolvedEntry.entry === 'init') {
+      return this.#dispatch(param, telemetry, resolvedEntry, executionId, null);
     }
 
     // Nothing may be read off a stored row until it is established to be
@@ -392,24 +415,24 @@ export class ArvoEventHandler<
     const record = await this.#hydrate(
       param,
       telemetry,
-      resolved,
+      resolvedEntry,
       executionId,
-      stored as JSONObject,
+      storedRecord as JSONObject,
     );
     markEntryStage(telemetry, 'record_hydrated');
 
-    const withdrawn = refuseWithdrawnVersion(
+    const withdrawnRefusal = refuseWithdrawnVersion(
       new Set(this.versions.keys()),
       record.version,
       this.contracts.self.type,
     );
-    if (withdrawn !== null) {
+    if (withdrawnRefusal !== null) {
       throw await this.#refuse(
         param,
         telemetry,
-        resolved,
+        resolvedEntry,
         record,
-        withdrawn,
+        withdrawnRefusal,
         // the record names a version nothing declares, so there may be
         // no contract at it either — a crafted one would otherwise
         // resolve to something inherited rather than declared
@@ -422,9 +445,9 @@ export class ArvoEventHandler<
     return this.#dispatch(
       param,
       telemetry,
-      resolved,
+      resolvedEntry,
       executionId,
-      stored as JSONObject,
+      storedRecord as JSONObject,
       record.version,
     );
   }
@@ -437,7 +460,7 @@ export class ArvoEventHandler<
    * never from the type alone, which names neither reliably.
    */
   #resolve(event: ArvoEvent): ArvoResolvedEntry | ArvoGateRefusal {
-    const origin = this.#events.resolveInput(event);
+    const origin = this.#eventValidator.resolveInput(event);
     if (!origin.ok) {
       return {
         faultKind: origin.error.faultKind,
@@ -454,10 +477,10 @@ export class ArvoEventHandler<
 
   /** The execution this event concerns, derived or carried. */
   async #identify(
-    resolved: ArvoResolvedEntry,
+    resolvedEntry: ArvoResolvedEntry,
     event: ArvoEvent,
   ): Promise<string> {
-    return resolved.entry === 'init'
+    return resolvedEntry.entry === 'init'
       ? await deriveArvoExecutionId(event)
       : event.executionid;
   }
@@ -466,7 +489,7 @@ export class ArvoEventHandler<
   async #fetch(
     param: ArvoEventHandlerExecuteParam<TDependencies, TMechanismHooks>,
     telemetry: ArvoExecutionContextTelemetry,
-    resolved: ArvoResolvedEntry,
+    resolvedEntry: ArvoResolvedEntry,
     executionId: string,
   ): Promise<JSONObject | null> {
     try {
@@ -476,7 +499,7 @@ export class ArvoEventHandler<
         attempt: param.attempt,
       });
     } catch (thrown) {
-      throw await this.#refuse(param, telemetry, resolved, null, {
+      throw await this.#refuse(param, telemetry, resolvedEntry, null, {
         faultKind: 'state_resolution_failed',
         message: `the store could not be read for ${executionId}, so nothing says whether this execution exists. Another attempt may reach it`,
         violations: [],
@@ -496,28 +519,28 @@ export class ArvoEventHandler<
   async #hydrate(
     param: ArvoEventHandlerExecuteParam<TDependencies, TMechanismHooks>,
     telemetry: ArvoExecutionContextTelemetry,
-    resolved: ArvoResolvedEntry,
+    resolvedEntry: ArvoResolvedEntry,
     executionId: string,
-    stored: JSONObject,
+    storedRecord: JSONObject,
   ): Promise<ArvoExecutionState> {
-    const restored = await createFollowupArvoExecutionState({
+    const restoredRecord = await createFollowupArvoExecutionState({
       dataSchema: ARVO_ANY_STATE_SCHEMA,
       event: param.event,
-      state: stored,
+      state: storedRecord,
       executionId,
     });
-    if (restored.ok) return restored.value;
+    if (restoredRecord.ok) return restoredRecord.value;
 
     // A record can fail to restore for two reasons, and only one of them
     // carries the rules it broke; the other is a row that could not be
     // read at all, which nothing here can produce since the schema it is
     // read under is always supplied.
     const issues =
-      restored.error instanceof ArvoExecutionStateValidationError
-        ? restored.error.issues
+      restoredRecord.error instanceof ArvoExecutionStateValidationError
+        ? restoredRecord.error.issues
         : [];
 
-    throw await this.#refuse(param, telemetry, resolved, null, {
+    throw await this.#refuse(param, telemetry, resolvedEntry, null, {
       // An event the record holds failing to restore is a different
       // diagnosis from a record whose shape is wrong, and a field the row
       // never carried is the second rather than the first.
@@ -526,14 +549,14 @@ export class ArvoEventHandler<
         return (
           ['initEvent', 'triggeringEvent', 'inFlightEventMap'].includes(
             field,
-          ) && field in stored
+          ) && field in storedRecord
         );
       })
         ? 'record_event_unrestorable'
         : 'record_invalid',
-      message: `the stored state under ${executionId} could not be read back as a record of ${this.contracts.self.type}: ${restored.error.message}`,
+      message: `the stored state under ${executionId} could not be read back as a record of ${this.contracts.self.type}: ${restoredRecord.error.message}`,
       violations: issues.map((issue) => issue.toString()),
-      cause: restored.error.message,
+      cause: restoredRecord.error.message,
     });
   }
 
@@ -541,20 +564,20 @@ export class ArvoEventHandler<
   async #dispatch(
     param: ArvoEventHandlerExecuteParam<TDependencies, TMechanismHooks>,
     telemetry: ArvoExecutionContextTelemetry,
-    resolved: ArvoResolvedEntry,
+    resolvedEntry: ArvoResolvedEntry,
     executionId: string,
-    stored: JSONObject | null,
-    owning?: ArvoSemanticVersion,
+    storedRecord: JSONObject | null,
+    owningVersion?: ArvoSemanticVersion,
   ): Promise<ArvoEventHandlerExecuteResponse> {
     const version = this.versions.get(
-      (owning ?? resolved.version) as keyof TSelf['versions'] &
+      (owningVersion ?? resolvedEntry.version) as keyof TSelf['versions'] &
         ArvoSemanticVersion,
     );
 
     return version.execute({
-      entry: resolved.entry,
+      entry: resolvedEntry.entry,
       event: param.event,
-      state: stored,
+      state: storedRecord,
       executionId,
       attempt: param.attempt,
       // The one place the two spellings for nothing meet: a caller
@@ -574,9 +597,9 @@ export class ArvoEventHandler<
       // is refused for being late rather than for what it carries.
       checkEvent: () =>
         this.#checkEvent(param.event, {
-          source: resolved.entry === 'init' ? 'self' : 'service',
-          version: resolved.version,
-          contract: resolved.contract,
+          source: resolvedEntry.entry === 'init' ? 'self' : 'service',
+          version: resolvedEntry.version,
+          contract: resolvedEntry.contract,
         }),
     } as Parameters<typeof version.execute>[0]);
   }
@@ -586,12 +609,12 @@ export class ArvoEventHandler<
     event: ArvoEvent,
     origin: ArvoEventOrigin,
   ): ArvoGateRefusal | null {
-    const refused = this.#events.checkInput(event, origin);
-    if (refused === null) return null;
+    const refusal = this.#eventValidator.checkInput(event, origin);
+    if (refusal === null) return null;
     return {
-      faultKind: refused.faultKind,
-      message: refused.message,
-      violations: refused.issues.map((issue) => issue.toString()),
+      faultKind: refusal.faultKind,
+      message: refusal.message,
+      violations: refusal.issues.map((issue) => issue.toString()),
     };
   }
 
@@ -625,17 +648,19 @@ export class ArvoEventHandler<
   async #refuse(
     param: ArvoEventHandlerExecuteParam<TDependencies, TMechanismHooks>,
     telemetry: ArvoExecutionContextTelemetry,
-    resolved: ArvoResolvedEntry,
+    resolvedEntry: ArvoResolvedEntry,
     record: ArvoExecutionState | null,
     refusal: ArvoGateRefusal,
-    owning?: VersionedArvoContract,
+    owningContract?: VersionedArvoContract,
   ): Promise<ArvoHandlerFault> {
     // An event opening an execution was resolved against a contract, so
     // that contract is the one to answer for it. Anything else is
     // refused before the record has said which version owns it.
     const self =
-      owning ??
-      (resolved.entry === 'init' ? resolved.contract : this.#anyVersion());
+      owningContract ??
+      (resolvedEntry.entry === 'init'
+        ? resolvedEntry.contract
+        : this.#anyVersion());
 
     // An event opening an execution names its own version, so that
     // version's options are in force. Anything else is refused before the
@@ -643,13 +668,13 @@ export class ArvoEventHandler<
     // handler no longer runs — and the rule with nothing on the version
     // side is the handler's own values.
     const options =
-      resolved.entry === 'init' && owning === undefined
+      resolvedEntry.entry === 'init' && owningContract === undefined
         ? this.versions.get(
             self.version as keyof TSelf['versions'] & ArvoSemanticVersion,
           ).options
         : this.options;
 
-    const shared = {
+    const faultFields = {
       contracts: { self },
       options,
       attempt: param.attempt,
@@ -663,22 +688,22 @@ export class ArvoEventHandler<
 
     if (record !== null) {
       return createArvoHandlerFault({
-        ...shared,
+        ...faultFields,
         state: record,
-        entry: resolved.entry,
+        entry: resolvedEntry.entry,
       });
     }
 
     return createArvoHandlerFault({
-      ...shared,
+      ...faultFields,
       state: null,
       event: param.event,
-      executionId: await this.#identify(resolved, param.event),
+      executionId: await this.#identify(resolvedEntry, param.event),
       // An event opening an execution carries where it came from, so its
       // caller can be told. One answering an execution names the service
       // that sent it and nothing of this execution's own caller, so until
       // the record is read there is nobody to address.
-      initEvent: resolved.entry === 'init' ? param.event : null,
+      initEvent: resolvedEntry.entry === 'init' ? param.event : null,
     });
   }
 

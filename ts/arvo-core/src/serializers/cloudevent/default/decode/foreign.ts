@@ -7,65 +7,70 @@ const asString = (
   source: Record<string, unknown>,
   key: string,
 ): string | undefined => {
-  const value = source[key];
-  return typeof value === 'string' ? value : undefined;
+  const fieldValue = source[key];
+  return typeof fieldValue === 'string' ? fieldValue : undefined;
 };
 
 /** Foreign-event adaptation: only `id`/`source`/`type` are unconditional; every other field is mapped when the foreign CloudEvent provides it, otherwise left to `fallback` — a present foreign value always wins over its fallback. */
 export const decodeForeign = (
-  data: CloudEvent,
-  fallback?: ForeignCloudEventFallback,
+  cloudEvent: CloudEvent,
+  foreignFallback?: ForeignCloudEventFallback,
 ): Decoded => {
   const issues: ErrorIssue[] = [];
-  const raw = data as unknown as Record<string, unknown>;
+  const cloudEventFields = cloudEvent as unknown as Record<string, unknown>;
   const candidate: Record<string, unknown> = {
-    id: data.id,
-    source: data.source,
-    type: data.type,
+    id: cloudEvent.id,
+    source: cloudEvent.source,
+    type: cloudEvent.type,
     subject:
-      typeof data.subject === 'string' ? data.subject : fallback?.subject,
-    time: typeof data.time === 'string' ? data.time : fallback?.time,
-    traceparent: asString(raw, 'traceparent'),
-    tracestate: asString(raw, 'tracestate'),
-    parentid: fallback?.parentid,
-    initid: fallback?.initid,
-    executionid: fallback?.executionid,
-    category: fallback?.category,
-    depth: fallback?.depth,
-    to: fallback?.to,
-    domain: fallback?.domain,
-    baggage: fallback?.baggage,
-    executionunits: fallback?.executionunits,
+      typeof cloudEvent.subject === 'string'
+        ? cloudEvent.subject
+        : foreignFallback?.subject,
+    time:
+      typeof cloudEvent.time === 'string'
+        ? cloudEvent.time
+        : foreignFallback?.time,
+    traceparent: asString(cloudEventFields, 'traceparent'),
+    tracestate: asString(cloudEventFields, 'tracestate'),
+    parentid: foreignFallback?.parentid,
+    initid: foreignFallback?.initid,
+    executionid: foreignFallback?.executionid,
+    category: foreignFallback?.category,
+    depth: foreignFallback?.depth,
+    to: foreignFallback?.to,
+    domain: foreignFallback?.domain,
+    baggage: foreignFallback?.baggage,
+    executionunits: foreignFallback?.executionunits,
   };
 
-  if (data.data !== undefined) {
+  if (cloudEvent.data !== undefined) {
     if (
-      data.data === null ||
-      typeof data.data !== 'object' ||
-      Array.isArray(data.data)
+      cloudEvent.data === null ||
+      typeof cloudEvent.data !== 'object' ||
+      Array.isArray(cloudEvent.data)
     ) {
       issues.push(
         new ErrorIssue({
           path: 'data',
           message: 'must be an object to be adapted from a foreign CloudEvent',
-          received: data.data,
+          received: cloudEvent.data,
         }),
       );
     } else {
-      candidate.data = data.data;
+      candidate.data = cloudEvent.data;
     }
   } else {
-    candidate.data = fallback?.data;
+    candidate.data = foreignFallback?.data;
   }
 
-  candidate.dataschema = fallback?.dataschema;
-  if (!fallback?.dataschema) {
+  candidate.dataschema = foreignFallback?.dataschema;
+  if (!foreignFallback?.dataschema) {
     issues.push(
       new ErrorIssue({
         path: 'dataschema',
         message:
           'is required as a caller-supplied fallback when adapting a foreign CloudEvent',
-        received: fallback?.dataschema,
+        received: foreignFallback?.dataschema,
       }),
     );
   }

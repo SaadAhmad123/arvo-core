@@ -177,30 +177,30 @@ export class ArvoExecutionContext<
    * refuses the value. What is remembered is left as it was.
    */
   async setState(param: { data: ArvoDataWrite<TDataSchema> }): Promise<void> {
-    const next =
+    const proposedData =
       typeof param.data === 'function'
-        ? (param.data as (current: z.output<TDataSchema> | null) => unknown)(
-            this.#state.data,
-          )
+        ? (
+            param.data as (currentData: z.output<TDataSchema> | null) => unknown
+          )(this.#state.data)
         : param.data;
 
-    const checked = z.safeParse(this.dataSchema, next);
-    if (!checked.success) {
-      const fieldOf = (issue: { path: PropertyKey[]; message: string }) =>
+    const validation = z.safeParse(this.dataSchema, proposedData);
+    if (!validation.success) {
+      const issuePath = (issue: { path: PropertyKey[]; message: string }) =>
         `${issue.path.join('.') || '(root)'}`;
-      const violations = checked.error.issues.map(
-        (issue) => `${fieldOf(issue)}: ${issue.message}`,
+      const violations = validation.error.issues.map(
+        (issue) => `${issuePath(issue)}: ${issue.message}`,
       );
-      const refused = checked.error.issues
-        .map((issue) => `${fieldOf(issue)} ${issue.message}`)
+      const issueSummary = validation.error.issues
+        .map((issue) => `${issuePath(issue)} ${issue.message}`)
         .join('; ');
       throw await this.fault({
         faultKind: 'state_schema_rejected',
-        message: `what you passed to ctx.setState() does not satisfy the state schema ${this.contracts.self.type}@${this.contracts.self.version} declares: ${refused}. What this execution remembered is unchanged`,
+        message: `what you passed to ctx.setState() does not satisfy the state schema ${this.contracts.self.type}@${this.contracts.self.version} declares: ${issueSummary}. What this execution remembered is unchanged`,
         violations,
       });
     }
-    this.#state = mutateState(this.#state, { data: checked.data });
+    this.#state = mutateState(this.#state, { data: validation.data });
   }
 
   /**
@@ -224,12 +224,12 @@ export class ArvoExecutionContext<
    * on, and never part of what this execution remembers.
    *
    * @param key - Where the value is read from.
-   * @param value - Kept as given, not copied.
+   * @param middlewareValue - Kept as given, not copied.
    * @throws {ArvoHandlerFault} `middleware_conflict` where the key was
    * already written, which no further attempt fixes. The value already
    * there is left as it was.
    */
-  async setMiddleware(key: string, value: unknown): Promise<void> {
+  async setMiddleware(key: string, middlewareValue: unknown): Promise<void> {
     if (Object.hasOwn(this.#middlewareData, key)) {
       throw await this.fault({
         faultKind: 'middleware_conflict',
@@ -237,7 +237,7 @@ export class ArvoExecutionContext<
         violations: [`middleware.${key}: already written`],
       });
     }
-    this.#middlewareData[key] = value;
+    this.#middlewareData[key] = middlewareValue;
   }
 
   /**
@@ -323,7 +323,7 @@ export class ArvoExecutionContext<
   async build<TParam extends ArvoEmissionParam<TSelf, TServices>>(
     param: TParam,
   ): Promise<ArvoEmittedEvent<TSelf, TServices, TParam['type']>> {
-    const built = tryBuildEmittedEvent(
+    const buildAttempt = tryBuildEmittedEvent(
       {
         self: this.contracts.self,
         services: this.contracts.services,
@@ -332,11 +332,11 @@ export class ArvoExecutionContext<
       },
       param,
     );
-    if (built.ok) return built.value;
+    if (buildAttempt.ok) return buildAttempt.value;
     throw await this.fault({
-      faultKind: built.error.faultKind,
-      message: built.error.message,
-      violations: built.error.violations,
+      faultKind: buildAttempt.error.faultKind,
+      message: buildAttempt.error.message,
+      violations: buildAttempt.error.violations,
     });
   }
 

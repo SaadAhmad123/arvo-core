@@ -37,7 +37,7 @@ export class ArvoExecutionStateSerializer<
   TDataSchema extends z.$ZodObject = z.$ZodObject,
 > {
   /** Owns the format the events inside a record are written in. */
-  readonly #events = new ArvoEventSerializer({ type: 'arvoevent' });
+  readonly #eventSerializer = new ArvoEventSerializer({ type: 'arvoevent' });
 
   /**
    * @param dataschema - The schema governing the data of the version whose
@@ -61,15 +61,15 @@ export class ArvoExecutionStateSerializer<
     const triggeringEvent = await this.#tryWriteEvent(state.triggeringEvent);
     if (!triggeringEvent.ok) return triggeringEvent;
 
-    const inFlight: [string, unknown][] = [];
-    for (const [id, answer] of state.inFlightEventMap) {
+    const inFlightEntries: [string, unknown][] = [];
+    for (const [requestId, answer] of state.inFlightEventMap) {
       if (answer === null) {
-        inFlight.push([id, null]);
+        inFlightEntries.push([requestId, null]);
         continue;
       }
-      const written = await this.#tryWriteEvent(answer);
-      if (!written.ok) return written;
-      inFlight.push([id, written.value]);
+      const serializedAnswer = await this.#tryWriteEvent(answer);
+      if (!serializedAnswer.ok) return serializedAnswer;
+      inFlightEntries.push([requestId, serializedAnswer.value]);
     }
 
     try {
@@ -79,7 +79,7 @@ export class ArvoExecutionStateSerializer<
             ...state.toJSON(),
             initEvent: initEvent.value,
             triggeringEvent: triggeringEvent.value,
-            inFlightEventMap: inFlight,
+            inFlightEventMap: inFlightEntries,
           }),
         ),
       );
@@ -97,9 +97,9 @@ export class ArvoExecutionStateSerializer<
    * holds cannot be turned into JSON.
    */
   async serialize(state: ArvoExecutionState<TDataSchema>): Promise<string> {
-    const result = await this.trySerialize(state);
-    if (result.ok) return result.value;
-    throw result.error;
+    const attempt = await this.trySerialize(state);
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 
   /**
@@ -132,16 +132,16 @@ export class ArvoExecutionStateSerializer<
       );
     }
 
-    let parsed: unknown;
+    let rawRecord: unknown;
     try {
-      parsed = JSON.parse(wire);
+      rawRecord = JSON.parse(wire);
     } catch (thrown) {
       return fromNeverthrow(
         err(new ArvoExecutionStateSerializerError(thrown as Error)),
       );
     }
 
-    if (!isPlainObject(parsed)) {
+    if (!isPlainObject(rawRecord)) {
       return fromNeverthrow(
         err(
           new ArvoExecutionStateSerializerError(
@@ -152,34 +152,36 @@ export class ArvoExecutionStateSerializer<
     }
 
     const issues: ErrorIssue[] = [];
-    const restored: Record<string, unknown> = { ...parsed };
+    const restoredRecord: Record<string, unknown> = { ...rawRecord };
 
     for (const field of ['initEvent', 'triggeringEvent'] as const) {
-      const event = await this.#tryReadEvent(parsed[field]);
-      if (event.ok) restored[field] = event.value;
-      else issues.push(this.#issueFor(field, parsed[field], event.error));
+      const event = await this.#tryReadEvent(rawRecord[field]);
+      if (event.ok) restoredRecord[field] = event.value;
+      else issues.push(this.#issueFor(field, rawRecord[field], event.error));
     }
 
-    if (Array.isArray(parsed.inFlightEventMap)) {
-      const awaited = new Map<string, ArvoEvent | null>();
-      for (const entry of parsed.inFlightEventMap) {
-        const [id, answer] = Array.isArray(entry) ? entry : [undefined, null];
-        const path = `inFlightEventMap[${String(id)}]`;
+    if (Array.isArray(rawRecord.inFlightEventMap)) {
+      const inFlightEventMap = new Map<string, ArvoEvent | null>();
+      for (const inFlightEntry of rawRecord.inFlightEventMap) {
+        const [requestId, answer] = Array.isArray(inFlightEntry)
+          ? inFlightEntry
+          : [undefined, null];
+        const path = `inFlightEventMap[${String(requestId)}]`;
         if (answer === null || answer === undefined) {
-          awaited.set(id as string, null);
+          inFlightEventMap.set(requestId as string, null);
           continue;
         }
         const event = await this.#tryReadEvent(answer);
-        if (event.ok) awaited.set(id as string, event.value);
+        if (event.ok) inFlightEventMap.set(requestId as string, event.value);
         else issues.push(this.#issueFor(path, answer, event.error));
       }
-      restored.inFlightEventMap = awaited;
+      restoredRecord.inFlightEventMap = inFlightEventMap;
     }
 
     if (issues.length > 0) {
       return fromNeverthrow(err(new ArvoExecutionStateValidationError(issues)));
     }
-    return ArvoExecutionState.tryBuild(restored, this.dataschema);
+    return ArvoExecutionState.tryBuild(restoredRecord, this.dataschema);
   }
 
   /**
@@ -191,28 +193,32 @@ export class ArvoExecutionStateSerializer<
    * wrong, naming every field at fault.
    */
   async deserialize(wire: string): Promise<ArvoExecutionState<TDataSchema>> {
-    const result = await this.tryDeserialize(wire);
-    if (result.ok) return result.value;
-    throw result.error;
+    const attempt = await this.tryDeserialize(wire);
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 
   /** One event as the plain object a record embeds. */
   async #tryWriteEvent(
     event: ArvoEvent,
   ): AsyncResult<unknown, ArvoExecutionStateSerializerError> {
-    const written = await this.#events.trySerialize(event);
-    if (!written.ok) {
+    const serialization = await this.#eventSerializer.trySerialize(event);
+    if (!serialization.ok) {
       return fromNeverthrow(
-        err(new ArvoExecutionStateSerializerError(written.error)),
+        err(new ArvoExecutionStateSerializerError(serialization.error)),
       );
     }
-    return fromNeverthrow(ok(JSON.parse(written.value)));
+    return fromNeverthrow(ok(JSON.parse(serialization.value)));
   }
 
   /** One embedded object back as an event. */
-  async #tryReadEvent(value: unknown): AsyncResult<ArvoEvent, Error> {
-    const read = await this.#events.tryDeserialize(JSON.stringify(value));
-    return read.ok ? read : fromNeverthrow(err(read.error));
+  async #tryReadEvent(eventJson: unknown): AsyncResult<ArvoEvent, Error> {
+    const deserialization = await this.#eventSerializer.tryDeserialize(
+      JSON.stringify(eventJson),
+    );
+    return deserialization.ok
+      ? deserialization
+      : fromNeverthrow(err(deserialization.error));
   }
 
   /** An event that would not restore, named where it sits in the record. */

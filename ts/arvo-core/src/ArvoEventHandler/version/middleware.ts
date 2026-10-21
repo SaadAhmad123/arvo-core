@@ -61,17 +61,21 @@ const describeThrown = (thrown: unknown) =>
  * once, here, and what it returns takes its place. Read before any layer
  * runs, so a refusal leaves nothing half-done.
  *
- * @param supplied - The layers this execution was given, or `null`.
- * @param declared - The layers the handler declared, or `null`.
+ * @param suppliedEntries - The layers this execution was given, or `null`.
+ * @param declaredEntries - The layers the handler declared, or `null`.
  * @returns The layers, `null` where neither site named any, or the
  * refusal: `middleware_instantiation_failed` where an entry yields no
  * layer, `middleware_conflict` where two share an identifier.
  */
 export const resolveMiddleware = async (
-  supplied: readonly ArvoEventHandlerMiddlewareEntry[] | null,
-  declared: readonly ArvoEventHandlerMiddlewareEntry[] | null,
+  suppliedEntries: readonly ArvoEventHandlerMiddlewareEntry[] | null,
+  declaredEntries: readonly ArvoEventHandlerMiddlewareEntry[] | null,
 ): Promise<readonly IArvoEventHandlerMiddleware[] | ArvoGateRefusal | null> => {
-  if (supplied !== null && supplied !== undefined && !Array.isArray(supplied)) {
+  if (
+    suppliedEntries !== null &&
+    suppliedEntries !== undefined &&
+    !Array.isArray(suppliedEntries)
+  ) {
     return {
       faultKind: 'middleware_instantiation_failed',
       message:
@@ -81,13 +85,13 @@ export const resolveMiddleware = async (
   }
 
   const entriesInOrder = [
-    ...(supplied ?? []).map((entry, index) => ({
-      entry,
-      position: `supplied middleware[${index}]`,
+    ...(suppliedEntries ?? []).map((middlewareEntry, entryIndex) => ({
+      entry: middlewareEntry,
+      position: `supplied middleware[${entryIndex}]`,
     })),
-    ...(declared ?? []).map((entry, index) => ({
-      entry,
-      position: `declared middleware[${index}]`,
+    ...(declaredEntries ?? []).map((middlewareEntry, entryIndex) => ({
+      entry: middlewareEntry,
+      position: `declared middleware[${entryIndex}]`,
     })),
   ];
 
@@ -96,11 +100,11 @@ export const resolveMiddleware = async (
   const layers: IArvoEventHandlerMiddleware[] = [];
   const firstPositionById = new Map<string, string>();
 
-  for (const { entry, position } of entriesInOrder) {
-    let candidate: unknown = entry;
-    if (typeof entry === 'function') {
+  for (const { entry: middlewareEntry, position } of entriesInOrder) {
+    let candidate: unknown = middlewareEntry;
+    if (typeof middlewareEntry === 'function') {
       try {
-        candidate = await entry();
+        candidate = await middlewareEntry();
       } catch (thrown) {
         const cause = thrown instanceof Error ? thrown.message : String(thrown);
         return {
@@ -181,7 +185,7 @@ export const runMiddleware = async <TContext>(param: {
     middlewareProgress.returnedAt = Date.now();
     middlewareProgress.emission = executorEmission;
   } catch (thrown) {
-    return { kind: 'raised', thrown: thrown };
+    return { kind: 'raised', thrown };
   }
 
   const readOnlyEmission: Readonly<ArvoExecutorEmission> = Array.isArray(

@@ -13,9 +13,9 @@ import type {
 } from './types.js';
 
 /** Returns what a builder reported, throwing the failure instead of holding it. */
-const unwrap = <R>(built: Result<R, ArvoEventValidationError>): R => {
-  if (built.ok) return built.value;
-  throw built.error;
+const unwrap = <R>(attempt: Result<R, ArvoEventValidationError>): R => {
+  if (attempt.ok) return attempt.value;
+  throw attempt.error;
 };
 
 /**

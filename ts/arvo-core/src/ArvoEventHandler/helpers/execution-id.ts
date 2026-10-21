@@ -28,22 +28,24 @@ export const deriveArvoExecutionId = async (
   initEvent: ArvoEvent,
 ): Promise<string> => {
   const encoder = new TextEncoder();
-  const dataschema = encoder.encode(initEvent.dataschema);
-  const id = encoder.encode(initEvent.id);
+  const dataschemaBytes = encoder.encode(initEvent.dataschema);
+  const eventIdBytes = encoder.encode(initEvent.id);
 
-  const input = new Uint8Array(dataschema.length + 1 + id.length);
-  input.set(dataschema, 0);
-  input[dataschema.length] = 0x00;
-  input.set(id, dataschema.length + 1);
+  const digestInput = new Uint8Array(
+    dataschemaBytes.length + 1 + eventIdBytes.length,
+  );
+  digestInput.set(dataschemaBytes, 0);
+  digestInput[dataschemaBytes.length] = 0x00;
+  digestInput.set(eventIdBytes, dataschemaBytes.length + 1);
 
-  const digest = await crypto.subtle.digest('SHA-256', input);
+  const digest = await crypto.subtle.digest('SHA-256', digestInput);
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
 };
 
 /** Whether a string is shaped like a derived execution identifier. */
-export const isArvoExecutionId = (value: unknown): boolean =>
-  typeof value === 'string' &&
-  value.length === EXECUTION_ID_LENGTH &&
-  /^[0-9a-f]+$/.test(value);
+export const isArvoExecutionId = (candidate: unknown): boolean =>
+  typeof candidate === 'string' &&
+  candidate.length === EXECUTION_ID_LENGTH &&
+  /^[0-9a-f]+$/.test(candidate);

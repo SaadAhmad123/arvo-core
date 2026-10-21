@@ -38,16 +38,16 @@ export const layerShapeIssues = (
       }),
     );
   }
-  for (const [partName, part] of [
+  for (const [hookName, hook] of [
     ['before', before],
     ['after', after],
   ] as const) {
-    if (part !== undefined && typeof part !== 'function') {
+    if (hook !== undefined && typeof hook !== 'function') {
       issues.push(
         new ErrorIssue({
-          path: `${path}.${partName}`,
+          path: `${path}.${hookName}`,
           message: `must be something to call, or left out`,
-          received: part,
+          received: hook,
         }),
       );
     }
@@ -85,25 +85,25 @@ export const checkMiddleware = (
   const issues: ErrorIssue[] = [];
   const firstIndexById = new Map<string, number>();
 
-  middleware.forEach((entry, index) => {
-    if (typeof entry === 'function') return;
+  middleware.forEach((middlewareEntry, entryIndex) => {
+    if (typeof middlewareEntry === 'function') return;
 
-    const path = `middleware[${index}]`;
-    const shapeIssues = layerShapeIssues(entry, path);
+    const path = `middleware[${entryIndex}]`;
+    const shapeIssues = layerShapeIssues(middlewareEntry, path);
     if (shapeIssues.length > 0) {
       issues.push(...shapeIssues);
       return;
     }
 
-    const earlierIndex = firstIndexById.get(entry.id);
+    const earlierIndex = firstIndexById.get(middlewareEntry.id);
     if (earlierIndex === undefined) {
-      firstIndexById.set(entry.id, index);
+      firstIndexById.set(middlewareEntry.id, entryIndex);
       return;
     }
     issues.push(
       new ErrorIssue({
         path: `${path}.id`,
-        message: `repeats the identifier "${entry.id}", already declared at middleware[${earlierIndex}]. Two layers in one execution cannot share an identifier`,
+        message: `repeats the identifier "${middlewareEntry.id}", already declared at middleware[${earlierIndex}]. Two layers in one execution cannot share an identifier`,
       }),
     );
   });

@@ -73,7 +73,7 @@ export const createArvoContract = <
 >(
   param: ArvoContractParam<T, M>,
 ): ArvoContract<T, M> => {
-  const declared = tryCreateArvoContract(param);
-  if (declared.ok) return declared.value;
-  throw declared.error;
+  const attempt = tryCreateArvoContract(param);
+  if (attempt.ok) return attempt.value;
+  throw attempt.error;
 };

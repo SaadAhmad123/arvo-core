@@ -105,9 +105,13 @@ export const markStage = (
 export const markExecutorRan = (
   telemetry: ArvoExecutionContextTelemetry,
   self: VersionedArvoContract,
-  ms: number,
+  durationMs: number,
 ): void => {
-  telemetry.metric.record('executor.duration', ms, versionAttributes(self));
+  telemetry.metric.record(
+    'executor.duration',
+    durationMs,
+    versionAttributes(self),
+  );
 };
 
 /**
@@ -121,9 +125,13 @@ export const markExecutorRan = (
 export const markMiddlewareRan = (
   telemetry: ArvoExecutionContextTelemetry,
   self: VersionedArvoContract,
-  ms: number,
+  durationMs: number,
 ): void => {
-  telemetry.metric.record('middleware.duration', ms, versionAttributes(self));
+  telemetry.metric.record(
+    'middleware.duration',
+    durationMs,
+    versionAttributes(self),
+  );
 };
 
 /**
@@ -146,9 +154,13 @@ export const markMiddlewareRan = (
 export const markCollection = (
   telemetry: ArvoExecutionContextTelemetry,
   self: VersionedArvoContract,
-  size: number,
+  collectionSize: number,
 ): void => {
-  telemetry.metric.record('collection.size', size, versionAttributes(self));
+  telemetry.metric.record(
+    'collection.size',
+    collectionSize,
+    versionAttributes(self),
+  );
 };
 
 /**
@@ -203,15 +215,15 @@ export const markOutcome = (
  * that would not close is not a reason to run business code again.
  *
  * @param telemetry - Where this execution records.
- * @param what - Which failure this was.
- * @param raised - Whatever was thrown.
+ * @param failure - Which failure this was.
+ * @param thrown - Whatever was thrown.
  */
 export const markSwallowed = (
   telemetry: ArvoExecutionContextTelemetry,
-  what: string,
+  failure: string,
   thrown: unknown,
 ): void => {
-  telemetry.addEvent(`swallowed.${what}`, {
+  telemetry.addEvent(`swallowed.${failure}`, {
     message: thrown instanceof Error ? thrown.message : String(thrown),
   });
 };
