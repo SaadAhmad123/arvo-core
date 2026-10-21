@@ -48,11 +48,11 @@ describe('a lattice running one workflow through', () => {
     const lattice = latticeWith();
     await lattice.publish(anOrder()).settle();
 
-    const answered = lattice.transcript.published.filter(
+    const fulfilments = lattice.transcript.published.filter(
       (event) => event.type === 'evt_order_fulfilled',
     );
-    expect(answered).toHaveLength(1);
-    expect(answered[0]?.to).toBe('com.web.checkout');
+    expect(fulfilments).toHaveLength(1);
+    expect(fulfilments[0]?.to).toBe('com.web.checkout');
   });
 
   it('runs every execution the workflow opened', async () => {
@@ -75,10 +75,10 @@ describe('a lattice running one workflow through', () => {
     lattice.publish(anOrder('order-1')).publish(anOrder('order-2'));
     await lattice.settle();
 
-    const answered = lattice.transcript.published.filter(
+    const fulfilments = lattice.transcript.published.filter(
       (event) => event.type === 'evt_order_fulfilled',
     );
-    expect(answered.map((event) => event.subject).sort()).toEqual([
+    expect(fulfilments.map((event) => event.subject).sort()).toEqual([
       'order-1',
       'order-2',
     ]);
@@ -101,7 +101,7 @@ describe('what a lattice does with work it cannot do itself', () => {
     expect(lattice.parked.get('human_review')).toHaveLength(1);
     expect(
       lattice.transcript.delivered.some(
-        (given) => given.event.type === 'com_manual_review',
+        (delivery) => delivery.event.type === 'com_manual_review',
       ),
     ).toBe(false);
   });
@@ -125,16 +125,16 @@ describe('what a lattice does with work it cannot do itself', () => {
     });
     await lattice.publish(anOrder()).settle();
 
-    lattice.fulfil('human_review', (asked) =>
+    lattice.fulfil('human_review', (reviewRequest) =>
       createArvoEventFactory(reviewV1).createOutput({
         type: 'evt_review_decided',
         source: reviewV1.type,
-        subject: asked.subject,
-        to: asked.source,
-        executionid: asked.executionid,
-        parentid: asked.id,
-        initid: asked.id,
-        depth: asked.depth,
+        subject: reviewRequest.subject,
+        to: reviewRequest.source,
+        executionid: reviewRequest.executionid,
+        parentid: reviewRequest.id,
+        initid: reviewRequest.id,
+        depth: reviewRequest.depth,
         data: { approved: true },
       }),
     );

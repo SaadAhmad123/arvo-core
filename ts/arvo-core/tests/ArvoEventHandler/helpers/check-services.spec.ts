@@ -4,7 +4,7 @@ import { ArvoContract } from '../../../src/ArvoContract/index.js';
 import { checkServices } from '../../../src/ArvoEventHandler/helpers/check-services.js';
 import { orderVersion, paymentVersion } from '../fixtures.js';
 
-const shipping = new ArvoContract({
+const shippingContract = new ArvoContract({
   type: 'com_shipping_book',
   versions: {
     '1.0.0': {
@@ -27,7 +27,7 @@ describe('what a handler may depend on', () => {
     expect(
       checkServices({
         payments: paymentVersion,
-        shipping: shipping.versions['1.0.0'],
+        shipping: shippingContract.versions['1.0.0'],
       }),
     ).toEqual([]);
   });
@@ -41,8 +41,8 @@ describe('what a handler may depend on', () => {
 
 describe('two versions of one service contract', () => {
   const issues = checkServices({
-    shippingNow: shipping.versions['1.0.0'],
-    shippingNext: shipping.versions['1.1.0'],
+    shippingNow: shippingContract.versions['1.0.0'],
+    shippingNext: shippingContract.versions['1.1.0'],
   });
 
   it('is refused, a response having nothing to be checked against', () => {
@@ -58,16 +58,16 @@ describe('two versions of one service contract', () => {
   });
 
   it('shows the contract declared twice', () => {
-    expect(issues[0]?.message).toContain(shipping.uri);
+    expect(issues[0]?.message).toContain(shippingContract.uri);
   });
 });
 
 describe('one contract declared three times', () => {
   it('reports each repeat against the first', () => {
     const issues = checkServices({
-      first: shipping.versions['1.0.0'],
-      second: shipping.versions['1.1.0'],
-      third: shipping.versions['1.0.0'],
+      first: shippingContract.versions['1.0.0'],
+      second: shippingContract.versions['1.1.0'],
+      third: shippingContract.versions['1.0.0'],
     });
     expect(issues.map((issue) => issue.path)).toEqual([
       'services["second"]',

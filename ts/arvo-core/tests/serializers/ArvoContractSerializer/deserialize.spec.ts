@@ -4,16 +4,16 @@ import { ArvoContract } from '../../../src/ArvoContract/index.js';
 import { ArvoContractSerializerError } from '../../../src/serializers/ArvoContractSerializer/errors.js';
 import { ArvoContractSerializer } from '../../../src/serializers/ArvoContractSerializer/index.js';
 
-const S = 'https://json-schema.org/draft/2020-12/schema';
+const DIALECT = 'https://json-schema.org/draft/2020-12/schema';
 const serializer = new ArvoContractSerializer();
 
 const objectSchema = (properties: Record<string, unknown> = {}) => ({
-  $schema: S,
+  $schema: DIALECT,
   type: 'object',
   properties,
 });
 
-const form = (over: Record<string, unknown> = {}) =>
+const form = (overrides: Record<string, unknown> = {}) =>
   JSON.stringify({
     uri: '#/com/order/create',
     type: 'com_order_create',
@@ -21,13 +21,13 @@ const form = (over: Record<string, unknown> = {}) =>
     domain: null,
     metadata: {},
     versions: { '1.0.0': { input: objectSchema(), outputs: {} } },
-    ...over,
+    ...overrides,
   });
 
-const failureOf = (json: string): ArvoContractSerializerError => {
-  const result = serializer.tryDeserialize(json);
-  if (result.ok) throw new Error('expected a failure');
-  return result.error;
+const deserializationError = (json: string): ArvoContractSerializerError => {
+  const deserialization = serializer.tryDeserialize(json);
+  if (deserialization.ok) throw new Error('expected a failure');
+  return deserialization.error;
 };
 
 describe('a form this serializer produced', () => {
@@ -136,22 +136,22 @@ describe('a form that omitted its uri', () => {
 
 describe('failure at this boundary', () => {
   it('reports a string that is not JSON', () => {
-    const error = failureOf('not json at all');
+    const error = deserializationError('not json at all');
     expect(error).toBeInstanceOf(ArvoContractSerializerError);
   });
 
   it('keeps the original parse failure retrievable', () => {
-    expect(failureOf('{ broken').cause).toBeInstanceOf(SyntaxError);
+    expect(deserializationError('{ broken').cause).toBeInstanceOf(SyntaxError);
   });
 
   it('names no position for a failure that had none', () => {
-    expect(failureOf('not json at all').issues).toEqual([]);
+    expect(deserializationError('not json at all').issues).toEqual([]);
   });
 });
 
 describe("failure of the contract's own rules", () => {
   it('names a malformed emit key', () => {
-    const error = failureOf(
+    const error = deserializationError(
       form({
         versions: {
           '1.0.0': {
@@ -161,20 +161,22 @@ describe("failure of the contract's own rules", () => {
         },
       }),
     );
-    expect(error.issues.map((i) => i.path)).toContain(
+    expect(error.issues.map((issue) => issue.path)).toContain(
       'versions["1.0.0"].outputs["Bad_Key"]',
     );
   });
 
   it('names a malformed version key', () => {
-    const error = failureOf(
+    const error = deserializationError(
       form({ versions: { '01.0.0': { input: objectSchema(), outputs: {} } } }),
     );
-    expect(error.issues.map((i) => i.path)).toContain('versions["01.0.0"]');
+    expect(error.issues.map((issue) => issue.path)).toContain(
+      'versions["01.0.0"]',
+    );
   });
 
   it('reports several contract faults in one attempt', () => {
-    const error = failureOf(
+    const error = deserializationError(
       form({
         domain: 'Bad_Domain',
         versions: {
@@ -185,57 +187,61 @@ describe("failure of the contract's own rules", () => {
         },
       }),
     );
-    const paths = error.issues.map((i) => i.path);
+    const paths = error.issues.map((issue) => issue.path);
     expect(paths).toContain('domain');
     expect(paths).toContain('versions["01.0.0"]');
     expect(paths).toContain('versions["01.0.0"].outputs["Bad_Key"]');
   });
 
   it('carries no cause, the failure being about positions', () => {
-    expect(failureOf(form({ domain: 'Bad_Domain' })).cause).toBeUndefined();
+    expect(
+      deserializationError(form({ domain: 'Bad_Domain' })).cause,
+    ).toBeUndefined();
   });
 });
 
 describe('a malformed form stops before the contract is checked', () => {
   // The two layers overlap on whether a position describes an object, and
   // word it differently. The form answers first, and says the list is partial.
-  const error = failureOf(
+  const error = deserializationError(
     form({
       domain: 'Bad_Domain',
       versions: {
-        '1.0.0': { input: { $schema: S, type: 'string' }, outputs: {} },
+        '1.0.0': { input: { $schema: DIALECT, type: 'string' }, outputs: {} },
       },
     }),
   );
 
   it('reports the form fault', () => {
-    expect(error.issues.map((i) => i.path)).toContain(
+    expect(error.issues.map((issue) => issue.path)).toContain(
       'versions["1.0.0"].input',
     );
   });
 
   it('does not also report the contract fault it did not reach', () => {
-    expect(error.issues.map((i) => i.path)).not.toContain('domain');
+    expect(error.issues.map((issue) => issue.path)).not.toContain('domain');
   });
 
   it('says the list is partial', () => {
-    expect(error.issues.some((i) => i.isBlocking)).toBe(true);
+    expect(error.issues.some((issue) => issue.isBlocking)).toBe(true);
     expect(error.message).toContain('not the whole list');
   });
 
   it('says why it stopped', () => {
-    const blocking = error.issues.find((i) => i.isBlocking);
+    const blocking = error.issues.find((issue) => issue.isBlocking);
     expect(blocking?.blockingReason).toContain('not well formed');
   });
 });
 
 describe('a construct that cannot be read', () => {
-  const refusedFor = (input: unknown) =>
-    failureOf(form({ versions: { '1.0.0': { input, outputs: {} } } }));
+  const inputError = (input: unknown) =>
+    deserializationError(
+      form({ versions: { '1.0.0': { input, outputs: {} } } }),
+    );
 
   it('names one the conversion refuses', () => {
-    const error = refusedFor({
-      $schema: S,
+    const error = inputError({
+      $schema: DIALECT,
       type: 'object',
       properties: { a: { type: 'string' } },
       unevaluatedProperties: false,
@@ -247,25 +253,25 @@ describe('a construct that cannot be read', () => {
   it('names a top-level allOf, which converts to something not an object', () => {
     // Legal under the model, and among the known gaps: the conversion turns
     // it into an intersection, which is not an object schema.
-    const error = refusedFor({
-      $schema: S,
+    const error = inputError({
+      $schema: DIALECT,
       type: 'object',
       allOf: [{ properties: { a: { type: 'string' } } }],
     });
-    expect(error.issues.map((i) => i.path)).toContain(
+    expect(error.issues.map((issue) => issue.path)).toContain(
       'versions["1.0.0"].input',
     );
   });
 
   it('names one inside an outputs entry, not only in input', () => {
-    const error = failureOf(
+    const error = deserializationError(
       form({
         versions: {
           '1.0.0': {
             input: objectSchema(),
             outputs: {
               com_a_done: {
-                $schema: S,
+                $schema: DIALECT,
                 type: 'object',
                 properties: { a: { type: 'string' } },
                 unevaluatedProperties: false,
@@ -275,43 +281,45 @@ describe('a construct that cannot be read', () => {
         },
       }),
     );
-    expect(error.issues.map((i) => i.path)).toContain(
+    expect(error.issues.map((issue) => issue.path)).toContain(
       'versions["1.0.0"].outputs["com_a_done"]',
     );
   });
 
   it('names patternProperties, which converts to a record', () => {
-    const error = refusedFor({
-      $schema: S,
+    const error = inputError({
+      $schema: DIALECT,
       type: 'object',
       patternProperties: { '^x-': { type: 'string' } },
     });
-    expect(error.issues.map((i) => i.path)).toContain(
+    expect(error.issues.map((issue) => issue.path)).toContain(
       'versions["1.0.0"].input',
     );
   });
 });
 
 describe('the primitive and its companion', () => {
-  const good = form();
-  const bad = 'not json';
+  const validForm = form();
+  const invalidJson = 'not json';
 
   it('the primitive does not raise for an expected failure', () => {
-    expect(() => serializer.tryDeserialize(bad)).not.toThrow();
-    expect(serializer.tryDeserialize(bad).ok).toBe(false);
+    expect(() => serializer.tryDeserialize(invalidJson)).not.toThrow();
+    expect(serializer.tryDeserialize(invalidJson).ok).toBe(false);
   });
 
   it('the companion raises what the primitive reported', () => {
-    const reported = serializer.tryDeserialize(bad);
-    expect(reported.ok).toBe(false);
-    if (!reported.ok) {
-      expect(() => serializer.deserialize(bad)).toThrow(reported.error.message);
+    const deserialization = serializer.tryDeserialize(invalidJson);
+    expect(deserialization.ok).toBe(false);
+    if (!deserialization.ok) {
+      expect(() => serializer.deserialize(invalidJson)).toThrow(
+        deserialization.error.message,
+      );
     }
   });
 
   it('both agree on success', () => {
-    const primitive = serializer.tryDeserialize(good);
-    const companion = serializer.deserialize(good);
+    const primitive = serializer.tryDeserialize(validForm);
+    const companion = serializer.deserialize(validForm);
     expect(primitive.ok).toBe(true);
     if (primitive.ok) {
       expect(primitive.value.contract.uri).toBe(companion.contract.uri);
@@ -320,8 +328,8 @@ describe('the primitive and its companion', () => {
   });
 
   it('both agree on failure', () => {
-    expect(serializer.tryDeserialize(bad).ok).toBe(false);
-    expect(() => serializer.deserialize(bad)).toThrow(
+    expect(serializer.tryDeserialize(invalidJson).ok).toBe(false);
+    expect(() => serializer.deserialize(invalidJson)).toThrow(
       ArvoContractSerializerError,
     );
   });

@@ -25,7 +25,7 @@ type ArvoFaultOrigin = ArvoHandlerErrorAddressing & {
 };
 
 /** Everything a fault names, read off the record or off the event instead. */
-const originOf = (
+const faultOrigin = (
   param: ArvoHandlerFaultFactoryParam,
   self: VersionedArvoContract,
 ): ArvoFaultOrigin =>
@@ -59,7 +59,7 @@ const originOf = (
 const abandonmentStateFor = async (
   state: ArvoExecutionState | null,
   entry: ArvoEntryKind,
-  published: ArvoEvent | null,
+  handlerErrorEvent: ArvoEvent | null,
   message: string,
 ): Promise<string | null> => {
   if (state === null) return null;
@@ -69,15 +69,19 @@ const abandonmentStateFor = async (
       lifecycle: 'failure',
       lifecycleDescription: message,
       eventIds:
-        published === null
+        handlerErrorEvent === null
           ? state.eventIds
-          : [...state.eventIds, { id: published.id, direction: 'emitted' }],
+          : [
+              ...state.eventIds,
+              { id: handlerErrorEvent.id, direction: 'emitted' },
+            ],
     }),
     entry,
   );
 
-  const written = await new ArvoExecutionStateSerializer().trySerialize(record);
-  return written.ok ? written.value : null;
+  const recordSerialization =
+    await new ArvoExecutionStateSerializer().trySerialize(record);
+  return recordSerialization.ok ? recordSerialization.value : null;
 };
 
 /**
@@ -117,7 +121,7 @@ export const createArvoHandlerFault = async (
 ): Promise<ArvoHandlerFault> => {
   const timestamp = Date.now();
   const self = param.contracts.self;
-  const origin = originOf(param, self);
+  const origin = faultOrigin(param, self);
 
   // An execution already at rest answered its caller and rests where it
   // rests: a second answer would be discarded at that caller's gate, and
@@ -126,7 +130,7 @@ export const createArvoHandlerFault = async (
 
   // The same event an execution that failed outright sends its caller, so
   // a caller reads one shape whether the work failed or was given up on.
-  const published = carriesAbandonment
+  const handlerErrorEvent = carriesAbandonment
     ? buildHandlerErrorEvent(
         self,
         origin,
@@ -134,11 +138,11 @@ export const createArvoHandlerFault = async (
         param.options.handlerErrorDomain,
       )
     : null;
-  const written =
-    published === null
+  const eventSerialization =
+    handlerErrorEvent === null
       ? null
       : await new ArvoEventSerializer({ type: 'arvoevent' }).trySerialize(
-          published,
+          handlerErrorEvent,
         );
 
   // An execution with no record was opening one, whatever it was
@@ -164,9 +168,14 @@ export const createArvoHandlerFault = async (
       state: param.state,
       timestamp,
     }),
-    abandonmentEvent: written?.ok ? written.value : null,
+    abandonmentEvent: eventSerialization?.ok ? eventSerialization.value : null,
     abandonmentState: carriesAbandonment
-      ? await abandonmentStateFor(param.state, entry, published, param.message)
+      ? await abandonmentStateFor(
+          param.state,
+          entry,
+          handlerErrorEvent,
+          param.message,
+        )
       : null,
   });
 

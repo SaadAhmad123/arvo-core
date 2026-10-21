@@ -5,13 +5,13 @@ import type { ArvoExecutionState } from './index.js';
 /** One field against what the init event says it must be. */
 const disagrees = (
   field: string,
-  held: unknown,
-  required: unknown,
-  what: string,
+  storedValue: unknown,
+  requiredValue: unknown,
+  authority: string,
 ): string | null =>
-  held === required
+  storedValue === requiredValue
     ? null
-    : `${field}: stored state says ${String(held)}, and ${what} says ${String(required)}`;
+    : `${field}: stored state says ${String(storedValue)}, and ${authority} says ${String(requiredValue)}`;
 
 /**
  * Every way a record contradicts its own init event, or none where it
@@ -40,7 +40,7 @@ export const disagreementsWithInitEvent = async (
   state: ArvoExecutionState,
 ): Promise<string[]> => {
   const initEvent: ArvoEvent = state.initEvent;
-  const derived = await deriveArvoExecutionId(initEvent);
+  const derivedExecutionId = await deriveArvoExecutionId(initEvent);
 
   const disagreements = [
     disagrees(
@@ -64,7 +64,7 @@ export const disagreementsWithInitEvent = async (
     disagrees(
       'executionId',
       state.executionId,
-      derived,
+      derivedExecutionId,
       'what the event that opened it derives to',
     ),
     disagrees(
@@ -80,23 +80,28 @@ export const disagreementsWithInitEvent = async (
       'the version the event that opened it names',
     ),
     state.eventIds.some(
-      (logged) => logged.id === initEvent.id && logged.direction === 'received',
+      (touchedEvent) =>
+        touchedEvent.id === initEvent.id &&
+        touchedEvent.direction === 'received',
     )
       ? null
       : `eventIds: does not list ${initEvent.id}, the event that opened this execution, as received — every stored execution must`,
   ];
 
-  for (const awaited of state.inFlightEventMap.keys()) {
+  for (const requestId of state.inFlightEventMap.keys()) {
     if (
       !state.eventIds.some(
-        (logged) => logged.id === awaited && logged.direction === 'emitted',
+        (touchedEvent) =>
+          touchedEvent.id === requestId && touchedEvent.direction === 'emitted',
       )
     ) {
       disagreements.push(
-        `inFlightEventMap: awaits request ${awaited}, which stored state does not list as having been sent`,
+        `inFlightEventMap: awaits request ${requestId}, which stored state does not list as having been sent`,
       );
     }
   }
 
-  return disagreements.filter((issue): issue is string => issue !== null);
+  return disagreements.filter(
+    (disagreement): disagreement is string => disagreement !== null,
+  );
 };

@@ -27,7 +27,7 @@ import { checkHandlerInvariants } from './invariants.js';
  * the seed is printed where one fails.
  */
 
-const latticeFor = (seed: number) =>
+const seededLattice = (seed: number) =>
   new ArvoLattice({
     versions: {},
     handlers: {
@@ -45,24 +45,24 @@ const latticeFor = (seed: number) =>
     },
   });
 
-const opening = (subject: string) => ({
+const openingFields = (subject: string) => ({
   source: 'com.web.checkout',
   subject,
   to: fulfilContract.type,
 });
 
 /** One order at each of the three versions, so routing is under chaos too. */
-const ordersFor = (run: number) => [
+const seededOrders = (seed: number) => [
   createArvoEventFactory(fulfilV1).createInput({
-    ...opening(`order-${run}-first`),
+    ...openingFields(`order-${seed}-first`),
     data: { items: ['book'] },
   }),
   createArvoEventFactory(fulfilV11).createInput({
-    ...opening(`order-${run}-second`),
+    ...openingFields(`order-${seed}-second`),
     data: { items: ['book'], rush: true },
   }),
   createArvoEventFactory(fulfilV2).createInput({
-    ...opening(`order-${run}-third`),
+    ...openingFields(`order-${seed}-third`),
     data: { items: ['book'] },
   }),
 ];
@@ -70,8 +70,8 @@ const ordersFor = (run: number) => [
 describe('two hundred seeded runs, every one placed by the handler', () => {
   it('holds every invariant under repetition, disorder and loss', async () => {
     for (let seed = 1; seed <= 200; seed += 1) {
-      const lattice = latticeFor(seed);
-      for (const order of ordersFor(seed)) lattice.publish(order);
+      const lattice = seededLattice(seed);
+      for (const order of seededOrders(seed)) lattice.publish(order);
       await lattice.settle();
       // a crash before publishing can happen again on the commit that
       // recovery produces, so recovery is not one act
@@ -79,9 +79,9 @@ describe('two hundred seeded runs, every one placed by the handler', () => {
 
       try {
         await checkHandlerInvariants(lattice);
-      } catch (broke) {
+      } catch (thrown) {
         throw new Error(
-          `seed ${seed} broke an invariant: ${(broke as Error).message}`,
+          `seed ${seed} broke an invariant: ${(thrown as Error).message}`,
         );
       }
     }
@@ -89,22 +89,23 @@ describe('two hundred seeded runs, every one placed by the handler', () => {
 
   it('routes every execution to the version its own event named, however badly it went', async () => {
     for (let seed = 201; seed <= 260; seed += 1) {
-      const lattice = latticeFor(seed);
-      for (const order of ordersFor(seed)) lattice.publish(order);
+      const lattice = seededLattice(seed);
+      for (const order of seededOrders(seed)) lattice.publish(order);
       await lattice.settle();
       // a crash before publishing can happen again on the commit that
       // recovery produces, so recovery is not one act
       while (lattice.holding > 0) await lattice.recover().settle();
 
-      const byVersion = new Map<string, Set<string>>();
+      const versionsBySubject = new Map<string, Set<string>>();
       for (const row of lattice.store.values()) {
         if (row.source !== fulfilContract.type) continue;
-        const held = byVersion.get(String(row.subject)) ?? new Set<string>();
-        held.add(String(row.version));
-        byVersion.set(String(row.subject), held);
+        const subjectVersions =
+          versionsBySubject.get(String(row.subject)) ?? new Set<string>();
+        subjectVersions.add(String(row.version));
+        versionsBySubject.set(String(row.subject), subjectVersions);
       }
 
-      for (const [subject, versions] of byVersion) {
+      for (const [subject, versions] of versionsBySubject) {
         expect([...versions], `seed ${seed}, ${subject}`).toHaveLength(1);
       }
     }
@@ -114,23 +115,26 @@ describe('two hundred seeded runs, every one placed by the handler', () => {
 describe('what chance must never produce', () => {
   it('never a workflow answered twice, however many repeats there were', async () => {
     for (let seed = 301; seed <= 340; seed += 1) {
-      const lattice = latticeFor(seed);
-      for (const order of ordersFor(seed)) lattice.publish(order);
+      const lattice = seededLattice(seed);
+      for (const order of seededOrders(seed)) lattice.publish(order);
       await lattice.settle();
       // a crash before publishing can happen again on the commit that
       // recovery produces, so recovery is not one act
       while (lattice.holding > 0) await lattice.recover().settle();
 
-      const answered = lattice.transcript.published.filter(
+      const answersToCaller = lattice.transcript.published.filter(
         (event) =>
           event.to === 'com.web.checkout' &&
           lattice.transcript.fromExecutions.has(event.id),
       );
-      const bySubject = new Map<string, number>();
-      for (const event of answered) {
-        bySubject.set(event.subject, (bySubject.get(event.subject) ?? 0) + 1);
+      const answerCountBySubject = new Map<string, number>();
+      for (const event of answersToCaller) {
+        answerCountBySubject.set(
+          event.subject,
+          (answerCountBySubject.get(event.subject) ?? 0) + 1,
+        );
       }
-      for (const [subject, count] of bySubject) {
+      for (const [subject, count] of answerCountBySubject) {
         expect(count, `seed ${seed}, ${subject} answered ${count} times`).toBe(
           1,
         );
@@ -145,10 +149,10 @@ describe('what a mechanism supplies, under the same chance', () => {
    * does: a store that cannot be read, a factory that cannot build, and
    * hooks that are not what anything expected.
    */
-  const latticeSupplying = (seed: number) => {
+  const latticeWithFailingSupplies = (seed: number) => {
     const chance = chanceFrom(seed);
     const handler = declareHandler();
-    const broken = { reads: 0, builds: 0 };
+    const failureCounts = { reads: 0, builds: 0 };
 
     const lattice = new ArvoLattice({
       versions: {},
@@ -156,24 +160,24 @@ describe('what a mechanism supplies, under the same chance', () => {
         [fulfilContract.type]: {
           execute: (param: {
             event: unknown;
-            state: (asked: { executionId: string }) => unknown;
+            state: (stateQuery: { executionId: string }) => unknown;
             attempt: number;
           }) =>
             handler.execute({
               event: param.event as never,
               // a store that is sometimes unreachable
-              state: (asked) => {
+              state: (stateQuery) => {
                 if (chance() < 0.15) {
-                  broken.reads += 1;
+                  failureCounts.reads += 1;
                   throw new Error('the store is unreachable');
                 }
-                return param.state(asked) as never;
+                return param.state(stateQuery) as never;
               },
               attempt: param.attempt,
               // a dependency that sometimes cannot open
               dependencies: openedPerExecution(() => {
                 if (chance() < 0.15) {
-                  broken.builds += 1;
+                  failureCounts.builds += 1;
                   throw new Error('the pool is exhausted');
                 }
                 return {};
@@ -191,31 +195,31 @@ describe('what a mechanism supplies, under the same chance', () => {
       chaos: { duplicate: 0.2, shuffle: true, loseRace: 0.1 },
     });
 
-    return { lattice, broken };
+    return { lattice, failureCounts };
   };
 
   it('holds every invariant while the store and the factory keep failing', async () => {
     for (let seed = 401; seed <= 460; seed += 1) {
-      const { lattice } = latticeSupplying(seed);
-      for (const order of ordersFor(seed)) lattice.publish(order);
+      const { lattice } = latticeWithFailingSupplies(seed);
+      for (const order of seededOrders(seed)) lattice.publish(order);
       await lattice.settle();
       while (lattice.holding > 0) await lattice.recover().settle();
 
       try {
         await checkHandlerInvariants(lattice);
-      } catch (broke) {
+      } catch (thrown) {
         throw new Error(
-          `seed ${seed} broke an invariant: ${(broke as Error).message}`,
+          `seed ${seed} broke an invariant: ${(thrown as Error).message}`,
         );
       }
     }
   }, 120_000);
 
   it('reads every failure to build as one worth trying again', async () => {
-    let sawOne = false;
+    let sawBuildFailure = false;
     for (let seed = 501; seed <= 560; seed += 1) {
-      const { lattice } = latticeSupplying(seed);
-      for (const order of ordersFor(seed)) lattice.publish(order);
+      const { lattice } = latticeWithFailingSupplies(seed);
+      for (const order of seededOrders(seed)) lattice.publish(order);
       await lattice.settle();
       while (lattice.holding > 0) await lattice.recover().settle();
 
@@ -226,7 +230,7 @@ describe('what a mechanism supplies, under the same chance', () => {
         ) {
           continue;
         }
-        sawOne = true;
+        sawBuildFailure = true;
         // in prospect only while there is budget left, which is the one
         // rule about retrying that is pinned rather than chosen
         if (fault.retry !== null) {
@@ -239,13 +243,13 @@ describe('what a mechanism supplies, under the same chance', () => {
         }
       }
     }
-    expect(sawOne, 'nothing failed to build in any run').toBe(true);
+    expect(sawBuildFailure, 'nothing failed to build in any run').toBe(true);
   }, 120_000);
 
   it('never lets what a mechanism supplied reach a record', async () => {
     for (let seed = 601; seed <= 640; seed += 1) {
-      const { lattice } = latticeSupplying(seed);
-      for (const order of ordersFor(seed)) lattice.publish(order);
+      const { lattice } = latticeWithFailingSupplies(seed);
+      for (const order of seededOrders(seed)) lattice.publish(order);
       await lattice.settle();
       while (lattice.holding > 0) await lattice.recover().settle();
 

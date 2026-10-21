@@ -19,7 +19,7 @@ import {
 } from '../fixtures.js';
 
 /** What an execution records against; these tests only carry it. */
-const { telemetry: tracing } = telemetry();
+const { telemetry: sharedTelemetry } = telemetry();
 
 const orderData = z.object({ orderId: z.string(), attempts: z.number() });
 
@@ -27,8 +27,8 @@ const EXECUTION_ID = 'a'.repeat(64);
 const PARENT_EXECUTION_ID = initEvent.executionid;
 
 /** The factory reports rather than throws; a fixture wants the value. */
-const ctx = () => {
-  const state = createInitArvoExecutionState<
+const openingContext = () => {
+  const stateCreation = createInitArvoExecutionState<
     typeof orderVersion,
     typeof services,
     typeof orderData
@@ -38,14 +38,14 @@ const ctx = () => {
     executionId: EXECUTION_ID,
     parentExecutionId: PARENT_EXECUTION_ID,
   });
-  if (!state.ok) throw state.error;
+  if (!stateCreation.ok) throw stateCreation.error;
   return new ArvoExecutionContext({
     contracts: { self: orderVersion, services },
-    state: state.value,
+    state: stateCreation.value,
     entry: 'init',
     dataSchema: orderData,
     attempt: 0,
-    telemetry: tracing,
+    telemetry: sharedTelemetry,
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     idempotency: placeholderIdempotencyKeys,
     dependencies: {},
@@ -54,16 +54,16 @@ const ctx = () => {
 };
 
 /** An event asking the declared payment service to do something. */
-const toService = async (param: Record<string, unknown> = {}) =>
-  ctx().build({
+const serviceEvent = async (param: Record<string, unknown> = {}) =>
+  openingContext().build({
     type: 'com_payment_charge',
     data: { amount: 10 },
     ...param,
   });
 
 /** An event completing this execution back to whoever opened it. */
-const toCaller = async (param: Record<string, unknown> = {}) =>
-  ctx().build({
+const completionEvent = async (param: Record<string, unknown> = {}) =>
+  openingContext().build({
     type: 'com_order_created',
     data: { order_id: 'o-1' },
     ...param,
@@ -71,192 +71,198 @@ const toCaller = async (param: Record<string, unknown> = {}) =>
 
 describe('building an event to emit', async () => {
   it('produces an event', async () => {
-    expect(await toService()).toBeInstanceOf(ArvoEvent);
+    expect(await serviceEvent()).toBeInstanceOf(ArvoEvent);
   });
 
   describe('an event asking a service to do something', async () => {
     it('is addressed to that service', async () => {
-      expect((await toService()).to).toBe(paymentVersion.type);
+      expect((await serviceEvent()).to).toBe(paymentVersion.type);
     });
 
     it('carries this execution as the one to reply to', async () => {
-      expect((await toService()).executionid).toBe(EXECUTION_ID);
+      expect((await serviceEvent()).executionid).toBe(EXECUTION_ID);
     });
 
     it('sits one deeper than this execution', async () => {
-      expect((await toService()).depth).toBe(initEvent.depth + 1);
+      expect((await serviceEvent()).depth).toBe(initEvent.depth + 1);
     });
 
     it('answers no request, not being a completion', async () => {
-      expect((await toService()).initid).toBeNull();
+      expect((await serviceEvent()).initid).toBeNull();
     });
 
     it('opens something, and says so', async () => {
-      expect((await toService()).category).toBe('io.arvo.init');
+      expect((await serviceEvent()).category).toBe('io.arvo.init');
     });
 
     it('is validated against that service contract', async () => {
-      expect((await toService()).dataschema).toBe(paymentVersion.dataschema);
-      expect((await toService()).data).toEqual({ amount: 10 });
+      expect((await serviceEvent()).dataschema).toBe(paymentVersion.dataschema);
+      expect((await serviceEvent()).data).toEqual({ amount: 10 });
     });
   });
 
   describe('an event completing this execution', async () => {
     it('is addressed to whoever opened the execution', async () => {
-      expect((await toCaller()).to).toBe(initEvent.source);
+      expect((await completionEvent()).to).toBe(initEvent.source);
     });
 
     it('carries the caller as the one to reply to', async () => {
-      expect((await toCaller()).executionid).toBe(PARENT_EXECUTION_ID);
+      expect((await completionEvent()).executionid).toBe(PARENT_EXECUTION_ID);
     });
 
     it('sits where this execution sits', async () => {
-      expect((await toCaller()).depth).toBe(initEvent.depth);
+      expect((await completionEvent()).depth).toBe(initEvent.depth);
     });
 
     it('names the request it answers', async () => {
-      expect((await toCaller()).initid).toBe(initEvent.id);
+      expect((await completionEvent()).initid).toBe(initEvent.id);
     });
 
     it('completes something, and says so', async () => {
-      expect((await toCaller()).category).toBe('io.arvo.complete');
+      expect((await completionEvent()).category).toBe('io.arvo.complete');
     });
 
     it('is validated against this version of the implemented contract', async () => {
-      expect((await toCaller()).dataschema).toBe(orderVersion.dataschema);
+      expect((await completionEvent()).dataschema).toBe(
+        orderVersion.dataschema,
+      );
     });
   });
 
   describe('what both carry', async () => {
     it('stays in the same workflow', async () => {
-      expect((await toService()).subject).toBe(initEvent.subject);
-      expect((await toCaller()).subject).toBe(initEvent.subject);
+      expect((await serviceEvent()).subject).toBe(initEvent.subject);
+      expect((await completionEvent()).subject).toBe(initEvent.subject);
     });
 
     it('names this handler as where it came from', async () => {
-      expect((await toService()).source).toBe(orderVersion.type);
-      expect((await toCaller()).source).toBe(orderVersion.type);
+      expect((await serviceEvent()).source).toBe(orderVersion.type);
+      expect((await completionEvent()).source).toBe(orderVersion.type);
     });
 
     it('names the event that caused it as its parent', async () => {
-      expect((await toService()).parentid).toBe(initEvent.id);
-      expect((await toCaller()).parentid).toBe(initEvent.id);
+      expect((await serviceEvent()).parentid).toBe(initEvent.id);
+      expect((await completionEvent()).parentid).toBe(initEvent.id);
     });
 
     it('costs nothing until something says otherwise', async () => {
-      expect((await toService()).executionunits).toBe(0);
+      expect((await serviceEvent()).executionunits).toBe(0);
     });
 
     it('is given an id of its own', async () => {
-      expect((await toService()).id).not.toBe((await toService()).id);
+      expect((await serviceEvent()).id).not.toBe((await serviceEvent()).id);
     });
   });
 
   describe('a type this version may not emit', async () => {
-    const refused = async (type: string, data: unknown = {}) => {
+    const refusedTypeFault = async (type: string, data: unknown = {}) => {
       try {
-        await ctx().build({ type, data } as never);
-      } catch (raised) {
-        return raised as ArvoHandlerFault;
+        await openingContext().build({ type, data } as never);
+      } catch (thrown) {
+        return thrown as ArvoHandlerFault;
       }
       throw new Error('expected the emission to be refused');
     };
 
     it('raises a fault', async () => {
-      expect(await refused('com_nothing_declared')).toBeInstanceOf(
+      expect(await refusedTypeFault('com_nothing_declared')).toBeInstanceOf(
         ArvoHandlerFault,
       );
     });
 
     it('names it as an emission the version may not make', async () => {
-      expect((await refused('com_nothing_declared')).faultKind).toBe(
+      expect((await refusedTypeFault('com_nothing_declared')).faultKind).toBe(
         'emission_not_permitted',
       );
     });
 
     it('says which type was asked for', async () => {
-      expect((await refused('com_nothing_declared')).message).toContain(
-        'com_nothing_declared',
-      );
+      expect(
+        (await refusedTypeFault('com_nothing_declared')).message,
+      ).toContain('com_nothing_declared');
     });
 
     it('refuses the handler error type, an executor having no means to emit one', async () => {
-      expect((await refused(orderVersion.error.type)).faultKind).toBe(
+      expect((await refusedTypeFault(orderVersion.error.type)).faultKind).toBe(
         'emission_not_permitted',
       );
     });
 
     it('refuses this version input type, which it receives rather than sends', async () => {
-      expect((await refused(orderVersion.type)).faultKind).toBe(
+      expect((await refusedTypeFault(orderVersion.type)).faultKind).toBe(
         'emission_not_permitted',
       );
     });
   });
 
   describe('a payload the schema refuses', async () => {
-    const refused = async () => {
+    const rejectedPayloadFault = async () => {
       try {
-        await ctx().build({
+        await openingContext().build({
           type: 'com_payment_charge',
           data: { amount: 'ten' },
         } as never);
-      } catch (raised) {
-        return raised as ArvoHandlerFault;
+      } catch (thrown) {
+        return thrown as ArvoHandlerFault;
       }
       throw new Error('expected the emission to be refused');
     };
 
     it('raises a fault', async () => {
-      expect(await refused()).toBeInstanceOf(ArvoHandlerFault);
+      expect(await rejectedPayloadFault()).toBeInstanceOf(ArvoHandlerFault);
     });
 
     it('names it as a payload the schema would not take', async () => {
-      expect((await refused()).faultKind).toBe('emission_schema_rejected');
+      expect((await rejectedPayloadFault()).faultKind).toBe(
+        'emission_schema_rejected',
+      );
     });
 
     it('says what was wrong with it', async () => {
-      expect((await refused()).message).toContain('amount');
+      expect((await rejectedPayloadFault()).message).toContain('amount');
     });
   });
 
   describe('what an executor may set outright', async () => {
     it('takes a processing path', async () => {
-      expect((await toService({ domain: 'analytics' })).domain).toBe(
+      expect((await serviceEvent({ domain: 'analytics' })).domain).toBe(
         'analytics',
       );
     });
 
     it('takes a cost figure', async () => {
-      expect((await toService({ executionunits: 12 })).executionunits).toBe(12);
+      expect((await serviceEvent({ executionunits: 12 })).executionunits).toBe(
+        12,
+      );
     });
   });
 
   describe('what it may set only through the unsafe surface', async () => {
     it('takes a reply path it was not given', async () => {
-      const event = await toService({
+      const event = await serviceEvent({
         unsafe: { executionid: 'somewhere-else' },
       });
       expect(event.executionid).toBe('somewhere-else');
     });
 
     it('takes a destination it was not given', async () => {
-      expect((await toService({ unsafe: { to: 'com.elsewhere' } })).to).toBe(
+      expect((await serviceEvent({ unsafe: { to: 'com.elsewhere' } })).to).toBe(
         'com.elsewhere',
       );
     });
 
     it('takes a depth it was not given, even a wrong one', async () => {
-      expect((await toService({ unsafe: { depth: 99 } })).depth).toBe(99);
+      expect((await serviceEvent({ unsafe: { depth: 99 } })).depth).toBe(99);
     });
 
     it('leaves the defaults alone where nothing was set', async () => {
-      expect((await toService({ unsafe: {} })).to).toBe(paymentVersion.type);
+      expect((await serviceEvent({ unsafe: {} })).to).toBe(paymentVersion.type);
     });
   });
 
   describe('what it gives back, read without a cast', async () => {
     it('is typed by the type it was asked for', async () => {
-      const charge = await ctx().build({
+      const charge = await openingContext().build({
         type: 'com_payment_charge',
         data: { amount: 10 },
       });
@@ -266,13 +272,13 @@ describe('building an event to emit', async () => {
     });
 
     it('is typed by that type on a completion too', async () => {
-      const done = await ctx().build({
+      const completion = await openingContext().build({
         type: 'com_order_created',
         data: { order_id: 'o-1' },
       });
-      expectTypeOf(done.type).toEqualTypeOf<'com_order_created'>();
-      expectTypeOf(done.data).toEqualTypeOf<{ order_id: string }>();
-      expect(done.data.order_id).toBe('o-1');
+      expectTypeOf(completion.type).toEqualTypeOf<'com_order_created'>();
+      expectTypeOf(completion.data).toEqualTypeOf<{ order_id: string }>();
+      expect(completion.data.order_id).toBe('o-1');
     });
   });
 });
@@ -303,29 +309,29 @@ describe('which processing path an emitted event takes', () => {
   }).versions['1.0.0'];
 
   /** An execution of the domained contract, triggered by a domained event. */
-  const reviewing = () => {
-    const triggered = cloneArvoEvent(initEvent, {
+  const reviewingContext = () => {
+    const triggeringEvent = cloneArvoEvent(initEvent, {
       dataschema: reviewedOrder.dataschema,
       domain: 'inherited',
     });
-    const state = createInitArvoExecutionState<
+    const stateCreation = createInitArvoExecutionState<
       typeof reviewedOrder,
       { review: typeof manualReview },
       typeof orderData
     >({
       self: reviewedOrder,
-      event: triggered,
+      event: triggeringEvent,
       executionId: EXECUTION_ID,
       parentExecutionId: PARENT_EXECUTION_ID,
     });
-    if (!state.ok) throw state.error;
+    if (!stateCreation.ok) throw stateCreation.error;
     return new ArvoExecutionContext({
       contracts: { self: reviewedOrder, services: { review: manualReview } },
-      state: state.value,
+      state: stateCreation.value,
       entry: 'init',
       dataSchema: orderData,
       attempt: 0,
-      telemetry: tracing,
+      telemetry: sharedTelemetry,
       options: ARVO_DEFAULT_HANDLER_OPTIONS,
       idempotency: placeholderIdempotencyKeys,
       dependencies: {},
@@ -333,51 +339,61 @@ describe('which processing path an emitted event takes', () => {
     });
   };
 
-  const asking = async (domain?: ArvoDomainInput) =>
-    reviewing().build({
+  const buildReviewRequest = async (domain?: ArvoDomainInput) =>
+    reviewingContext().build({
       type: 'com_manual_review',
       data: { order_id: 'o-1' },
       ...(domain === undefined ? {} : { domain }),
     });
 
   it('stays on the lattice where nothing asked otherwise', async () => {
-    expect((await asking()).domain).toBeNull();
+    expect((await buildReviewRequest()).domain).toBeNull();
   });
 
   it('takes the path named outright', async () => {
-    expect((await asking('escalations')).domain).toBe('escalations');
-  });
-
-  it('takes the path the contract it is built from declares', async () => {
-    expect((await asking(ArvoDomain.FROM_EVENT_CONTRACT)).domain).toBe('human');
-  });
-
-  it('takes the path this handler own contract declares', async () => {
-    expect((await asking(ArvoDomain.FROM_SELF_CONTRACT)).domain).toBe('orders');
-  });
-
-  it('takes the path the event that caused this execution came on', async () => {
-    expect((await asking(ArvoDomain.FROM_TRIGGERING_EVENT)).domain).toBe(
-      'inherited',
+    expect((await buildReviewRequest('escalations')).domain).toBe(
+      'escalations',
     );
   });
 
+  it('takes the path the contract it is built from declares', async () => {
+    expect(
+      (await buildReviewRequest(ArvoDomain.FROM_EVENT_CONTRACT)).domain,
+    ).toBe('human');
+  });
+
+  it('takes the path this handler own contract declares', async () => {
+    expect(
+      (await buildReviewRequest(ArvoDomain.FROM_SELF_CONTRACT)).domain,
+    ).toBe('orders');
+  });
+
+  it('takes the path the event that caused this execution came on', async () => {
+    expect(
+      (await buildReviewRequest(ArvoDomain.FROM_TRIGGERING_EVENT)).domain,
+    ).toBe('inherited');
+  });
+
   it('stays on the lattice where that is asked for outright', async () => {
-    expect((await asking(ArvoDomain.LOCAL)).domain).toBeNull();
+    expect((await buildReviewRequest(ArvoDomain.LOCAL)).domain).toBeNull();
   });
 
   it('carries a value, never the symbol that named it', async () => {
-    const asked = await asking(ArvoDomain.FROM_SELF_CONTRACT);
-    expect(typeof asked.domain).toBe('string');
-    expect(JSON.parse(JSON.stringify({ ...asked })).domain).toBe('orders');
+    const reviewRequest = await buildReviewRequest(
+      ArvoDomain.FROM_SELF_CONTRACT,
+    );
+    expect(typeof reviewRequest.domain).toBe('string');
+    expect(JSON.parse(JSON.stringify({ ...reviewRequest })).domain).toBe(
+      'orders',
+    );
   });
 
   it('answers the caller on the same path, where the completion asks for it', async () => {
-    const answered = await reviewing().build({
+    const completion = await reviewingContext().build({
       type: 'com_order_created',
       data: { order_id: 'o-1' },
       domain: ArvoDomain.FROM_SELF_CONTRACT,
     });
-    expect(answered.domain).toBe('orders');
+    expect(completion.domain).toBe('orders');
   });
 });

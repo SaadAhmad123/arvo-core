@@ -8,7 +8,7 @@
  */
 
 /** What the composition and its version are called in every key. */
-const PREFIX = 'arvo';
+const KEY_PREFIX = 'arvo';
 
 /** The scopes, which are also the first part of each hashed input. */
 const WORKFLOW = 'workflow';
@@ -60,7 +60,7 @@ export type ArvoIdempotencyParts = {
 };
 
 /** The byte that separates the parts of a hashed input. */
-const SEPARATOR = 0x00;
+const PART_SEPARATOR = 0x00;
 
 /**
  * One hashed input, as the pinned composition builds it.
@@ -72,44 +72,52 @@ const SEPARATOR = 0x00;
  * cannot occur inside any part — without it, two different pairs could
  * form one string.
  */
-const inputFor = (
+const digestInputFor = (
   scope: string,
-  parts: readonly string[],
+  keyParts: readonly string[],
 ): Uint8Array<ArrayBuffer> => {
   const encoder = new TextEncoder();
-  const encoded = [scope, ...parts].map((part) => encoder.encode(part));
-  const separators = encoded.length - 1;
+  const encodedParts = [scope, ...keyParts].map((keyPart) =>
+    encoder.encode(keyPart),
+  );
+  const separatorCount = encodedParts.length - 1;
 
-  const input = new Uint8Array(
+  const digestInput = new Uint8Array(
     new ArrayBuffer(
-      encoded.reduce((total, part) => total + part.length, separators),
+      encodedParts.reduce(
+        (byteLength, encodedPart) => byteLength + encodedPart.length,
+        separatorCount,
+      ),
     ),
   );
 
-  let at = 0;
-  for (const [position, part] of encoded.entries()) {
+  let offset = 0;
+  for (const [position, encodedPart] of encodedParts.entries()) {
     if (position > 0) {
-      input[at] = SEPARATOR;
-      at += 1;
+      digestInput[offset] = PART_SEPARATOR;
+      offset += 1;
     }
-    input.set(part, at);
-    at += part.length;
+    digestInput.set(encodedPart, offset);
+    offset += encodedPart.length;
   }
 
-  return input;
+  return digestInput;
 };
 
 /** One key, hashed and rendered as the composition fixes it. */
-const keyFor = async (
+const idempotencyKeyFor = async (
   scope: string,
-  parts: readonly string[],
+  keyParts: readonly string[],
 ): Promise<string> => {
-  const digest = await crypto.subtle.digest('SHA-256', inputFor(scope, parts));
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    digestInputFor(scope, keyParts),
+  );
   const hex = [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
 
-  return `${PREFIX}-${scope}-${hex}`;
+  return `${KEY_PREFIX}-${scope}-${hex}`;
 };
 
 /**
@@ -133,12 +141,15 @@ const keyFor = async (
  * ```
  */
 export const arvoIdempotencyKeysFor = async (
-  parts: ArvoIdempotencyParts,
+  idempotencyParts: ArvoIdempotencyParts,
 ): Promise<ArvoIdempotencyKeys> => {
   const [workflow, execution, delivery] = await Promise.all([
-    keyFor(WORKFLOW, [parts.subject]),
-    keyFor(EXECUTION, [parts.executionId]),
-    keyFor(DELIVERY, [parts.executionId, parts.deliveredEventId]),
+    idempotencyKeyFor(WORKFLOW, [idempotencyParts.subject]),
+    idempotencyKeyFor(EXECUTION, [idempotencyParts.executionId]),
+    idempotencyKeyFor(DELIVERY, [
+      idempotencyParts.executionId,
+      idempotencyParts.deliveredEventId,
+    ]),
   ]);
 
   return Object.freeze({ workflow, execution, delivery });

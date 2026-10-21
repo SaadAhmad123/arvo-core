@@ -14,39 +14,44 @@ import { join } from 'node:path';
  * two processes that share no memory can agree on.
  */
 
-const HERE = new URL('.', import.meta.url).pathname;
-const ROOT = join(HERE, '..');
-const BUILT = join(ROOT, 'dist', 'ArvoEventHandler', 'index.js');
-const SOURCE = join(ROOT, 'src');
-const LOCK = join(ROOT, 'node_modules', '.arvo-build-lock');
+const TESTS_DIRECTORY = new URL('.', import.meta.url).pathname;
+const PACKAGE_ROOT = join(TESTS_DIRECTORY, '..');
+const BUILT_INDEX = join(PACKAGE_ROOT, 'dist', 'ArvoEventHandler', 'index.js');
+const SOURCE_DIRECTORY = join(PACKAGE_ROOT, 'src');
+const BUILD_LOCK = join(PACKAGE_ROOT, 'node_modules', '.arvo-build-lock');
 
 /** The compiler, named by path so nothing resolves through `PATH`. */
-const COMPILER = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
+const COMPILER = join(PACKAGE_ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
 
 /** When anything under a directory was last written. */
-const newestUnder = (where: string): number => {
-  let newest = 0;
-  for (const entry of readdirSync(where, { withFileTypes: true })) {
-    const at = join(where, entry.name);
-    const when = entry.isDirectory() ? newestUnder(at) : statSync(at).mtimeMs;
-    if (when > newest) newest = when;
+const latestWriteTime = (directory: string): number => {
+  let latestWrite = 0;
+  for (const directoryEntry of readdirSync(directory, {
+    withFileTypes: true,
+  })) {
+    const entryPath = join(directory, directoryEntry.name);
+    const lastWritten = directoryEntry.isDirectory()
+      ? latestWriteTime(entryPath)
+      : statSync(entryPath).mtimeMs;
+    if (lastWritten > latestWrite) latestWrite = lastWritten;
   }
-  return newest;
+  return latestWrite;
 };
 
 /** Whether what is built is older than what it was built from. */
-const stale = (): boolean =>
-  !existsSync(BUILT) || statSync(BUILT).mtimeMs < newestUnder(SOURCE);
+const buildIsStale = (): boolean =>
+  !existsSync(BUILT_INDEX) ||
+  statSync(BUILT_INDEX).mtimeMs < latestWriteTime(SOURCE_DIRECTORY);
 
 /** Blocks this thread, the only synchronous wait the language has. */
-const pauseFor = (ms: number): void => {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+const pauseFor = (milliseconds: number): void => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 };
 
 /** Blocks until nothing else is building. */
-const waitForTheOther = (): void => {
-  const until = Date.now() + 180_000;
-  while (existsSync(LOCK) && Date.now() < until) {
+const waitForBuildLock = (): void => {
+  const deadline = Date.now() + 180_000;
+  while (existsSync(BUILD_LOCK) && Date.now() < deadline) {
     pauseFor(200);
   }
 };
@@ -56,23 +61,23 @@ const waitForTheOther = (): void => {
  * waits where another process is already doing it.
  */
 export const buildOnce = (): void => {
-  if (!stale()) return;
+  if (!buildIsStale()) return;
 
-  if (existsSync(LOCK)) {
-    waitForTheOther();
-    if (!stale()) return;
+  if (existsSync(BUILD_LOCK)) {
+    waitForBuildLock();
+    if (!buildIsStale()) return;
   }
 
-  mkdirSync(LOCK, { recursive: true });
+  mkdirSync(BUILD_LOCK, { recursive: true });
   try {
-    if (stale()) {
+    if (buildIsStale()) {
       execFileSync(process.execPath, [COMPILER], {
-        cwd: ROOT,
+        cwd: PACKAGE_ROOT,
         stdio: 'ignore',
       });
     }
   } finally {
-    rmSync(LOCK, { recursive: true, force: true });
+    rmSync(BUILD_LOCK, { recursive: true, force: true });
   }
 };
 

@@ -78,7 +78,7 @@ export class ArvoEventDepthValidator {
   #judge(
     event: ArvoEvent,
     faultKind: ArvoFaultKind,
-    what: string,
+    predicate: string,
     remedy: string,
   ): Result<boolean, ArvoEventDepthValidatorError> {
     if (event.depth < this.maxDepth) return fromNeverthrow(ok(true));
@@ -86,7 +86,7 @@ export class ArvoEventDepthValidator {
       err(
         new ArvoEventDepthValidatorError(
           faultKind,
-          `${event.type} ${what} ${event.depth}, and ${this.contractAtVersion} allows below ${this.maxDepth} (maxDepth). ${remedy}.`,
+          `${event.type} ${predicate} ${event.depth}, and ${this.contractAtVersion} allows below ${this.maxDepth} (maxDepth). ${remedy}.`,
           [
             new ErrorIssue({
               path: 'depth',

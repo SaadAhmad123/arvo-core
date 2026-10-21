@@ -1,5 +1,6 @@
 import type { Attributes } from '@opentelemetry/api';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
+import { textOfThrown } from '../../utils/thrown-text.js';
 import type { ArvoExecutionContextTelemetry } from '../context/telemetry/index.js';
 import type { ArvoEntryKind } from '../context/types.js';
 import type { ArvoExecutionState } from '../state/index.js';
@@ -21,9 +22,16 @@ export const ARVO_EXECUTION_STAGES = Object.freeze([
   'dependencies_resolved',
   'collection_partial',
   'executor_entered',
+  'middleware_before_entered',
+  'middleware_before_returned',
   'executor_returned',
   'executor_raised',
   'executor_outran',
+  'middleware_after_entered',
+  'middleware_after_returned',
+  'middleware_after_failed',
+  'middleware_after_cut',
+  'middleware_after_write_discarded',
   'returns_judged',
   'record_written',
 ] as const);
@@ -98,9 +106,33 @@ export const markStage = (
 export const markExecutorRan = (
   telemetry: ArvoExecutionContextTelemetry,
   self: VersionedArvoContract,
-  ms: number,
+  durationMs: number,
 ): void => {
-  telemetry.metric.record('executor.duration', ms, versionAttributes(self));
+  telemetry.metric.record(
+    'executor.duration',
+    durationMs,
+    versionAttributes(self),
+  );
+};
+
+/**
+ * Records how long the layers around the executor ran, the executor's own
+ * time left out, so slow layers and slow business code are two charts.
+ *
+ * @param telemetry - Where this execution records.
+ * @param self - The version of the contract whose executor they surround.
+ * @param ms - How long the layers ran, all of them together.
+ */
+export const markMiddlewareRan = (
+  telemetry: ArvoExecutionContextTelemetry,
+  self: VersionedArvoContract,
+  durationMs: number,
+): void => {
+  telemetry.metric.record(
+    'middleware.duration',
+    durationMs,
+    versionAttributes(self),
+  );
 };
 
 /**
@@ -123,9 +155,13 @@ export const markExecutorRan = (
 export const markCollection = (
   telemetry: ArvoExecutionContextTelemetry,
   self: VersionedArvoContract,
-  size: number,
+  collectionSize: number,
 ): void => {
-  telemetry.metric.record('collection.size', size, versionAttributes(self));
+  telemetry.metric.record(
+    'collection.size',
+    collectionSize,
+    versionAttributes(self),
+  );
 };
 
 /**
@@ -180,15 +216,15 @@ export const markOutcome = (
  * that would not close is not a reason to run business code again.
  *
  * @param telemetry - Where this execution records.
- * @param what - Which failure this was.
- * @param raised - Whatever was thrown.
+ * @param failure - Which failure this was.
+ * @param thrown - Whatever was thrown.
  */
 export const markSwallowed = (
   telemetry: ArvoExecutionContextTelemetry,
-  what: string,
-  raised: unknown,
+  failure: string,
+  thrown: unknown,
 ): void => {
-  telemetry.addEvent(`swallowed.${what}`, {
-    message: raised instanceof Error ? raised.message : String(raised),
+  telemetry.addEvent(`swallowed.${failure}`, {
+    message: textOfThrown(thrown),
   });
 };

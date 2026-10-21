@@ -9,6 +9,7 @@ import type { Pool } from 'pg';
 import { HANDLERS } from '../handler/index.js';
 import { withDeliveryIdentity } from '../handler/log-context.js';
 import { PostgresCatalogue } from '../shared/catalogue.js';
+import { deliveryMiddleware } from '../shared/delivery-middleware.js';
 import type { RecordStore } from '../shared/record-store.js';
 import { destinationFor } from '../shared/routing.js';
 import { needsAPerson } from './needs-a-person.js';
@@ -283,6 +284,8 @@ const deliver = async (
         // handler, so nothing here holds a connection to remember to
         // give back.
         dependencies: new PostgresCatalogue(scope.pool),
+        // Outside the handlers' own layers, as ADR-016 orders them.
+        middleware: deliveryMiddleware('dbos', triggeringEvent),
       }),
   );
 

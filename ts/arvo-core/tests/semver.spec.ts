@@ -4,15 +4,18 @@ import { ArvoSemanticVersion } from '../src/semver/index.js';
 import { ErrorIssue } from '../src/utils/error-issue.js';
 
 /** The error of a failed check, or a test failure if it unexpectedly passed. */
-const errorOf = (data: unknown): ArvoSemanticVersionCheckError => {
-  const result = ArvoSemanticVersion.tryCheck(data);
-  if (result.ok) throw new Error(`expected ${String(data)} to be rejected`);
-  return result.error;
+const checkError = (candidate: unknown): ArvoSemanticVersionCheckError => {
+  const checkResult = ArvoSemanticVersion.tryCheck(candidate);
+  if (checkResult.ok)
+    throw new Error(`expected ${String(candidate)} to be rejected`);
+  return checkResult.error;
 };
 
 /** The `path: message` lines of a failed check, ignoring `received`. */
-const issuesOf = (data: unknown): string[] =>
-  errorOf(data).issues.map((issue) => `${issue.path}: ${issue.message}`);
+const checkIssueLines = (candidate: unknown): string[] =>
+  checkError(candidate).issues.map(
+    (issue) => `${issue.path}: ${issue.message}`,
+  );
 
 describe('ArvoSemanticVersion.check', () => {
   describe('accepts MAJOR.MINOR.PATCH', () => {
@@ -182,7 +185,7 @@ describe('ArvoSemanticVersion.check', () => {
 
   describe('is a pure predicate', () => {
     it('returns the same answer across repeated calls', () => {
-      for (let i = 0; i < 5; i++) {
+      for (let repetition = 0; repetition < 5; repetition++) {
         expect(ArvoSemanticVersion.check('1.2.3')).toBe(true);
         expect(ArvoSemanticVersion.check('nope')).toBe(false);
       }
@@ -191,12 +194,12 @@ describe('ArvoSemanticVersion.check', () => {
 
   describe('narrows the type at call sites', () => {
     it('narrows unknown to ArvoSemanticVersion inside the guard', () => {
-      const value: unknown = '1.2.3';
-      if (!ArvoSemanticVersion.check(value))
+      const candidate: unknown = '1.2.3';
+      if (!ArvoSemanticVersion.check(candidate))
         throw new Error('expected a version');
 
-      // Compiles only because `value` is now ArvoSemanticVersion, not unknown.
-      const [major, minor, patch] = value.split('.');
+      // Compiles only because `candidate` is now ArvoSemanticVersion, not unknown.
+      const [major, minor, patch] = candidate.split('.');
 
       expect([major, minor, patch]).toEqual(['1', '2', '3']);
     });
@@ -238,18 +241,18 @@ describe('ArvoSemanticVersionCheckError', () => {
 describe('ArvoSemanticVersion.tryCheck', () => {
   describe('on success', () => {
     it('reports ok and carries the version unchanged', () => {
-      const result = ArvoSemanticVersion.tryCheck('1.2.3');
-      expect(result.ok).toBe(true);
-      if (!result.ok) throw new Error('expected ok');
-      expect(result.value).toBe('1.2.3');
+      const checkResult = ArvoSemanticVersion.tryCheck('1.2.3');
+      expect(checkResult.ok).toBe(true);
+      if (!checkResult.ok) throw new Error('expected ok');
+      expect(checkResult.value).toBe('1.2.3');
     });
 
     it('narrows the carried value to ArvoSemanticVersion', () => {
-      const result = ArvoSemanticVersion.tryCheck('10.0.7' as unknown);
-      if (!result.ok) throw new Error('expected ok');
+      const checkResult = ArvoSemanticVersion.tryCheck('10.0.7' as unknown);
+      if (!checkResult.ok) throw new Error('expected ok');
 
       // Compiles only because `value` is ArvoSemanticVersion, not unknown.
-      const [major] = result.value.split('.');
+      const [major] = checkResult.value.split('.');
 
       expect(major).toBe('10');
     });
@@ -257,7 +260,7 @@ describe('ArvoSemanticVersion.tryCheck', () => {
 
   describe('on failure', () => {
     it('reports an ArvoSemanticVersionCheckError with a discriminant', () => {
-      const error = errorOf('nope');
+      const error = checkError('nope');
       expect(error).toBeInstanceOf(ArvoSemanticVersionCheckError);
       expect(error._tag).toBe('ArvoSemanticVersionCheckError');
       expect(error.name).toBe('ArvoSemanticVersionCheckError');
@@ -268,26 +271,26 @@ describe('ArvoSemanticVersion.tryCheck', () => {
     });
 
     it('freezes issues so a caller cannot mutate the report', () => {
-      const { issues } = errorOf('nope');
+      const { issues } = checkError('nope');
       expect(Object.isFrozen(issues)).toBe(true);
     });
   });
 
   describe('names the whole-value faults', () => {
     it('reports a non-string as a single issue and stops there', () => {
-      expect(issuesOf(123)).toEqual(['version: must be a string']);
-      expect(issuesOf(null)).toEqual(['version: must be a string']);
+      expect(checkIssueLines(123)).toEqual(['version: must be a string']);
+      expect(checkIssueLines(null)).toEqual(['version: must be a string']);
     });
 
     it('shows the offending value on a non-string', () => {
-      expect(errorOf(123).issues[0]?.received).toBe(123);
+      expect(checkError(123).issues[0]?.received).toBe(123);
     });
 
     it('reports a wrong segment count as a single issue, with the count', () => {
-      expect(issuesOf('1.2')).toEqual([
+      expect(checkIssueLines('1.2')).toEqual([
         "version: must have exactly three '.'-separated segments, found 2",
       ]);
-      expect(issuesOf('1.2.3.4')).toEqual([
+      expect(checkIssueLines('1.2.3.4')).toEqual([
         "version: must have exactly three '.'-separated segments, found 4",
       ]);
     });
@@ -295,44 +298,44 @@ describe('ArvoSemanticVersion.tryCheck', () => {
     it('does not add per-segment noise to a segment-count failure', () => {
       // '1.x' is both short and non-numeric; only the shape fault is
       // reportable, because segments cannot be named until there are three.
-      expect(issuesOf('1.x')).toHaveLength(1);
+      expect(checkIssueLines('1.x')).toHaveLength(1);
     });
   });
 
   describe('names the faulty segment', () => {
     it('names an empty segment by position', () => {
-      expect(issuesOf('.2.3')).toEqual(['major: must not be empty']);
-      expect(issuesOf('1..3')).toEqual(['minor: must not be empty']);
-      expect(issuesOf('1.2.')).toEqual(['patch: must not be empty']);
+      expect(checkIssueLines('.2.3')).toEqual(['major: must not be empty']);
+      expect(checkIssueLines('1..3')).toEqual(['minor: must not be empty']);
+      expect(checkIssueLines('1.2.')).toEqual(['patch: must not be empty']);
     });
 
     it('names a non-digit segment by position', () => {
-      expect(issuesOf('x.2.3')).toEqual([
+      expect(checkIssueLines('x.2.3')).toEqual([
         'major: must contain only the digits 0-9',
       ]);
-      expect(issuesOf('1.2.0x3')).toEqual([
+      expect(checkIssueLines('1.2.0x3')).toEqual([
         'patch: must contain only the digits 0-9',
       ]);
     });
 
     it('names a leading-zero segment by position', () => {
-      expect(issuesOf('01.2.3')).toEqual([
+      expect(checkIssueLines('01.2.3')).toEqual([
         'major: must not have leading zeros',
       ]);
-      expect(issuesOf('1.2.007')).toEqual([
+      expect(checkIssueLines('1.2.007')).toEqual([
         'patch: must not have leading zeros',
       ]);
     });
 
     it('shows the offending segment, not the whole version', () => {
-      expect(errorOf('1.2.0x3').issues[0]?.received).toBe('0x3');
-      expect(errorOf('01.2.3').issues[0]?.received).toBe('01');
+      expect(checkError('1.2.0x3').issues[0]?.received).toBe('0x3');
+      expect(checkError('01.2.3').issues[0]?.received).toBe('01');
     });
 
     it('prefers the wider fault when a segment breaks several rules', () => {
       // '0x3' has a leading zero *and* a non-digit; the character fault is
       // the one a reader would name.
-      expect(issuesOf('1.2.0x3')).toEqual([
+      expect(checkIssueLines('1.2.0x3')).toEqual([
         'patch: must contain only the digits 0-9',
       ]);
     });
@@ -340,14 +343,14 @@ describe('ArvoSemanticVersion.tryCheck', () => {
 
   describe('reports every broken rule, not merely the first', () => {
     it('reports two faulty segments at once', () => {
-      expect(issuesOf('1.x.y')).toEqual([
+      expect(checkIssueLines('1.x.y')).toEqual([
         'minor: must contain only the digits 0-9',
         'patch: must contain only the digits 0-9',
       ]);
     });
 
     it('reports three faulty segments at once', () => {
-      expect(issuesOf('..')).toEqual([
+      expect(checkIssueLines('..')).toEqual([
         'major: must not be empty',
         'minor: must not be empty',
         'patch: must not be empty',
@@ -355,7 +358,7 @@ describe('ArvoSemanticVersion.tryCheck', () => {
     });
 
     it('reports a mix of different faults in one pass', () => {
-      expect(issuesOf('01..z')).toEqual([
+      expect(checkIssueLines('01..z')).toEqual([
         'major: must not have leading zeros',
         'minor: must not be empty',
         'patch: must contain only the digits 0-9',
@@ -365,7 +368,7 @@ describe('ArvoSemanticVersion.tryCheck', () => {
 
   describe('builds a message that can be read without this source', () => {
     it('renders a single issue under a singular preamble', () => {
-      expect(errorOf('1.2').message).toBe(
+      expect(checkError('1.2').message).toBe(
         [
           'Value is not a valid ArvoSemanticVersion.',
           'The following problem was found:',
@@ -375,7 +378,7 @@ describe('ArvoSemanticVersion.tryCheck', () => {
     });
 
     it('renders several issues under a counted preamble', () => {
-      expect(errorOf('1.x.y').message).toBe(
+      expect(checkError('1.x.y').message).toBe(
         [
           'Value is not a valid ArvoSemanticVersion.',
           'The following 2 problems were found:',
@@ -405,9 +408,9 @@ describe('ArvoSemanticVersion.tryCheck', () => {
         undefined,
         {},
       ];
-      for (const value of corpus) {
-        expect(ArvoSemanticVersion.tryCheck(value).ok).toBe(
-          ArvoSemanticVersion.check(value),
+      for (const candidate of corpus) {
+        expect(ArvoSemanticVersion.tryCheck(candidate).ok).toBe(
+          ArvoSemanticVersion.check(candidate),
         );
       }
     });

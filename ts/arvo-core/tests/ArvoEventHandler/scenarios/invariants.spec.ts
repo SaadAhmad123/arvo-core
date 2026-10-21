@@ -22,7 +22,7 @@ import {
  * shown refusing something before it is trusted to accept anything.
  */
 
-const opening = () =>
+const anOrder = () =>
   createArvoEventFactory(fulfilV1).createInput({
     source: 'com.web.checkout',
     subject: 'order-1',
@@ -31,22 +31,22 @@ const opening = () =>
   });
 
 /** Only the parts of a lattice an invariant reads. */
-const asLattice = (parts: {
+const partialLattice = (latticeParts: {
   store?: Map<string, JSONObject>;
   committed?: { executionId: string; row: JSONObject }[];
   faults?: { event: ArvoEvent; fault: ArvoHandlerFault }[];
 }) =>
   ({
-    store: parts.store ?? new Map(),
+    store: latticeParts.store ?? new Map(),
     transcript: {
-      committed: parts.committed ?? [],
-      faults: parts.faults ?? [],
+      committed: latticeParts.committed ?? [],
+      faults: latticeParts.faults ?? [],
     },
   }) as unknown as ArvoLattice;
 
 /** A fault shaped as one, without running anything to produce it. */
 const aFault = (
-  parts: Partial<ConstructorParameters<typeof ArvoHandlerFault>[0]>,
+  faultOverrides: Partial<ConstructorParameters<typeof ArvoHandlerFault>[0]>,
 ) =>
   new ArvoHandlerFault({
     faultKind: 'record_invalid',
@@ -61,14 +61,14 @@ const aFault = (
     retry: null,
     abandonmentEvent: null,
     abandonmentState: null,
-    ...parts,
+    ...faultOverrides,
   });
 
 describe('every execution kept its version', () => {
   it('accepts one committed under the same version throughout', () => {
     expect(() =>
       everyExecutionKeptItsVersion(
-        asLattice({
+        partialLattice({
           committed: [
             { executionId: 'e-1', row: { version: '1.0.0' } },
             { executionId: 'e-1', row: { version: '1.0.0' } },
@@ -81,7 +81,7 @@ describe('every execution kept its version', () => {
   it('refuses one that changed version part way through', () => {
     expect(() =>
       everyExecutionKeptItsVersion(
-        asLattice({
+        partialLattice({
           committed: [
             { executionId: 'e-1', row: { version: '1.0.0' } },
             { executionId: 'e-1', row: { version: '1.1.0' } },
@@ -96,7 +96,7 @@ describe('every execution ran what its own event named', () => {
   it('accepts a record whose version is the one its opening event named', () => {
     expect(() =>
       everyExecutionRanWhatItsEventNamed(
-        asLattice({
+        partialLattice({
           store: new Map([
             [
               'e-1',
@@ -115,7 +115,7 @@ describe('every execution ran what its own event named', () => {
   it('refuses one running a version its opening event never named', () => {
     expect(() =>
       everyExecutionRanWhatItsEventNamed(
-        asLattice({
+        partialLattice({
           store: new Map([
             [
               'e-1',
@@ -134,11 +134,11 @@ describe('every execution ran what its own event named', () => {
 
 describe('every identity was derived', () => {
   it('accepts a record stored under what its own event derives', async () => {
-    const event = opening();
+    const event = anOrder();
     const executionId = await deriveArvoExecutionId(event);
     await expect(
       everyIdentityWasDerived(
-        asLattice({
+        partialLattice({
           store: new Map([
             [
               executionId,
@@ -151,10 +151,10 @@ describe('every identity was derived', () => {
   });
 
   it('refuses one stored under anything else', async () => {
-    const event = opening();
+    const event = anOrder();
     await expect(
       everyIdentityWasDerived(
-        asLattice({
+        partialLattice({
           store: new Map([
             [
               'made-up',
@@ -171,12 +171,12 @@ describe('every identity was derived', () => {
 });
 
 describe('every fault names what was asked for', () => {
-  const event = opening();
+  const event = anOrder();
 
   it('accepts an unplaceable event naming no execution', () => {
     expect(() =>
       everyFaultNamesWhatWasAskedFor(
-        asLattice({
+        partialLattice({
           faults: [
             {
               event,
@@ -194,7 +194,7 @@ describe('every fault names what was asked for', () => {
   it('refuses an unplaceable event that names one anyway', () => {
     expect(() =>
       everyFaultNamesWhatWasAskedFor(
-        asLattice({
+        partialLattice({
           faults: [
             {
               event,
@@ -212,7 +212,7 @@ describe('every fault names what was asked for', () => {
   it('refuses a placed event that names none', () => {
     expect(() =>
       everyFaultNamesWhatWasAskedFor(
-        asLattice({
+        partialLattice({
           faults: [
             {
               event,
@@ -229,12 +229,12 @@ describe('every fault names what was asked for', () => {
 });
 
 describe('every fault carries only what it may', () => {
-  const event = opening();
+  const event = anOrder();
 
   it('accepts a terminal refusal carrying neither half', () => {
     expect(() =>
       everyFaultCarriesWhatItMay(
-        asLattice({
+        partialLattice({
           faults: [
             { event, fault: aFault({ faultKind: 'lifecycle_terminal' }) },
           ],
@@ -246,7 +246,7 @@ describe('every fault carries only what it may', () => {
   it('refuses one carrying an answer it may not send', () => {
     expect(() =>
       everyFaultCarriesWhatItMay(
-        asLattice({
+        partialLattice({
           faults: [
             {
               event,
@@ -264,7 +264,7 @@ describe('every fault carries only what it may', () => {
   it('refuses one carrying a record it may not write', () => {
     expect(() =>
       everyFaultCarriesWhatItMay(
-        asLattice({
+        partialLattice({
           faults: [
             {
               event,

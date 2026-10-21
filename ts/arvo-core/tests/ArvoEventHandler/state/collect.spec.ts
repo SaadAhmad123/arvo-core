@@ -9,10 +9,10 @@ import { buildState } from './fixtures.js';
 const REQUEST_ID = 'charge-request';
 
 /** The service's answer to that request. */
-const answer = cloneArvoEvent(chargedEvent, { initid: REQUEST_ID });
+const response = cloneArvoEvent(chargedEvent, { initid: REQUEST_ID });
 
 /** A record waiting on that one request, and nothing else. */
-const waiting = (overrides: Record<string, unknown> = {}) =>
+const waitingState = (overrides: Record<string, unknown> = {}) =>
   buildState({
     eventIds: [{ id: initEvent.id, direction: 'received' }],
     inFlightEventMap: new Map<string, ArvoEvent | null>([[REQUEST_ID, null]]),
@@ -22,44 +22,46 @@ const waiting = (overrides: Record<string, unknown> = {}) =>
 describe('taking in a response an execution was waiting for', () => {
   it('holds it against the request it answers', () => {
     expect(
-      collectResponse(waiting(), answer).inFlightEventMap.get(REQUEST_ID),
-    ).toBe(answer);
+      collectResponse(waitingState(), response).inFlightEventMap.get(
+        REQUEST_ID,
+      ),
+    ).toBe(response);
   });
 
   it('leaves outstanding whatever still is', () => {
-    const collected = collectResponse(
-      waiting({
+    const collectedState = collectResponse(
+      waitingState({
         inFlightEventMap: new Map<string, ArvoEvent | null>([
           [REQUEST_ID, null],
           ['other-request', null],
         ]),
       }),
-      answer,
+      response,
     );
-    expect(collected.inFlightEventMap.get('other-request')).toBeNull();
-    expect(collected.inFlightEventMap.size).toBe(2);
+    expect(collectedState.inFlightEventMap.get('other-request')).toBeNull();
+    expect(collectedState.inFlightEventMap.size).toBe(2);
   });
 
   it('adds it to the events the execution has handled', () => {
-    expect(collectResponse(waiting(), answer).eventIds.at(-1)).toEqual({
-      id: answer.id,
+    expect(collectResponse(waitingState(), response).eventIds.at(-1)).toEqual({
+      id: response.id,
       direction: 'received',
     });
   });
 
   it('mints a new record rather than changing the one it had', () => {
-    const before = waiting();
-    const collected = collectResponse(before, answer);
-    expect(collected).not.toBe(before);
-    expect(before.inFlightEventMap.get(REQUEST_ID)).toBeNull();
+    const stateBefore = waitingState();
+    const collectedState = collectResponse(stateBefore, response);
+    expect(collectedState).not.toBe(stateBefore);
+    expect(stateBefore.inFlightEventMap.get(REQUEST_ID)).toBeNull();
   });
 
   it('leaves everything else as the execution stood', () => {
-    const before = waiting();
-    const collected = collectResponse(before, answer);
-    expect(collected.data).toEqual(before.data);
-    expect(collected.lifecycle).toBe(before.lifecycle);
-    expect(collected.executionId).toBe(before.executionId);
-    expect(collected.casVersion).toBe(before.casVersion);
+    const stateBefore = waitingState();
+    const collectedState = collectResponse(stateBefore, response);
+    expect(collectedState.data).toEqual(stateBefore.data);
+    expect(collectedState.lifecycle).toBe(stateBefore.lifecycle);
+    expect(collectedState.executionId).toBe(stateBefore.executionId);
+    expect(collectedState.casVersion).toBe(stateBefore.casVersion);
   });
 });

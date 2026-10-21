@@ -98,9 +98,9 @@ export class ArvoExecutionContextTelemetry {
     recording(() =>
       this.span.setAttributes(
         Object.fromEntries(
-          Object.entries(attributes).map(([name, value]) => [
-            `${ARVO_TELEMETRY_PREFIX}${name}`,
-            value,
+          Object.entries(attributes).map(([attributeName, attributeValue]) => [
+            `${ARVO_TELEMETRY_PREFIX}${attributeName}`,
+            attributeValue,
           ]),
         ),
       ),

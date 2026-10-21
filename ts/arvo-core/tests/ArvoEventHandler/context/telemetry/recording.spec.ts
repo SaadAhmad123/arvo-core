@@ -12,16 +12,16 @@ import { ArvoExecutionContextTelemetry } from '../../../../src/ArvoEventHandler/
  * work gets done.
  */
 
-const aSpan = () => trace.getTracer('recording').startSpan('execution');
+const freshSpan = () => trace.getTracer('recording').startSpan('execution');
 
 /** A span that refuses everything asked of it. */
-const refusing = (): Span => {
-  const real = aSpan();
-  return new Proxy(real, {
-    get(held, named) {
-      if (named === 'spanContext') return () => held.spanContext();
+const refusingSpan = (): Span => {
+  const liveSpan = freshSpan();
+  return new Proxy(liveSpan, {
+    get(targetSpan, property) {
+      if (property === 'spanContext') return () => targetSpan.spanContext();
       return () => {
-        throw new Error(`the collector refused ${String(named)}`);
+        throw new Error(`the collector refused ${String(property)}`);
       };
     },
   }) as Span;
@@ -35,7 +35,7 @@ describe('what an execution may be told to record against', () => {
   it('is a span, with or without anything else', () => {
     expect(
       new ArvoExecutionContextTelemetry({
-        span: aSpan(),
+        span: freshSpan(),
         meter: null,
         logger: null,
       }),
@@ -60,10 +60,11 @@ describe('what an execution may be told to record against', () => {
         meter: null,
         logger: null,
       });
-    } catch (refused) {
-      const named = refused as ArvoExecutionContextTelemetryValidationError;
-      expect(named.issues[0]?.path).toBe('span');
-      expect(named.message).toContain('addEvent');
+    } catch (thrown) {
+      const validationError =
+        thrown as ArvoExecutionContextTelemetryValidationError;
+      expect(validationError.issues[0]?.path).toBe('span');
+      expect(validationError.message).toContain('addEvent');
       return;
     }
     throw new Error('expected that span to be refused');
@@ -72,13 +73,14 @@ describe('what an execution may be told to record against', () => {
   it('is never a meter that does not meter', () => {
     try {
       new ArvoExecutionContextTelemetry({
-        span: aSpan(),
+        span: freshSpan(),
         meter: {} as never,
         logger: null,
       });
-    } catch (refused) {
-      const named = refused as ArvoExecutionContextTelemetryValidationError;
-      expect(named.issues[0]?.path).toBe('meter');
+    } catch (thrown) {
+      const validationError =
+        thrown as ArvoExecutionContextTelemetryValidationError;
+      expect(validationError.issues[0]?.path).toBe('meter');
       return;
     }
     throw new Error('expected that meter to be refused');
@@ -87,13 +89,14 @@ describe('what an execution may be told to record against', () => {
   it('is never a logger that cannot emit', () => {
     try {
       new ArvoExecutionContextTelemetry({
-        span: aSpan(),
+        span: freshSpan(),
         meter: null,
         logger: { log: () => undefined } as never,
       });
-    } catch (refused) {
-      const named = refused as ArvoExecutionContextTelemetryValidationError;
-      expect(named.issues[0]?.path).toBe('logger');
+    } catch (thrown) {
+      const validationError =
+        thrown as ArvoExecutionContextTelemetryValidationError;
+      expect(validationError.issues[0]?.path).toBe('logger');
       return;
     }
     throw new Error('expected that logger to be refused');
@@ -106,9 +109,10 @@ describe('what an execution may be told to record against', () => {
         meter: {} as never,
         logger: {} as never,
       });
-    } catch (refused) {
-      const named = refused as ArvoExecutionContextTelemetryValidationError;
-      expect(named.issues.map((issue) => issue.path)).toEqual([
+    } catch (thrown) {
+      const validationError =
+        thrown as ArvoExecutionContextTelemetryValidationError;
+      expect(validationError.issues.map((issue) => issue.path)).toEqual([
         'span',
         'meter',
         'logger',
@@ -133,9 +137,9 @@ describe('what an execution may be told to record against', () => {
 });
 
 describe('a collector that worked and then stopped', () => {
-  const quietly = () =>
+  const brokenTelemetry = () =>
     new ArvoExecutionContextTelemetry({
-      span: refusing(),
+      span: refusingSpan(),
       meter: null,
       logger: {
         emit: () => {
@@ -145,7 +149,7 @@ describe('a collector that worked and then stopped', () => {
     });
 
   it('does not stop an execution recording against it', () => {
-    const telemetry = quietly();
+    const telemetry = brokenTelemetry();
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     expect(() => telemetry.setAttributes({ subject: 'order-1' })).not.toThrow();
@@ -156,7 +160,7 @@ describe('a collector that worked and then stopped', () => {
   });
 
   it('answers with no trace to stamp, rather than refusing to answer', () => {
-    const telemetry = quietly();
+    const telemetry = brokenTelemetry();
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     expect(telemetry.isRecording).toBe(false);
@@ -165,16 +169,20 @@ describe('a collector that worked and then stopped', () => {
   });
 
   it('answers with no trace where the span says it records and then will not', () => {
-    const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
 
     // a span with a context valid enough to be worth reading, whose
     // trace state then refuses to be read — where an event would
     // otherwise lose its trace without anybody hearing about it
-    const real = aSpan();
-    const halfThere = new Proxy(real, {
-      get(held, named) {
-        if (named !== 'spanContext') {
-          return (held as unknown as Record<string, unknown>)[named as string];
+    const liveSpan = freshSpan();
+    const unreadableStateSpan = new Proxy(liveSpan, {
+      get(targetSpan, property) {
+        if (property !== 'spanContext') {
+          return (targetSpan as unknown as Record<string, unknown>)[
+            property as string
+          ];
         }
         return () => ({
           traceId: 'a'.repeat(32),
@@ -190,42 +198,48 @@ describe('a collector that worked and then stopped', () => {
     }) as Span;
 
     const telemetry = new ArvoExecutionContextTelemetry({
-      span: halfThere,
+      span: unreadableStateSpan,
       meter: null,
       logger: null,
     });
 
     expect(telemetry.isRecording).toBe(true);
     expect(telemetry.tracestate).toBeNull();
-    expect(said).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
   });
 
   it('says so, rather than losing it quietly', () => {
-    const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    quietly().setAttributes({ subject: 'order-1' });
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    brokenTelemetry().setAttributes({ subject: 'order-1' });
 
-    expect(said).toHaveBeenCalledTimes(1);
-    expect(said.mock.calls[0]?.[0]).toContain('telemetry');
-    expect(said.mock.calls[0]?.[1]).toBeInstanceOf(Error);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toContain('telemetry');
+    expect(warnSpy.mock.calls[0]?.[1]).toBeInstanceOf(Error);
   });
 
   it('says so every time, a collector broken on every call being that', () => {
-    const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const telemetry = quietly();
-    for (let at = 0; at < 5; at += 1) {
-      telemetry.setAttributes({ subject: `order-${at}` });
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    const telemetry = brokenTelemetry();
+    for (let callIndex = 0; callIndex < 5; callIndex += 1) {
+      telemetry.setAttributes({ subject: `order-${callIndex}` });
     }
 
     // quietening it would take a count, and a count kept in a module is
     // shared by every handler in the process
-    expect(said).toHaveBeenCalledTimes(5);
+    expect(warnSpy).toHaveBeenCalledTimes(5);
   });
 
   it('says so for a meter and a logger as readily as for a span', () => {
-    const said = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const telemetry = quietly();
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    const telemetry = brokenTelemetry();
 
     telemetry.logger.info('charging');
-    expect(said).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 });

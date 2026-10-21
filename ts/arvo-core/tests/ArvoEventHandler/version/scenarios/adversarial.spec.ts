@@ -18,7 +18,7 @@ import { declareVersions, type OrderContext, orderV1 } from './fixture.js';
  * eventually write.
  */
 
-const telemetryFor = () =>
+const executionTelemetry = () =>
   new ArvoExecutionContextTelemetry({
     span: trace.getTracer('adversarial').startSpan('execution'),
     meter: null,
@@ -34,7 +34,7 @@ const anOrder = (subject = 'order-1') =>
   });
 
 /** One execution of an order, behaving however the test says. */
-const running = async (
+const runOrder = async (
   behave: (ctx: OrderContext) => unknown,
 ): Promise<ArvoEventHandlerExecuteResponse | ArvoHandlerFault> => {
   const versions = declareVersions();
@@ -48,41 +48,41 @@ const running = async (
       attempt: 0,
       dependencies: heldDependencies({ behave }).dependency,
       hooks: {},
-      telemetry: telemetryFor(),
+      telemetry: executionTelemetry(),
     } as never)) as ArvoEventHandlerExecuteResponse;
-  } catch (raised) {
-    return raised as ArvoHandlerFault;
+  } catch (thrown) {
+    return thrown as ArvoHandlerFault;
   }
 };
 
 const faultFrom = async (behave: (ctx: OrderContext) => unknown) => {
-  const outcome = await running(behave);
-  if (!('faultKind' in outcome)) {
-    throw new Error(`expected a fault, got ${outcome.kind}`);
+  const responseOrFault = await runOrder(behave);
+  if (!('faultKind' in responseOrFault)) {
+    throw new Error(`expected a fault, got ${responseOrFault.kind}`);
   }
-  return outcome;
+  return responseOrFault;
 };
 
 /** The same, for an executor expected to have produced something. */
-const producedBy = async (behave: (ctx: OrderContext) => unknown) => {
-  const outcome = await running(behave);
-  if ('faultKind' in outcome || outcome.kind !== 'produced') {
+const responseFrom = async (behave: (ctx: OrderContext) => unknown) => {
+  const response = await runOrder(behave);
+  if ('faultKind' in response || response.kind !== 'produced') {
     throw new Error('expected this execution to produce');
   }
-  return outcome;
+  return response;
 };
 
 describe('an executor that returns what it must not', () => {
   it('a value that is not an event at all', async () => {
-    const refused = await faultFrom(async (ctx) => {
+    const fault = await faultFrom(async (ctx) => {
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
       return { type: 'evt_order_fulfilled' };
     });
-    expect(refused.faultKind).toBe('emission_not_permitted');
+    expect(fault.faultKind).toBe('emission_not_permitted');
   });
 
   it('a list with one thing in it that is not an event', async () => {
-    const refused = await faultFrom(async (ctx) => {
+    const fault = await faultFrom(async (ctx) => {
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
       return [
         await ctx.build({
@@ -92,11 +92,11 @@ describe('an executor that returns what it must not', () => {
         'nearly',
       ];
     });
-    expect(refused.faultKind).toBe('emission_not_permitted');
+    expect(fault.faultKind).toBe('emission_not_permitted');
   });
 
   it('two answers to the caller, who awaits exactly one', async () => {
-    const refused = await faultFrom(async (ctx) => {
+    const fault = await faultFrom(async (ctx) => {
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
       const answer = await ctx.build({
         type: 'evt_order_fulfilled',
@@ -104,14 +104,14 @@ describe('an executor that returns what it must not', () => {
       });
       return [answer, cloneArvoEvent(answer, { id: 'a-second-answer' })];
     });
-    expect(refused.faultKind).toBe('emission_not_permitted');
-    expect(refused.violations.some((broken) => broken.includes('one'))).toBe(
-      true,
-    );
+    expect(fault.faultKind).toBe('emission_not_permitted');
+    expect(
+      fault.violations.some((violation) => violation.includes('one')),
+    ).toBe(true);
   });
 
   it('the same event twice, which is one request counted as two', async () => {
-    const refused = await faultFrom(async (ctx) => {
+    const fault = await faultFrom(async (ctx) => {
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
       const answer = await ctx.build({
         type: 'evt_order_fulfilled',
@@ -119,11 +119,11 @@ describe('an executor that returns what it must not', () => {
       });
       return [answer, answer];
     });
-    expect(refused.faultKind).toBe('emission_not_permitted');
+    expect(fault.faultKind).toBe('emission_not_permitted');
   });
 
   it('this contract own error event, which is never an executor to send', async () => {
-    const refused = await faultFrom(async (ctx) => {
+    const fault = await faultFrom(async (ctx) => {
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
       return createArvoEventFactory(orderV1).createError({
         source: orderV1.type,
@@ -131,75 +131,79 @@ describe('an executor that returns what it must not', () => {
         error: new Error('I have decided I failed'),
       });
     });
-    expect(refused.faultKind).toBe('emission_not_permitted');
+    expect(fault.faultKind).toBe('emission_not_permitted');
   });
 
   it('an event addressed somewhere this version may not send', async () => {
-    const refused = await faultFrom(async (ctx) => {
+    const fault = await faultFrom(async (ctx) => {
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
-      const asking = await ctx.build({
+      const chargeRequest = await ctx.build({
         type: 'com_payment_charge',
         data: { amount: 1 },
       });
-      return cloneArvoEvent(asking, { type: 'com_nothing_declared' as never });
+      return cloneArvoEvent(chargeRequest, {
+        type: 'com_nothing_declared' as never,
+      });
     });
-    expect(refused.faultKind).toBe('emission_not_permitted');
+    expect(fault.faultKind).toBe('emission_not_permitted');
   });
 });
 
 describe('an executor that fails in an unusual way', () => {
   it('throws a string, which is still the work failing', async () => {
-    const outcome = await producedBy(async (ctx) => {
+    const response = await responseFrom(async (ctx) => {
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
       throw 'the warehouse is on fire';
     });
-    expect(outcome.events[0]?.type).toBe(orderV1.error.type);
+    expect(response.events[0]?.type).toBe(orderV1.error.type);
   });
 
   it('throws nothing at all, which is still the work failing', async () => {
-    const outcome = await producedBy(async (ctx) => {
+    const response = await responseFrom(async (ctx) => {
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
       throw null;
     });
-    expect(outcome.events[0]?.type).toBe(orderV1.error.type);
+    expect(response.events[0]?.type).toBe(orderV1.error.type);
   });
 
   it('throws something frozen, which nothing may be added to', async () => {
-    const outcome = await producedBy(async (ctx) => {
+    const response = await responseFrom(async (ctx) => {
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
       throw Object.freeze(new Error('sealed'));
     });
-    expect(outcome.events[0]?.type).toBe(orderV1.error.type);
-    expect(outcome.state.lifecycle).toBe('error');
+    expect(response.events[0]?.type).toBe(orderV1.error.type);
+    expect(response.state.lifecycle).toBe('error');
   });
 
   it('fails before it remembered anything, and a record is written anyway', async () => {
-    const outcome = await producedBy(() => {
+    const response = await responseFrom(() => {
       throw new Error('it failed before it could write');
     });
-    expect(outcome.state.lifecycle).toBe('error');
-    expect(outcome.state.data).toBeNull();
+    expect(response.state.lifecycle).toBe('error');
+    expect(response.state.data).toBeNull();
   });
 });
 
 describe('an executor that writes what it must not', () => {
   it('writes ten thousand times, the last one standing', async () => {
-    const outcome = await producedBy(async (ctx) => {
-      for (let at = 0; at < 10_000; at += 1) {
-        await ctx.setState({ data: { stage: 'counting', answers: at } });
+    const response = await responseFrom(async (ctx) => {
+      for (let writeIndex = 0; writeIndex < 10_000; writeIndex += 1) {
+        await ctx.setState({
+          data: { stage: 'counting', answers: writeIndex },
+        });
       }
       return ctx.build({
         type: 'evt_order_fulfilled',
         data: { order_id: 'o-1' },
       });
     });
-    expect((outcome.state.data as { answers: number }).answers).toBe(9_999);
+    expect((response.state.data as { answers: number }).answers).toBe(9_999);
   });
 
   it('keeps the context and writes after the execution ended', async () => {
-    let kept: OrderContext | undefined;
-    const outcome = await producedBy(async (ctx) => {
-      kept = ctx;
+    let escapedContext: OrderContext | undefined;
+    const response = await responseFrom(async (ctx) => {
+      escapedContext = ctx;
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
       return ctx.build({
         type: 'evt_order_fulfilled',
@@ -207,16 +211,18 @@ describe('an executor that writes what it must not', () => {
       });
     });
 
-    const committed = JSON.stringify(outcome.state);
-    await kept?.setState({ data: { stage: 'after the fact', answers: 99 } });
+    const committedState = JSON.stringify(response.state);
+    await escapedContext?.setState({
+      data: { stage: 'after the fact', answers: 99 },
+    });
 
     // what was committed is what was committed; a context kept past its
     // execution describes one already over
-    expect(JSON.stringify(outcome.state)).toBe(committed);
+    expect(JSON.stringify(response.state)).toBe(committedState);
   });
 
   it('cannot replace what the protocol owns on its context', async () => {
-    await running(async (ctx) => {
+    await runOrder(async (ctx) => {
       expect(() => {
         (ctx as unknown as { entry: string }).entry = 'followup';
       }).toThrow();
@@ -228,7 +234,7 @@ describe('an executor that writes what it must not', () => {
   });
 
   it('cannot change the record it was handed', async () => {
-    await running(async (ctx) => {
+    await runOrder(async (ctx) => {
       expect(() => {
         (ctx.state as unknown as { lifecycle: string }).lifecycle = 'success';
       }).toThrow();
@@ -258,80 +264,82 @@ describe('an executor that raises a fault belonging to somebody else', () => {
           },
         }).dependency,
         hooks: {},
-        telemetry: telemetryFor(),
+        telemetry: executionTelemetry(),
       } as never);
-    } catch (raised) {
-      return raised as ArvoHandlerFault;
+    } catch (thrown) {
+      return thrown as ArvoHandlerFault;
     }
     throw new Error('expected that order to fault');
   };
 
   it('is refused, throwing one being the corruption itself', async () => {
-    const borrowed = await faultOfAnotherOrder();
-    const raised = await faultFrom(() => {
-      throw borrowed;
+    const foreignFault = await faultOfAnotherOrder();
+    const reportedFault = await faultFrom(() => {
+      throw foreignFault;
     });
 
-    expect(raised).not.toBe(borrowed);
-    expect(raised.faultKind).toBe('executor_raised');
-    expect(raised.message).toContain('another execution');
+    expect(reportedFault).not.toBe(foreignFault);
+    expect(reportedFault.faultKind).toBe('executor_raised');
+    expect(reportedFault.message).toContain('another execution');
   });
 
   it('names this execution throughout, never the one it came from', async () => {
-    const borrowed = await faultOfAnotherOrder();
-    expect(borrowed.subject).toBe('somebody-elses-order');
+    const foreignFault = await faultOfAnotherOrder();
+    expect(foreignFault.subject).toBe('somebody-elses-order');
 
-    const raised = await faultFrom(() => {
-      throw borrowed;
+    const reportedFault = await faultFrom(() => {
+      throw foreignFault;
     });
 
     // What a mechanism acts on is what the fault names. One naming
     // another execution would have it commit that execution's record and
     // answer that execution's caller, for an event belonging to this one.
-    expect(raised.subject).toBe('order-1');
-    expect(raised.executionId).not.toBe(borrowed.executionId);
-    expect(JSON.parse(raised.abandonmentEvent as string).subject).toBe(
+    expect(reportedFault.subject).toBe('order-1');
+    expect(reportedFault.executionId).not.toBe(foreignFault.executionId);
+    expect(JSON.parse(reportedFault.abandonmentEvent as string).subject).toBe(
       'order-1',
     );
-    expect(JSON.parse(raised.abandonmentState as string).subject).toBe(
+    expect(JSON.parse(reportedFault.abandonmentState as string).subject).toBe(
       'order-1',
     );
   });
 
   it('is not worth another attempt, a redelivery doing the same thing', async () => {
-    const borrowed = await faultOfAnotherOrder();
-    const raised = await faultFrom(() => {
-      throw borrowed;
+    const foreignFault = await faultOfAnotherOrder();
+    const reportedFault = await faultFrom(() => {
+      throw foreignFault;
     });
-    expect(raised.retry).toBeNull();
+    expect(reportedFault.retry).toBeNull();
   });
 
   it('keeps what the other fault said, as the cause of this one', async () => {
-    const borrowed = await faultOfAnotherOrder();
-    const raised = await faultFrom(() => {
-      throw borrowed;
+    const foreignFault = await faultOfAnotherOrder();
+    const reportedFault = await faultFrom(() => {
+      throw foreignFault;
     });
-    expect(raised.cause).toContain('the gateway refused this other order');
+    expect(reportedFault.cause).toContain(
+      'the gateway refused this other order',
+    );
   });
 
   it('tells nobody the work failed, this being no answer at all', async () => {
-    const borrowed = await faultOfAnotherOrder();
-    const outcome = await running(() => {
-      throw borrowed;
+    const foreignFault = await faultOfAnotherOrder();
+    const responseOrFault = await runOrder(() => {
+      throw foreignFault;
     });
     // a fault concludes nothing: no handler error event reaches a caller
-    expect('faultKind' in outcome).toBe(true);
+    expect('faultKind' in responseOrFault).toBe(true);
   });
 
   it('still lets an executor raise a fault of its own', async () => {
-    const raised = await faultFrom(async (ctx) => {
+    const reportedFault = await faultFrom(async (ctx) => {
       throw await ctx.fault({
         faultKind: 'executor_raised',
         message: 'the gateway refused',
       });
     });
-    expect(raised.faultKind).toBe('executor_raised');
-    expect(raised.message).toBe('the gateway refused');
-    expect(raised.retry).not.toBeNull();
+    expect(reportedFault.faultKind).toBe('executor_raised');
+    expect(reportedFault.message).toBe('the gateway refused');
+    expect(reportedFault.retry).not.toBeNull();
   });
 });

@@ -20,12 +20,12 @@ export class ArvoToCloudEventConverter implements IArvoEventTransformer {
 
   /** Strict Arvo-shaped deserialization or foreign-event adaptation, chosen by whichever marker `data` claims — never both, never a silent fallback between them. */
   async revert(
-    data: CloudEvent,
+    cloudEvent: CloudEvent,
     foreignFallback?: ForeignCloudEventFallback,
   ): Promise<ArvoEvent> {
-    return claimsArvoShape(data)
-      ? this.assemble('strict', decodeStrict(data))
-      : this.assemble('foreign', decodeForeign(data, foreignFallback));
+    return claimsArvoShape(cloudEvent)
+      ? this.assemble('strict', decodeStrict(cloudEvent))
+      : this.assemble('foreign', decodeForeign(cloudEvent, foreignFallback));
   }
 
   /**
@@ -45,14 +45,14 @@ export class ArvoToCloudEventConverter implements IArvoEventTransformer {
         });
       }
       return event;
-    } catch (error) {
-      if (error instanceof ArvoEventValidationError) {
+    } catch (thrown) {
+      if (thrown instanceof ArvoEventValidationError) {
         throw new CloudEventTransformationError({
           kind,
-          issues: [...decoded.issues, ...error.issues],
+          issues: [...decoded.issues, ...thrown.issues],
         });
       }
-      throw error;
+      throw thrown;
     }
   }
 }

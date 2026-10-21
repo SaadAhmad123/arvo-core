@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-28
+- **Amended by:** [ADR-016](./016-executor-middleware.md), which states what the run clock covers where a version's business code is surrounded by layers, under **The run clock: what it covers, and what it does not**. Additive: nothing already there changes
 - **Scope:** Arvo ecosystem
 - **Amends:** nothing in the AAM membership list; refines the handler lifecycle semantics [ADR-006](./006-arvoeventhandler-protocol.md) places inside the model
 - **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), which defines the options these bounds read, the gate steps that enforce them on entry, and the return validation that enforces them on exit; [ADR-007](./007-execution-record.md), which defines the record they are stored in; [ADR-008](./008-execution-faults-and-abandonment.md), which defines the faults they raise

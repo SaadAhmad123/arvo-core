@@ -7,7 +7,7 @@ import type { Result } from '../types.js';
 import { tryCreateArvoEvent } from './createArvoEvent.js';
 
 /** A span if there is one, else an overridden header, else the event's own. */
-const traceOf = <T extends string, D extends Record<string, any>>(
+const cloneTraceContext = <T extends string, D extends Record<string, any>>(
   event: ArvoEvent<T, D>,
   overrides: {
     traceparent?: string;
@@ -55,18 +55,20 @@ export const tryCloneArvoEvent = <
   event: ArvoEvent<T, D>,
   overrides: Partial<ArvoEventParam<T, D>> = {},
 ): Result<ArvoEvent<T, D>, ArvoEventValidationError> => {
-  const { span: _span, ...replaced } = overrides as {
+  const { span: _span, ...fieldOverrides } = overrides as {
     span?: Span | SpanContext;
   };
 
   const replacements = Object.fromEntries(
-    Object.entries(replaced).filter(([, value]) => value !== undefined),
+    Object.entries(fieldOverrides).filter(
+      ([, override]) => override !== undefined,
+    ),
   );
 
   return tryCreateArvoEvent<T, D>({
     ...event,
     ...replacements,
-    ...traceOf(event, overrides),
+    ...cloneTraceContext(event, overrides),
   } as Parameters<typeof tryCreateArvoEvent<T, D>>[0]);
 };
 
@@ -98,7 +100,7 @@ export const cloneArvoEvent = <T extends string, D extends Record<string, any>>(
   event: ArvoEvent<T, D>,
   overrides?: Partial<ArvoEventParam<T, D>>,
 ): ArvoEvent<T, D> => {
-  const cloned = tryCloneArvoEvent(event, overrides);
-  if (cloned.ok) return cloned.value;
-  throw cloned.error;
+  const attempt = tryCloneArvoEvent(event, overrides);
+  if (attempt.ok) return attempt.value;
+  throw attempt.error;
 };

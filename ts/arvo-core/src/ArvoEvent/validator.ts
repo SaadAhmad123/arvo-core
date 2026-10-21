@@ -57,49 +57,49 @@ const applyDefaults = (
 });
 
 const requireNonEmptyString = (
-  value: unknown,
+  fieldValue: unknown,
   path: string,
   issues: ErrorIssue[],
 ): void => {
-  if (value === undefined) {
+  if (fieldValue === undefined) {
     issues.push(new ErrorIssue({ path, message: 'is required' }));
     return;
   }
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof fieldValue !== 'string' || fieldValue.length === 0) {
     issues.push(
       new ErrorIssue({
         path,
         message: 'must be a non-empty string',
-        received: value,
+        received: fieldValue,
       }),
     );
   }
 };
 
 const checkNullableNonEmptyString = (
-  value: unknown,
+  fieldValue: unknown,
   path: string,
   issues: ErrorIssue[],
 ): void => {
-  if (value === null) return;
-  if (typeof value !== 'string' || value.length === 0) {
+  if (fieldValue === null) return;
+  if (typeof fieldValue !== 'string' || fieldValue.length === 0) {
     issues.push(
       new ErrorIssue({
         path,
         message: 'must be null or a non-empty string',
-        received: value,
+        received: fieldValue,
       }),
     );
   }
 };
 
-const checkDepth = (value: unknown, issues: ErrorIssue[]): void => {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+const checkDepth = (depth: unknown, issues: ErrorIssue[]): void => {
+  if (typeof depth !== 'number' || !Number.isInteger(depth) || depth < 0) {
     issues.push(
       new ErrorIssue({
         path: 'depth',
         message: 'must be a non-negative integer',
-        received: value,
+        received: depth,
       }),
     );
   }
@@ -107,16 +107,16 @@ const checkDepth = (value: unknown, issues: ErrorIssue[]): void => {
 
 const isoDateTimeWithOffset = z.iso.datetime({ offset: true });
 
-const checkTime = (value: unknown, issues: ErrorIssue[]): void => {
+const checkTime = (time: unknown, issues: ErrorIssue[]): void => {
   if (
-    typeof value !== 'string' ||
-    !isoDateTimeWithOffset.safeParse(value).success
+    typeof time !== 'string' ||
+    !isoDateTimeWithOffset.safeParse(time).success
   ) {
     issues.push(
       new ErrorIssue({
         path: 'time',
         message: 'must be an RFC 3339 timestamp carrying a UTC offset',
-        received: value,
+        received: time,
       }),
     );
   }
@@ -128,22 +128,27 @@ const checkTime = (value: unknown, issues: ErrorIssue[]): void => {
  * stated explicitly for conformance across a future non-JS implementation,
  * not because anything finite here could fail it.
  */
-const checkExecutionUnits = (value: unknown, issues: ErrorIssue[]): void => {
-  if (value === null) return;
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+const checkExecutionUnits = (
+  executionUnits: unknown,
+  issues: ErrorIssue[],
+): void => {
+  if (executionUnits === null) return;
+  if (typeof executionUnits !== 'number' || !Number.isFinite(executionUnits)) {
     issues.push(
       new ErrorIssue({
         path: 'executionunits',
         message: 'must be null or a finite IEEE 754 binary64 number',
-        received: value,
+        received: executionUnits,
       }),
     );
   }
 };
 
 /** `-0` and `0` are never distinguished by ArvoEvent; normalize at the door. */
-const normalizeExecutionUnits = (value: unknown): unknown =>
-  typeof value === 'number' && Object.is(value, -0) ? 0 : value;
+const normalizeExecutionUnits = (executionUnits: unknown): unknown =>
+  typeof executionUnits === 'number' && Object.is(executionUnits, -0)
+    ? 0
+    : executionUnits;
 
 /** Every top-level string field subject to the character-domain restriction — see {@link findForbiddenCodePoint}. */
 const CHARACTER_DOMAIN_FIELDS = [
@@ -178,20 +183,18 @@ const CHARACTER_DOMAIN_FIELDS = [
 const FORBIDDEN_CODE_POINT =
   /[\p{Cc}\p{Noncharacter_Code_Point}\uD800-\uDFFF]/u;
 
-const findForbiddenCodePoint = (
-  value: string,
-): { codePoint: number } | null => {
-  const match = FORBIDDEN_CODE_POINT.exec(value);
+const findForbiddenCodePoint = (text: string): { codePoint: number } | null => {
+  const match = FORBIDDEN_CODE_POINT.exec(text);
   return match ? { codePoint: match[0].codePointAt(0) as number } : null;
 };
 
 const checkCharacterDomain = (
-  value: unknown,
+  fieldValue: unknown,
   path: string,
   issues: ErrorIssue[],
 ): void => {
-  if (typeof value !== 'string' || value.length === 0) return;
-  const violation = findForbiddenCodePoint(value);
+  if (typeof fieldValue !== 'string' || fieldValue.length === 0) return;
+  const violation = findForbiddenCodePoint(fieldValue);
   if (violation) {
     const codePointHex = violation.codePoint
       .toString(16)
@@ -201,24 +204,24 @@ const checkCharacterDomain = (
       new ErrorIssue({
         path,
         message: `must not contain U+${codePointHex} — control characters, Unicode noncharacters, and unpaired surrogates are forbidden`,
-        received: value,
+        received: fieldValue,
       }),
     );
   }
 };
 
 const checkUriReference = (
-  value: unknown,
+  fieldValue: unknown,
   path: string,
   issues: ErrorIssue[],
 ): void => {
-  if (typeof value !== 'string' || value.length === 0) return;
-  if (!isUriReference(value)) {
+  if (typeof fieldValue !== 'string' || fieldValue.length === 0) return;
+  if (!isUriReference(fieldValue)) {
     issues.push(
       new ErrorIssue({
         path,
         message: 'must be a valid RFC 3986 URI-reference',
-        received: value,
+        received: fieldValue,
       }),
     );
   }
@@ -310,9 +313,9 @@ export const validateArvoEvent = (
     };
   }
 
-  const raw = input as Record<string, unknown>;
+  const rawFields = input as Record<string, unknown>;
 
-  for (const key of Object.keys(raw)) {
+  for (const key of Object.keys(rawFields)) {
     if (!(KNOWN_FIELDS as readonly string[]).includes(key)) {
       issues.push(
         new ErrorIssue({ path: key, message: 'is not a field of ArvoEvent' }),
@@ -320,7 +323,7 @@ export const validateArvoEvent = (
     }
   }
 
-  const candidate = applyDefaults(raw);
+  const candidate = applyDefaults(rawFields);
 
   requireNonEmptyString(candidate.id, 'id', issues);
   checkNullableNonEmptyString(candidate.parentid, 'parentid', issues);
@@ -364,11 +367,11 @@ export const validateArvoEvent = (
     : walkFlatMap(candidate.baggage, 'baggage');
   issues.push(...baggage.issues);
 
-  const value = {
+  const fields = {
     ...candidate,
     data: payload.value,
     baggage: baggage.value,
   } as ArvoEventFields;
 
-  return { value, issues };
+  return { value: fields, issues };
 };

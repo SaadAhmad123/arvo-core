@@ -62,16 +62,17 @@ describe('a lattice driving the handler rather than a version', () => {
     ).toEqual(['success', 'success', 'success']);
 
     // and the caller heard back
-    const answered = lattice.transcript.published.filter(
+    const fulfilledAnswers = lattice.transcript.published.filter(
       (event) => event.type === 'evt_order_fulfilled',
     );
-    expect(answered).toHaveLength(1);
-    expect(answered[0]?.to).toBe('com.web.checkout');
+    expect(fulfilledAnswers).toHaveLength(1);
+    expect(fulfilledAnswers[0]?.to).toBe('com.web.checkout');
   });
 
   it('holds every invariant, including those only this layer can break', async () => {
     const lattice = latticeWithHandlers();
-    for (let at = 0; at < 10; at += 1) lattice.publish(anOrder(`order-${at}`));
+    for (let orderIndex = 0; orderIndex < 10; orderIndex += 1)
+      lattice.publish(anOrder(`order-${orderIndex}`));
     await lattice.settle();
 
     await checkHandlerInvariants(lattice);

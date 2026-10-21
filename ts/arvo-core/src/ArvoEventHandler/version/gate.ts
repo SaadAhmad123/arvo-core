@@ -17,7 +17,8 @@ export const alreadySeen = (
   event: ArvoEvent,
 ): boolean =>
   state.eventIds.some(
-    (logged) => logged.id === event.id && logged.direction === 'received',
+    (touchedEvent) =>
+      touchedEvent.id === event.id && touchedEvent.direction === 'received',
   );
 
 /**
@@ -55,12 +56,12 @@ export const refuseOutlived = (
 ): ArvoGateRefusal | null => {
   if (executionTimeout === null) return null;
 
-  const elapsed = now - Date.parse(initEvent.time);
-  if (elapsed < executionTimeout) return null;
+  const ageMs = now - Date.parse(initEvent.time);
+  if (ageMs < executionTimeout) return null;
 
   return {
     faultKind: 'execution_timeout',
-    message: `this execution of ${contractAtVersion} started at ${initEvent.time} and is ${elapsed}ms old, past the ${executionTimeout}ms it is allowed (executionTimeout). No further attempt can give that time back`,
+    message: `this execution of ${contractAtVersion} started at ${initEvent.time} and is ${ageMs}ms old, past the ${executionTimeout}ms it is allowed (executionTimeout). No further attempt can give that time back`,
     violations: [],
   };
 };
@@ -128,28 +129,28 @@ export const refuseUnawaited = (
   state: ArvoExecutionState,
   event: ArvoEvent,
 ): ArvoGateRefusal | null => {
-  const awaited = event.initid;
-  const held =
-    awaited === null ? undefined : state.inFlightEventMap.get(awaited);
+  const requestId = event.initid;
+  const answer =
+    requestId === null ? undefined : state.inFlightEventMap.get(requestId);
 
-  if (awaited === null) {
+  if (requestId === null) {
     return {
       faultKind: 'response_unawaited',
       message: `this event carries no "initid", so nothing can say which request it answers — a reply must carry the id of the event it is answering`,
       violations: [],
     };
   }
-  if (held === undefined) {
+  if (answer === undefined) {
     return {
       faultKind: 'response_unawaited',
-      message: `this event answers request ${awaited}, which this execution never sent, so nothing was processed`,
+      message: `this event answers request ${requestId}, which this execution never sent, so nothing was processed`,
       violations: [],
     };
   }
-  if (held !== null) {
+  if (answer !== null) {
     return {
       faultKind: 'response_unawaited',
-      message: `request ${awaited} already has an answer, and one request takes exactly one — a second reply from the same service does this`,
+      message: `request ${requestId} already has an answer, and one request takes exactly one — a second reply from the same service does this`,
       violations: [],
     };
   }

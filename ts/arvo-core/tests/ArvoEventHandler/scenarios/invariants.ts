@@ -22,14 +22,14 @@ import type { ArvoLattice } from '../version/scenarios/lattice.js';
  * never its own, and may well succeed in doing so.
  */
 export const everyExecutionKeptItsVersion = (lattice: ArvoLattice): void => {
-  const seen = new Map<string, Set<string>>();
+  const versionsByExecution = new Map<string, Set<string>>();
   for (const { executionId, row } of lattice.transcript.committed) {
-    const versions = seen.get(executionId) ?? new Set<string>();
+    const versions = versionsByExecution.get(executionId) ?? new Set<string>();
     versions.add(String(row.version));
-    seen.set(executionId, versions);
+    versionsByExecution.set(executionId, versions);
   }
 
-  for (const [executionId, versions] of seen) {
+  for (const [executionId, versions] of versionsByExecution) {
     expect(
       [...versions],
       `${executionId} was committed under more than one version`,
@@ -45,16 +45,16 @@ export const everyExecutionRanWhatItsEventNamed = (
   lattice: ArvoLattice,
 ): void => {
   for (const row of lattice.store.values()) {
-    const opening = row.initEvent as { dataschema: string } | undefined;
-    if (opening === undefined) continue;
+    const openingEvent = row.initEvent as { dataschema: string } | undefined;
+    if (openingEvent === undefined) continue;
 
-    const named = opening.dataschema.slice(
-      opening.dataschema.lastIndexOf('/') + 1,
+    const namedVersion = openingEvent.dataschema.slice(
+      openingEvent.dataschema.lastIndexOf('/') + 1,
     );
     expect(
       row.version,
-      `${row.executionId} ran ${row.version} for an event naming ${named}`,
-    ).toBe(named);
+      `${row.executionId} ran ${row.version} for an event naming ${namedVersion}`,
+    ).toBe(namedVersion);
   }
 };
 
@@ -69,13 +69,13 @@ export const everyIdentityWasDerived = async (
   lattice: ArvoLattice,
 ): Promise<void> => {
   for (const [executionId, row] of lattice.store) {
-    const opening = row.initEvent as
+    const openingEvent = row.initEvent as
       | { id: string; dataschema: string }
       | undefined;
-    if (opening === undefined) continue;
+    if (openingEvent === undefined) continue;
 
     expect(
-      await deriveArvoExecutionId(opening as never),
+      await deriveArvoExecutionId(openingEvent as never),
       `${executionId} is not what its own opening event derives`,
     ).toBe(executionId);
   }

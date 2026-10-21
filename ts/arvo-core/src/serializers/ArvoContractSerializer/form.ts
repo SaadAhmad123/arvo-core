@@ -3,13 +3,15 @@ import { ErrorIssue } from '../../utils/error-issue.js';
 /** The dialect every schema-bearing position must declare. */
 const DIALECT = 'https://json-schema.org/draft/2020-12/schema';
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
+  typeof candidate === 'object' &&
+  candidate !== null &&
+  !Array.isArray(candidate);
 
 /** A map key rendered for an issue path, matching what serialization writes. */
-const at = (key: string): string => `[${JSON.stringify(key)}]`;
+const pathSegmentForKey = (key: string): string => `[${JSON.stringify(key)}]`;
 
-const push = (
+const pushIssue = (
   issues: ErrorIssue[],
   path: string,
   message: string,
@@ -34,11 +36,11 @@ const checkSchemaPosition = (
   issues: ErrorIssue[],
 ): void => {
   if (!isRecord(schema)) {
-    push(issues, path, 'must be a JSON Schema object', schema);
+    pushIssue(issues, path, 'must be a JSON Schema object', schema);
     return;
   }
   if (schema.type !== 'object') {
-    push(
+    pushIssue(
       issues,
       path,
       'must carry the literal keyword "type": "object" at its top level',
@@ -46,7 +48,12 @@ const checkSchemaPosition = (
     );
   }
   if (schema.$schema !== DIALECT) {
-    push(issues, path, `must declare "$schema" as ${DIALECT}`, schema.$schema);
+    pushIssue(
+      issues,
+      path,
+      `must declare "$schema" as ${DIALECT}`,
+      schema.$schema,
+    );
   }
 };
 
@@ -57,7 +64,7 @@ const checkVersion = (
   issues: ErrorIssue[],
 ): void => {
   if (!isRecord(definition)) {
-    push(issues, path, 'must be an object', definition);
+    pushIssue(issues, path, 'must be an object', definition);
     return;
   }
 
@@ -65,11 +72,15 @@ const checkVersion = (
 
   const { outputs } = definition;
   if (!isRecord(outputs)) {
-    push(issues, `${path}.outputs`, 'must be an object', outputs);
+    pushIssue(issues, `${path}.outputs`, 'must be an object', outputs);
     return;
   }
-  for (const [type, schema] of Object.entries(outputs)) {
-    checkSchemaPosition(schema, `${path}.outputs${at(type)}`, issues);
+  for (const [outputType, schema] of Object.entries(outputs)) {
+    checkSchemaPosition(
+      schema,
+      `${path}.outputs${pathSegmentForKey(outputType)}`,
+      issues,
+    );
   }
 };
 
@@ -88,32 +99,36 @@ const checkVersion = (
  * would reject a contract whose identity is intact over a field carrying no
  * information.
  */
-export const validateCanonicalForm = (parsed: unknown): ErrorIssue[] => {
+export const validateCanonicalForm = (form: unknown): ErrorIssue[] => {
   const issues: ErrorIssue[] = [];
 
-  if (!isRecord(parsed)) {
-    push(issues, 'form', 'must be a JSON object', parsed);
+  if (!isRecord(form)) {
+    pushIssue(issues, 'form', 'must be a JSON object', form);
     return issues;
   }
 
-  if (typeof parsed.type !== 'string') {
-    push(issues, 'type', 'must be a string', parsed.type);
+  if (typeof form.type !== 'string') {
+    pushIssue(issues, 'type', 'must be a string', form.type);
   }
 
-  const { versions } = parsed;
+  const { versions } = form;
   if (!isRecord(versions)) {
-    push(issues, 'versions', 'must be an object', versions);
+    pushIssue(issues, 'versions', 'must be an object', versions);
     return issues;
   }
 
-  const keys = Object.keys(versions);
-  if (keys.length === 0) {
-    push(issues, 'versions', 'must declare at least one version');
+  const versionKeys = Object.keys(versions);
+  if (versionKeys.length === 0) {
+    pushIssue(issues, 'versions', 'must declare at least one version');
     return issues;
   }
 
-  for (const key of keys) {
-    checkVersion(versions[key], `versions${at(key)}`, issues);
+  for (const version of versionKeys) {
+    checkVersion(
+      versions[version],
+      `versions${pathSegmentForKey(version)}`,
+      issues,
+    );
   }
 
   return issues;

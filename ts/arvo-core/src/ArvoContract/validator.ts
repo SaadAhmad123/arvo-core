@@ -10,10 +10,12 @@ import type { VersionedArvoContractParam } from './versioned/types.js';
 /** Lowercase alphanumeric segments joined by single underscores. */
 const IDENTIFIER_GRAMMAR = /^[a-z0-9]+(_[a-z0-9]+)*$/;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
+  typeof candidate === 'object' &&
+  candidate !== null &&
+  !Array.isArray(candidate);
 
-const push = (
+const pushIssue = (
   issues: ErrorIssue[],
   path: string,
   message: string,
@@ -24,66 +26,72 @@ const push = (
 };
 
 const checkIdentifier = (
-  value: unknown,
+  identifier: unknown,
   path: string,
   issues: ErrorIssue[],
   blockingReason?: string,
 ): void => {
-  if (typeof value !== 'string' || value.length === 0) {
-    push(issues, path, 'must be a non-empty string', value, blockingReason);
+  if (typeof identifier !== 'string' || identifier.length === 0) {
+    pushIssue(
+      issues,
+      path,
+      'must be a non-empty string',
+      identifier,
+      blockingReason,
+    );
     return;
   }
-  if (!IDENTIFIER_GRAMMAR.test(value)) {
-    push(
+  if (!IDENTIFIER_GRAMMAR.test(identifier)) {
+    pushIssue(
       issues,
       path,
       'must be lowercase alphanumeric segments joined by single underscores',
-      value,
+      identifier,
       blockingReason,
     );
   }
 };
 
-const checkUri = (value: unknown, path: string, issues: ErrorIssue[]): void => {
-  if (typeof value !== 'string' || value.length === 0) {
-    push(issues, path, 'must be a non-empty string', value);
+const checkUri = (uri: unknown, path: string, issues: ErrorIssue[]): void => {
+  if (typeof uri !== 'string' || uri.length === 0) {
+    pushIssue(issues, path, 'must be a non-empty string', uri);
     return;
   }
-  if (!isUriReference(value)) {
-    push(
+  if (!isUriReference(uri)) {
+    pushIssue(
       issues,
       path,
       'must be an RFC 3986 URI-reference already in canonical form',
-      value,
+      uri,
     );
   }
 };
 
 const checkNullableIdentifier = (
-  value: unknown,
+  identifier: unknown,
   path: string,
   issues: ErrorIssue[],
 ): void => {
-  if (value === null) return;
-  checkIdentifier(value, path, issues);
+  if (identifier === null) return;
+  checkIdentifier(identifier, path, issues);
 };
 
 const checkDescription = (
-  value: unknown,
+  description: unknown,
   path: string,
   issues: ErrorIssue[],
 ): void => {
-  if (value === null || typeof value === 'string') return;
-  push(issues, path, 'must be a string or null', value);
+  if (description === null || typeof description === 'string') return;
+  pushIssue(issues, path, 'must be a string or null', description);
 };
 
 const checkMetadata = (
-  value: unknown,
+  metadata: unknown,
   path: string,
   issues: ErrorIssue[],
 ): void => {
-  if (isRecord(value)) return;
-  push(issues, path, 'must be an object', value);
+  if (isRecord(metadata)) return;
+  pushIssue(issues, path, 'must be an object', metadata);
 };
 
 /**
@@ -94,28 +102,28 @@ const checkMetadata = (
  * peer dependency — make `instanceof` false for a perfectly good schema
  * authored against the other copy.
  */
-const isObjectSchema = (value: unknown): boolean =>
-  (value as { _zod?: { def?: { type?: string } } })?._zod?.def?.type ===
+const isObjectSchema = (schema: unknown): boolean =>
+  (schema as { _zod?: { def?: { type?: string } } })?._zod?.def?.type ===
   'object';
 
 const checkObjectSchema = (
-  value: unknown,
+  schema: unknown,
   path: string,
   issues: ErrorIssue[],
 ): void => {
-  if (isObjectSchema(value)) return;
-  push(issues, path, 'must be a zod object schema', value);
+  if (isObjectSchema(schema)) return;
+  pushIssue(issues, path, 'must be a zod object schema', schema);
 };
 
 const checkVersionKey = (
-  key: string,
+  versionKey: string,
   path: string,
   issues: ErrorIssue[],
 ): void => {
-  const result = ArvoSemanticVersion.tryCheck(key);
-  if (result.ok) return;
-  for (const issue of result.error.issues) {
-    push(issues, path, issue.message, issue.received);
+  const attempt = ArvoSemanticVersion.tryCheck(versionKey);
+  if (attempt.ok) return;
+  for (const issue of attempt.error.issues) {
+    pushIssue(issues, path, issue.message, issue.received);
   }
 };
 
@@ -126,32 +134,32 @@ const checkVersionKey = (
  * version contract accepting the same values can never disagree.
  */
 const checkVersionInterface = (
-  params: { type: string; input: unknown; outputs: unknown },
-  prefix: string,
+  versionInterface: { type: string; input: unknown; outputs: unknown },
+  pathPrefix: string,
   issues: ErrorIssue[],
 ): void => {
-  checkObjectSchema(params.input, `${prefix}input`, issues);
+  checkObjectSchema(versionInterface.input, `${pathPrefix}input`, issues);
 
-  const { outputs } = params;
+  const { outputs } = versionInterface;
   if (!isRecord(outputs)) {
-    push(issues, `${prefix}outputs`, 'must be an object', outputs);
+    pushIssue(issues, `${pathPrefix}outputs`, 'must be an object', outputs);
     return;
   }
 
-  const errorType = handlerErrorType(params.type);
-  for (const [key, schema] of Object.entries(outputs)) {
-    const path = `${prefix}outputs${pathSegmentForKey(key)}`;
-    checkIdentifier(key, path, issues);
+  const errorType = handlerErrorType(versionInterface.type);
+  for (const [outputType, schema] of Object.entries(outputs)) {
+    const path = `${pathPrefix}outputs${pathSegmentForKey(outputType)}`;
+    checkIdentifier(outputType, path, issues);
     checkObjectSchema(schema, path, issues);
-    if (key === params.type) {
-      push(
+    if (outputType === versionInterface.type) {
+      pushIssue(
         issues,
         path,
         "must not reuse the contract type, which already names this contract's input",
       );
     }
-    if (key === errorType) {
-      push(
+    if (outputType === errorType) {
+      pushIssue(
         issues,
         path,
         'must not reuse the handler error type, which every version already carries',
@@ -229,42 +237,43 @@ export type ArvoContractValidation =
 export const validateArvoContract = (
   param: ArvoContractParam,
 ): ArvoContractValidation => {
-  const blocking: ErrorIssue[] = [];
-  checkIdentifier(param.type, 'type', blocking, TYPE_IS_LOAD_BEARING);
-  if (blocking.length > 0) return { blocked: true, issues: blocking };
+  const blockingIssues: ErrorIssue[] = [];
+  checkIdentifier(param.type, 'type', blockingIssues, TYPE_IS_LOAD_BEARING);
+  if (blockingIssues.length > 0)
+    return { blocked: true, issues: blockingIssues };
 
   const issues: ErrorIssue[] = [];
-  const value = normalize(param);
+  const contract = normalize(param);
 
-  checkUri(value.uri, 'uri', issues);
-  checkDescription(value.description, 'description', issues);
-  checkNullableIdentifier(value.domain, 'domain', issues);
-  checkMetadata(value.metadata, 'metadata', issues);
+  checkUri(contract.uri, 'uri', issues);
+  checkDescription(contract.description, 'description', issues);
+  checkNullableIdentifier(contract.domain, 'domain', issues);
+  checkMetadata(contract.metadata, 'metadata', issues);
 
   if (!isRecord(param.versions)) {
-    push(issues, 'versions', 'must be an object', param.versions);
-    return { blocked: false, value, issues };
+    pushIssue(issues, 'versions', 'must be an object', param.versions);
+    return { blocked: false, value: contract, issues };
   }
 
-  const keys = Object.keys(value.versions);
-  if (keys.length === 0) {
-    push(issues, 'versions', 'must declare at least one version');
-    return { blocked: false, value, issues };
+  const versionKeys = Object.keys(contract.versions);
+  if (versionKeys.length === 0) {
+    pushIssue(issues, 'versions', 'must declare at least one version');
+    return { blocked: false, value: contract, issues };
   }
 
-  for (const key of keys) {
-    const path = `versions${pathSegmentForKey(key)}`;
-    checkVersionKey(key, path, issues);
+  for (const version of versionKeys) {
+    const path = `versions${pathSegmentForKey(version)}`;
+    checkVersionKey(version, path, issues);
 
-    const definition = value.versions[key];
+    const definition = contract.versions[version];
     if (!isRecord(definition)) {
-      push(issues, path, 'must be an object', definition);
+      pushIssue(issues, path, 'must be an object', definition);
       continue;
     }
 
     checkVersionInterface(
       {
-        type: value.type,
+        type: contract.type,
         input: definition.input,
         outputs: definition.outputs,
       },
@@ -273,7 +282,7 @@ export const validateArvoContract = (
     );
   }
 
-  return { blocked: false, value, issues };
+  return { blocked: false, value: contract, issues };
 };
 
 /**
@@ -286,9 +295,9 @@ export const validateArvoContract = (
 export const validateVersionedArvoContract = (
   param: VersionedArvoContractParam,
 ): { issues: ErrorIssue[] } => {
-  const blocking: ErrorIssue[] = [];
-  checkIdentifier(param.type, 'type', blocking, TYPE_IS_LOAD_BEARING);
-  if (blocking.length > 0) return { issues: blocking };
+  const blockingIssues: ErrorIssue[] = [];
+  checkIdentifier(param.type, 'type', blockingIssues, TYPE_IS_LOAD_BEARING);
+  if (blockingIssues.length > 0) return { issues: blockingIssues };
 
   const issues: ErrorIssue[] = [];
 

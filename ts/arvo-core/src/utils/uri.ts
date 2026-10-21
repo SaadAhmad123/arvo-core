@@ -12,8 +12,8 @@ import fastUri from 'fast-uri';
  * The empty string returns `true` -- it is a valid URI-reference. Callers
  * that also require non-emptiness check for that separately.
  */
-export const isUriReference = (value: string): boolean => {
-  const parsed = fastUri.parse(value);
-  if ('error' in parsed) return false;
-  return fastUri.serialize(parsed) === value;
+export const isUriReference = (uriReference: string): boolean => {
+  const uriComponents = fastUri.parse(uriReference);
+  if ('error' in uriComponents) return false;
+  return fastUri.serialize(uriComponents) === uriReference;
 };

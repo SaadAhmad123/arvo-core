@@ -9,13 +9,15 @@ export class ExecutionUnitsCodec implements ICodec<number, string> {
    * rather than reimplementing the algorithm; `decode`'s round trip is what
    * enforces canonical form on the way back in.
    */
-  encode(value: number): string {
-    return JSON.stringify(value);
+  encode(executionUnits: number): string {
+    return JSON.stringify(executionUnits);
   }
 
-  decode(value: string): number | null {
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return null;
-    return JSON.stringify(parsed) === value ? parsed : null;
+  decode(encodedExecutionUnits: string): number | null {
+    const executionUnits = Number(encodedExecutionUnits);
+    if (!Number.isFinite(executionUnits)) return null;
+    return JSON.stringify(executionUnits) === encodedExecutionUnits
+      ? executionUnits
+      : null;
   }
 }

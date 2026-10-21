@@ -54,13 +54,13 @@ const looseCloudEvent = (fields: Record<string, unknown>): CloudEvent =>
  * exercises that method at all.
  */
 const wireRoundTrip = async (event: ArvoEvent): Promise<ArvoEvent> => {
-  const ce = await converter().convert(event);
-  const wireBody = JSON.stringify(ce);
-  const received = new CloudEvent<Record<string, unknown>>(
+  const cloudEvent = await converter().convert(event);
+  const wireBody = JSON.stringify(cloudEvent);
+  const receivedCloudEvent = new CloudEvent<Record<string, unknown>>(
     JSON.parse(wireBody),
     false,
   );
-  return converter().revert(received);
+  return converter().revert(receivedCloudEvent);
 };
 
 const conformingArvoShapedFields = (): Record<string, unknown> => ({
@@ -81,14 +81,14 @@ const conformingArvoShapedFields = (): Record<string, unknown> => ({
   } as Record<string, unknown>,
 });
 
-const isThrown = async (
-  fn: () => Promise<unknown>,
+const thrownError = async (
+  operation: () => Promise<unknown>,
 ): Promise<CloudEventTransformationError> => {
   try {
-    await fn();
-  } catch (error) {
-    if (error instanceof CloudEventTransformationError) return error;
-    throw error;
+    await operation();
+  } catch (thrown) {
+    if (thrown instanceof CloudEventTransformationError) return thrown;
+    throw thrown;
   }
   throw new Error(
     'expected the promise to reject with a CloudEventTransformationError',
@@ -99,42 +99,46 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
   describe('forward mapping', () => {
     it('carries native attributes unchanged', async () => {
       const event = new ArvoEvent(fullParam());
-      const ce = await converter().convert(event);
-      expect(ce.id).toBe(event.id);
-      expect(ce.source).toBe(event.source);
-      expect(ce.type).toBe(event.type);
-      expect(ce.subject).toBe(event.subject);
-      expect(ce.time).toBe(event.time);
+      const cloudEvent = await converter().convert(event);
+      expect(cloudEvent.id).toBe(event.id);
+      expect(cloudEvent.source).toBe(event.source);
+      expect(cloudEvent.type).toBe(event.type);
+      expect(cloudEvent.subject).toBe(event.subject);
+      expect(cloudEvent.time).toBe(event.time);
     });
 
     it('fixes the protocol-level constants regardless of the source event', async () => {
-      const ce = await converter().convert(new ArvoEvent(minimalParam()));
-      expect(ce.specversion).toBe('1.0');
-      expect(ce.datacontenttype).toBe(
+      const cloudEvent = await converter().convert(
+        new ArvoEvent(minimalParam()),
+      );
+      expect(cloudEvent.specversion).toBe('1.0');
+      expect(cloudEvent.datacontenttype).toBe(
         'application/vnd.arvo.event+json;version=1',
       );
-      expect(ce.dataschema).toBe(
+      expect(cloudEvent.dataschema).toBe(
         'https://www.arvo.land/schemas/cloudevent-data/v1',
       );
       expect(
-        (ce as never as { data_base64?: unknown }).data_base64,
+        (cloudEvent as never as { data_base64?: unknown }).data_base64,
       ).toBeUndefined();
     });
 
     it('carries traceparent/tracestate as extensions when present', async () => {
-      const ce = await converter().convert(new ArvoEvent(fullParam()));
-      const traced = fullParam() as {
+      const cloudEvent = await converter().convert(new ArvoEvent(fullParam()));
+      const tracedParam = fullParam() as {
         traceparent: string;
         tracestate: string;
       };
-      expect(ce.traceparent).toBe(traced.traceparent);
-      expect(ce.tracestate).toBe(traced.tracestate);
+      expect(cloudEvent.traceparent).toBe(tracedParam.traceparent);
+      expect(cloudEvent.tracestate).toBe(tracedParam.tracestate);
     });
 
     it('omits traceparent/tracestate when null', async () => {
-      const ce = await converter().convert(new ArvoEvent(minimalParam()));
-      expect('traceparent' in ce).toBe(false);
-      expect('tracestate' in ce).toBe(false);
+      const cloudEvent = await converter().convert(
+        new ArvoEvent(minimalParam()),
+      );
+      expect('traceparent' in cloudEvent).toBe(false);
+      expect('tracestate' in cloudEvent).toBe(false);
     });
 
     const scalarExtensions: [keyof ArvoEventParam, string][] = [
@@ -147,36 +151,42 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
 
     for (const [field, extension] of scalarExtensions) {
       it(`carries ${field} as ${extension} when present`, async () => {
-        const ce = await converter().convert(new ArvoEvent(fullParam()));
-        expect((ce as never as Record<string, unknown>)[extension]).toBe(
-          fullParam()[field],
+        const cloudEvent = await converter().convert(
+          new ArvoEvent(fullParam()),
         );
+        expect(
+          (cloudEvent as never as Record<string, unknown>)[extension],
+        ).toBe(fullParam()[field]);
       });
 
       it(`omits ${extension} when ${field} is null`, async () => {
-        const ce = await converter().convert(new ArvoEvent(minimalParam()));
-        expect(extension in ce).toBe(false);
+        const cloudEvent = await converter().convert(
+          new ArvoEvent(minimalParam()),
+        );
+        expect(extension in cloudEvent).toBe(false);
       });
     }
 
     it('carries executionid as arvoexecutionid, always present', async () => {
-      const ce = await converter().convert(new ArvoEvent(minimalParam()));
-      expect((ce as never as Record<string, unknown>).arvoexecutionid).toBe(
-        'subj-1',
+      const cloudEvent = await converter().convert(
+        new ArvoEvent(minimalParam()),
       );
+      expect(
+        (cloudEvent as never as Record<string, unknown>).arvoexecutionid,
+      ).toBe('subj-1');
     });
 
     it.each([0, 1, 42, 1000000])(
       'encodes arvodepth %i as its canonical decimal string',
       async (depth) => {
-        const ce = await converter().convert(
+        const cloudEvent = await converter().convert(
           new ArvoEvent({
             ...minimalParam(),
             parentid: depth > 0 ? 'parent-1' : undefined,
             depth,
           }),
         );
-        expect((ce as never as Record<string, unknown>).arvodepth).toBe(
+        expect((cloudEvent as never as Record<string, unknown>).arvodepth).toBe(
           String(depth),
         );
       },
@@ -185,35 +195,38 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
     it.each([0.5, -3.25, 1e21, Number.MAX_SAFE_INTEGER])(
       'encodes arvoexecutionunits %s canonically',
       async (executionunits) => {
-        const ce = await converter().convert(
+        const cloudEvent = await converter().convert(
           new ArvoEvent({ ...minimalParam(), executionunits }),
         );
         expect(
-          (ce as never as Record<string, unknown>).arvoexecutionunits,
+          (cloudEvent as never as Record<string, unknown>).arvoexecutionunits,
         ).toBe(JSON.stringify(executionunits));
       },
     );
 
     it('omits arvoexecutionunits when null', async () => {
-      const ce = await converter().convert(new ArvoEvent(minimalParam()));
-      expect('arvoexecutionunits' in ce).toBe(false);
+      const cloudEvent = await converter().convert(
+        new ArvoEvent(minimalParam()),
+      );
+      expect('arvoexecutionunits' in cloudEvent).toBe(false);
     });
 
     it('wraps data/dataschema/baggage under exactly arvoeventdata/arvoeventdataschema/arvoeventbaggage', async () => {
       const event = new ArvoEvent(fullParam());
-      const ce = await converter().convert(event);
-      expect(Object.keys(ce.data as object).sort()).toEqual(
+      const cloudEvent = await converter().convert(event);
+      expect(Object.keys(cloudEvent.data as object).sort()).toEqual(
         ['arvoeventbaggage', 'arvoeventdata', 'arvoeventdataschema'].sort(),
       );
       expect(
-        (ce.data as never as { arvoeventdata: unknown }).arvoeventdata,
+        (cloudEvent.data as never as { arvoeventdata: unknown }).arvoeventdata,
       ).toEqual(event.data);
       expect(
-        (ce.data as never as { arvoeventdataschema: unknown })
+        (cloudEvent.data as never as { arvoeventdataschema: unknown })
           .arvoeventdataschema,
       ).toBe(event.dataschema);
       expect(
-        (ce.data as never as { arvoeventbaggage: unknown }).arvoeventbaggage,
+        (cloudEvent.data as never as { arvoeventbaggage: unknown })
+          .arvoeventbaggage,
       ).toEqual(event.baggage);
     });
   });
@@ -221,54 +234,60 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
   describe('round-trip losslessness', () => {
     it('round-trips a fully populated event field for field', async () => {
       const event = new ArvoEvent(fullParam());
-      const back = await converter().revert(await converter().convert(event));
-      expect(JSON.parse(JSON.stringify(back))).toEqual(
+      const restoredEvent = await converter().revert(
+        await converter().convert(event),
+      );
+      expect(JSON.parse(JSON.stringify(restoredEvent))).toEqual(
         JSON.parse(JSON.stringify(event)),
       );
     });
 
     it('round-trips a minimal (all-null) event field for field', async () => {
       const event = new ArvoEvent(minimalParam());
-      const back = await converter().revert(await converter().convert(event));
-      expect(JSON.parse(JSON.stringify(back))).toEqual(
+      const restoredEvent = await converter().revert(
+        await converter().convert(event),
+      );
+      expect(JSON.parse(JSON.stringify(restoredEvent))).toEqual(
         JSON.parse(JSON.stringify(event)),
       );
     });
 
     it('round-trips a supplied -0 executionunits as 0', async () => {
       const event = new ArvoEvent({ ...minimalParam(), executionunits: -0 });
-      const back = await converter().revert(await converter().convert(event));
-      expect(Object.is(back.executionunits, 0)).toBe(true);
+      const restoredEvent = await converter().revert(
+        await converter().convert(event),
+      );
+      expect(Object.is(restoredEvent.executionunits, 0)).toBe(true);
     });
 
     describe('through the real wire (JSON.stringify/JSON.parse, not the in-memory object)', () => {
       it('round-trips a fully populated event field for field, time omitted (default)', async () => {
         const event = new ArvoEvent({ ...fullParam(), time: undefined });
-        const back = await wireRoundTrip(event);
-        expect(JSON.parse(JSON.stringify(back))).toEqual(
+        const restoredEvent = await wireRoundTrip(event);
+        expect(JSON.parse(JSON.stringify(restoredEvent))).toEqual(
           JSON.parse(JSON.stringify(event)),
         );
       });
 
       it('round-trips a minimal (all-null) event field for field', async () => {
         const event = new ArvoEvent(minimalParam());
-        const back = await wireRoundTrip(event);
-        expect(JSON.parse(JSON.stringify(back))).toEqual(
+        const restoredEvent = await wireRoundTrip(event);
+        expect(JSON.parse(JSON.stringify(restoredEvent))).toEqual(
           JSON.parse(JSON.stringify(event)),
         );
       });
 
       it('round-trips a supplied -0 executionunits as 0', async () => {
         const event = new ArvoEvent({ ...minimalParam(), executionunits: -0 });
-        const back = await wireRoundTrip(event);
-        expect(Object.is(back.executionunits, 0)).toBe(true);
+        const restoredEvent = await wireRoundTrip(event);
+        expect(Object.is(restoredEvent.executionunits, 0)).toBe(true);
       });
 
       it('is idempotent across two wire round trips', async () => {
         const event = new ArvoEvent({ ...fullParam(), time: undefined });
-        const once = await wireRoundTrip(event);
-        const twice = await wireRoundTrip(once);
-        expect(JSON.parse(JSON.stringify(twice))).toEqual(
+        const oneTripEvent = await wireRoundTrip(event);
+        const twoTripEvent = await wireRoundTrip(oneTripEvent);
+        expect(JSON.parse(JSON.stringify(twoTripEvent))).toEqual(
           JSON.parse(JSON.stringify(event)),
         );
       });
@@ -278,35 +297,35 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
           ...minimalParam(),
           time: '2026-08-04T19:52:45.042+05:00',
         });
-        const back = await wireRoundTrip(event);
+        const restoredEvent = await wireRoundTrip(event);
         // This assertion is the regression guard in the other direction: if
         // this ever starts passing, either the gap was silently closed (say
         // so in tryRevert/revert's TSDoc and developer-usage-findings.md
         // Finding 6) or something is now silently swallowing a real
         // mismatch that should be visible.
-        expect(back.time).not.toBe(event.time);
+        expect(restoredEvent.time).not.toBe(event.time);
       });
     });
   });
 
   describe('discriminator and strict reversal', () => {
     it('reverses a fully conforming CloudEvent successfully', async () => {
-      const ce = rawCloudEvent(conformingArvoShapedFields());
-      const event = await converter().revert(ce);
+      const cloudEvent = rawCloudEvent(conformingArvoShapedFields());
+      const event = await converter().revert(cloudEvent);
       expect(event.subject).toBe('subj-1');
       expect(event.executionid).toBe('subj-1');
     });
 
     it('rejects the wrong specversion', async () => {
-      const ce = rawCloudEvent({
+      const cloudEvent = rawCloudEvent({
         ...conformingArvoShapedFields(),
         specversion: '2.0',
       });
-      const error = await isThrown(() => converter().revert(ce));
+      const error = await thrownError(() => converter().revert(cloudEvent));
       expect(error.detail.kind).toBe('strict');
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'specversion'),
+          error.detail.issues.some((issue) => issue.path === 'specversion'),
       ).toBe(true);
     });
 
@@ -316,93 +335,97 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
       ['application/vnd.arvo.event+json;version=2', 'wrong version value'],
       ['application/vnd.arvo.event+json;version=1;extra=x', 'extra params'],
     ])('rejects datacontenttype: %s (%s)', async (datacontenttype) => {
-      const ce = rawCloudEvent({
+      const cloudEvent = rawCloudEvent({
         ...conformingArvoShapedFields(),
         datacontenttype,
       });
-      const error = await isThrown(() => converter().revert(ce));
+      const error = await thrownError(() => converter().revert(cloudEvent));
       expect(error.detail.kind).toBe('strict');
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'datacontenttype'),
+          error.detail.issues.some((issue) => issue.path === 'datacontenttype'),
       ).toBe(true);
     });
 
     it('accepts a case-varied media type and parameter name', async () => {
-      const ce = rawCloudEvent({
+      const cloudEvent = rawCloudEvent({
         ...conformingArvoShapedFields(),
         datacontenttype: 'Application/Vnd.Arvo.Event+JSON;VERSION=1',
       });
-      await expect(converter().revert(ce)).resolves.toBeInstanceOf(ArvoEvent);
+      await expect(converter().revert(cloudEvent)).resolves.toBeInstanceOf(
+        ArvoEvent,
+      );
     });
 
     it('rejects a case-varied version value (case-sensitive)', async () => {
-      const ce = rawCloudEvent({
+      const cloudEvent = rawCloudEvent({
         ...conformingArvoShapedFields(),
         datacontenttype: 'application/vnd.arvo.event+json;version=X',
       });
-      const error = await isThrown(() => converter().revert(ce));
+      const error = await thrownError(() => converter().revert(cloudEvent));
       expect(error.detail.kind).toBe('strict');
     });
 
     it('rejects the wrong dataschema', async () => {
-      const ce = rawCloudEvent({
+      const cloudEvent = rawCloudEvent({
         ...conformingArvoShapedFields(),
         dataschema: 'https://example.com/other',
       });
-      const error = await isThrown(() => converter().revert(ce));
+      const error = await thrownError(() => converter().revert(cloudEvent));
       expect(error.detail.kind).toBe('strict');
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'dataschema'),
+          error.detail.issues.some((issue) => issue.path === 'dataschema'),
       ).toBe(true);
     });
 
     it('rejects a missing subject', async () => {
       const fields = conformingArvoShapedFields();
       fields.subject = undefined;
-      const error = await isThrown(() =>
+      const error = await thrownError(() =>
         converter().revert(rawCloudEvent(fields)),
       );
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'subject'),
+          error.detail.issues.some((issue) => issue.path === 'subject'),
       ).toBe(true);
     });
 
     it('rejects a missing time', async () => {
       const fields = conformingArvoShapedFields();
       fields.time = undefined;
-      const error = await isThrown(() =>
+      const error = await thrownError(() =>
         converter().revert(looseCloudEvent(fields)),
       );
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'time'),
+          error.detail.issues.some((issue) => issue.path === 'time'),
       ).toBe(true);
     });
 
     it('rejects a wrapper missing a required key', async () => {
       const fields = conformingArvoShapedFields();
       fields.data = { arvoeventdata: {}, arvoeventdataschema: 'x://y' };
-      const error = await isThrown(() =>
+      const error = await thrownError(() =>
         converter().revert(rawCloudEvent(fields)),
       );
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'data.arvoeventbaggage'),
+          error.detail.issues.some(
+            (issue) => issue.path === 'data.arvoeventbaggage',
+          ),
       ).toBe(true);
     });
 
     it('rejects a wrapper with an extra key', async () => {
       const fields = conformingArvoShapedFields();
       fields.data = { ...(fields.data as Record<string, unknown>), extra: 1 };
-      const error = await isThrown(() =>
+      const error = await thrownError(() =>
         converter().revert(rawCloudEvent(fields)),
       );
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'data'),
+          error.detail.issues.some((issue) => issue.path === 'data'),
       ).toBe(true);
     });
 
@@ -414,12 +437,12 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
           ...(fields.data as Record<string, unknown>),
           [key]: 'not-an-object',
         };
-        const error = await isThrown(() =>
+        const error = await thrownError(() =>
           converter().revert(rawCloudEvent(fields)),
         );
         expect(
           error.detail.kind === 'strict' &&
-            error.detail.issues.some((i) => i.path === `data.${key}`),
+            error.detail.issues.some((issue) => issue.path === `data.${key}`),
         ).toBe(true);
       },
     );
@@ -430,13 +453,13 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
         ...(fields.data as Record<string, unknown>),
         arvoeventdataschema: 123,
       };
-      const error = await isThrown(() =>
+      const error = await thrownError(() =>
         converter().revert(rawCloudEvent(fields)),
       );
       expect(
         error.detail.kind === 'strict' &&
           error.detail.issues.some(
-            (i) => i.path === 'data.arvoeventdataschema',
+            (issue) => issue.path === 'data.arvoeventdataschema',
           ),
       ).toBe(true);
     });
@@ -444,86 +467,90 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
     it('rejects a missing arvoexecutionid', async () => {
       const fields = conformingArvoShapedFields();
       fields.arvoexecutionid = undefined;
-      const error = await isThrown(() =>
+      const error = await thrownError(() =>
         converter().revert(rawCloudEvent(fields)),
       );
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'arvoexecutionid'),
+          error.detail.issues.some((issue) => issue.path === 'arvoexecutionid'),
       ).toBe(true);
     });
 
     it.each(['-1', '01', '1.0', '1e1'])(
       'rejects a non-canonical arvodepth encoding: %s',
       async (arvodepth) => {
-        const ce = rawCloudEvent({
+        const cloudEvent = rawCloudEvent({
           ...conformingArvoShapedFields(),
           arvodepth,
         });
-        const error = await isThrown(() => converter().revert(ce));
+        const error = await thrownError(() => converter().revert(cloudEvent));
         expect(
           error.detail.kind === 'strict' &&
-            error.detail.issues.some((i) => i.path === 'arvodepth'),
+            error.detail.issues.some((issue) => issue.path === 'arvodepth'),
         ).toBe(true);
       },
     );
 
     it('rejects a present-but-wrong-typed optional extension', async () => {
-      const ce = rawCloudEvent({
+      const cloudEvent = rawCloudEvent({
         ...conformingArvoShapedFields(),
         arvocategory: 42,
       });
-      const error = await isThrown(() => converter().revert(ce));
+      const error = await thrownError(() => converter().revert(cloudEvent));
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'arvocategory'),
+          error.detail.issues.some((issue) => issue.path === 'arvocategory'),
       ).toBe(true);
     });
 
     it('rejects a non-string arvodepth', async () => {
       const fields = conformingArvoShapedFields();
       fields.arvodepth = 0;
-      const error = await isThrown(() =>
+      const error = await thrownError(() =>
         converter().revert(looseCloudEvent(fields)),
       );
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'arvodepth'),
+          error.detail.issues.some((issue) => issue.path === 'arvodepth'),
       ).toBe(true);
     });
 
     it('rejects a non-string arvoexecutionunits', async () => {
       const fields = conformingArvoShapedFields();
       fields.arvoexecutionunits = 1.5;
-      const error = await isThrown(() =>
+      const error = await thrownError(() =>
         converter().revert(looseCloudEvent(fields)),
       );
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'arvoexecutionunits'),
+          error.detail.issues.some(
+            (issue) => issue.path === 'arvoexecutionunits',
+          ),
       ).toBe(true);
     });
 
     it('rejects an arvoexecutionunits failing its RFC 8785 round-trip check', async () => {
-      const ce = rawCloudEvent({
+      const cloudEvent = rawCloudEvent({
         ...conformingArvoShapedFields(),
         arvoexecutionunits: '1.50',
       });
-      const error = await isThrown(() => converter().revert(ce));
+      const error = await thrownError(() => converter().revert(cloudEvent));
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'arvoexecutionunits'),
+          error.detail.issues.some(
+            (issue) => issue.path === 'arvoexecutionunits',
+          ),
       ).toBe(true);
     });
 
     it('treats a CloudEvent claiming neither marker as foreign, not malformed', async () => {
-      const ce = rawCloudEvent({
+      const cloudEvent = rawCloudEvent({
         id: 'id-1',
         source: 'foreign/source',
         type: 'foreign.event',
         specversion: '1.0',
       });
-      const event = await converter().revert(ce, {
+      const event = await converter().revert(cloudEvent, {
         dataschema: 'unknown/0.0.0',
         subject: 'fallback-subject',
         data: {},
@@ -532,7 +559,7 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
     });
 
     it('rejects a partial-marker-match as malformed, distinguishably from foreign', async () => {
-      const ce = rawCloudEvent({
+      const cloudEvent = rawCloudEvent({
         id: 'id-1',
         source: 'test/source',
         type: 'test.event',
@@ -540,7 +567,7 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
         dataschema: 'https://www.arvo.land/schemas/cloudevent-data/v1',
         // datacontenttype absent, subject/time/data absent -> claims via dataschema only
       });
-      const error = await isThrown(() => converter().revert(ce));
+      const error = await thrownError(() => converter().revert(cloudEvent));
       expect(error.detail.kind).toBe('strict');
     });
 
@@ -548,37 +575,39 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
       const fields = conformingArvoShapedFields();
       fields.arvoparentid = undefined; // parentid null -> root event
       fields.arvoexecutionid = 'not-equal-to-subject'; // violates root constraint (executionid must equal subject)
-      const error = await isThrown(() =>
+      const error = await thrownError(() =>
         converter().revert(rawCloudEvent(fields)),
       );
       expect(
         error.detail.kind === 'strict' &&
-          error.detail.issues.some((i) => i.path === 'parentid + executionid'),
+          error.detail.issues.some(
+            (issue) => issue.path === 'parentid + executionid',
+          ),
       ).toBe(true);
     });
 
     it('never throws for any strict-path failure — always resolves through tryRevert', async () => {
-      const ce = rawCloudEvent({
+      const cloudEvent = rawCloudEvent({
         ...conformingArvoShapedFields(),
         specversion: '2.0',
       });
-      const result = await converter().tryRevert(ce);
-      expect(result.ok).toBe(false);
+      const reversion = await converter().tryRevert(cloudEvent);
+      expect(reversion.ok).toBe(false);
     });
   });
 
   describe('foreign adaptation', () => {
-    const foreign = (extra: Record<string, unknown> = {}) =>
+    const foreignCloudEvent = (extraAttributes: Record<string, unknown> = {}) =>
       rawCloudEvent({
         id: 'f-1',
         source: 'foreign/source',
         type: 'foreign.type',
         specversion: '1.0',
-        ...extra,
+        ...extraAttributes,
       });
 
     it('maps id/source/type unconditionally', async () => {
-      const event = await converter().revert(foreign(), {
+      const event = await converter().revert(foreignCloudEvent(), {
         dataschema: 'unknown/0.0.0',
         subject: 'fallback-subject',
         data: {},
@@ -589,7 +618,7 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
     });
 
     it('maps subject/time/data when present, falls back otherwise', async () => {
-      const event = await converter().revert(foreign(), {
+      const event = await converter().revert(foreignCloudEvent(), {
         dataschema: 'unknown/0.0.0',
         subject: 'fallback-subject',
         data: { a: 1 },
@@ -599,13 +628,13 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
     });
 
     it('falls back to a caller-supplied time when the foreign CloudEvent genuinely has none', async () => {
-      const ce = looseCloudEvent({
+      const cloudEvent = looseCloudEvent({
         id: 'f-1',
         source: 'foreign/source',
         type: 'foreign.type',
         specversion: '1.0',
       });
-      const event = await converter().revert(ce, {
+      const event = await converter().revert(cloudEvent, {
         dataschema: 'unknown/0.0.0',
         subject: 'fallback-subject',
         data: {},
@@ -615,12 +644,12 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
     });
 
     it('lets a present foreign subject/time/data win over a caller-supplied fallback', async () => {
-      const ce = foreign({
+      const cloudEvent = foreignCloudEvent({
         subject: 'foreign-subject',
         time: '2024-01-01T00:00:00.000+00:00',
         data: { a: 1 },
       });
-      const event = await converter().revert(ce, {
+      const event = await converter().revert(cloudEvent, {
         dataschema: 'unknown/0.0.0',
         subject: 'fallback-subject',
         data: { b: 2 },
@@ -630,8 +659,11 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
     });
 
     it('maps traceparent/tracestate when present', async () => {
-      const ce = foreign({ traceparent: '00-abc-def-01', tracestate: 'k=v' });
-      const event = await converter().revert(ce, {
+      const cloudEvent = foreignCloudEvent({
+        traceparent: '00-abc-def-01',
+        tracestate: 'k=v',
+      });
+      const event = await converter().revert(cloudEvent, {
         dataschema: 'unknown/0.0.0',
         subject: 'fallback-subject',
         data: {},
@@ -641,29 +673,32 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
     });
 
     it('fails adaptation, naming dataschema, when the caller supplies no fallback dataschema', async () => {
-      const error = await isThrown(() =>
-        converter().revert(foreign({ data: {} })),
+      const error = await thrownError(() =>
+        converter().revert(foreignCloudEvent({ data: {} })),
       );
       expect(
         error.detail.kind === 'foreign' &&
-          error.detail.issues.some((i) => i.path === 'dataschema'),
+          error.detail.issues.some((issue) => issue.path === 'dataschema'),
       ).toBe(true);
     });
 
     it('fails adaptation, naming data, when foreign data is present but not an object', async () => {
-      const ce = foreign({ data: 'not-an-object' });
-      const error = await isThrown(() =>
-        converter().revert(ce, { dataschema: 'unknown/0.0.0' }),
+      const cloudEvent = foreignCloudEvent({ data: 'not-an-object' });
+      const error = await thrownError(() =>
+        converter().revert(cloudEvent, { dataschema: 'unknown/0.0.0' }),
       );
       expect(
         error.detail.kind === 'foreign' &&
-          error.detail.issues.some((i) => i.path === 'data'),
+          error.detail.issues.some((issue) => issue.path === 'data'),
       ).toBe(true);
     });
 
     it('never interprets an arvo-prefixed attribute on a foreign event', async () => {
-      const ce = foreign({ arvoparentid: 'should-be-ignored', data: {} });
-      const event = await converter().revert(ce, {
+      const cloudEvent = foreignCloudEvent({
+        arvoparentid: 'should-be-ignored',
+        data: {},
+      });
+      const event = await converter().revert(cloudEvent, {
         dataschema: 'unknown/0.0.0',
         subject: 'fallback-subject',
       });
@@ -671,13 +706,16 @@ describe('ArvoToCloudEventConverter (default stage)', () => {
     });
 
     it('still runs the assembled candidate through structural validation', async () => {
-      const ce = foreign({ source: 'not a valid uri reference', data: {} });
-      const error = await isThrown(() =>
-        converter().revert(ce, { dataschema: 'unknown/0.0.0' }),
+      const cloudEvent = foreignCloudEvent({
+        source: 'not a valid uri reference',
+        data: {},
+      });
+      const error = await thrownError(() =>
+        converter().revert(cloudEvent, { dataschema: 'unknown/0.0.0' }),
       );
       expect(
         error.detail.kind === 'foreign' &&
-          error.detail.issues.some((i) => i.path === 'source'),
+          error.detail.issues.some((issue) => issue.path === 'source'),
       ).toBe(true);
     });
   });

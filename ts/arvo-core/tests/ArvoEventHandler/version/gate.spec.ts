@@ -54,37 +54,42 @@ describe('whether a finished execution accepts anything further', () => {
 });
 
 describe('whether an execution has outlived its time', () => {
-  const opened = Date.parse(initEvent.time);
+  const initTime = Date.parse(initEvent.time);
 
   /** What a refusal names this version by. */
   const VERSION = 'com_order_create@1.0.0';
 
   it('admits one where the version sets no bound', () => {
     expect(
-      refuseOutlived(VERSION, initEvent, null, opened + 1_000_000),
+      refuseOutlived(VERSION, initEvent, null, initTime + 1_000_000),
     ).toBeNull();
   });
 
   it('admits one still inside the bound', () => {
     expect(
-      refuseOutlived(VERSION, initEvent, 10_000, opened + 9_999),
+      refuseOutlived(VERSION, initEvent, 10_000, initTime + 9_999),
     ).toBeNull();
   });
 
   it('refuses one at the bound, which is exclusive', () => {
     expect(
-      refuseOutlived(VERSION, initEvent, 10_000, opened + 10_000)?.faultKind,
+      refuseOutlived(VERSION, initEvent, 10_000, initTime + 10_000)?.faultKind,
     ).toBe('execution_timeout');
   });
 
   it('refuses one past it', () => {
     expect(
-      refuseOutlived(VERSION, initEvent, 1_000, opened + 60_000)?.faultKind,
+      refuseOutlived(VERSION, initEvent, 1_000, initTime + 60_000)?.faultKind,
     ).toBe('execution_timeout');
   });
 
   it('says the limit, the option it comes from, when it began, and how old it is', () => {
-    const refusal = refuseOutlived(VERSION, initEvent, 1_000, opened + 60_000);
+    const refusal = refuseOutlived(
+      VERSION,
+      initEvent,
+      1_000,
+      initTime + 60_000,
+    );
     expect(refusal?.message).toContain('1000ms');
     expect(refusal?.message).toContain('executionTimeout');
     expect(refusal?.message).toContain(VERSION);
@@ -94,119 +99,127 @@ describe('whether an execution has outlived its time', () => {
 });
 
 describe('whether the event, the handler and the record agree', () => {
-  const addressed = cloneArvoEvent(initEvent, { to: orderVersion.type });
+  const addressedEvent = cloneArvoEvent(initEvent, { to: orderVersion.type });
 
   it('admits an event addressed here, with no record to check', () => {
-    expect(refuseMisaddressed(orderVersion, addressed, null)).toBeNull();
+    expect(refuseMisaddressed(orderVersion, addressedEvent, null)).toBeNull();
   });
 
   it('says what to set where an event names no destination', () => {
-    const unaddressed = createArvoEvent({
+    const unaddressedEvent = createArvoEvent({
       source: initEvent.source,
       subject: initEvent.subject,
       type: initEvent.type,
       dataschema: initEvent.dataschema,
       data: initEvent.data,
     });
-    const refusal = refuseMisaddressed(orderVersion, unaddressed, null);
+    const refusal = refuseMisaddressed(orderVersion, unaddressedEvent, null);
     expect(refusal?.message).toContain('to = its own type');
     expect(refusal?.message).toContain(orderVersion.type);
   });
 
   it('says how many fields disagree, where the record and the event do', () => {
     const state = buildState({ source: 'com_something_else' });
-    const stray = cloneArvoEvent(chargedEvent, {
+    const strayEvent = cloneArvoEvent(chargedEvent, {
       to: 'com.somewhere.else',
       parentid: initEvent.id,
       executionid: 'somewhere-else',
       subject: 'another-workflow',
     });
-    const refusal = refuseMisaddressed(orderVersion, stray, state);
+    const refusal = refuseMisaddressed(orderVersion, strayEvent, state);
     expect(refusal?.message).toContain('4 of its identifying fields');
   });
 
   it('refuses one naming no destination at all', () => {
-    const unaddressed = createArvoEvent({
+    const unaddressedEvent = createArvoEvent({
       source: initEvent.source,
       subject: initEvent.subject,
       type: initEvent.type,
       dataschema: initEvent.dataschema,
       data: initEvent.data,
     });
-    const refusal = refuseMisaddressed(orderVersion, unaddressed, null);
+    const refusal = refuseMisaddressed(orderVersion, unaddressedEvent, null);
     expect(refusal?.faultKind).toBe('event_unaddressed');
   });
 
   it('refuses one addressed elsewhere', () => {
-    const elsewhere = cloneArvoEvent(initEvent, { to: 'com.somewhere.else' });
-    const refusal = refuseMisaddressed(orderVersion, elsewhere, null);
+    const misaddressedEvent = cloneArvoEvent(initEvent, {
+      to: 'com.somewhere.else',
+    });
+    const refusal = refuseMisaddressed(orderVersion, misaddressedEvent, null);
     expect(refusal?.faultKind).toBe('addressing_mismatch');
     expect(refusal?.violations[0]).toContain('to:');
   });
 
   it('admits one agreeing with the record on every count', () => {
     const state = buildState();
-    const answering = cloneArvoEvent(chargedEvent, {
+    const answerEvent = cloneArvoEvent(chargedEvent, {
       to: orderVersion.type,
       executionid: state.executionId,
       subject: state.subject,
     });
-    expect(refuseMisaddressed(orderVersion, answering, state)).toBeNull();
+    expect(refuseMisaddressed(orderVersion, answerEvent, state)).toBeNull();
   });
 
   it('refuses one answering a different execution', () => {
     const state = buildState();
-    const stray = cloneArvoEvent(chargedEvent, {
+    const strayEvent = cloneArvoEvent(chargedEvent, {
       to: orderVersion.type,
       parentid: initEvent.id,
       executionid: 'somewhere-else',
       subject: state.subject,
     });
-    const refusal = refuseMisaddressed(orderVersion, stray, state);
-    expect(refusal?.violations.some((v) => v.includes('executionId'))).toBe(
-      true,
-    );
+    const refusal = refuseMisaddressed(orderVersion, strayEvent, state);
+    expect(
+      refusal?.violations.some((violation) =>
+        violation.includes('executionId'),
+      ),
+    ).toBe(true);
   });
 
   it('refuses one from a different workflow', () => {
     const state = buildState();
-    const stray = cloneArvoEvent(chargedEvent, {
+    const strayEvent = cloneArvoEvent(chargedEvent, {
       to: orderVersion.type,
       parentid: initEvent.id,
       executionid: state.executionId,
       subject: 'another-workflow',
     });
-    const refusal = refuseMisaddressed(orderVersion, stray, state);
-    expect(refusal?.violations.some((v) => v.includes('subject'))).toBe(true);
+    const refusal = refuseMisaddressed(orderVersion, strayEvent, state);
+    expect(
+      refusal?.violations.some((violation) => violation.includes('subject')),
+    ).toBe(true);
   });
 
   it('refuses a record naming a contract this handler does not implement', () => {
     const state = buildState({ source: 'com_something_else' });
-    const answering = cloneArvoEvent(chargedEvent, {
+    const answerEvent = cloneArvoEvent(chargedEvent, {
       to: orderVersion.type,
       executionid: state.executionId,
       subject: state.subject,
     });
-    const refusal = refuseMisaddressed(orderVersion, answering, state);
-    expect(refusal?.violations.some((v) => v.includes('source'))).toBe(true);
+    const refusal = refuseMisaddressed(orderVersion, answerEvent, state);
+    expect(
+      refusal?.violations.some((violation) => violation.includes('source')),
+    ).toBe(true);
   });
 
   it('reports every disagreement together, not merely the first', () => {
     const state = buildState({ source: 'com_something_else' });
-    const stray = cloneArvoEvent(chargedEvent, {
+    const strayEvent = cloneArvoEvent(chargedEvent, {
       to: 'com.somewhere.else',
       parentid: initEvent.id,
       executionid: 'somewhere-else',
       subject: 'another-workflow',
     });
     expect(
-      refuseMisaddressed(orderVersion, stray, state)?.violations,
+      refuseMisaddressed(orderVersion, strayEvent, state)?.violations,
     ).toHaveLength(4);
   });
 });
 
 describe('whether a response was awaited', () => {
-  const awaiting = (answer: ArvoEvent | null) =>
+  const stateAwaiting = (answer: ArvoEvent | null) =>
     buildState({
       inFlightEventMap: new Map<string, ArvoEvent | null>([
         ['charge-request', answer],
@@ -215,37 +228,39 @@ describe('whether a response was awaited', () => {
 
   it('admits one answering an outstanding request', () => {
     const answer = cloneArvoEvent(chargedEvent, { initid: 'charge-request' });
-    expect(refuseUnawaited(awaiting(null), answer)).toBeNull();
+    expect(refuseUnawaited(stateAwaiting(null), answer)).toBeNull();
   });
 
   it('refuses one naming no request', () => {
-    const unaddressed = cloneArvoEvent(chargedEvent, {
+    const unaddressedEvent = cloneArvoEvent(chargedEvent, {
       initid: null as never,
     });
-    expect(refuseUnawaited(awaiting(null), unaddressed)?.faultKind).toBe(
-      'response_unawaited',
-    );
+    expect(
+      refuseUnawaited(stateAwaiting(null), unaddressedEvent)?.faultKind,
+    ).toBe('response_unawaited');
   });
 
   it('says a reply must name what it answers, where it names nothing', () => {
-    const unaddressed = cloneArvoEvent(chargedEvent, {
+    const unaddressedEvent = cloneArvoEvent(chargedEvent, {
       initid: null as never,
     });
-    const refusal = refuseUnawaited(awaiting(null), unaddressed);
+    const refusal = refuseUnawaited(stateAwaiting(null), unaddressedEvent);
     expect(refusal?.message).toContain('initid');
     expect(refusal?.message).toContain('the id of the event it is answering');
   });
 
   it('refuses one naming a request never made', () => {
-    const stranger = cloneArvoEvent(chargedEvent, { initid: 'never-asked' });
-    const refusal = refuseUnawaited(awaiting(null), stranger);
+    const strangerEvent = cloneArvoEvent(chargedEvent, {
+      initid: 'never-asked',
+    });
+    const refusal = refuseUnawaited(stateAwaiting(null), strangerEvent);
     expect(refusal?.message).toContain('never-asked');
     expect(refusal?.message).toContain('never sent');
   });
 
   it('refuses a second answer to one already answered', () => {
     const answer = cloneArvoEvent(chargedEvent, { initid: 'charge-request' });
-    const refusal = refuseUnawaited(awaiting(answer), answer);
+    const refusal = refuseUnawaited(stateAwaiting(answer), answer);
     expect(refusal?.message).toContain('already has an answer');
   });
 });

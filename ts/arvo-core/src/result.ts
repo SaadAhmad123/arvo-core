@@ -9,11 +9,11 @@ import type { AsyncResult, Result } from './types.js';
  * `neverthrow` itself never appears in an exported type.
  */
 export const fromNeverthrow = <R, E>(
-  result: NeverthrowResult<R, E>,
+  neverthrowResult: NeverthrowResult<R, E>,
 ): Result<R, E> =>
-  result.isOk()
-    ? { ok: true, value: result.value }
-    : { ok: false, error: result.error };
+  neverthrowResult.isOk()
+    ? { ok: true, value: neverthrowResult.value }
+    : { ok: false, error: neverthrowResult.error };
 
 /**
  * {@link fromNeverthrow}, for a `neverthrow` `ResultAsync`.
@@ -23,5 +23,5 @@ export const fromNeverthrow = <R, E>(
  * added later, so the pattern is already in place when one is.
  */
 export const fromNeverthrowAsync = <R, E>(
-  result: ResultAsync<R, E>,
-): AsyncResult<R, E> => Promise.resolve(result).then(fromNeverthrow);
+  neverthrowResult: ResultAsync<R, E>,
+): AsyncResult<R, E> => Promise.resolve(neverthrowResult).then(fromNeverthrow);

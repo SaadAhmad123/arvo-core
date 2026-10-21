@@ -48,13 +48,13 @@ export const tryCreateArvoEvent = <
         }),
       ),
     );
-  } catch (error) {
-    if (error instanceof ArvoEventValidationError) {
-      return fromNeverthrow(err(error));
+  } catch (thrown) {
+    if (thrown instanceof ArvoEventValidationError) {
+      return fromNeverthrow(err(thrown));
     }
     // Anything else is not an invalid event, so reporting it here would make
     // the error type say something untrue. It goes up as it arrived.
-    throw error;
+    throw thrown;
   }
 };
 
@@ -86,7 +86,7 @@ export const createArvoEvent = <
 >(
   param: PartialExcept<ArvoEventParam<T, D>, Required>,
 ): ArvoEvent<T, D> => {
-  const built = tryCreateArvoEvent<T, D>(param);
-  if (built.ok) return built.value;
-  throw built.error;
+  const attempt = tryCreateArvoEvent<T, D>(param);
+  if (attempt.ok) return attempt.value;
+  throw attempt.error;
 };

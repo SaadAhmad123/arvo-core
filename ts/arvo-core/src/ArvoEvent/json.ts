@@ -6,6 +6,7 @@ import type {
   JSONValue,
 } from '../types.js';
 import { ErrorIssue } from '../utils/error-issue.js';
+import { textOfThrown } from '../utils/thrown-text.js';
 
 /**
  * The outcome of walking a value: the normalized, frozen result and every
@@ -38,30 +39,30 @@ const NOT_SCALAR = Symbol('json.not-scalar');
  * there is the caller's decision, not this function's.
  */
 const classifyScalar = (
-  value: unknown,
+  candidate: unknown,
   path: string,
   issues: ErrorIssue[],
 ): JSONScalar | typeof NOT_SCALAR => {
-  if (value === null) return null;
+  if (candidate === null) return null;
 
-  switch (typeof value) {
+  switch (typeof candidate) {
     case 'string':
     case 'boolean':
-      return value;
+      return candidate;
 
     case 'number':
-      if (!Number.isFinite(value)) {
+      if (!Number.isFinite(candidate)) {
         issues.push(
           new ErrorIssue({
             path,
             message:
               'must be a finite number. NaN and Infinity have no JSON representation and would not survive transmission',
-            received: value,
+            received: candidate,
           }),
         );
         return NOT_SCALAR;
       }
-      return value;
+      return candidate;
 
     case 'bigint':
       issues.push(
@@ -69,7 +70,7 @@ const classifyScalar = (
           path,
           message:
             'is a bigint, which JSON cannot represent. Convert it to a number if it fits, or to a string if it does not',
-          received: value,
+          received: candidate,
         }),
       );
       return NOT_SCALAR;
@@ -88,7 +89,7 @@ const classifyScalar = (
         new ErrorIssue({
           path,
           message: 'is a symbol, which JSON cannot represent',
-          received: value,
+          received: candidate,
         }),
       );
       return NOT_SCALAR;
@@ -111,14 +112,14 @@ const classifyScalar = (
  * `JSON.stringify` would quietly turn most of them into `{}`, discarding
  * their contents with no signal that anything was lost.
  */
-const isPlainObject = (value: object): boolean => {
-  const prototype = Object.getPrototypeOf(value);
+const isPlainObject = (candidate: object): boolean => {
+  const prototype = Object.getPrototypeOf(candidate);
   return prototype === Object.prototype || prototype === null;
 };
 
 /** Names a rejected object's type well enough to act on. */
-const constructorName = (value: object): string =>
-  Object.getPrototypeOf(value)?.constructor?.name ?? 'object';
+const constructorName = (instance: object): string =>
+  Object.getPrototypeOf(instance)?.constructor?.name ?? 'object';
 
 /**
  * Walks one value, collecting issues and returning its normalized form.
@@ -143,9 +144,9 @@ const walk = (
     return null;
   }
 
-  const value = input;
+  const node = input;
 
-  if (ancestors.has(value)) {
+  if (ancestors.has(node)) {
     issues.push(
       new ErrorIssue({
         path,
@@ -156,56 +157,56 @@ const walk = (
     return null;
   }
 
-  if (Array.isArray(value)) {
-    ancestors.add(value);
-    const result = value.map((element, index) =>
+  if (Array.isArray(node)) {
+    ancestors.add(node);
+    const normalizedArray = node.map((element, index) =>
       walk(element, indexPath(path, index), issues, ancestors),
     );
-    ancestors.delete(value);
-    return Object.freeze(result) as JSONArray;
+    ancestors.delete(node);
+    return Object.freeze(normalizedArray) as JSONArray;
   }
 
-  const toJSON = (value as { toJSON?: unknown }).toJSON;
+  const toJSON = (node as { toJSON?: unknown }).toJSON;
   if (typeof toJSON === 'function') {
-    ancestors.add(value);
-    let serialized: unknown;
+    ancestors.add(node);
+    let toJSONOutput: unknown;
     try {
-      serialized = toJSON.call(value);
-    } catch (error) {
-      ancestors.delete(value);
+      toJSONOutput = toJSON.call(node);
+    } catch (thrown) {
+      ancestors.delete(node);
       issues.push(
         new ErrorIssue({
           path,
-          message: `toJSON() threw: ${error instanceof Error ? error.message : String(error)}`,
+          message: `toJSON() threw: ${textOfThrown(thrown)}`,
         }),
       );
       return null;
     }
-    const result = walk(serialized, path, issues, ancestors);
-    ancestors.delete(value);
-    return result;
+    const normalizedSerialization = walk(toJSONOutput, path, issues, ancestors);
+    ancestors.delete(node);
+    return normalizedSerialization;
   }
 
-  if (!isPlainObject(value)) {
+  if (!isPlainObject(node)) {
     issues.push(
       new ErrorIssue({
         path,
-        message: `is a ${constructorName(value)}, which has no JSON representation. Convert it to a plain object, array, or scalar first`,
+        message: `is a ${constructorName(node)}, which has no JSON representation. Convert it to a plain object, array, or scalar first`,
       }),
     );
     return null;
   }
 
-  ancestors.add(value);
-  const result: JSONObject = {};
-  for (const [key, element] of Object.entries(value)) {
+  ancestors.add(node);
+  const normalizedMap: JSONObject = {};
+  for (const [key, element] of Object.entries(node)) {
     // Absent rather than invalid: an undefined map value is dropped, exactly
     // as serializing the object would have dropped it.
     if (element === undefined) continue;
-    result[key] = walk(element, keyPath(path, key), issues, ancestors);
+    normalizedMap[key] = walk(element, keyPath(path, key), issues, ancestors);
   }
-  ancestors.delete(value);
-  return Object.freeze(result);
+  ancestors.delete(node);
+  return Object.freeze(normalizedMap);
 };
 
 /**
@@ -232,8 +233,8 @@ export const walkPayload = (
     return { value: Object.freeze({}), issues };
   }
 
-  const value = walk(input, path, issues, new Set());
-  return { value: value as JSONObject, issues };
+  const payload = walk(input, path, issues, new Set());
+  return { value: payload as JSONObject, issues };
 };
 
 /**
@@ -259,7 +260,7 @@ export const walkFlatMap = (
     return { value: Object.freeze({}), issues };
   }
 
-  const result: FlatMap = {};
+  const flatMap: FlatMap = {};
   for (const [key, element] of Object.entries(input)) {
     if (element === undefined) continue;
 
@@ -267,7 +268,7 @@ export const walkFlatMap = (
     const scalar = classifyScalar(element, entryPath, issues);
 
     if (scalar !== NOT_SCALAR) {
-      result[key] = scalar;
+      flatMap[key] = scalar;
       continue;
     }
 
@@ -284,5 +285,5 @@ export const walkFlatMap = (
     // else: bigint, function, or symbol — classifyScalar already reported it
   }
 
-  return { value: Object.freeze(result), issues };
+  return { value: Object.freeze(flatMap), issues };
 };

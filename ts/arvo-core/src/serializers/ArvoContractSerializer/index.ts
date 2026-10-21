@@ -15,12 +15,12 @@ import type {
 import { buildWarningFromErrorIssues } from './warnings.js';
 
 /** Freezes a result and the losses inside it, so it is immutable throughout. */
-const sealed = <T extends object>(
-  value: T,
+const seal = <T extends object>(
+  fields: T,
   warnings: ErrorIssue[],
 ): T & ArvoContractSerializerWarnings =>
   Object.freeze({
-    ...value,
+    ...fields,
     warnings: Object.freeze([...warnings]),
     warningString: buildWarningFromErrorIssues(warnings),
   });
@@ -82,15 +82,15 @@ export class ArvoContractSerializer {
         this.options.serialize,
       );
       return fromNeverthrow(
-        ok(sealed({ schema: JSON.stringify(form) }, warnings)),
+        ok(seal({ schema: JSON.stringify(form) }, warnings)),
       );
-    } catch (error) {
+    } catch (thrown) {
       return fromNeverthrow(
         err(
           new ArvoContractSerializerError(
             'ArvoContract could not be serialized.',
             {
-              cause: asError(error),
+              cause: asError(thrown),
             },
           ),
         ),
@@ -104,9 +104,9 @@ export class ArvoContractSerializer {
    * @throws {ArvoContractSerializerError} What `trySerialize` would report.
    */
   serialize(contract: ArvoContract): SerializedArvoContract {
-    const result = this.trySerialize(contract);
-    if (result.ok) return result.value;
-    throw result.error;
+    const attempt = this.trySerialize(contract);
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 
   /**
@@ -128,25 +128,25 @@ export class ArvoContractSerializer {
   tryDeserialize(
     json: string,
   ): Result<DeserializedArvoContract, ArvoContractSerializerError> {
-    let parsed: unknown;
+    let rawForm: unknown;
     try {
-      parsed = JSON.parse(json);
-    } catch (error) {
+      rawForm = JSON.parse(json);
+    } catch (thrown) {
       return fromNeverthrow(
         err(
           new ArvoContractSerializerError('ArvoContract could not be read.', {
-            cause: asError(error),
+            cause: asError(thrown),
           }),
         ),
       );
     }
 
-    const read = readCanonicalForm(parsed);
-    if (!read.ok) {
+    const canonicalForm = readCanonicalForm(rawForm);
+    if (!canonicalForm.ok) {
       return fromNeverthrow(
         err(
           new ArvoContractSerializerError('ArvoContract could not be read.', {
-            issues: read.error,
+            issues: canonicalForm.error,
           }),
         ),
       );
@@ -155,13 +155,13 @@ export class ArvoContractSerializer {
     try {
       return fromNeverthrow(
         ok(
-          sealed(
-            { contract: new ArvoContract(read.value.param) },
-            read.value.losses,
+          seal(
+            { contract: new ArvoContract(canonicalForm.value.param) },
+            canonicalForm.value.losses,
           ),
         ),
       );
-    } catch (error) {
+    } catch (thrown) {
       // The contract's own rules have already passed, so this should be
       // unreachable -- `arvo-contract` has a test asserting a declaration it
       // accepts always constructs. Guarded anyway, and worded so it does not
@@ -170,7 +170,7 @@ export class ArvoContractSerializer {
         err(
           new ArvoContractSerializerError(
             'ArvoContract was read but could not be constructed.',
-            { cause: asError(error) },
+            { cause: asError(thrown) },
           ),
         ),
       );
@@ -183,8 +183,8 @@ export class ArvoContractSerializer {
    * @throws {ArvoContractSerializerError} What `tryDeserialize` would report.
    */
   deserialize(json: string): DeserializedArvoContract {
-    const result = this.tryDeserialize(json);
-    if (result.ok) return result.value;
-    throw result.error;
+    const attempt = this.tryDeserialize(json);
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 }

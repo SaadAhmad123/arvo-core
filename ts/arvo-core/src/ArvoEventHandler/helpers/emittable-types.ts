@@ -30,9 +30,9 @@ export const emittableTypes = (
   self: VersionedArvoContract,
   services: ArvoServiceMap,
 ): ReadonlySet<string> => {
-  const emittable = new Set<string>();
-  for (const service of Object.values(services)) emittable.add(service.type);
-  for (const output of Object.keys(self.outputs)) emittable.add(output);
-  emittable.add(self.error.type);
-  return emittable;
+  const types = new Set<string>();
+  for (const service of Object.values(services)) types.add(service.type);
+  for (const outputType of Object.keys(self.outputs)) types.add(outputType);
+  types.add(self.error.type);
+  return types;
 };

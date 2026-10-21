@@ -80,7 +80,7 @@ describe('isUriReference', () => {
   });
 
   it('is a pure predicate, stable across repeated calls', () => {
-    for (let i = 0; i < 3; i++) {
+    for (let repetition = 0; repetition < 3; repetition++) {
       expect(isUriReference('#/com/payment/process')).toBe(true);
       expect(isUriReference('./relative')).toBe(false);
     }

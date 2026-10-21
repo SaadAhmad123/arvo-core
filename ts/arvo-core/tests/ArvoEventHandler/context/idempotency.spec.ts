@@ -14,7 +14,7 @@ import { arvoIdempotencyKeysFor } from '../../../src/ArvoEventHandler/context/id
  */
 
 /** Something to key, with nothing special about any of it. */
-const PARTS = {
+const KEY_PARTS = {
   subject: 'workflow-one',
   executionId: 'a'.repeat(64),
   deliveredEventId: 'event-one',
@@ -22,7 +22,7 @@ const PARTS = {
 
 describe('the three idempotency keys', () => {
   it('are the strings the pinned composition produces', async () => {
-    expect(await arvoIdempotencyKeysFor(PARTS)).toEqual({
+    expect(await arvoIdempotencyKeysFor(KEY_PARTS)).toEqual({
       workflow:
         'arvo-workflow-1c083ff9fad5fe5682ae3fcf37c1153144c2607544a66e53e8dc145f125f2322',
       execution:
@@ -33,7 +33,7 @@ describe('the three idempotency keys', () => {
   });
 
   it('name the composition, its version and the scope, then sixty-four hex characters', async () => {
-    const keys = await arvoIdempotencyKeysFor(PARTS);
+    const keys = await arvoIdempotencyKeysFor(KEY_PARTS);
 
     for (const [scope, key] of Object.entries(keys)) {
       expect(key).toMatch(new RegExp(`^arvo-${scope}-[0-9a-f]{64}$`));
@@ -41,7 +41,7 @@ describe('the three idempotency keys', () => {
   });
 
   it('hand back something nothing can change afterwards', async () => {
-    const keys = await arvoIdempotencyKeysFor(PARTS);
+    const keys = await arvoIdempotencyKeysFor(KEY_PARTS);
     expect(Object.isFrozen(keys)).toBe(true);
   });
 
@@ -53,8 +53,8 @@ describe('the three idempotency keys', () => {
     // executor using both would find its second call treated as a
     // repeat of its first.
     const keys = await arvoIdempotencyKeysFor({
-      ...PARTS,
-      subject: PARTS.executionId,
+      ...KEY_PARTS,
+      subject: KEY_PARTS.executionId,
     });
 
     expect(keys.workflow).toBe(
@@ -69,21 +69,21 @@ describe('the three idempotency keys', () => {
 
   it('keep two deliveries apart where their parts would join into one string', async () => {
     // `ab` ‖ `c` and `a` ‖ `bc` are one string without a separator.
-    const joinedOneWay = await arvoIdempotencyKeysFor({
+    const abThenCKeys = await arvoIdempotencyKeysFor({
       subject: 'irrelevant',
       executionId: 'ab',
       deliveredEventId: 'c',
     });
-    const joinedTheOther = await arvoIdempotencyKeysFor({
+    const aThenBcKeys = await arvoIdempotencyKeysFor({
       subject: 'irrelevant',
       executionId: 'a',
       deliveredEventId: 'bc',
     });
 
-    expect(joinedOneWay.delivery).toBe(
+    expect(abThenCKeys.delivery).toBe(
       'arvo-delivery-007faa92579d2fb5420a050054deec4f622ca76ea80cc73e56398a630b3246d1',
     );
-    expect(joinedTheOther.delivery).toBe(
+    expect(aThenBcKeys.delivery).toBe(
       'arvo-delivery-335ca6dc227589789f771bcf6e4cec8a9b757a3511b3af8b1ede940b562e3bb0',
     );
   });
@@ -91,47 +91,47 @@ describe('the three idempotency keys', () => {
   // --------------------------------------------- what each is constant across
 
   it('give one workflow key to every execution belonging to it', async () => {
-    const here = await arvoIdempotencyKeysFor(PARTS);
-    const elsewhere = await arvoIdempotencyKeysFor({
-      ...PARTS,
+    const executionKeys = await arvoIdempotencyKeysFor(KEY_PARTS);
+    const siblingExecutionKeys = await arvoIdempotencyKeysFor({
+      ...KEY_PARTS,
       executionId: 'b'.repeat(64),
       deliveredEventId: 'event-two',
     });
 
-    expect(elsewhere.workflow).toBe(here.workflow);
+    expect(siblingExecutionKeys.workflow).toBe(executionKeys.workflow);
     // and nothing else about them is shared
-    expect(elsewhere.execution).not.toBe(here.execution);
-    expect(elsewhere.delivery).not.toBe(here.delivery);
+    expect(siblingExecutionKeys.execution).not.toBe(executionKeys.execution);
+    expect(siblingExecutionKeys.delivery).not.toBe(executionKeys.delivery);
   });
 
   it('give different workflow keys to different workflows', async () => {
-    const one = await arvoIdempotencyKeysFor(PARTS);
-    const another = await arvoIdempotencyKeysFor({
-      ...PARTS,
+    const workflowKeys = await arvoIdempotencyKeysFor(KEY_PARTS);
+    const differentWorkflowKeys = await arvoIdempotencyKeysFor({
+      ...KEY_PARTS,
       subject: 'workflow-two',
     });
 
-    expect(another.workflow).not.toBe(one.workflow);
+    expect(differentWorkflowKeys.workflow).not.toBe(workflowKeys.workflow);
   });
 
   it('give one execution key to every event that execution receives', async () => {
-    const opening = await arvoIdempotencyKeysFor(PARTS);
-    const answering = await arvoIdempotencyKeysFor({
-      ...PARTS,
+    const openingEventKeys = await arvoIdempotencyKeysFor(KEY_PARTS);
+    const answeringEventKeys = await arvoIdempotencyKeysFor({
+      ...KEY_PARTS,
       deliveredEventId: 'event-two',
     });
 
-    expect(answering.execution).toBe(opening.execution);
+    expect(answeringEventKeys.execution).toBe(openingEventKeys.execution);
     // while each event it receives has its own
-    expect(answering.delivery).not.toBe(opening.delivery);
+    expect(answeringEventKeys.delivery).not.toBe(openingEventKeys.delivery);
   });
 
   it('give the same keys again for the same parts, every time', async () => {
     // No clock, no randomness, nothing of the attempt: the same parts
     // are the same keys, which is what lets a replay not redo what it
     // already did.
-    expect(await arvoIdempotencyKeysFor(PARTS)).toEqual(
-      await arvoIdempotencyKeysFor(PARTS),
+    expect(await arvoIdempotencyKeysFor(KEY_PARTS)).toEqual(
+      await arvoIdempotencyKeysFor(KEY_PARTS),
     );
   });
 });

@@ -6,7 +6,7 @@ import type { ArvoContractSerializeOptions } from './types.js';
 import { demotedCheck, droppedConstraint } from './warnings.js';
 
 /** The dialect ADR-005 pins. Not negotiable, and not caller-settable. */
-const TARGET = 'draft-2020-12' as const;
+const JSON_SCHEMA_TARGET = 'draft-2020-12' as const;
 
 /**
  * Conversion settings this serializer chooses, and why each is what it is.
@@ -26,7 +26,7 @@ const TARGET = 'draft-2020-12' as const;
  * dialect's "unknown". A caller may set `'throw'` to refuse the conversion
  * instead; neither choice affects whether losses are reported.
  */
-const CHOSEN = {
+const CHOSEN_OPTIONS = {
   io: 'input',
   cycles: 'ref',
   reused: 'inline',
@@ -52,7 +52,7 @@ const DELIBERATELY_UNCONSTRAINED = new Set(['unknown', 'any']);
  * dialect could not carry what was there.
  */
 const recordLoss = (
-  into: ErrorIssue[],
+  warnings: ErrorIssue[],
   position: string,
   ctx: {
     zodSchema: { _zod: { def: { type: string } } };
@@ -63,10 +63,10 @@ const recordLoss = (
   if (Object.keys(ctx.jsonSchema).length > 0) return;
   const type = ctx.zodSchema._zod.def.type;
   if (DELIBERATELY_UNCONSTRAINED.has(type)) return;
-  const at = [position, ...ctx.path].join('.');
-  if (into.some((issue) => issue.path === at)) return;
-  into.push(
-    droppedConstraint(at, `a ${type} cannot be expressed in JSON Schema`),
+  const path = [position, ...ctx.path].join('.');
+  if (warnings.some((issue) => issue.path === path)) return;
+  warnings.push(
+    droppedConstraint(path, `a ${type} cannot be expressed in JSON Schema`),
   );
 };
 
@@ -86,21 +86,22 @@ const unenforcedFormat = (schema: JSONObject): string | null =>
 const recordDemotions = (
   node: unknown,
   position: string,
-  into: ErrorIssue[],
+  warnings: ErrorIssue[],
 ): void => {
   if (node === null || typeof node !== 'object') return;
   if (Array.isArray(node)) {
-    for (const [i, child] of node.entries()) {
-      recordDemotions(child, `${position}[${i}]`, into);
+    for (const [childIndex, child] of node.entries()) {
+      recordDemotions(child, `${position}[${childIndex}]`, warnings);
     }
     return;
   }
   const schema = node as JSONObject;
   const format = unenforcedFormat(schema);
-  if (format !== null) into.push(demotedCheck(position, `format: ${format}`));
+  if (format !== null)
+    warnings.push(demotedCheck(position, `format: ${format}`));
   for (const [key, child] of Object.entries(schema)) {
     if (key === 'format' || key === 'pattern') continue;
-    recordDemotions(child, `${position}.${key}`, into);
+    recordDemotions(child, `${position}.${key}`, warnings);
   }
 };
 
@@ -117,17 +118,18 @@ const convert = (
   schema: unknown,
   position: string,
   options: ArvoContractSerializeOptions | undefined,
-  into: ErrorIssue[],
+  warnings: ErrorIssue[],
 ): JSONObject => {
-  const converted = z.toJSONSchema(schema as never, {
-    ...CHOSEN,
+  const jsonSchema = z.toJSONSchema(schema as never, {
+    ...CHOSEN_OPTIONS,
     ...options,
-    target: TARGET,
+    target: JSON_SCHEMA_TARGET,
     override:
-      options?.override ?? ((ctx) => recordLoss(into, position, ctx as never)),
+      options?.override ??
+      ((ctx) => recordLoss(warnings, position, ctx as never)),
   }) as JSONObject;
-  recordDemotions(converted, position, into);
-  return converted;
+  recordDemotions(jsonSchema, position, warnings);
+  return jsonSchema;
 };
 
 /**
@@ -149,18 +151,23 @@ export const buildCanonicalForm = (
   const versions: JSONObject = {};
 
   for (const [version, definition] of Object.entries(contract.versions)) {
-    const at = `versions[${JSON.stringify(version)}]`;
+    const versionPath = `versions[${JSON.stringify(version)}]`;
     const outputs: JSONObject = {};
-    for (const [type, schema] of Object.entries(definition.outputs)) {
-      outputs[type] = convert(
+    for (const [outputType, schema] of Object.entries(definition.outputs)) {
+      outputs[outputType] = convert(
         schema,
-        `${at}.outputs[${JSON.stringify(type)}]`,
+        `${versionPath}.outputs[${JSON.stringify(outputType)}]`,
         options,
         warnings,
       );
     }
     versions[version] = {
-      input: convert(definition.input, `${at}.input`, options, warnings),
+      input: convert(
+        definition.input,
+        `${versionPath}.input`,
+        options,
+        warnings,
+      ),
       outputs,
     };
   }

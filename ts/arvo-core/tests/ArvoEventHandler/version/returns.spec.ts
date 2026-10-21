@@ -46,8 +46,8 @@ const refuse = (batch: ArvoEvent[], maxDepth = 10_000) =>
 
 describe('what an executor handed back', () => {
   it('is a batch of one where it returned one event', () => {
-    const one = completion();
-    expect(collectBatch(one)).toEqual([one]);
+    const completionEvent = completion();
+    expect(collectBatch(completionEvent)).toEqual([completionEvent]);
   });
 
   it('is the list where it returned a list', () => {
@@ -90,10 +90,10 @@ describe('what a batch must be to leave the handler', () => {
   });
 
   it('refuses a type this version may not emit', () => {
-    const stray = cloneArvoEvent(completion(), {
+    const strayEvent = cloneArvoEvent(completion(), {
       type: 'com_order_shipped' as never,
     });
-    expect(refuse([stray])?.faultKind).toBe('emission_not_permitted');
+    expect(refuse([strayEvent])?.faultKind).toBe('emission_not_permitted');
   });
 
   it('refuses the handler error event, which is never an executor’s', () => {
@@ -112,64 +112,77 @@ describe('what a batch must be to leave the handler', () => {
   });
 
   it('refuses a payload the schema its type selects will not have', () => {
-    const wrong = cloneArvoEvent(completion(), {
+    const invalidEvent = cloneArvoEvent(completion(), {
       data: { order_id: 42 } as never,
     });
-    expect(refuse([wrong])?.faultKind).toBe('emission_schema_rejected');
+    expect(refuse([invalidEvent])?.faultKind).toBe('emission_schema_rejected');
   });
 
   it('names the payload itself where no one field is at fault', () => {
-    const strict = new ArvoContract({
+    const strictVersion = new ArvoContract({
       type: 'com_strict_charge',
       versions: {
         '1.0.0': { input: z.strictObject({ amount: z.number() }), outputs: {} },
       },
     }).versions['1.0.0'];
-    const extra = cloneArvoEvent(
-      createArvoEventFactory(strict).createInput({
+    const extraFieldEvent = cloneArvoEvent(
+      createArvoEventFactory(strictVersion).createInput({
         source: orderVersion.type,
         subject: initEvent.subject,
-        to: strict.type,
+        to: strictVersion.type,
         data: { amount: 10 },
       }),
       { data: { amount: 10, discount: 1 } as never },
     );
-    const refusal = refuseBatch(orderVersion, { strict }, 10_000, [extra]);
+    const refusal = refuseBatch(
+      orderVersion,
+      { strict: strictVersion },
+      10_000,
+      [extraFieldEvent],
+    );
     expect(refusal?.violations[0]).toContain('(root)');
   });
 
   it('refuses one that would sit deeper than this version allows', () => {
-    const deep = cloneArvoEvent(request(), {
+    const deepEvent = cloneArvoEvent(request(), {
       depth: 10,
       parentid: initEvent.id,
     });
-    expect(refuse([deep], 10)?.faultKind).toBe('max_depth_event_requested');
+    expect(refuse([deepEvent], 10)?.faultKind).toBe(
+      'max_depth_event_requested',
+    );
   });
 
   it('counts the events at fault against the batch, and says none were emitted', () => {
-    const wrong = cloneArvoEvent(completion(), {
+    const invalidEvent = cloneArvoEvent(completion(), {
       data: { order_id: 42 } as never,
     });
-    const refusal = refuse([wrong, request()]);
+    const refusal = refuse([invalidEvent, request()]);
     expect(refusal?.message).toContain('one of the 2 events');
     expect(refusal?.message).toContain('com_order_create@1.0.0');
     expect(refusal?.message).toContain('none of them were');
   });
 
   it('counts more than one in the plural, so the sentence reads', () => {
-    const wrong = cloneArvoEvent(completion(), {
+    const invalidEvent = cloneArvoEvent(completion(), {
       data: { order_id: 42 } as never,
     });
-    const stray = cloneArvoEvent(request(), { type: 'com_nothing' as never });
-    expect(refuse([wrong, stray])?.message).toContain('2 of the 2 events');
+    const strayEvent = cloneArvoEvent(request(), {
+      type: 'com_nothing' as never,
+    });
+    expect(refuse([invalidEvent, strayEvent])?.message).toContain(
+      '2 of the 2 events',
+    );
   });
 
   it('reports every event at fault, not merely the first', () => {
-    const wrong = cloneArvoEvent(completion(), {
+    const invalidEvent = cloneArvoEvent(completion(), {
       data: { order_id: 42 } as never,
     });
-    const stray = cloneArvoEvent(request(), { type: 'com_nothing' as never });
-    expect(refuse([wrong, stray])?.violations).toHaveLength(2);
+    const strayEvent = cloneArvoEvent(request(), {
+      type: 'com_nothing' as never,
+    });
+    expect(refuse([invalidEvent, strayEvent])?.violations).toHaveLength(2);
   });
 });
 
@@ -190,13 +203,13 @@ describe('where an execution rests once its batch is in', () => {
   });
 
   it('stays cancelled, the executor having ended it deliberately', () => {
-    const cancelled = buildState({
+    const cancelledState = buildState({
       lifecycle: 'cancelled',
       lifecycleDescription: 'the customer withdrew the order',
     });
-    const settled = settle([completion()], cancelled);
-    expect(settled.lifecycle).toBe('cancelled');
-    expect(settled.lifecycleDescription).toBe(
+    const settledRecord = settle([completion()], cancelledState);
+    expect(settledRecord.lifecycle).toBe('cancelled');
+    expect(settledRecord.lifecycleDescription).toBe(
       'the customer withdrew the order',
     );
   });
@@ -206,8 +219,8 @@ describe('where an execution rests once its batch is in', () => {
   });
 
   it('rests idle, where it returned nothing and waits for nothing', () => {
-    const answered = buildState({ inFlightEventMap: new Map() });
-    expect(settle([], answered).lifecycle).toBe('idle');
+    const answeredState = buildState({ inFlightEventMap: new Map() });
+    expect(settle([], answeredState).lifecycle).toBe('idle');
   });
 
   it('succeeds on nothing at all, for a version with nothing it could return', () => {
@@ -217,13 +230,13 @@ describe('where an execution rests once its batch is in', () => {
         '1.0.0': { input: z.object({ line: z.string() }), outputs: {} },
       },
     }).versions['1.0.0'];
-    const sink = settleRecord(
+    const sinkRecord = settleRecord(
       sinkVersion,
       {},
       buildState({ inFlightEventMap: new Map() }),
       [],
     );
-    expect(sink.lifecycle).toBe('success');
+    expect(sinkRecord.lifecycle).toBe('success');
   });
 });
 
@@ -232,10 +245,10 @@ describe('what the record says it is waiting for', () => {
     settleRecord(orderVersion, services, state, batch);
 
   it('is exactly what this batch asked for, whatever it held before', () => {
-    const asked = request();
-    const awaiting = settle([asked]).inFlightEventMap;
-    expect([...awaiting.keys()]).toEqual([asked.id]);
-    expect(awaiting.get(asked.id)).toBeNull();
+    const requestEvent = request();
+    const awaitedMap = settle([requestEvent]).inFlightEventMap;
+    expect([...awaitedMap.keys()]).toEqual([requestEvent.id]);
+    expect(awaitedMap.get(requestEvent.id)).toBeNull();
   });
 
   it('is what it held before, where this batch asked for nothing', () => {
@@ -246,11 +259,17 @@ describe('what the record says it is waiting for', () => {
   });
 
   it('logs every event it is sending', () => {
-    const asked = request();
-    const answered = completion();
-    const logged = settle([asked, answered]).eventIds;
-    expect(logged).toContainEqual({ id: asked.id, direction: 'emitted' });
-    expect(logged).toContainEqual({ id: answered.id, direction: 'emitted' });
+    const requestEvent = request();
+    const completionEvent = completion();
+    const eventIds = settle([requestEvent, completionEvent]).eventIds;
+    expect(eventIds).toContainEqual({
+      id: requestEvent.id,
+      direction: 'emitted',
+    });
+    expect(eventIds).toContainEqual({
+      id: completionEvent.id,
+      direction: 'emitted',
+    });
   });
 
   it('leaves the record it was given exactly as it was', () => {
@@ -266,26 +285,24 @@ describe('the record an execution leaves behind', () => {
     recordToCommit(true, orderData, state);
 
   it('is a JSON object, ready for whatever stores it', async () => {
-    const written = await commit();
-    expect(written.ok && typeof written.value).toBe('object');
+    const record = await commit();
+    expect(record.ok && typeof record.value).toBe('object');
   });
 
   it('reads back as the record the execution ended on', async () => {
-    const written = await commit();
-    const restored = await new ArvoExecutionStateSerializer(
+    const record = await commit();
+    const restoredState = await new ArvoExecutionStateSerializer(
       orderData,
-    ).deserialize(JSON.stringify(written.ok && written.value));
+    ).deserialize(JSON.stringify(record.ok && record.value));
 
-    expect(restored.data).toEqual({ orderId: 'o-1', attempts: 2 });
-    expect(restored.executionId).toBe(buildState().executionId);
-    expect(restored.initEvent.id).toBe(initEvent.id);
+    expect(restoredState.data).toEqual({ orderId: 'o-1', attempts: 2 });
+    expect(restoredState.executionId).toBe(buildState().executionId);
+    expect(restoredState.initEvent.id).toBe(initEvent.id);
   });
 
   it('is written at the revision it carries, which its caller settled', async () => {
-    const written = await commit();
-    expect(written.ok && written.value.casVersion).toBe(
-      buildState().casVersion,
-    );
+    const record = await commit();
+    expect(record.ok && record.value.casVersion).toBe(buildState().casVersion);
   });
 
   it('leaves the record it was given exactly as it was', async () => {
@@ -295,73 +312,67 @@ describe('the record an execution leaves behind', () => {
   });
 
   it('refuses an execution that remembered nothing at all', async () => {
-    const written = await commit(buildState({ data: null }));
-    expect(!written.ok && written.error.faultKind).toBe(
-      'state_schema_rejected',
-    );
+    const record = await commit(buildState({ data: null }));
+    expect(!record.ok && record.error.faultKind).toBe('state_schema_rejected');
   });
 
   it('names the call that was never made, and what to write instead', async () => {
-    const written = await commit(buildState({ data: null }));
-    expect(!written.ok && written.error.message).toContain('ctx.setState()');
-    expect(!written.ok && written.error.message).toContain('Write {}');
+    const record = await commit(buildState({ data: null }));
+    expect(!record.ok && record.error.message).toContain('ctx.setState()');
+    expect(!record.ok && record.error.message).toContain('Write {}');
   });
 
   it('says why what was written cannot be stored, and what commonly causes it', async () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
-    const written = await recordToCommit(
+    const record = await recordToCommit(
       true,
       z.looseObject({}),
       buildLooseState({ circular }),
     );
-    expect(!written.ok && written.error.message).toContain('ctx.setState()');
-    expect(!written.ok && written.error.message).toContain(
+    expect(!record.ok && record.error.message).toContain('ctx.setState()');
+    expect(!record.ok && record.error.message).toContain(
       'refers back to itself',
     );
   });
 
   it('accepts a version that remembers nothing in particular saying so', async () => {
-    const loose = z.looseObject({});
-    const written = await recordToCommit(true, loose, buildLooseState({}));
-    expect(written.ok).toBe(true);
+    const looseSchema = z.looseObject({});
+    const record = await recordToCommit(true, looseSchema, buildLooseState({}));
+    expect(record.ok).toBe(true);
   });
 
   it('refuses an execution holding something it cannot write out', async () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
-    const written = await recordToCommit(
+    const record = await recordToCommit(
       true,
       z.looseObject({}),
       buildLooseState({ circular }),
     );
-    expect(!written.ok && written.error.faultKind).toBe(
-      'state_not_serializable',
-    );
-    expect(!written.ok && written.error.cause).toContain('circular');
+    expect(!record.ok && record.error.faultKind).toBe('state_not_serializable');
+    expect(!record.ok && record.error.cause).toContain('circular');
   });
 });
 
 describe('a version whose author declared no state', () => {
   it('is not expected to write one, and rests with none', async () => {
-    const written = await recordToCommit(
+    const record = await recordToCommit(
       false,
       z.strictObject({}),
       buildLooseState(null),
     );
-    expect(written.ok && written.value.data).toBeNull();
+    expect(record.ok && record.value.data).toBeNull();
   });
 
   it('is still refused where what it did write cannot be written out', async () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
-    const written = await recordToCommit(
+    const record = await recordToCommit(
       false,
       z.looseObject({}),
       buildLooseState({ circular }),
     );
-    expect(!written.ok && written.error.faultKind).toBe(
-      'state_not_serializable',
-    );
+    expect(!record.ok && record.error.faultKind).toBe('state_not_serializable');
   });
 });

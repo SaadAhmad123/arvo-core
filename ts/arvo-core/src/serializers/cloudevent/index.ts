@@ -20,13 +20,13 @@ import type { CloudEvent, ForeignCloudEventFallback } from './types.js';
  * stage list makes.
  */
 type AnyStage = {
-  convert(data: unknown): Promise<unknown>;
-  revert(data: unknown): Promise<unknown>;
+  convert(stageInput: unknown): Promise<unknown>;
+  revert(stageInput: unknown): Promise<unknown>;
 };
 
 /** `transformer.revert`, viewed with the `foreignFallback` no `ICloudEventConverter` understands or needs. */
 type TransformerRevert = (
-  data: unknown,
+  stageInput: unknown,
   foreignFallback?: ForeignCloudEventFallback,
 ) => Promise<unknown>;
 
@@ -113,19 +113,19 @@ export class CloudEventConverter {
    * ```
    */
   async tryConvert(
-    data: ArvoEvent,
+    event: ArvoEvent,
   ): AsyncResult<CloudEvent, CloudEventTransformationError> {
     const stages: readonly AnyStage[] = [this.transformer, ...this.converters];
     const chain = stages.reduce<
       ResultAsync<unknown, CloudEventTransformationError>
     >(
-      (acc, stage, stageIndex) =>
-        acc.andThen((value) =>
-          ResultAsync.fromPromise(stage.convert(value), (cause) =>
+      (chainSoFar, stage, stageIndex) =>
+        chainSoFar.andThen((stageInput) =>
+          ResultAsync.fromPromise(stage.convert(stageInput), (cause) =>
             toStageError(cause, 'convert', stageIndex),
           ),
         ),
-      okAsync<unknown, CloudEventTransformationError>(data),
+      okAsync<unknown, CloudEventTransformationError>(event),
     );
     return fromNeverthrowAsync(
       chain as ResultAsync<CloudEvent, CloudEventTransformationError>,
@@ -144,10 +144,10 @@ export class CloudEventConverter {
    * sendToBroker(cloudEvent);
    * ```
    */
-  async convert(data: ArvoEvent): Promise<CloudEvent> {
-    const result = await this.tryConvert(data);
-    if (result.ok) return result.value;
-    throw result.error;
+  async convert(event: ArvoEvent): Promise<CloudEvent> {
+    const attempt = await this.tryConvert(event);
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 
   /**
@@ -186,23 +186,23 @@ export class CloudEventConverter {
     T extends string = string,
     D extends Record<string, any> = Record<string, any>,
   >(
-    data: CloudEvent,
+    cloudEvent: CloudEvent,
     foreignFallback?: ForeignCloudEventFallback,
   ): AsyncResult<ArvoEvent<T, D>, CloudEventTransformationError> {
     const stages: readonly AnyStage[] = [this.transformer, ...this.converters];
     const chain = stages.reduceRight<
       ResultAsync<unknown, CloudEventTransformationError>
     >(
-      (acc, stage, stageIndex) =>
-        acc.andThen((value) =>
+      (chainSoFar, stage, stageIndex) =>
+        chainSoFar.andThen((stageInput) =>
           ResultAsync.fromPromise(
             stageIndex === 0
-              ? (stage.revert as TransformerRevert)(value, foreignFallback)
-              : stage.revert(value),
+              ? (stage.revert as TransformerRevert)(stageInput, foreignFallback)
+              : stage.revert(stageInput),
             (cause) => toStageError(cause, 'revert', stageIndex),
           ),
         ),
-      okAsync<unknown, CloudEventTransformationError>(data),
+      okAsync<unknown, CloudEventTransformationError>(cloudEvent),
     );
     return fromNeverthrowAsync(
       chain as ResultAsync<ArvoEvent<T, D>, CloudEventTransformationError>,
@@ -227,11 +227,11 @@ export class CloudEventConverter {
     T extends string = string,
     D extends Record<string, any> = Record<string, any>,
   >(
-    data: CloudEvent,
+    cloudEvent: CloudEvent,
     foreignFallback?: ForeignCloudEventFallback,
   ): Promise<ArvoEvent<T, D>> {
-    const result = await this.tryRevert<T, D>(data, foreignFallback);
-    if (result.ok) return result.value;
-    throw result.error;
+    const attempt = await this.tryRevert<T, D>(cloudEvent, foreignFallback);
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 }

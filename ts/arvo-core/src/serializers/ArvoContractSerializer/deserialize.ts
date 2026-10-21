@@ -58,23 +58,23 @@ const CONSTRAINT_KEYWORDS = new Set([
 const collectConstraints = (
   node: unknown,
   path = '',
-  into = new Map<string, string>(),
+  constraints = new Map<string, string>(),
 ): Map<string, string> => {
-  if (node === null || typeof node !== 'object') return into;
+  if (node === null || typeof node !== 'object') return constraints;
   if (Array.isArray(node)) {
-    for (const [i, child] of node.entries()) {
-      collectConstraints(child, `${path}[${i}]`, into);
+    for (const [childIndex, child] of node.entries()) {
+      collectConstraints(child, `${path}[${childIndex}]`, constraints);
     }
-    return into;
+    return constraints;
   }
-  for (const [key, value] of Object.entries(node)) {
+  for (const [key, child] of Object.entries(node)) {
     if (CONSTRAINT_KEYWORDS.has(key)) {
-      into.set(`${path}.${key}`, JSON.stringify(value));
+      constraints.set(`${path}.${key}`, JSON.stringify(child));
     } else {
-      collectConstraints(value, `${path}.${key}`, into);
+      collectConstraints(child, `${path}.${key}`, constraints);
     }
   }
-  return into;
+  return constraints;
 };
 
 /**
@@ -90,19 +90,19 @@ const collectConstraints = (
  * an addition takes nothing away.
  */
 const lostConstraints = (
-  before: unknown,
-  after: unknown,
+  originalSchema: unknown,
+  roundTrippedSchema: unknown,
   position: string,
 ): ErrorIssue[] => {
-  const stated = collectConstraints(before);
-  const kept = collectConstraints(after);
+  const statedConstraints = collectConstraints(originalSchema);
+  const keptConstraints = collectConstraints(roundTrippedSchema);
   const losses: ErrorIssue[] = [];
-  for (const [where, value] of stated) {
-    if (kept.get(where) === value) continue;
-    const keyword = where.slice(where.lastIndexOf('.') + 1);
+  for (const [constraintPath, constraintValue] of statedConstraints) {
+    if (keptConstraints.get(constraintPath) === constraintValue) continue;
+    const keyword = constraintPath.slice(constraintPath.lastIndexOf('.') + 1);
     losses.push(
       droppedConstraint(
-        `${position}${where.slice(0, where.lastIndexOf('.'))}`,
+        `${position}${constraintPath.slice(0, constraintPath.lastIndexOf('.'))}`,
         `${keyword} is no longer enforced`,
       ),
     );
@@ -131,24 +131,24 @@ const lostConstraints = (
 const withoutFormat = (
   node: unknown,
   position: string,
-  into: ErrorIssue[],
+  demotions: ErrorIssue[],
 ): unknown => {
   if (node === null || typeof node !== 'object') return node;
   if (Array.isArray(node)) {
-    return node.map((child, i) =>
-      withoutFormat(child, `${position}[${i}]`, into),
+    return node.map((child, childIndex) =>
+      withoutFormat(child, `${position}[${childIndex}]`, demotions),
     );
   }
   const schema = node as Record<string, unknown>;
   if (typeof schema.format === 'string' && schema.pattern === undefined) {
-    into.push(demotedCheck(position, `format: ${schema.format}`));
+    demotions.push(demotedCheck(position, `format: ${schema.format}`));
   }
-  const stripped: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(schema)) {
+  const strippedSchema: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(schema)) {
     if (key === 'format') continue;
-    stripped[key] = withoutFormat(value, `${position}.${key}`, into);
+    strippedSchema[key] = withoutFormat(child, `${position}.${key}`, demotions);
   }
-  return stripped;
+  return strippedSchema;
 };
 
 /**
@@ -158,7 +158,7 @@ const withoutFormat = (
  * conversion that threw something other than an `Error` still has to be
  * reported rather than crashing the read.
  */
-const refusalOf = (error: unknown): string => String(error).split('\n')[0];
+const errorHeadline = (error: unknown): string => String(error).split('\n')[0];
 
 /**
  * Converts one schema position from JSON Schema to a native schema, and
@@ -174,17 +174,17 @@ export const convertFromJSONSchema = (
   position: string,
 ): Result<{ schema: zc.$ZodType; losses: ErrorIssue[] }, ErrorIssue> => {
   const demotions: ErrorIssue[] = [];
-  const withheld = withoutFormat(schema, position, demotions);
+  const schemaWithoutFormat = withoutFormat(schema, position, demotions);
 
-  let native: zc.$ZodType;
+  let zodSchema: zc.$ZodType;
   try {
-    native = z.fromJSONSchema(withheld as never);
-  } catch (error) {
+    zodSchema = z.fromJSONSchema(schemaWithoutFormat as never);
+  } catch (thrown) {
     return fromNeverthrow(
       err(
         new ErrorIssue({
           path: position,
-          message: `cannot be read: ${refusalOf(error)}`,
+          message: `cannot be read: ${errorHeadline(thrown)}`,
         }),
       ),
     );
@@ -194,8 +194,8 @@ export const convertFromJSONSchema = (
   try {
     losses.push(
       ...lostConstraints(
-        withheld,
-        z.toJSONSchema(native as never, {
+        schemaWithoutFormat,
+        z.toJSONSchema(zodSchema as never, {
           target: 'draft-2020-12',
           io: 'input',
           cycles: 'ref',
@@ -210,7 +210,7 @@ export const convertFromJSONSchema = (
     // was lost. The schema itself is sound, so the contract still reads.
   }
 
-  return fromNeverthrow(ok({ schema: native, losses }));
+  return fromNeverthrow(ok({ schema: zodSchema, losses }));
 };
 
 /**
@@ -246,7 +246,7 @@ type CheckedForm = {
 };
 
 /** One form issue, marked as the reason nothing after it was checked. */
-const blocking = (issue: ErrorIssue): ErrorIssue =>
+const asBlocking = (issue: ErrorIssue): ErrorIssue =>
   new ErrorIssue({
     path: issue.path,
     message: issue.message,
@@ -257,31 +257,34 @@ const blocking = (issue: ErrorIssue): ErrorIssue =>
 /** Converts one version's schemas, collecting refusals and losses apart. */
 const readVersion = (
   definition: { input: unknown; outputs: Record<string, unknown> },
-  at: string,
+  versionPath: string,
   issues: ErrorIssue[],
   losses: ErrorIssue[],
 ): { input: unknown; outputs: Record<string, unknown> } | null => {
   const outputs: Record<string, unknown> = {};
-  for (const [type, schema] of Object.entries(definition.outputs)) {
-    const converted = convertFromJSONSchema(
+  for (const [outputType, schema] of Object.entries(definition.outputs)) {
+    const conversion = convertFromJSONSchema(
       schema,
-      `${at}.outputs[${JSON.stringify(type)}]`,
+      `${versionPath}.outputs[${JSON.stringify(outputType)}]`,
     );
-    if (converted.ok) {
-      outputs[type] = converted.value.schema;
-      losses.push(...converted.value.losses);
+    if (conversion.ok) {
+      outputs[outputType] = conversion.value.schema;
+      losses.push(...conversion.value.losses);
     } else {
-      issues.push(converted.error);
+      issues.push(conversion.error);
     }
   }
 
-  const input = convertFromJSONSchema(definition.input, `${at}.input`);
-  if (!input.ok) {
-    issues.push(input.error);
+  const inputConversion = convertFromJSONSchema(
+    definition.input,
+    `${versionPath}.input`,
+  );
+  if (!inputConversion.ok) {
+    issues.push(inputConversion.error);
     return null;
   }
-  losses.push(...input.value.losses);
-  return { input: input.value.schema, outputs };
+  losses.push(...inputConversion.value.losses);
+  return { input: inputConversion.value.schema, outputs };
 };
 
 /**
@@ -319,34 +322,37 @@ const asDeclaration = (
  * it finds arrives with everything found before it.
  */
 export const readCanonicalForm = (
-  parsed: unknown,
+  rawForm: unknown,
 ): Result<ReadForm, ErrorIssue[]> => {
-  const formIssues = validateCanonicalForm(parsed);
+  const formIssues = validateCanonicalForm(rawForm);
   if (formIssues.length > 0) {
-    const [first, ...rest] = formIssues;
-    return fromNeverthrow(err([blocking(first as ErrorIssue), ...rest]));
+    const [firstIssue, ...laterIssues] = formIssues;
+    return fromNeverthrow(
+      err([asBlocking(firstIssue as ErrorIssue), ...laterIssues]),
+    );
   }
 
-  const form = parsed as CheckedForm;
+  const form = rawForm as CheckedForm;
   const issues: ErrorIssue[] = [];
   const losses: ErrorIssue[] = [];
   const versions: Record<string, unknown> = {};
 
   for (const [version, definition] of Object.entries(form.versions)) {
-    const read = readVersion(
+    const versionSchemas = readVersion(
       definition,
       `versions[${JSON.stringify(version)}]`,
       issues,
       losses,
     );
-    if (read !== null) versions[version] = read;
+    if (versionSchemas !== null) versions[version] = versionSchemas;
   }
 
   if (issues.length > 0) return fromNeverthrow(err(issues));
 
   const param = asDeclaration(form, versions);
-  const checked = validateArvoContract(param);
-  if (checked.issues.length > 0) return fromNeverthrow(err(checked.issues));
+  const validation = validateArvoContract(param);
+  if (validation.issues.length > 0)
+    return fromNeverthrow(err(validation.issues));
 
   return fromNeverthrow(ok({ param, losses }));
 };

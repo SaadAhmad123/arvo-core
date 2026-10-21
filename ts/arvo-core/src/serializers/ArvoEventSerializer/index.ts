@@ -31,8 +31,10 @@ type NormalizedMode =
   | { type: 'arvoevent' }
   | { type: 'cloudevent'; converter: CloudEventConverter };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
+  typeof candidate === 'object' &&
+  candidate !== null &&
+  !Array.isArray(candidate);
 
 /**
  * Converts an {@link ArvoEvent} to and from a wire string, in either of two
@@ -56,11 +58,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * ```typescript
  * try {
  *   await serializer.deserialize(wire);
- * } catch (error) {
- *   if (error instanceof ArvoEventSerializerError) {
- *     log('malformed input', error.cause);
- *   } else if (error instanceof CloudEventTransformationError) {
- *     log('transformation failed', error.detail);
+ * } catch (thrown) {
+ *   if (thrown instanceof ArvoEventSerializerError) {
+ *     log('malformed input', thrown.cause);
+ *   } else if (thrown instanceof CloudEventTransformationError) {
+ *     log('transformation failed', thrown.detail);
  *   }
  * }
  * ```
@@ -102,19 +104,19 @@ export class ArvoEventSerializer {
     if (this.mode.type === 'arvoevent') {
       try {
         return fromNeverthrow(ok(JSON.stringify(event)));
-      } catch (cause) {
+      } catch (thrown) {
         return fromNeverthrow(
-          err(new ArvoEventSerializerError(cause as Error)),
+          err(new ArvoEventSerializerError(thrown as Error)),
         );
       }
     }
     const converter = this.mode.converter;
-    const result = await converter.tryConvert(event);
-    if (!result.ok) return result;
+    const conversion = await converter.tryConvert(event);
+    if (!conversion.ok) return conversion;
     try {
-      return fromNeverthrow(ok(JSON.stringify(result.value)));
-    } catch (cause) {
-      return fromNeverthrow(err(new ArvoEventSerializerError(cause as Error)));
+      return fromNeverthrow(ok(JSON.stringify(conversion.value)));
+    } catch (thrown) {
+      return fromNeverthrow(err(new ArvoEventSerializerError(thrown as Error)));
     }
   }
 
@@ -125,16 +127,16 @@ export class ArvoEventSerializer {
    * {@link trySerialize} for the distinct failure cases.
    */
   async serialize(event: ArvoEvent): Promise<string> {
-    const result = await this.trySerialize(event);
-    if (result.ok) return result.value;
-    throw result.error;
+    const attempt = await this.trySerialize(event);
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 
   /**
    * Deserializes a wire string back to an `ArvoEvent`, reporting the
    * outcome as a value rather than throwing.
    *
-   * `data` that isn't valid JSON, and (in `arvoevent` mode) a parsed value
+   * `wire` that isn't valid JSON, and (in `arvoevent` mode) a parsed value
    * that isn't a structurally valid `ArvoEvent`, both report as
    * `ArvoEventSerializerError` with the original error available via
    * `.cause`. In `cloudevent` mode, a parsed value is wrapped as a
@@ -153,26 +155,26 @@ export class ArvoEventSerializer {
     T extends string = string,
     D extends Record<string, any> = Record<string, any>,
   >(
-    data: string,
+    wire: string,
     foreignFallback?: ForeignCloudEventFallback,
   ): AsyncResult<
     ArvoEvent<T, D>,
     CloudEventTransformationError | ArvoEventSerializerError
   > {
-    let parsed: unknown;
+    let rawEvent: unknown;
     try {
-      parsed = JSON.parse(data);
-    } catch (cause) {
-      return fromNeverthrow(err(new ArvoEventSerializerError(cause as Error)));
+      rawEvent = JSON.parse(wire);
+    } catch (thrown) {
+      return fromNeverthrow(err(new ArvoEventSerializerError(thrown as Error)));
     }
 
     if (this.mode.type === 'arvoevent') {
-      const result = ArvoEvent.tryParse<T, D>(parsed);
-      if (result.ok) return result;
-      return fromNeverthrow(err(new ArvoEventSerializerError(result.error)));
+      const attempt = ArvoEvent.tryParse<T, D>(rawEvent);
+      if (attempt.ok) return attempt;
+      return fromNeverthrow(err(new ArvoEventSerializerError(attempt.error)));
     }
 
-    if (!isRecord(parsed) || typeof parsed.specversion !== 'string') {
+    if (!isRecord(rawEvent) || typeof rawEvent.specversion !== 'string') {
       return fromNeverthrow(
         err(
           new CloudEventTransformationError({
@@ -181,7 +183,7 @@ export class ArvoEventSerializer {
               new ErrorIssue({
                 path: 'specversion',
                 message: 'is required',
-                received: parsed,
+                received: rawEvent,
               }),
             ],
           }),
@@ -191,7 +193,7 @@ export class ArvoEventSerializer {
 
     const converter = this.mode.converter;
     const cloudEvent = new CloudEvent<Record<string, unknown>>(
-      parsed as never,
+      rawEvent as never,
       false,
     );
     return converter.tryRevert<T, D>(cloudEvent, foreignFallback);
@@ -208,11 +210,11 @@ export class ArvoEventSerializer {
     T extends string = string,
     D extends Record<string, any> = Record<string, any>,
   >(
-    data: string,
+    wire: string,
     foreignFallback?: ForeignCloudEventFallback,
   ): Promise<ArvoEvent<T, D>> {
-    const result = await this.tryDeserialize<T, D>(data, foreignFallback);
-    if (result.ok) return result.value;
-    throw result.error;
+    const attempt = await this.tryDeserialize<T, D>(wire, foreignFallback);
+    if (attempt.ok) return attempt.value;
+    throw attempt.error;
   }
 }

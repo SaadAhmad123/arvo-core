@@ -9,8 +9,8 @@ describe('createTimestamp', () => {
   });
 
   it('is already in the canonical form Date.prototype.toISOString() produces', () => {
-    const value = createTimestamp();
-    expect(new Date(value).toISOString()).toBe(value);
+    const timestamp = createTimestamp();
+    expect(new Date(timestamp).toISOString()).toBe(timestamp);
   });
 });
 
@@ -24,9 +24,9 @@ describe('truncate', () => {
   });
 
   it('truncates text longer than maxLength, ending in an ellipsis', () => {
-    const result = truncate('hello world', 5);
-    expect(result).toBe('hell…');
-    expect(result).toHaveLength(5);
+    const truncated = truncate('hello world', 5);
+    expect(truncated).toBe('hell…');
+    expect(truncated).toHaveLength(5);
   });
 
   it('truncated output is always exactly maxLength characters', () => {

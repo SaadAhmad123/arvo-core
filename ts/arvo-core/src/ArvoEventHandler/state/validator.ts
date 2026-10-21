@@ -8,15 +8,19 @@ import {
 
 /** Whether a value is a plain object, which arrays and `null` are not. */
 export const isPlainObject = (
-  value: unknown,
-): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+  candidate: unknown,
+): candidate is Record<string, unknown> =>
+  typeof candidate === 'object' &&
+  candidate !== null &&
+  !Array.isArray(candidate);
 
-const isNonEmptyString = (value: unknown): boolean =>
-  typeof value === 'string' && value.length > 0;
+const isNonEmptyString = (candidate: unknown): boolean =>
+  typeof candidate === 'string' && candidate.length > 0;
 
-const isCount = (value: unknown): boolean =>
-  typeof value === 'number' && Number.isInteger(value) && value >= 0;
+const isCount = (candidate: unknown): boolean =>
+  typeof candidate === 'number' &&
+  Number.isInteger(candidate) &&
+  candidate >= 0;
 
 /** The identifiers, each of which must be there and must say something. */
 const IDENTIFIER_FIELDS = [
@@ -65,60 +69,67 @@ const checkEvents = (record: Record<string, unknown>): (ErrorIssue | null)[] =>
   );
 
 /** The event log: an array, and every entry an id with a direction. */
-const checkTouchedEvents = (value: unknown): (ErrorIssue | null)[] => {
-  if (!Array.isArray(value)) {
+const checkTouchedEvents = (eventIds: unknown): (ErrorIssue | null)[] => {
+  if (!Array.isArray(eventIds)) {
     return [
       new ErrorIssue({
         path: 'eventIds',
         message: 'must be an array of touched events',
-        received: value,
+        received: eventIds,
       }),
     ];
   }
-  return value.flatMap((entry, index) => {
-    const path = `eventIds[${index}]`;
-    if (!isPlainObject(entry)) {
+  return eventIds.flatMap((touchedEvent, position) => {
+    const path = `eventIds[${position}]`;
+    if (!isPlainObject(touchedEvent)) {
       return [
-        new ErrorIssue({ path, message: 'must be an object', received: entry }),
+        new ErrorIssue({
+          path,
+          message: 'must be an object',
+          received: touchedEvent,
+        }),
       ];
     }
     return [
-      isNonEmptyString(entry.id)
+      isNonEmptyString(touchedEvent.id)
         ? null
         : new ErrorIssue({
             path: `${path}.id`,
             message: 'must be a non-empty string',
-            received: entry.id,
+            received: touchedEvent.id,
           }),
       ARVO_TOUCHED_EVENT_DIRECTIONS.includes(
-        entry.direction as (typeof ARVO_TOUCHED_EVENT_DIRECTIONS)[number],
+        touchedEvent.direction as (typeof ARVO_TOUCHED_EVENT_DIRECTIONS)[number],
       )
         ? null
         : new ErrorIssue({
             path: `${path}.direction`,
             message: `must be one of ${ARVO_TOUCHED_EVENT_DIRECTIONS.join(', ')}`,
-            received: entry.direction,
+            received: touchedEvent.direction,
           }),
     ];
   });
 };
 
 /** What is awaited: a map from an emitted event's id to its answer, or none. */
-const checkInFlightEvents = (value: unknown): (ErrorIssue | null)[] => {
-  if (!(value instanceof Map)) {
+const checkInFlightEvents = (
+  inFlightEventMap: unknown,
+): (ErrorIssue | null)[] => {
+  if (!(inFlightEventMap instanceof Map)) {
     return [
       new ErrorIssue({
         path: 'inFlightEventMap',
         message: 'must be a Map keyed by the id of the event emitted',
-        received: value,
+        received: inFlightEventMap,
       }),
     ];
   }
-  return [...value.entries()].map(([key, answer]) =>
-    isNonEmptyString(key) && (answer === null || answer instanceof ArvoEvent)
+  return [...inFlightEventMap.entries()].map(([requestId, answer]) =>
+    isNonEmptyString(requestId) &&
+    (answer === null || answer instanceof ArvoEvent)
       ? null
       : new ErrorIssue({
-          path: `inFlightEventMap[${String(key)}]`,
+          path: `inFlightEventMap[${String(requestId)}]`,
           message: 'must map a non-empty id to an ArvoEvent or to null',
           received: answer,
         }),
@@ -145,7 +156,7 @@ export const checkExecutionState = (input: unknown): ErrorIssue[] => {
     ];
   }
 
-  const found: (ErrorIssue | null)[] = [
+  const issues: (ErrorIssue | null)[] = [
     ...checkIdentifiers(input),
     ...checkCounts(input),
     ...checkEvents(input),
@@ -196,5 +207,5 @@ export const checkExecutionState = (input: unknown): ErrorIssue[] => {
         }),
   ];
 
-  return found.filter((issue): issue is ErrorIssue => issue !== null);
+  return issues.filter((issue): issue is ErrorIssue => issue !== null);
 };

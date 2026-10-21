@@ -51,18 +51,18 @@ export class ArvoExecutionContextMeter {
    * @param unit - What one of them is, where a unit means anything.
    */
   counter(name: string, unit?: string): Counter {
-    const key = `${ARVO_TELEMETRY_PREFIX}${name}`;
-    const found = this.#counters.get(key);
-    if (found !== undefined) return found;
-    const made =
+    const instrumentName = `${ARVO_TELEMETRY_PREFIX}${name}`;
+    const cachedInstrument = this.#counters.get(instrumentName);
+    if (cachedInstrument !== undefined) return cachedInstrument;
+    const instrument =
       this.meter === null
         ? NO_OP_COUNTER
         : reading(
-            () => (this.meter as Meter).createCounter(key, { unit }),
+            () => (this.meter as Meter).createCounter(instrumentName, { unit }),
             NO_OP_COUNTER,
           );
-    this.#counters.set(key, made);
-    return made;
+    this.#counters.set(instrumentName, instrument);
+    return instrument;
   }
 
   /**
@@ -72,23 +72,24 @@ export class ArvoExecutionContextMeter {
    * @param unit - What one measurement is in.
    */
   histogram(name: string, unit?: string): Histogram {
-    const key = `${ARVO_TELEMETRY_PREFIX}${name}`;
-    const found = this.#histograms.get(key);
-    if (found !== undefined) return found;
-    const made =
+    const instrumentName = `${ARVO_TELEMETRY_PREFIX}${name}`;
+    const cachedInstrument = this.#histograms.get(instrumentName);
+    if (cachedInstrument !== undefined) return cachedInstrument;
+    const instrument =
       this.meter === null
         ? NO_OP_HISTOGRAM
         : reading(
-            () => (this.meter as Meter).createHistogram(key, { unit }),
+            () =>
+              (this.meter as Meter).createHistogram(instrumentName, { unit }),
             NO_OP_HISTOGRAM,
           );
-    this.#histograms.set(key, made);
-    return made;
+    this.#histograms.set(instrumentName, instrument);
+    return instrument;
   }
 
   /** One measurement recorded on a named histogram. */
-  record(name: string, value: number, attributes?: Attributes): void {
-    recording(() => this.histogram(name).record(value, attributes));
+  record(name: string, measurement: number, attributes?: Attributes): void {
+    recording(() => this.histogram(name).record(measurement, attributes));
   }
 
   /** One occurrence counted on a named counter. */

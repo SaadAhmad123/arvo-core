@@ -16,15 +16,18 @@ import { declareThreadedHandlers } from './contracts.ts';
  * live, however far away the answer lives.
  */
 
-const handlers = declareThreadedHandlers(workerData?.charges ?? 'succeeds');
-const events = new ArvoEventSerializer({ type: 'arvoevent' });
+const handlers = declareThreadedHandlers(
+  workerData?.charges ?? 'succeeds',
+  workerData?.layered === true,
+);
+const serializer = new ArvoEventSerializer({ type: 'arvoevent' });
 
 /** Every read waiting on the thread that owns the store. */
-const waiting = new Map<number, (row: unknown) => void>();
-let asked = 0;
+const pendingReads = new Map<number, (row: unknown) => void>();
+let readCount = 0;
 
 /** What a broker asks this thread to run. */
-type Asked = {
+type RunRequest = {
   readonly kind: 'run';
   readonly event: string;
   readonly attempt: number;
@@ -32,7 +35,7 @@ type Asked = {
 };
 
 /** What the thread owning the store answered a read with. */
-type Answered = {
+type ReadAnswer = {
   readonly kind: 'read';
   readonly at: number;
   readonly row: unknown;
@@ -40,29 +43,29 @@ type Answered = {
 
 /** One read of the store, which lives on another thread. */
 const readStore = (executionId: string): Promise<unknown> => {
-  asked += 1;
-  const at = asked;
+  readCount += 1;
+  const readId = readCount;
   return new Promise((answer) => {
-    waiting.set(at, answer);
-    parentPort?.postMessage({ kind: 'read', at, executionId });
+    pendingReads.set(readId, answer);
+    parentPort?.postMessage({ kind: 'read', at: readId, executionId });
   });
 };
 
-parentPort?.on('message', async (said: Asked | Answered) => {
-  if (said.kind === 'read') {
-    const answer = waiting.get(said.at);
-    waiting.delete(said.at);
-    answer?.(said.row);
+parentPort?.on('message', async (message: RunRequest | ReadAnswer) => {
+  if (message.kind === 'read') {
+    const answer = pendingReads.get(message.at);
+    pendingReads.delete(message.at);
+    answer?.(message.row);
     return;
   }
 
-  const restored = await events.tryDeserialize(said.event);
-  if (!restored.ok) {
+  const deserialization = await serializer.tryDeserialize(message.event);
+  if (!deserialization.ok) {
     parentPort?.postMessage({ kind: 'refused' });
     return;
   }
 
-  const handler = handlers[restored.value.to as string];
+  const handler = handlers[deserialization.value.to as string];
   if (handler === undefined) {
     parentPort?.postMessage({ kind: 'refused' });
     return;
@@ -70,37 +73,42 @@ parentPort?.on('message', async (said: Asked | Answered) => {
 
   // held open deliberately, so two threads are inside one execution at
   // the same moment rather than merely close to it
-  if (said.slowly > 0) {
-    await new Promise((settle) => setTimeout(settle, said.slowly));
+  if (message.slowly > 0) {
+    await new Promise((resolve) => setTimeout(resolve, message.slowly));
   }
 
   try {
-    const ran = await handler.execute({
-      event: restored.value,
+    const outcome = await handler.execute({
+      event: deserialization.value,
       state: ({ executionId }: { executionId: string }) =>
         readStore(executionId),
-      attempt: said.attempt,
+      attempt: message.attempt,
     });
 
-    if (ran.kind === 'discarded') {
-      parentPort?.postMessage({ kind: 'discarded', reason: ran.reason });
+    if (outcome.kind === 'discarded') {
+      parentPort?.postMessage({ kind: 'discarded', reason: outcome.reason });
       return;
     }
 
-    const written = await Promise.all(
-      ran.events.map(async (leaving: unknown) => {
-        const out = await events.trySerialize(leaving as never);
-        return out.ok ? out.value : null;
+    const serializedEvents = await Promise.all(
+      outcome.events.map(async (outgoingEvent: unknown) => {
+        const serialization = await serializer.trySerialize(
+          outgoingEvent as never,
+        );
+        return serialization.ok ? serialization.value : null;
       }),
     );
 
     parentPort?.postMessage({
       kind: 'produced',
-      state: ran.state,
-      events: written.filter((one): one is string => one !== null),
+      state: outcome.state,
+      events: serializedEvents.filter(
+        (serializedEvent): serializedEvent is string =>
+          serializedEvent !== null,
+      ),
     });
-  } catch (raised) {
-    const fault = raised as {
+  } catch (thrown) {
+    const fault = thrown as {
       faultKind?: string;
       retry?: unknown;
       abandonmentEvent?: string | null;

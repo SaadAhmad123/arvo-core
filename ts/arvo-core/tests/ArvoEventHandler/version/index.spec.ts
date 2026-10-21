@@ -28,7 +28,7 @@ import { orderData } from '../state/fixtures.js';
 const EXECUTION_ID = await deriveArvoExecutionId(initEvent);
 
 /** What a fixture may vary about how a version is declared. */
-type Declared = Partial<
+type VersionOverrides = Partial<
   ArvoEventHandlerVersionParam<
     typeof orderVersion,
     typeof services,
@@ -39,12 +39,13 @@ type Declared = Partial<
 >;
 
 /** A version that asks the payment service, then answers its caller. */
-const declared = (overrides: Declared = {}) =>
+const declareVersion = (overrides: VersionOverrides = {}) =>
   new ArvoEventHandlerVersion({
     contracts: { self: orderVersion, services },
     options: ARVO_DEFAULT_HANDLER_OPTIONS,
     state: orderData,
     declaresState: true,
+    middleware: null,
     execute: async (ctx) => {
       await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
       return ctx.entry === 'init'
@@ -60,7 +61,7 @@ const declared = (overrides: Declared = {}) =>
 /** Opening an execution, as the version reports it. */
 const open = (
   overrides: Record<string, unknown> = {},
-  version = declared(),
+  version = declareVersion(),
 ): Promise<ArvoEventHandlerExecuteResponse> =>
   version.execute({
     entry: 'init',
@@ -70,14 +71,15 @@ const open = (
     attempt: 0,
     dependencies: null,
     hooks: {},
+    middleware: null,
     telemetry: telemetry().telemetry,
     ...overrides,
   });
 
 /** The same, for a fixture that expects it to have produced something. */
-const opened = async (
+const openProduced = async (
   overrides: Record<string, unknown> = {},
-  version = declared(),
+  version = declareVersion(),
 ) => {
   const response = await open(overrides, version);
   if (response.kind !== 'produced') {
@@ -104,26 +106,27 @@ const answerTo = (
 /** Answering what an opened execution asked for. */
 const resume = async (
   overrides: Record<string, unknown> = {},
-  version = declared(),
+  version = declareVersion(),
 ) => {
-  const first = await opened({}, version);
+  const openedResponse = await openProduced({}, version);
   return version.execute({
     entry: 'followup',
-    event: answerTo(first.events[0] as ArvoEvent),
-    state: first.state as JSONObject,
+    event: answerTo(openedResponse.events[0] as ArvoEvent),
+    state: openedResponse.state as JSONObject,
     executionId: EXECUTION_ID,
     attempt: 0,
     dependencies: null,
     hooks: {},
+    middleware: null,
     telemetry: telemetry().telemetry,
     ...overrides,
   });
 };
 
 /** The same, for a fixture that expects it to have produced something. */
-const resumed = async (
+const resumeProduced = async (
   overrides: Record<string, unknown> = {},
-  version = declared(),
+  version = declareVersion(),
 ) => {
   const response = await resume(overrides, version);
   if (response.kind !== 'produced') {
@@ -133,11 +136,11 @@ const resumed = async (
 };
 
 /** The fault an execution raised, for a fixture that expects one. */
-const faulted = async (run: Promise<unknown>) => {
+const faultFrom = async (execution: Promise<unknown>) => {
   try {
-    await run;
-  } catch (raised) {
-    return raised as ArvoHandlerFault;
+    await execution;
+  } catch (thrown) {
+    return thrown as ArvoHandlerFault;
   }
   throw new Error('expected the execution to fault');
 };
@@ -150,35 +153,35 @@ const readBack = (state: JSONObject) =>
 
 describe('what a version says about itself', () => {
   it('is the version of the contract it implements', () => {
-    expect(declared().version).toBe('1.0.0');
+    expect(declareVersion().version).toBe('1.0.0');
   });
 
   it('holds the contracts it was declared with', () => {
-    expect(declared().contracts.self).toBe(orderVersion);
-    expect(declared().contracts.services).toEqual(services);
+    expect(declareVersion().contracts.self).toBe(orderVersion);
+    expect(declareVersion().contracts.services).toEqual(services);
   });
 });
 
 describe('opening an execution', () => {
   it('produces exactly what the executor returned', async () => {
-    const response = await opened();
+    const response = await openProduced();
     expect(response.events).toHaveLength(1);
     expect(response.events[0]?.type).toBe('com_payment_charge');
   });
 
   it('commits a record that reads back as what the execution remembered', async () => {
-    const record = await readBack((await opened()).state);
+    const record = await readBack((await openProduced()).state);
     expect(record.data).toEqual({ orderId: 'o-1', attempts: 1 });
     expect(record.executionId).toBe(EXECUTION_ID);
   });
 
   it('rests the execution where it waits for the answer', async () => {
-    const record = await readBack((await opened()).state);
+    const record = await readBack((await openProduced()).state);
     expect(record.lifecycle).toBe('waiting');
   });
 
   it('says what it is waiting for', async () => {
-    const response = await opened();
+    const response = await openProduced();
     const record = await readBack(response.state);
     expect([...record.inFlightEventMap.keys()]).toEqual([
       response.events[0]?.id,
@@ -186,7 +189,7 @@ describe('opening an execution', () => {
   });
 
   it('logs the event it took in and the one it sent', async () => {
-    const response = await opened();
+    const response = await openProduced();
     const record = await readBack(response.state);
     expect(record.eventIds).toEqual([
       { id: initEvent.id, direction: 'received' },
@@ -195,23 +198,25 @@ describe('opening an execution', () => {
   });
 
   it('writes the record at the revision a store takes only where none exists', async () => {
-    expect((await readBack((await opened()).state)).casVersion).toBe(0);
+    expect((await readBack((await openProduced()).state)).casVersion).toBe(0);
   });
 
   it('refuses one whose execution could not be named', async () => {
-    const fault = await faulted(open({ executionId: '' }));
+    const fault = await faultFrom(open({ executionId: '' }));
     expect(fault.faultKind).toBe('record_invalid');
   });
 
   it('tells the caller but stores nothing, where it is refused on the way in', async () => {
-    const elsewhere = cloneArvoEvent(initEvent, { to: 'com.somewhere.else' });
-    const fault = await faulted(open({ event: elsewhere }));
+    const misaddressedEvent = cloneArvoEvent(initEvent, {
+      to: 'com.somewhere.else',
+    });
+    const fault = await faultFrom(open({ event: misaddressedEvent }));
     expect(typeof fault.abandonmentEvent).toBe('string');
     expect(fault.abandonmentState).toBeNull();
   });
 
   it('stores nothing where what the executor works with would not resolve, that being the last way in', async () => {
-    const fault = await faulted(
+    const fault = await faultFrom(
       open({
         dependencies: openedPerExecution(() => {
           throw new Error('the pool is exhausted');
@@ -223,13 +228,13 @@ describe('opening an execution', () => {
   });
 
   it('stores the record it would have written, where it is refused once past the way in', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         return { type: 'com_order_created' } as never;
       },
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.faultKind).toBe('emission_not_permitted');
     const record = JSON.parse(fault.abandonmentState as string);
     expect(record.lifecycle).toBe('failure');
@@ -239,19 +244,21 @@ describe('opening an execution', () => {
 
 describe('answering something an execution awaited', () => {
   it('produces what the executor returned on being re-entered', async () => {
-    const response = await resumed();
+    const response = await resumeProduced();
     expect(response.events[0]?.type).toBe('com_order_created');
   });
 
   it('finishes the execution', async () => {
-    expect((await readBack((await resumed()).state)).lifecycle).toBe('success');
+    expect((await readBack((await resumeProduced()).state)).lifecycle).toBe(
+      'success',
+    );
   });
 
   it('holds the answer against the request it answers', async () => {
-    const first = await opened();
-    const request = first.events[0] as ArvoEvent;
+    const openedResponse = await openProduced();
+    const request = openedResponse.events[0] as ArvoEvent;
     const answer = answerTo(request);
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 2 } });
         expect(ctx.state.inFlightEventMap.get(request.id)?.id).toBe(answer.id);
@@ -260,120 +267,129 @@ describe('answering something an execution awaited', () => {
     await version.execute({
       entry: 'followup',
       event: answer,
-      state: first.state as JSONObject,
+      state: openedResponse.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
   });
 
   it('writes the record a revision past the one it read', async () => {
-    expect((await readBack((await resumed()).state)).casVersion).toBe(1);
+    expect((await readBack((await resumeProduced()).state)).casVersion).toBe(1);
   });
 
   it('discards one it has already processed, there being nothing to commit', async () => {
-    const first = await opened();
-    const answer = answerTo(first.events[0] as ArvoEvent);
-    const version = declared();
-    const once = await version.execute({
+    const openedResponse = await openProduced();
+    const answer = answerTo(openedResponse.events[0] as ArvoEvent);
+    const version = declareVersion();
+    const followupResponse = await version.execute({
       entry: 'followup',
       event: answer,
-      state: first.state as JSONObject,
+      state: openedResponse.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
-    if (once.kind !== 'produced') throw new Error('expected it to produce');
+    if (followupResponse.kind !== 'produced')
+      throw new Error('expected it to produce');
 
-    const again = await version.execute({
+    const repeatResponse = await version.execute({
       entry: 'followup',
       event: answer,
-      state: once.state,
+      state: followupResponse.state,
       executionId: EXECUTION_ID,
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
-    expect(again.kind).toBe('discarded');
+    expect(repeatResponse.kind).toBe('discarded');
   });
 
   it('refuses one nothing was waiting for', async () => {
-    const first = await opened();
-    const stray = answerTo(first.events[0] as ArvoEvent, {
+    const openedResponse = await openProduced();
+    const strayAnswer = answerTo(openedResponse.events[0] as ArvoEvent, {
       initid: 'never-asked',
     });
-    const fault = await faulted(resume({ event: stray }));
+    const fault = await faultFrom(resume({ event: strayAnswer }));
     expect(fault.faultKind).toBe('response_unawaited');
   });
 
   it('refuses one reaching an execution that has finished', async () => {
-    const finished = await resumed();
-    const late = answerTo(finished.events[0] as ArvoEvent, {
+    const finishedResponse = await resumeProduced();
+    const lateAnswer = answerTo(finishedResponse.events[0] as ArvoEvent, {
       id: 'an-answer-nobody-waited-for',
     });
-    const fault = await faulted(resume({ state: finished.state, event: late }));
+    const fault = await faultFrom(
+      resume({ state: finishedResponse.state, event: lateAnswer }),
+    );
     expect(fault.faultKind).toBe('lifecycle_terminal');
   });
 
   it('refuses a row that is not a stored record at all', async () => {
-    const fault = await faulted(resume({ state: 'not a row' }));
+    const fault = await faultFrom(resume({ state: 'not a row' }));
     expect(fault.faultKind).toBe('record_invalid');
   });
 
   it('refuses a row that reads but is wrong', async () => {
-    const first = await opened();
-    const wrong = { ...first.state, depth: -1 };
-    const fault = await faulted(resume({ state: wrong }));
+    const openedResponse = await openProduced();
+    const invalidState = { ...openedResponse.state, depth: -1 };
+    const fault = await faultFrom(resume({ state: invalidState }));
     expect(fault.faultKind).toBe('record_invalid');
   });
 
   it('refuses a row that contradicts the event that opened it', async () => {
-    const first = await opened();
-    const drifted = { ...first.state, depth: 4 };
-    const fault = await faulted(resume({ state: drifted }));
+    const openedResponse = await openProduced();
+    const driftedState = { ...openedResponse.state, depth: 4 };
+    const fault = await faultFrom(resume({ state: driftedState }));
     expect(fault.faultKind).toBe('record_invalid');
-    expect(fault.violations.some((broken) => broken.includes('depth'))).toBe(
-      true,
-    );
+    expect(
+      fault.violations.some((violation) => violation.includes('depth')),
+    ).toBe(true);
   });
 
   it('still answers the caller where only what it remembered was refused', async () => {
-    const first = await opened();
-    const refused = { ...first.state, data: { orderId: 42 } };
-    const fault = await faulted(resume({ state: refused }));
+    const openedResponse = await openProduced();
+    const staleDataState = { ...openedResponse.state, data: { orderId: 42 } };
+    const fault = await faultFrom(resume({ state: staleDataState }));
     expect(fault.faultKind).toBe('record_invalid');
     expect(typeof fault.abandonmentEvent).toBe('string');
     expect(typeof fault.abandonmentState).toBe('string');
   });
 
   it('answers nobody where the row itself could not be read', async () => {
-    const fault = await faulted(resume({ state: 'not a row' }));
+    const fault = await faultFrom(resume({ state: 'not a row' }));
     expect(fault.abandonmentEvent).toBeNull();
     expect(fault.abandonmentState).toBeNull();
   });
 
   it('refuses a row whose events will not restore', async () => {
-    const first = await opened();
-    const broken = { ...first.state, initEvent: { not: 'an event' } };
-    const fault = await faulted(resume({ state: broken }));
+    const openedResponse = await openProduced();
+    const unrestorableState = {
+      ...openedResponse.state,
+      initEvent: { not: 'an event' },
+    };
+    const fault = await faultFrom(resume({ state: unrestorableState }));
     expect(fault.faultKind).toBe('record_event_unrestorable');
   });
 
   it('refuses a row belonging to another execution', async () => {
-    const fault = await faulted(resume({ executionId: 'b'.repeat(64) }));
+    const fault = await faultFrom(resume({ executionId: 'b'.repeat(64) }));
     expect(fault.faultKind).toBe('record_invalid');
   });
 });
 
 describe('whether an answer re-enters the executor', () => {
   /** A version that asks two services at once. */
-  const twoRequests = (overrides: Declared = {}) =>
-    declared({
+  const twoRequests = (overrides: VersionOverrides = {}) =>
+    declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         if (ctx.entry === 'followup') {
@@ -392,15 +408,16 @@ describe('whether an answer re-enters the executor', () => {
 
   it('does not, where the version waits for all of them', async () => {
     const version = twoRequests();
-    const first = await opened({}, version);
+    const openedResponse = await openProduced({}, version);
     const response = await version.execute({
       entry: 'followup',
-      event: answerTo(first.events[0] as ArvoEvent),
-      state: first.state as JSONObject,
+      event: answerTo(openedResponse.events[0] as ArvoEvent),
+      state: openedResponse.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
     if (response.kind !== 'produced') throw new Error('expected it to produce');
@@ -410,16 +427,17 @@ describe('whether an answer re-enters the executor', () => {
 
   it('commits the answer it took in, so the next one completes the collection', async () => {
     const version = twoRequests();
-    const first = await opened({}, version);
-    const answer = answerTo(first.events[0] as ArvoEvent);
+    const openedResponse = await openProduced({}, version);
+    const answer = answerTo(openedResponse.events[0] as ArvoEvent);
     const response = await version.execute({
       entry: 'followup',
       event: answer,
-      state: first.state as JSONObject,
+      state: openedResponse.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
     if (response.kind !== 'produced') throw new Error('expected it to produce');
@@ -433,15 +451,16 @@ describe('whether an answer re-enters the executor', () => {
     const version = twoRequests({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, collect: 'each' },
     });
-    const first = await opened({}, version);
+    const openedResponse = await openProduced({}, version);
     const response = await version.execute({
       entry: 'followup',
-      event: answerTo(first.events[0] as ArvoEvent),
-      state: first.state as JSONObject,
+      event: answerTo(openedResponse.events[0] as ArvoEvent),
+      state: openedResponse.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
     if (response.kind !== 'produced') throw new Error('expected it to produce');
@@ -452,20 +471,20 @@ describe('whether an answer re-enters the executor', () => {
 describe('what an executor is given to work with', () => {
   it('is what a dependency exposes, where one was handed over', async () => {
     const db = {};
-    const seen: unknown[] = [];
-    const version = declared({
+    const exposedDbs: unknown[] = [];
+    const version = declareVersion({
       execute: async (ctx) => {
-        seen.push(ctx.dependencies?.db);
+        exposedDbs.push(ctx.dependencies?.db);
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
       },
     });
     await open({ dependencies: heldDependencies({ db }).dependency }, version);
-    expect(seen[0]).toBe(db);
+    expect(exposedDbs[0]).toBe(db);
   });
 
   it('is what one open yielded, called once with the execution so far', async () => {
     const calls: unknown[] = [];
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         expect(ctx.dependencies?.db).toBe('from the factory');
@@ -473,10 +492,12 @@ describe('what an executor is given to work with', () => {
     });
     await open(
       {
-        dependencies: openedPerExecution((given: Record<string, unknown>) => {
-          calls.push(given);
-          return { db: 'from the factory' };
-        }).dependency,
+        dependencies: openedPerExecution(
+          (executionSoFar: Record<string, unknown>) => {
+            calls.push(executionSoFar);
+            return { db: 'from the factory' };
+          },
+        ).dependency,
       },
       version,
     );
@@ -485,7 +506,7 @@ describe('what an executor is given to work with', () => {
   });
 
   it('is a fault where the factory could not answer', async () => {
-    const fault = await faulted(
+    const fault = await faultFrom(
       open({
         dependencies: openedPerExecution(() => {
           throw new Error('the pool is exhausted');
@@ -497,7 +518,7 @@ describe('what an executor is given to work with', () => {
   });
 
   it('is worth another attempt, a pool recovering a moment later', async () => {
-    const fault = await faulted(
+    const fault = await faultFrom(
       open({
         dependencies: openedPerExecution(() => {
           throw new Error('the pool is exhausted');
@@ -510,49 +531,51 @@ describe('what an executor is given to work with', () => {
 
 describe('what an execution may not do on the way in', () => {
   it('may not arrive deeper than the version allows', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, maxDepth: 1 },
     });
-    const deep = cloneArvoEvent(initEvent, {
+    const deepEvent = cloneArvoEvent(initEvent, {
       depth: 1,
       parentid: 'something-above',
     });
-    const fault = await faulted(open({ event: deep }, version));
+    const fault = await faultFrom(open({ event: deepEvent }, version));
     expect(fault.faultKind).toBe('max_depth_event_received');
   });
 
   it('may not arrive addressed somewhere else', async () => {
-    const elsewhere = cloneArvoEvent(initEvent, { to: 'com.somewhere.else' });
-    const fault = await faulted(open({ event: elsewhere }));
+    const misaddressedEvent = cloneArvoEvent(initEvent, {
+      to: 'com.somewhere.else',
+    });
+    const fault = await faultFrom(open({ event: misaddressedEvent }));
     expect(fault.faultKind).toBe('addressing_mismatch');
   });
 
   it('may not arrive at an execution that has outlived its time', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, executionTimeout: 1 },
     });
-    const old = cloneArvoEvent(initEvent, {
+    const staleEvent = cloneArvoEvent(initEvent, {
       time: new Date(Date.now() - 60_000).toISOString(),
     });
-    const fault = await faulted(open({ event: old }, version));
+    const fault = await faultFrom(open({ event: staleEvent }, version));
     expect(fault.faultKind).toBe('execution_timeout');
   });
 });
 
 describe('what an executor may not return', () => {
   it('may not return something that is not an event', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         return { type: 'com_order_created' } as never;
       },
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.faultKind).toBe('emission_not_permitted');
   });
 
   it('may not answer its caller twice', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         const answer = await ctx.build({
@@ -562,32 +585,32 @@ describe('what an executor may not return', () => {
         return [answer, cloneArvoEvent(answer, { id: 'a-second-answer' })];
       },
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.faultKind).toBe('emission_not_permitted');
   });
 
   it('may not finish having remembered nothing', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) =>
         ctx.build({ type: 'com_order_created', data: { order_id: 'o-1' } }),
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.faultKind).toBe('state_schema_rejected');
   });
 
   it('may return nothing at all, which leaves the execution idle', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
       },
     });
-    const response = await opened({}, version);
+    const response = await openProduced({}, version);
     expect(response.events).toEqual([]);
     expect((await readBack(response.state)).lifecycle).toBe('idle');
   });
 
   it('may end the execution deliberately, where it still answers its caller', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         ctx.cancel('the customer withdrew the order');
@@ -597,26 +620,26 @@ describe('what an executor may not return', () => {
         });
       },
     });
-    const record = await readBack((await opened({}, version)).state);
+    const record = await readBack((await openProduced({}, version)).state);
     expect(record.lifecycle).toBe('cancelled');
     expect(record.lifecycleDescription).toBe('the customer withdrew the order');
   });
 
   it('may not end it deliberately and answer nobody', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         ctx.cancel('the customer withdrew the order');
       },
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.faultKind).toBe('execution_cancelled');
     expect(fault.message).toContain('the customer withdrew the order');
     expect(fault.retry).toBeNull();
   });
 
   it('may compensate as it ends, so long as it answers too', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         ctx.cancel('the customer withdrew the order');
@@ -632,7 +655,7 @@ describe('what an executor may not return', () => {
         ];
       },
     });
-    const response = await opened({}, version);
+    const response = await openProduced({}, version);
     expect(response.events).toHaveLength(2);
     expect((await readBack(response.state)).lifecycle).toBe('cancelled');
   });
@@ -640,35 +663,37 @@ describe('what an executor may not return', () => {
 
 describe('when an executor cannot finish the work', () => {
   it('tells the caller, as this contract’s handler error event', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         throw new Error('the warehouse is on fire');
       },
     });
-    const response = await opened({}, version);
+    const response = await openProduced({}, version);
     expect(response.events[0]?.type).toBe(orderVersion.error.type);
     expect(response.events[0]?.to).toBe(initEvent.source);
   });
 
   it('ends the execution in error, saying what went wrong', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async () => {
         throw new Error('the warehouse is on fire');
       },
     });
-    const record = await readBack((await opened({}, version)).state);
+    const record = await readBack((await openProduced({}, version)).state);
     expect(record.lifecycle).toBe('error');
     expect(record.lifecycleDescription).toContain('the warehouse is on fire');
   });
 
   it('writes a record even where the executor remembered nothing', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async () => {
         throw new Error('it failed before it could write anything');
       },
     });
-    expect((await readBack((await opened({}, version)).state)).data).toBeNull();
+    expect(
+      (await readBack((await openProduced({}, version)).state)).data,
+    ).toBeNull();
   });
 
   it('faults where the event that would tell the caller cannot be built', async () => {
@@ -677,7 +702,7 @@ describe('when an executor cannot finish the work', () => {
     // (`src/ArvoEvent/validator.ts`). So the handler error event cannot
     // be built for a reason that has nothing to do with the failure it
     // was going to report — and the failure must not be lost to it.
-    const version = declared({
+    const version = declareVersion({
       options: {
         ...ARVO_DEFAULT_HANDLER_OPTIONS,
         handlerErrorDomain: 'orders\u0000held',
@@ -687,7 +712,7 @@ describe('when an executor cannot finish the work', () => {
       },
     });
 
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.faultKind).toBe('executor_raised');
     // both failures, the original one included
     expect(fault.message).toContain('the warehouse is on fire');
@@ -704,7 +729,7 @@ describe('when an executor cannot finish the work', () => {
     const circular: Record<string, unknown> = {};
     circular.self = circular;
 
-    const version = declared({
+    const version = declareVersion({
       state: z.object({ anything: z.any() }) as unknown as typeof orderData,
       execute: async (ctx) => {
         await ctx.setState({
@@ -714,13 +739,13 @@ describe('when an executor cannot finish the work', () => {
       },
     });
 
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.faultKind).toBe('state_not_serializable');
     expect(fault.retry).toBeNull();
   });
 
   it('lets a fault it raised itself through, a fault being no answer', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         throw await ctx.fault({
           faultKind: 'executor_raised',
@@ -728,7 +753,7 @@ describe('when an executor cannot finish the work', () => {
         });
       },
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.faultKind).toBe('executor_raised');
     expect(fault.message).toBe('the payment gateway refused the charge');
   });
@@ -736,17 +761,17 @@ describe('when an executor cannot finish the work', () => {
 
 describe('an executor that does not come back', () => {
   it('is not waited for past the time one attempt allows', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, runTimeout: 20 },
       execute: () => new Promise(() => undefined),
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.faultKind).toBe('run_timeout');
     expect(fault.retry).not.toBeNull();
   });
 
   it('is reported for the whole execution where that bound passed too', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: {
         ...ARVO_DEFAULT_HANDLER_OPTIONS,
         runTimeout: 20,
@@ -754,46 +779,46 @@ describe('an executor that does not come back', () => {
       },
       execute: () => new Promise(() => undefined),
     });
-    const fresh = cloneArvoEvent(initEvent, {
+    const recentEvent = cloneArvoEvent(initEvent, {
       time: new Date(Date.now() - 50).toISOString(),
     });
-    const fault = await faulted(open({ event: fresh }, version));
+    const fault = await faultFrom(open({ event: recentEvent }, version));
     expect(fault.faultKind).toBe('execution_timeout');
     expect(fault.retry).toBeNull();
   });
 
   it('is not listened to where it fails after the clock expired', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, runTimeout: 20 },
       execute: () =>
-        new Promise((_, refuse) => {
-          setTimeout(() => refuse(new Error('far too late')), 60);
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('far too late')), 60);
         }),
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.faultKind).toBe('run_timeout');
-    await new Promise((settle) => setTimeout(settle, 80));
+    await new Promise((resolve) => setTimeout(resolve, 80));
   });
 
   it('is waited for as long as it takes where the version set no bound', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: {
         ...ARVO_DEFAULT_HANDLER_OPTIONS,
         runTimeout: null,
         executionTimeout: null,
       },
       execute: async (ctx) => {
-        await new Promise((settle) => setTimeout(settle, 30));
+        await new Promise((resolve) => setTimeout(resolve, 30));
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
       },
     });
-    expect((await opened({}, version)).events).toEqual([]);
+    expect((await openProduced({}, version)).events).toEqual([]);
   });
 });
 
 describe('what the clocks say when an executor returns', () => {
   it('is a fault where the execution passed its own bound while the attempt did not', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: {
         ...ARVO_DEFAULT_HANDLER_OPTIONS,
         runTimeout: 60,
@@ -801,25 +826,25 @@ describe('what the clocks say when an executor returns', () => {
       },
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
-        await new Promise((settle) => setTimeout(settle, 30));
+        await new Promise((resolve) => setTimeout(resolve, 30));
       },
     });
-    const partway = cloneArvoEvent(initEvent, {
+    const partwayEvent = cloneArvoEvent(initEvent, {
       time: new Date(Date.now() - 40).toISOString(),
     });
-    const fault = await faulted(open({ event: partway }, version));
+    const fault = await faultFrom(open({ event: partwayEvent }, version));
     expect(fault.faultKind).toBe('execution_timeout');
     expect(fault.retry).toBeNull();
   });
 
   it('is a fault where a blocking attempt outran its run timeout', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, runTimeout: 20 },
       execute: (ctx) => {
         // Blocking rather than awaiting, so the clock it would have fired
         // on never got the chance.
-        const until = Date.now() + 40;
-        while (Date.now() < until) {
+        const deadline = Date.now() + 40;
+        while (Date.now() < deadline) {
           /* holding the thread */
         }
         return ctx.build({
@@ -828,13 +853,13 @@ describe('what the clocks say when an executor returns', () => {
         });
       },
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.faultKind).toBe('run_timeout');
     expect(fault.retry).not.toBeNull();
   });
 
   it('is the execution clock where both expired, the broader verdict winning', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: {
         ...ARVO_DEFAULT_HANDLER_OPTIONS,
         runTimeout: 20,
@@ -842,43 +867,43 @@ describe('what the clocks say when an executor returns', () => {
       },
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
-        await new Promise((settle) => setTimeout(settle, 40));
+        await new Promise((resolve) => setTimeout(resolve, 40));
       },
     });
-    const fresh = cloneArvoEvent(initEvent, {
+    const recentEvent = cloneArvoEvent(initEvent, {
       time: new Date(Date.now() - 50).toISOString(),
     });
-    const fault = await faulted(open({ event: fresh }, version));
+    const fault = await faultFrom(open({ event: recentEvent }, version));
     expect(fault.faultKind).toBe('execution_timeout');
   });
 });
 
 describe('what one execution records as it goes', () => {
   /** A telemetry object whose span keeps what it was told. */
-  const watched = () => {
-    const built = telemetry();
+  const watchingTelemetry = () => {
+    const telemetryFixture = telemetry();
     return {
-      ...built,
-      events: vi.spyOn(built.span, 'addEvent'),
-      attributes: vi.spyOn(built.span, 'setAttributes'),
+      ...telemetryFixture,
+      events: vi.spyOn(telemetryFixture.span, 'addEvent'),
+      attributes: vi.spyOn(telemetryFixture.span, 'setAttributes'),
     };
   };
 
-  const stages = (watch: ReturnType<typeof watched>) =>
-    watch.events.mock.calls.map((call: unknown[]) => call[0]);
+  const stages = (telemetrySpy: ReturnType<typeof watchingTelemetry>) =>
+    telemetrySpy.events.mock.calls.map((call: unknown[]) => call[0]);
 
   it('names the execution before anything can refuse it', async () => {
-    const watch = watched();
-    await open({ telemetry: watch.telemetry });
-    expect(watch.attributes).toHaveBeenCalledWith(
+    const telemetrySpy = watchingTelemetry();
+    await open({ telemetry: telemetrySpy.telemetry });
+    expect(telemetrySpy.attributes).toHaveBeenCalledWith(
       expect.objectContaining({ 'arvo.execution.id': EXECUTION_ID }),
     );
   });
 
   it('marks every stage it passed through, in order', async () => {
-    const watch = watched();
-    await open({ telemetry: watch.telemetry });
-    expect(stages(watch)).toEqual([
+    const telemetrySpy = watchingTelemetry();
+    await open({ telemetry: telemetrySpy.telemetry });
+    expect(stages(telemetrySpy)).toEqual([
       'arvo.stage.record_resolved',
       'arvo.stage.entry_judged',
       'arvo.stage.dependencies_resolved',
@@ -890,51 +915,58 @@ describe('what one execution records as it goes', () => {
   });
 
   it('stops at the stage that refused it, so a reader sees how far it got', async () => {
-    const watch = watched();
-    const elsewhere = cloneArvoEvent(initEvent, { to: 'com.somewhere.else' });
-    await faulted(open({ event: elsewhere, telemetry: watch.telemetry }));
-    expect(stages(watch)).toEqual([
+    const telemetrySpy = watchingTelemetry();
+    const misaddressedEvent = cloneArvoEvent(initEvent, {
+      to: 'com.somewhere.else',
+    });
+    await faultFrom(
+      open({ event: misaddressedEvent, telemetry: telemetrySpy.telemetry }),
+    );
+    expect(stages(telemetrySpy)).toEqual([
       'arvo.stage.record_resolved',
       'arvo.stage.entry_judged',
     ]);
   });
 
   it('says it was discarded rather than leaving the span unjudged', async () => {
-    const watch = watched();
-    const first = await opened();
-    const answer = answerTo(first.events[0] as ArvoEvent);
-    const version = declared();
-    const once = await version.execute({
+    const telemetrySpy = watchingTelemetry();
+    const openedResponse = await openProduced();
+    const answer = answerTo(openedResponse.events[0] as ArvoEvent);
+    const version = declareVersion();
+    const followupResponse = await version.execute({
       entry: 'followup',
       event: answer,
-      state: first.state as JSONObject,
+      state: openedResponse.state as JSONObject,
       executionId: EXECUTION_ID,
       attempt: 0,
       dependencies: null,
       hooks: {},
+      middleware: null,
       telemetry: telemetry().telemetry,
     });
-    if (once.kind !== 'produced') throw new Error('expected it to produce');
+    if (followupResponse.kind !== 'produced')
+      throw new Error('expected it to produce');
 
     await version.execute({
       entry: 'followup',
       event: answer,
-      state: once.state,
+      state: followupResponse.state,
       executionId: EXECUTION_ID,
       attempt: 0,
       dependencies: null,
       hooks: {},
-      telemetry: watch.telemetry,
+      middleware: null,
+      telemetry: telemetrySpy.telemetry,
     });
-    expect(watch.attributes).toHaveBeenCalledWith(
+    expect(telemetrySpy.attributes).toHaveBeenCalledWith(
       expect.objectContaining({ 'arvo.outcome': 'discarded' }),
     );
   });
 
   it('says what it produced and where the execution came to rest', async () => {
-    const watch = watched();
-    await open({ telemetry: watch.telemetry });
-    expect(watch.attributes).toHaveBeenCalledWith(
+    const telemetrySpy = watchingTelemetry();
+    await open({ telemetry: telemetrySpy.telemetry });
+    expect(telemetrySpy.attributes).toHaveBeenCalledWith(
       expect.objectContaining({
         'arvo.outcome': 'produced',
         'arvo.lifecycle': 'waiting',
@@ -944,13 +976,13 @@ describe('what one execution records as it goes', () => {
   });
 
   it('marks an executor that did not come back as having outrun its time', async () => {
-    const watch = watched();
-    const version = declared({
+    const telemetrySpy = watchingTelemetry();
+    const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, runTimeout: 20 },
       execute: () => new Promise(() => undefined),
     });
-    await faulted(open({ telemetry: watch.telemetry }, version));
-    expect(stages(watch)).toContain('arvo.stage.executor_outran');
+    await faultFrom(open({ telemetry: telemetrySpy.telemetry }, version));
+    expect(stages(telemetrySpy)).toContain('arvo.stage.executor_outran');
   });
 });
 
@@ -958,43 +990,43 @@ describe('what a fault tells whoever has to fix it', () => {
   const VERSION = 'com_order_create@1.0.0';
 
   it('names the version whose executor returned something that is not an event', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         return { type: 'com_order_created' } as never;
       },
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.message).toContain(VERSION);
     expect(fault.message).toContain('ctx.build()');
   });
 
   it('says what stopped an execution from opening at all', async () => {
-    const fault = await faulted(open({ executionId: '' }));
+    const fault = await faultFrom(open({ executionId: '' }));
     expect(fault.message).toContain(VERSION);
     expect(fault.message).toContain('executionId');
   });
 
   it('says a stored state disagrees with the event that opened it, and lists the fields', async () => {
-    const first = await opened();
-    const fault = await faulted(
-      resume({ state: { ...first.state, depth: 4 } }),
+    const openedResponse = await openProduced();
+    const fault = await faultFrom(
+      resume({ state: { ...openedResponse.state, depth: 4 } }),
     );
     expect(fault.message).toContain('disagrees with the event that opened it');
     expect(fault.violations[0]).toContain('depth');
   });
 
   it('blames a state schema that no longer fits what is stored', async () => {
-    const first = await opened();
-    const fault = await faulted(
-      resume({ state: { ...first.state, data: { orderId: 42 } } }),
+    const openedResponse = await openProduced();
+    const fault = await faultFrom(
+      resume({ state: { ...openedResponse.state, data: { orderId: 42 } } }),
     );
     expect(fault.message).toContain(VERSION);
     expect(fault.message).toContain('state schema');
   });
 
   it('says the dependencies would not resolve, and why, and that it may pass', async () => {
-    const fault = await faulted(
+    const fault = await faultFrom(
       open({
         dependencies: openedPerExecution(() => {
           throw new Error('the pool is exhausted');
@@ -1007,13 +1039,13 @@ describe('what a fault tells whoever has to fix it', () => {
   });
 
   it('quotes the reason a cancelled execution gave, and says what was missing', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         ctx.cancel('the customer withdrew the order');
       },
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.message).toContain(
       'ctx.cancel("the customer withdrew the order")',
     );
@@ -1021,21 +1053,21 @@ describe('what a fault tells whoever has to fix it', () => {
   });
 
   it('names the option that bounded an executor that never came back', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, runTimeout: 20 },
       execute: () => new Promise(() => undefined),
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.message).toContain('runTimeout');
     expect(fault.message).toContain('may still be running');
   });
 
   it('says how long a blocking executor took, and that blocking cannot be stopped', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, runTimeout: 20 },
       execute: (ctx) => {
-        const until = Date.now() + 40;
-        while (Date.now() < until) {
+        const deadline = Date.now() + 40;
+        while (Date.now() < deadline) {
           /* holding the thread */
         }
         return ctx.build({
@@ -1044,31 +1076,31 @@ describe('what a fault tells whoever has to fix it', () => {
         });
       },
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.message).toContain('runTimeout');
     expect(fault.message).toContain('blocks rather than awaits');
   });
 
   it('says how long an execution has lived against the bound it passed', async () => {
-    const version = declared({
+    const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, executionTimeout: 1 },
     });
-    const old = cloneArvoEvent(initEvent, {
+    const staleEvent = cloneArvoEvent(initEvent, {
       time: new Date(Date.now() - 60_000).toISOString(),
     });
-    const fault = await faulted(open({ event: old }, version));
+    const fault = await faultFrom(open({ event: staleEvent }, version));
     expect(fault.message).toContain('executionTimeout');
     expect(fault.message).toContain(VERSION);
   });
 
   it('repeats nothing the fault already carries as a field', async () => {
-    const version = declared({
+    const version = declareVersion({
       execute: async (ctx) => {
         await ctx.setState({ data: { orderId: 'o-1', attempts: 1 } });
         return { type: 'com_order_created' } as never;
       },
     });
-    const fault = await faulted(open({}, version));
+    const fault = await faultFrom(open({}, version));
     expect(fault.subject).toBe(initEvent.subject);
     expect(fault.executionId).toBe(EXECUTION_ID);
     expect(fault.message).not.toContain(fault.subject);

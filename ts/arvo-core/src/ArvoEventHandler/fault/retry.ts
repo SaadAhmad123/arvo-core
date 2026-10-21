@@ -23,10 +23,10 @@ export const ARVO_RETRY_SAFE_FAULT_KINDS: ReadonlySet<ArvoFaultKind> =
 /** Whether a kind is one a reexecution could fix, before exhaustion. */
 export const isRetrySafeFaultKind = (
   faultKind: ArvoFaultKind,
-  executorChoice: boolean,
+  retryableByExecutor: boolean,
 ): boolean =>
   faultKind === 'executor_raised'
-    ? executorChoice
+    ? retryableByExecutor
     : ARVO_RETRY_SAFE_FAULT_KINDS.has(faultKind);
 
 /**
@@ -46,9 +46,9 @@ export const resolveRetryDelayMs = (
 ): number => {
   if (typeof retryDelay === 'number') return retryDelay;
   try {
-    const delay = retryDelay(event, state, attempt, maxRetryAttempts);
-    return Number.isInteger(delay) && delay >= 0
-      ? delay
+    const delayMs = retryDelay(event, state, attempt, maxRetryAttempts);
+    return Number.isInteger(delayMs) && delayMs >= 0
+      ? delayMs
       : ARVO_RETRY_DELAY_FALLBACK_MS;
   } catch {
     return ARVO_RETRY_DELAY_FALLBACK_MS;

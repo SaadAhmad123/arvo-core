@@ -51,10 +51,10 @@ describe('fromNeverthrowAsync', () => {
   });
 
   it('returns a genuine Promise, not merely a PromiseLike', () => {
-    const pending = fromNeverthrowAsync(okAsync(1));
-    expect(pending).toBeInstanceOf(Promise);
-    expect(typeof pending.catch).toBe('function');
-    expect(typeof pending.finally).toBe('function');
-    return pending;
+    const resultPromise = fromNeverthrowAsync(okAsync(1));
+    expect(resultPromise).toBeInstanceOf(Promise);
+    expect(typeof resultPromise.catch).toBe('function');
+    expect(typeof resultPromise.finally).toBe('function');
+    return resultPromise;
   });
 });

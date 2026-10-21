@@ -6,50 +6,52 @@ import type { ArvoEventHandlerOptions } from '../types/options.js';
 const DOMAIN_SOURCES: readonly unknown[] = Object.values(ArvoDomain);
 
 /** Whether a value is a whole count no smaller than the lowest allowed. */
-const isWholeCountAtLeast = (value: unknown, lowest: number): boolean =>
-  typeof value === 'number' && Number.isInteger(value) && value >= lowest;
+const isWholeCountAtLeast = (candidate: unknown, minimum: number): boolean =>
+  typeof candidate === 'number' &&
+  Number.isInteger(candidate) &&
+  candidate >= minimum;
 
 /** What each option accepts, and how to say so when it is not met. */
 const OPTION_RULES: {
   [TKey in keyof ArvoEventHandlerOptions]: {
-    accepts: (value: unknown) => boolean;
+    accepts: (option: unknown) => boolean;
     refusalMessage: string;
   };
 } = {
   maxDepth: {
-    accepts: (value) => isWholeCountAtLeast(value, 0),
+    accepts: (option) => isWholeCountAtLeast(option, 0),
     refusalMessage: 'must be a whole number of levels, zero or more',
   },
   maxRetryAttempts: {
-    accepts: (value) => isWholeCountAtLeast(value, 0),
+    accepts: (option) => isWholeCountAtLeast(option, 0),
     refusalMessage: 'must be a whole number of attempts, zero or more',
   },
   retryDelay: {
-    accepts: (value) =>
-      typeof value === 'function' || isWholeCountAtLeast(value, 0),
+    accepts: (option) =>
+      typeof option === 'function' || isWholeCountAtLeast(option, 0),
     refusalMessage:
       'must be a whole number of milliseconds, zero or more, or a function working one out per attempt',
   },
   runTimeout: {
-    accepts: (value) => value === null || isWholeCountAtLeast(value, 1),
+    accepts: (option) => option === null || isWholeCountAtLeast(option, 1),
     refusalMessage:
       'must be a whole number of milliseconds above zero, or null for no bound',
   },
   executionTimeout: {
-    accepts: (value) => value === null || isWholeCountAtLeast(value, 1),
+    accepts: (option) => option === null || isWholeCountAtLeast(option, 1),
     refusalMessage:
       'must be a whole number of milliseconds above zero, or null for no bound',
   },
   collect: {
-    accepts: (value) => value === 'all' || value === 'each',
+    accepts: (option) => option === 'all' || option === 'each',
     refusalMessage:
       "must be 'all' to enter once every answer is in, or 'each' to enter on every one",
   },
   handlerErrorDomain: {
-    accepts: (value) =>
-      value === null ||
-      DOMAIN_SOURCES.includes(value) ||
-      (typeof value === 'string' && value.trim() !== ''),
+    accepts: (option) =>
+      option === null ||
+      DOMAIN_SOURCES.includes(option) ||
+      (typeof option === 'string' && option.trim() !== ''),
     refusalMessage:
       'must be a domain, one of ArvoDomain’s sources to read one from, or null for no domain',
   },
@@ -78,27 +80,27 @@ const OPTION_RULES: {
  * ```
  */
 export const checkOptions = (
-  declared: Partial<ArvoEventHandlerOptions> | null,
+  declaredOptions: Partial<ArvoEventHandlerOptions> | null,
   declaredAt: string,
 ): ErrorIssue[] => {
-  if (declared === null) return [];
+  if (declaredOptions === null) return [];
 
   const issues: ErrorIssue[] = [];
-  for (const key of Object.keys(
+  for (const optionName of Object.keys(
     OPTION_RULES,
   ) as (keyof ArvoEventHandlerOptions)[]) {
     // an option written undefined is an option not written, which is how
     // resolution reads it too
-    const written = declared[key];
-    if (written === undefined) continue;
+    const option = declaredOptions[optionName];
+    if (option === undefined) continue;
 
-    const rule = OPTION_RULES[key];
-    if (rule.accepts(written)) continue;
+    const rule = OPTION_RULES[optionName];
+    if (rule.accepts(option)) continue;
     issues.push(
       new ErrorIssue({
-        path: `${declaredAt}.${key}`,
+        path: `${declaredAt}.${optionName}`,
         message: rule.refusalMessage,
-        received: written,
+        received: option,
       }),
     );
   }

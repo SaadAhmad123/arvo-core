@@ -138,12 +138,12 @@ export class VersionedArvoContract<
     expectedType: E,
   ): NarrowedAssertedArvoEvent<V, E, ScopeOf<E, T, C>, PayloadFor<E, T, C>>;
   assert(event: ArvoEvent, expectedType?: string): AssertedArvoEvent<V> {
-    const result =
+    const attempt =
       expectedType === undefined
         ? this.tryAssert(event)
         : this.tryAssert(event, expectedType as AssertableType<T, C>);
-    if (result.ok) return result.value as AssertedArvoEvent<V>;
-    throw result.error;
+    if (attempt.ok) return attempt.value as AssertedArvoEvent<V>;
+    throw attempt.error;
   }
 
   constructor(param: VersionedArvoContractParam<T, V, C>) {

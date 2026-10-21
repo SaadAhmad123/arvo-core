@@ -9,8 +9,8 @@ import type { CloudEvent, ForeignCloudEventFallback } from './types.js';
  * `convert`/`revert` pair is itself lossless.
  */
 export interface ICloudEventConverter {
-  convert(data: CloudEvent): Promise<CloudEvent>;
-  revert(data: CloudEvent): Promise<CloudEvent>;
+  convert(cloudEvent: CloudEvent): Promise<CloudEvent>;
+  revert(cloudEvent: CloudEvent): Promise<CloudEvent>;
 }
 
 /**
@@ -22,9 +22,9 @@ export interface ICloudEventConverter {
  * real, checked part of its signature rather than an unchecked cast.
  */
 export interface IArvoEventTransformer {
-  convert(data: ArvoEvent): Promise<CloudEvent>;
+  convert(event: ArvoEvent): Promise<CloudEvent>;
   revert(
-    data: CloudEvent,
+    cloudEvent: CloudEvent,
     foreignFallback?: ForeignCloudEventFallback,
   ): Promise<ArvoEvent>;
 }

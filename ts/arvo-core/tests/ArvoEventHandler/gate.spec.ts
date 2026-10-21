@@ -13,12 +13,12 @@ import {
   paymentVersion,
 } from './fixtures.js';
 
-const opening = {
+const openingEntry = {
   entry: 'init',
   version: '1.0.0',
   contract: orderVersion,
 } as const;
-const answering = {
+const answeringEntry = {
   entry: 'followup',
   version: '1.0.0',
   contract: paymentVersion,
@@ -27,11 +27,11 @@ const answering = {
 describe('an event stating what it is', () => {
   it('accepts one opening an execution that states so', () => {
     const event = cloneArvoEvent(initEvent, { category: 'io.arvo.init' });
-    expect(refuseMiscategorised(opening, event)).toBeNull();
+    expect(refuseMiscategorised(openingEntry, event)).toBeNull();
   });
 
   it('accepts one answering an execution that states so', () => {
-    expect(refuseMiscategorised(answering, chargedEvent)).toBeNull();
+    expect(refuseMiscategorised(answeringEntry, chargedEvent)).toBeNull();
   });
 
   it('refuses one opening an execution that states it completes one', () => {
@@ -39,14 +39,14 @@ describe('an event stating what it is', () => {
       category: 'io.arvo.complete',
       initid: 'a-request-somewhere-else',
     });
-    expect(refuseMiscategorised(opening, event)?.faultKind).toBe(
+    expect(refuseMiscategorised(openingEntry, event)?.faultKind).toBe(
       'category_mismatch',
     );
   });
 
   it('refuses one answering an execution that states it opens one', () => {
     const event = cloneArvoEvent(chargedEvent, { category: 'io.arvo.init' });
-    expect(refuseMiscategorised(answering, event)?.faultKind).toBe(
+    expect(refuseMiscategorised(answeringEntry, event)?.faultKind).toBe(
       'category_mismatch',
     );
   });
@@ -55,74 +55,85 @@ describe('an event stating what it is', () => {
     // a factory builds an opening event without one, there being nothing
     // for it to corroborate
     expect(initEvent.category).toBeNull();
-    expect(refuseMiscategorised(opening, initEvent)).toBeNull();
+    expect(refuseMiscategorised(openingEntry, initEvent)).toBeNull();
   });
 
   it('does not consult one stating something it has no meaning for', () => {
     const event = cloneArvoEvent(initEvent, { category: 'something.else' });
-    expect(refuseMiscategorised(opening, event)).toBeNull();
+    expect(refuseMiscategorised(openingEntry, event)).toBeNull();
   });
 
   it('says which it should have been, so the disagreement is readable', () => {
     const event = cloneArvoEvent(chargedEvent, { category: 'io.arvo.init' });
-    expect(refuseMiscategorised(answering, event)?.violations[0]).toContain(
-      'io.arvo.complete',
-    );
+    expect(
+      refuseMiscategorised(answeringEntry, event)?.violations[0],
+    ).toContain('io.arvo.complete');
   });
 });
 
 describe('what the store held against what the event claims', () => {
-  const row = {} as JSONObject;
+  const storedRow = {} as JSONObject;
 
   it('accepts an opening event where nothing is stored', () => {
-    expect(refuseMismatchedPresence(opening, 'an-execution', null)).toBeNull();
+    expect(
+      refuseMismatchedPresence(openingEntry, 'an-execution', null),
+    ).toBeNull();
   });
 
   it('refuses an opening event where something is', () => {
     expect(
-      refuseMismatchedPresence(opening, 'an-execution', row)?.faultKind,
+      refuseMismatchedPresence(openingEntry, 'an-execution', storedRow)
+        ?.faultKind,
     ).toBe('record_unexpected');
   });
 
   it('accepts an answering event where something is stored', () => {
-    expect(refuseMismatchedPresence(answering, 'an-execution', row)).toBeNull();
+    expect(
+      refuseMismatchedPresence(answeringEntry, 'an-execution', storedRow),
+    ).toBeNull();
   });
 
   it('refuses an answering event where nothing is', () => {
     expect(
-      refuseMismatchedPresence(answering, 'an-execution', null)?.faultKind,
+      refuseMismatchedPresence(answeringEntry, 'an-execution', null)?.faultKind,
     ).toBe('record_expected');
   });
 
   it('names the execution it looked under', () => {
     expect(
-      refuseMismatchedPresence(answering, 'an-execution', null)?.message,
+      refuseMismatchedPresence(answeringEntry, 'an-execution', null)?.message,
     ).toContain('an-execution');
   });
 });
 
 describe('an execution at a version the handler still runs', () => {
-  const declared = new Set(['1.0.0', '1.1.0']);
+  const declaredVersions = new Set(['1.0.0', '1.1.0']);
 
   it('is accepted', () => {
-    expect(refuseWithdrawnVersion(declared, '1.0.0', 'com_order')).toBeNull();
+    expect(
+      refuseWithdrawnVersion(declaredVersions, '1.0.0', 'com_order'),
+    ).toBeNull();
   });
 
   it('is refused where the version has gone', () => {
     expect(
-      refuseWithdrawnVersion(declared, '0.9.0', 'com_order')?.faultKind,
+      refuseWithdrawnVersion(declaredVersions, '0.9.0', 'com_order')?.faultKind,
     ).toBe('version_not_declared');
   });
 
   it('says which versions are left, so the gap is visible', () => {
-    const refusal = refuseWithdrawnVersion(declared, '0.9.0', 'com_order');
+    const refusal = refuseWithdrawnVersion(
+      declaredVersions,
+      '0.9.0',
+      'com_order',
+    );
     expect(refusal?.violations[0]).toContain('1.0.0');
     expect(refusal?.violations[0]).toContain('1.1.0');
   });
 
   it('names the contract and the version it was stranded at', () => {
     expect(
-      refuseWithdrawnVersion(declared, '0.9.0', 'com_order')?.message,
+      refuseWithdrawnVersion(declaredVersions, '0.9.0', 'com_order')?.message,
     ).toContain('com_order@0.9.0');
   });
 });

@@ -39,9 +39,10 @@ export type DataschemaParts = { uri: string; version: string };
 export const readDataschema = (
   dataschema: string,
 ): Result<DataschemaParts, ErrorIssue> => {
-  const at = dataschema.lastIndexOf('/');
-  const uri = at === -1 ? '' : dataschema.slice(0, at);
-  const version = at === -1 ? '' : dataschema.slice(at + 1);
+  const separatorIndex = dataschema.lastIndexOf('/');
+  const uri = separatorIndex === -1 ? '' : dataschema.slice(0, separatorIndex);
+  const version =
+    separatorIndex === -1 ? '' : dataschema.slice(separatorIndex + 1);
 
   if (uri === '' || version === '') {
     return fromNeverthrow(
@@ -62,13 +63,13 @@ export const readDataschema = (
 
 /** Reports an event addressed to a contract other than the one asked. */
 export const foreignContractIssue = (
-  found: string,
-  expected: string,
+  receivedUri: string,
+  expectedUri: string,
 ): ErrorIssue =>
   new ErrorIssue({
     path: 'event.dataschema.uri',
-    message: `must be this contract's identifier, ${expected}`,
-    received: found,
+    message: `must be this contract's identifier, ${expectedUri}`,
+    received: receivedUri,
     blockingReason: BLOCKED_BY.uri,
   });
 
@@ -80,21 +81,23 @@ export const foreignContractIssue = (
  * the list the caller should be looking at.
  */
 export const unknownVersionIssue = (
-  found: string,
-  declared: readonly string[],
+  receivedVersion: string,
+  declaredVersions: readonly string[],
 ): ErrorIssue => {
-  const wanted =
-    declared.length === 1 ? declared[0] : `one of ${declared.join(', ')}`;
+  const expectation =
+    declaredVersions.length === 1
+      ? declaredVersions[0]
+      : `one of ${declaredVersions.join(', ')}`;
   return new ErrorIssue({
     path: 'event.dataschema.version',
-    message: `must be ${wanted}`,
-    received: found,
+    message: `must be ${expectation}`,
+    received: receivedVersion,
     blockingReason: BLOCKED_BY.version,
   });
 };
 
 /** Every type one version may legitimately carry, in reporting order. */
-const declaredTypes = (
+const listDeclaredTypes = (
   type: string,
   outputs: Record<string, unknown>,
   handlerErrorType: string,
@@ -135,28 +138,28 @@ const schemaForScope = (
 
 /** Reports an expected type this version does not declare. */
 const undeclaredExpectationIssue = (
-  expected: string,
-  declared: readonly string[],
+  expectedType: string,
+  declaredTypes: readonly string[],
 ): ErrorIssue =>
   new ErrorIssue({
     path: 'expectedType',
-    message: `must be a type this version declares: ${declared.join(', ')}`,
-    received: expected,
+    message: `must be a type this version declares: ${declaredTypes.join(', ')}`,
+    received: expectedType,
     blockingReason: BLOCKED_BY.expectedType,
   });
 
 /** Reports a type that is not the shape being checked. */
 const typeDisagreementIssue = (
-  found: string,
-  wanted: readonly string[],
+  receivedType: string,
+  expectedTypes: readonly string[],
 ): ErrorIssue =>
   new ErrorIssue({
     path: 'event.type',
     message:
-      wanted.length === 1
-        ? `must be ${wanted[0]}, the type expected`
-        : `must be one of the types this version declares: ${wanted.join(', ')}`,
-    received: found,
+      expectedTypes.length === 1
+        ? `must be ${expectedTypes[0]}, the type expected`
+        : `must be one of the types this version declares: ${expectedTypes.join(', ')}`,
+    received: receivedType,
     blockingReason: BLOCKED_BY.type,
   });
 
@@ -169,13 +172,16 @@ const typeDisagreementIssue = (
  * else in this package. A path reaching nothing yields `undefined`, which is
  * how an absent value is already rendered: without a `received` clause.
  */
-const valueAt = (payload: unknown, path: readonly PropertyKey[]): unknown => {
-  let current: unknown = payload;
-  for (const key of path) {
-    if (current === null || typeof current !== 'object') return undefined;
-    current = (current as Record<PropertyKey, unknown>)[key];
+const valueAtPath = (
+  payload: unknown,
+  path: readonly PropertyKey[],
+): unknown => {
+  let node: unknown = payload;
+  for (const segment of path) {
+    if (node === null || typeof node !== 'object') return undefined;
+    node = (node as Record<PropertyKey, unknown>)[segment];
   }
-  return current;
+  return node;
 };
 
 /**
@@ -192,15 +198,15 @@ export const checkPayload = (
   schema: z.$ZodType,
   data: unknown,
 ): ErrorIssue[] => {
-  const result = z.safeParse(schema, data);
-  if (result.success) return [];
+  const validation = z.safeParse(schema, data);
+  if (validation.success) return [];
 
-  return result.error.issues.map(
+  return validation.error.issues.map(
     (issue) =>
       new ErrorIssue({
         path: ['event', 'data', ...issue.path].join('.'),
         message: issue.message,
-        received: valueAt(data, issue.path),
+        received: valueAtPath(data, issue.path),
       }),
   );
 };
@@ -214,10 +220,10 @@ export const checkPayload = (
 const checkExpectation = (
   expectedType: string | undefined,
   expectedScope: ArvoContractEventAssertionScope | null,
-  declared: readonly string[],
+  declaredTypes: readonly string[],
 ): ErrorIssue | null =>
   expectedType !== undefined && expectedScope === null
-    ? undeclaredExpectationIssue(expectedType, declared)
+    ? undeclaredExpectationIssue(expectedType, declaredTypes)
     : null;
 
 /**
@@ -233,13 +239,13 @@ const checkIdentity = (
   uri: string,
   version: string,
 ): ErrorIssue | null => {
-  const parts = readDataschema(dataschema);
-  if (!parts.ok) return parts.error;
-  if (parts.value.uri !== uri) {
-    return foreignContractIssue(parts.value.uri, uri);
+  const dataschemaParts = readDataschema(dataschema);
+  if (!dataschemaParts.ok) return dataschemaParts.error;
+  if (dataschemaParts.value.uri !== uri) {
+    return foreignContractIssue(dataschemaParts.value.uri, uri);
   }
-  if (parts.value.version !== version) {
-    return unknownVersionIssue(parts.value.version, [version]);
+  if (dataschemaParts.value.version !== version) {
+    return unknownVersionIssue(dataschemaParts.value.version, [version]);
   }
   return null;
 };
@@ -254,17 +260,17 @@ const checkIdentity = (
  */
 const resolveScope = (
   eventType: string,
-  wanted: string,
+  wantedType: string,
   scope: ArvoContractEventAssertionScope | null,
   expectedType: string | undefined,
-  declared: readonly string[],
+  declaredTypes: readonly string[],
 ): Result<ArvoContractEventAssertionScope, ErrorIssue> => {
-  if (scope === null || eventType !== wanted) {
+  if (scope === null || eventType !== wantedType) {
     return fromNeverthrow(
       err(
         typeDisagreementIssue(
           eventType,
-          expectedType === undefined ? declared : [expectedType],
+          expectedType === undefined ? declaredTypes : [expectedType],
         ),
       ),
     );
@@ -315,22 +321,22 @@ export const checkAgainstVersion = (param: {
   const { event, type, uri, version, input, outputs, error, expectedType } =
     param;
 
-  const declared = declaredTypes(type, outputs, error.type);
+  const declaredTypes = listDeclaredTypes(type, outputs, error.type);
   /** What is being checked against: the expectation, else the event itself. */
-  const wanted = expectedType ?? event.type;
-  const wantedScope = scopeOfType(wanted, type, outputs, error.type);
+  const wantedType = expectedType ?? event.type;
+  const wantedScope = scopeOfType(wantedType, type, outputs, error.type);
 
-  const blocking =
-    checkExpectation(expectedType, wantedScope, declared) ??
+  const blockingIssue =
+    checkExpectation(expectedType, wantedScope, declaredTypes) ??
     checkIdentity(event.dataschema, uri, version);
-  if (blocking !== null) return fromNeverthrow(err([blocking]));
+  if (blockingIssue !== null) return fromNeverthrow(err([blockingIssue]));
 
   const scope = resolveScope(
     event.type,
-    wanted,
+    wantedType,
     wantedScope,
     expectedType,
-    declared,
+    declaredTypes,
   );
   if (!scope.ok) return fromNeverthrow(err([scope.error]));
 
@@ -349,9 +355,11 @@ export const checkAgainstVersion = (param: {
  */
 export const mapOk = <A, B, E>(
   outcome: Result<A, E>,
-  f: (value: A) => B,
+  transform: (okValue: A) => B,
 ): Result<B, E> =>
-  fromNeverthrow(outcome.ok ? ok(f(outcome.value)) : err(outcome.error));
+  fromNeverthrow(
+    outcome.ok ? ok(transform(outcome.value)) : err(outcome.error),
+  );
 
 /**
  * A failed assertion, for a caller that has issues rather than an outcome.

@@ -10,7 +10,8 @@ import {
  * The schema is a core schema, which carries no methods of its own, so it is
  * parsed the way every other contract schema in this package is.
  */
-const parse = (data: unknown) => z.parse(HANDLER_ERROR_SCHEMA, data);
+const parseHandlerError = (data: unknown) =>
+  z.parse(HANDLER_ERROR_SCHEMA, data);
 
 describe('handlerErrorType', () => {
   it('wraps a multi-segment type', () => {
@@ -32,26 +33,26 @@ describe('handlerErrorType', () => {
   it('produces a result that is itself a valid contract identifier', () => {
     // Wrapping can never introduce a leading, trailing, or doubled
     // underscore, because a valid type never starts or ends with one.
-    const grammar = /^[a-z0-9]+(_[a-z0-9]+)*$/;
+    const typeGrammar = /^[a-z0-9]+(_[a-z0-9]+)*$/;
     for (const type of ['payment', 'com_payment_process', 'v2_order_create']) {
-      expect(handlerErrorType(type)).toMatch(grammar);
+      expect(handlerErrorType(type)).toMatch(typeGrammar);
     }
   });
 });
 
 describe('HANDLER_ERROR_SCHEMA', () => {
   it('accepts a fully populated error', () => {
-    const parsed = parse({
+    const parsedError = parseHandlerError({
       error_name: 'TypeError',
       error_message: 'boom',
       error_stack: 'at foo()',
     });
-    expect(parsed.error_name).toBe('TypeError');
+    expect(parsedError.error_name).toBe('TypeError');
   });
 
   it('accepts a null stack', () => {
     expect(
-      parse({
+      parseHandlerError({
         error_name: 'Error',
         error_message: 'boom',
         error_stack: null,
@@ -61,7 +62,7 @@ describe('HANDLER_ERROR_SCHEMA', () => {
 
   it('rejects a missing stack, which is nullable rather than optional', () => {
     expect(() =>
-      parse({
+      parseHandlerError({
         error_name: 'Error',
         error_message: 'boom',
       }),
@@ -70,14 +71,14 @@ describe('HANDLER_ERROR_SCHEMA', () => {
 
   it('rejects a non-string name or message', () => {
     expect(() =>
-      parse({
+      parseHandlerError({
         error_name: 42,
         error_message: 'boom',
         error_stack: null,
       }),
     ).toThrow();
     expect(() =>
-      parse({
+      parseHandlerError({
         error_name: 'Error',
         error_message: null,
         error_stack: null,
@@ -94,10 +95,10 @@ describe('handlerErrorContract', () => {
   });
 
   it('shares one schema instance across contracts', () => {
-    const a = handlerErrorContract('com_order_create');
-    const b = handlerErrorContract('com_payment_process');
-    expect(a.schema).toBe(HANDLER_ERROR_SCHEMA);
-    expect(a.schema).toBe(b.schema);
+    const orderErrorContract = handlerErrorContract('com_order_create');
+    const paymentErrorContract = handlerErrorContract('com_payment_process');
+    expect(orderErrorContract.schema).toBe(HANDLER_ERROR_SCHEMA);
+    expect(orderErrorContract.schema).toBe(paymentErrorContract.schema);
   });
 
   it('is frozen', () => {

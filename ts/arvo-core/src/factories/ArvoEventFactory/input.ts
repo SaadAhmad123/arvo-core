@@ -33,8 +33,12 @@ export const buildInput = <V extends VersionedArvoContract>(
   ArvoEvent<V['type'], z.output<V['input']>>,
   ArvoEventValidationError
 > => {
-  const checked = checkPayload<V['input']>(contract.input, param.data, 'input');
-  if (!checked.ok) return fromNeverthrow(err(checked.error));
+  const payloadCheck = checkPayload<V['input']>(
+    contract.input,
+    param.data,
+    'input',
+  );
+  if (!payloadCheck.ok) return fromNeverthrow(err(payloadCheck.error));
   const { data: _data, domain, ...fields } = param;
   return tryCreateArvoEvent<V['type'], z.output<V['input']>>({
     ...fields,
@@ -42,6 +46,6 @@ export const buildInput = <V extends VersionedArvoContract>(
     type: contract.type,
     dataschema: contract.dataschema,
     domain: domainFor(contract, domain, options),
-    data: checked.value,
+    data: payloadCheck.value,
   });
 };

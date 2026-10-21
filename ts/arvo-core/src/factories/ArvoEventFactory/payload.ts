@@ -17,20 +17,20 @@ import { ErrorIssue } from '../../utils/error-issue.js';
 export const checkPayload = <S extends z.$ZodObject>(
   schema: S,
   data: unknown,
-  what: string,
+  schemaLabel: string,
 ): Result<z.output<S>, ArvoEventValidationError> => {
-  const result = z.safeParse(schema, data);
+  const validation = z.safeParse(schema, data);
 
-  if (!result.success) {
+  if (!validation.success) {
     return fromNeverthrow(
       err(
         new ArvoEventValidationError(
-          result.error.issues.map(
+          validation.error.issues.map(
             (issue) =>
               new ErrorIssue({
                 path: ['data', ...issue.path].join('.'),
-                message: `${issue.message} (against the contract's ${what})`,
-                received: valueAt(data, issue.path),
+                message: `${issue.message} (against the contract's ${schemaLabel})`,
+                received: valueAtPath(data, issue.path),
               }),
           ),
         ),
@@ -38,15 +38,18 @@ export const checkPayload = <S extends z.$ZodObject>(
     );
   }
 
-  return fromNeverthrow(ok(result.data));
+  return fromNeverthrow(ok(validation.data));
 };
 
 /** The value at a schema issue's path, the schema not reporting one itself. */
-const valueAt = (payload: unknown, path: readonly PropertyKey[]): unknown => {
-  let current: unknown = payload;
-  for (const key of path) {
-    if (current === null || typeof current !== 'object') return undefined;
-    current = (current as Record<PropertyKey, unknown>)[key];
+const valueAtPath = (
+  payload: unknown,
+  path: readonly PropertyKey[],
+): unknown => {
+  let node: unknown = payload;
+  for (const segment of path) {
+    if (node === null || typeof node !== 'object') return undefined;
+    node = (node as Record<PropertyKey, unknown>)[segment];
   }
-  return current;
+  return node;
 };

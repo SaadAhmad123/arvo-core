@@ -14,9 +14,14 @@ const SPAN_ANSWERS = [
 const METER_ANSWERS = ['createCounter', 'createHistogram'] as const;
 
 /** Whether this value answers to each of those by name. */
-const answersTo = (held: unknown, named: readonly string[]): string[] =>
-  named.filter(
-    (name) => typeof (held as Record<string, unknown>)?.[name] !== 'function',
+const missingMethods = (
+  candidate: unknown,
+  methodNames: readonly string[],
+): string[] =>
+  methodNames.filter(
+    (methodName) =>
+      typeof (candidate as Record<string, unknown>)?.[methodName] !==
+      'function',
   );
 
 /**
@@ -40,7 +45,7 @@ export const checkTelemetry = (
 ): ErrorIssue[] => {
   const issues: ErrorIssue[] = [];
 
-  const spanMissing = answersTo(param.span, SPAN_ANSWERS);
+  const spanMissing = missingMethods(param.span, SPAN_ANSWERS);
   if (param.span === null || param.span === undefined) {
     issues.push(
       new ErrorIssue({
@@ -60,7 +65,7 @@ export const checkTelemetry = (
     );
   }
 
-  const meterMissing = answersTo(param.meter, METER_ANSWERS);
+  const meterMissing = missingMethods(param.meter, METER_ANSWERS);
   if (param.meter !== null && meterMissing.length > 0) {
     issues.push(
       new ErrorIssue({

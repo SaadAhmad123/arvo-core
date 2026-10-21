@@ -15,19 +15,19 @@ import { ThreadedBroker, type ThreadedBrokerOptions } from './worker/broker.js';
  * of the exercise rather than a side effect of it.
  */
 
-let running: ThreadedBroker | null = null;
+let runningBroker: ThreadedBroker | null = null;
 
 afterEach(async () => {
-  await running?.stop();
-  running = null;
+  await runningBroker?.stop();
+  runningBroker = null;
 });
 
-const broking = async (
-  howMany: number,
+const startBroker = async (
+  threadCount: number,
   options: ThreadedBrokerOptions = {},
 ) => {
-  running = await new ThreadedBroker(howMany, options).start();
-  return running;
+  runningBroker = await new ThreadedBroker(threadCount, options).start();
+  return runningBroker;
 };
 
 /** An order, written out the way one arrives. */
@@ -45,56 +45,82 @@ const anOrder = async (subject: string, version: '1.0.0' | '2.0.0') => {
 };
 
 /** What reached the caller, as a workflow concluding looks from outside. */
-const answers = (broker: ThreadedBroker) =>
-  broker.transcript.published.filter((one) => one.to === 'com.web.checkout');
+const answersToCaller = (broker: ThreadedBroker) =>
+  broker.transcript.published.filter(
+    (event) => event.to === 'com.web.checkout',
+  );
 
-describe('four threads, one store, and the handler deciding everything', () => {
-  it('carries forty workflows through, each answered once', async () => {
-    const broker = await broking(4);
-    for (let at = 0; at < 40; at += 1) {
-      await broker.publish(await anOrder(`order-${at}`, '1.0.0'));
+describe('four threads with layers around the order handler', () => {
+  it('keeps what each execution learns with that execution, under real concurrency', async () => {
+    const broker = await startBroker(4, { layered: true });
+    for (let orderIndex = 0; orderIndex < 40; orderIndex += 1) {
+      await broker.publish(await anOrder(`order-${orderIndex}`, '1.0.0'));
     }
     await broker.settle();
 
-    expect(answers(broker)).toHaveLength(40);
-    expect(new Set(answers(broker).map((one) => one.subject)).size).toBe(40);
+    const answers = answersToCaller(broker);
+    expect(answers).toHaveLength(40);
+    for (const answer of answers) {
+      const orderId = (answer as unknown as { data: { order_id: string } }).data
+        .order_id;
+      expect(orderId).toBe(`${answer.subject}|${answer.subject}`);
+    }
+    expect(broker.transcript.faults).toEqual([]);
+  }, 60_000);
+});
+
+describe('four threads, one store, and the handler deciding everything', () => {
+  it('carries forty workflows through, each answered once', async () => {
+    const broker = await startBroker(4);
+    for (let orderIndex = 0; orderIndex < 40; orderIndex += 1) {
+      await broker.publish(await anOrder(`order-${orderIndex}`, '1.0.0'));
+    }
+    await broker.settle();
+
+    expect(answersToCaller(broker)).toHaveLength(40);
+    expect(
+      new Set(answersToCaller(broker).map((event) => event.subject)).size,
+    ).toBe(40);
     expect(broker.transcript.faults).toEqual([]);
   }, 60_000);
 
   it('routes each to the version its own event named, whichever thread took it', async () => {
-    const broker = await broking(4);
-    for (let at = 0; at < 20; at += 1) {
+    const broker = await startBroker(4);
+    for (let orderIndex = 0; orderIndex < 20; orderIndex += 1) {
       await broker.publish(
-        await anOrder(`order-${at}`, at % 2 === 0 ? '1.0.0' : '2.0.0'),
+        await anOrder(
+          `order-${orderIndex}`,
+          orderIndex % 2 === 0 ? '1.0.0' : '2.0.0',
+        ),
       );
     }
     await broker.settle();
 
-    const first = answers(broker).filter(
-      (one) => one.type === 'evt_threaded_order_done',
+    const doneAnswers = answersToCaller(broker).filter(
+      (event) => event.type === 'evt_threaded_order_done',
     );
-    const second = answers(broker).filter(
-      (one) => one.type === 'evt_threaded_order_shipped',
+    const shippedAnswers = answersToCaller(broker).filter(
+      (event) => event.type === 'evt_threaded_order_shipped',
     );
-    expect(first).toHaveLength(10);
-    expect(second).toHaveLength(10);
+    expect(doneAnswers).toHaveLength(10);
+    expect(shippedAnswers).toHaveLength(10);
   }, 60_000);
 
   it('advances every record one revision at a time, from zero', async () => {
-    const broker = await broking(4);
-    for (let at = 0; at < 20; at += 1) {
-      await broker.publish(await anOrder(`order-${at}`, '1.0.0'));
+    const broker = await startBroker(4);
+    for (let orderIndex = 0; orderIndex < 20; orderIndex += 1) {
+      await broker.publish(await anOrder(`order-${orderIndex}`, '1.0.0'));
     }
     await broker.settle();
 
-    const byExecution = new Map<string, number[]>();
+    const revisionsByExecution = new Map<string, number[]>();
     for (const { executionId, casVersion } of broker.transcript.committed) {
-      byExecution.set(executionId, [
-        ...(byExecution.get(executionId) ?? []),
+      revisionsByExecution.set(executionId, [
+        ...(revisionsByExecution.get(executionId) ?? []),
         casVersion,
       ]);
     }
-    for (const [executionId, revisions] of byExecution) {
+    for (const [executionId, revisions] of revisionsByExecution) {
       expect(revisions[0], `${executionId} did not open at 0`).toBe(0);
       expect(
         new Set(revisions).size,
@@ -104,19 +130,20 @@ describe('four threads, one store, and the handler deciding everything', () => {
   }, 60_000);
 
   it('keeps every execution on one version for its whole life', async () => {
-    const broker = await broking(4);
-    for (let at = 0; at < 20; at += 1) {
-      await broker.publish(await anOrder(`order-${at}`, '1.0.0'));
+    const broker = await startBroker(4);
+    for (let orderIndex = 0; orderIndex < 20; orderIndex += 1) {
+      await broker.publish(await anOrder(`order-${orderIndex}`, '1.0.0'));
     }
     await broker.settle();
 
-    const byExecution = new Map<string, Set<string>>();
+    const versionsByExecution = new Map<string, Set<string>>();
     for (const { executionId, version } of broker.transcript.committed) {
-      const held = byExecution.get(executionId) ?? new Set<string>();
-      held.add(version);
-      byExecution.set(executionId, held);
+      const executionVersions =
+        versionsByExecution.get(executionId) ?? new Set<string>();
+      executionVersions.add(version);
+      versionsByExecution.set(executionId, executionVersions);
     }
-    for (const [executionId, versions] of byExecution) {
+    for (const [executionId, versions] of versionsByExecution) {
       expect([...versions], `${executionId} changed version`).toHaveLength(1);
     }
   }, 60_000);
@@ -126,31 +153,32 @@ describe('the same opening event in four threads at one moment', () => {
   it('opens the execution once, every other thread deriving the same identity', async () => {
     // each thread is held inside its execution, so all four are in there
     // together rather than merely close to one another
-    const broker = await broking(4, { slowly: 25 });
+    const broker = await startBroker(4, { slowly: 25 });
     const order = await anOrder('order-raced', '1.0.0');
-    for (let at = 0; at < 4; at += 1) await broker.publish(order);
+    for (let orderIndex = 0; orderIndex < 4; orderIndex += 1)
+      await broker.publish(order);
     await broker.settle();
 
     // one order and one charge, however many threads tried to open it
     expect(broker.store.size).toBe(2);
-    expect(answers(broker)).toHaveLength(1);
+    expect(answersToCaller(broker)).toHaveLength(1);
   }, 60_000);
 
   it('never writes two records at one revision, however they interleaved', async () => {
-    const broker = await broking(4, { slowly: 15, duplicate: true });
-    for (let at = 0; at < 10; at += 1) {
-      await broker.publish(await anOrder(`order-${at}`, '1.0.0'));
+    const broker = await startBroker(4, { slowly: 15, duplicate: true });
+    for (let orderIndex = 0; orderIndex < 10; orderIndex += 1) {
+      await broker.publish(await anOrder(`order-${orderIndex}`, '1.0.0'));
     }
     await broker.settle();
 
-    const byExecution = new Map<string, number[]>();
+    const revisionsByExecution = new Map<string, number[]>();
     for (const { executionId, casVersion } of broker.transcript.committed) {
-      byExecution.set(executionId, [
-        ...(byExecution.get(executionId) ?? []),
+      revisionsByExecution.set(executionId, [
+        ...(revisionsByExecution.get(executionId) ?? []),
         casVersion,
       ]);
     }
-    for (const [executionId, revisions] of byExecution) {
+    for (const [executionId, revisions] of revisionsByExecution) {
       expect(
         new Set(revisions).size,
         `${executionId} wrote a revision twice`,
@@ -159,41 +187,41 @@ describe('the same opening event in four threads at one moment', () => {
   }, 60_000);
 
   it('comes to the same end however the threads happened to interleave', async () => {
-    const ends = [];
-    for (let again = 0; again < 3; again += 1) {
-      const broker = await broking(4, { slowly: 10, duplicate: true });
-      for (let at = 0; at < 8; at += 1) {
-        await broker.publish(await anOrder(`order-${at}`, '1.0.0'));
+    const endStates = [];
+    for (let round = 0; round < 3; round += 1) {
+      const broker = await startBroker(4, { slowly: 10, duplicate: true });
+      for (let orderIndex = 0; orderIndex < 8; orderIndex += 1) {
+        await broker.publish(await anOrder(`order-${orderIndex}`, '1.0.0'));
       }
       await broker.settle();
-      ends.push(
+      endStates.push(
         [...broker.store.values()]
           .map((row) => `${row.source}:${row.lifecycle}:${row.casVersion}`)
           .sort()
           .join('|'),
       );
       await broker.stop();
-      running = null;
+      runningBroker = null;
     }
-    expect(new Set(ends).size).toBe(1);
+    expect(new Set(endStates).size).toBe(1);
   }, 90_000);
 });
 
 describe('a thread killed while it is deciding', () => {
   it('loses nothing: whatever it held is placed again elsewhere', async () => {
-    const broker = await broking(4, { slowly: 40 });
-    for (let at = 0; at < 12; at += 1) {
-      await broker.publish(await anOrder(`order-${at}`, '1.0.0'));
+    const broker = await startBroker(4, { slowly: 40 });
+    for (let orderIndex = 0; orderIndex < 12; orderIndex += 1) {
+      await broker.publish(await anOrder(`order-${orderIndex}`, '1.0.0'));
     }
 
-    for (let again = 0; again < 2; again += 1) {
-      await new Promise((settle) => setTimeout(settle, 20));
+    for (let round = 0; round < 2; round += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
       await broker.kill(0);
     }
     await broker.settle(40_000);
 
     expect(broker.transcript.died).toBeGreaterThan(0);
-    expect(answers(broker)).toHaveLength(12);
+    expect(answersToCaller(broker)).toHaveLength(12);
     expect(
       new Set([...broker.store.values()].map((row) => row.lifecycle)),
     ).toEqual(new Set(['success']));
@@ -202,17 +230,19 @@ describe('a thread killed while it is deciding', () => {
 
 describe('a service that fails in every thread', () => {
   it('tells each order once, and ends every one of them', async () => {
-    const broker = await broking(4, { charges: 'errors' });
-    for (let at = 0; at < 12; at += 1) {
-      await broker.publish(await anOrder(`order-${at}`, '1.0.0'));
+    const broker = await startBroker(4, { charges: 'errors' });
+    for (let orderIndex = 0; orderIndex < 12; orderIndex += 1) {
+      await broker.publish(await anOrder(`order-${orderIndex}`, '1.0.0'));
     }
     await broker.settle();
 
-    const resting = [...broker.store.values()].map(
+    const restingStates = [...broker.store.values()].map(
       (row) => `${row.source}:${row.lifecycle}`,
     );
-    expect(resting.filter((one) => one.endsWith(':error'))).toHaveLength(12);
-    expect(answers(broker)).toHaveLength(12);
+    expect(
+      restingStates.filter((restingState) => restingState.endsWith(':error')),
+    ).toHaveLength(12);
+    expect(answersToCaller(broker)).toHaveLength(12);
     expect(broker.transcript.faults).toEqual([]);
   }, 60_000);
 });

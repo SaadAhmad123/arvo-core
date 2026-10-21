@@ -29,7 +29,10 @@ const anOrder = (subject = 'order-1') =>
   });
 
 /** A lattice whose payment worker never returns. */
-const stuck = (overrides: Record<string, unknown> = {}, abandons = true) => {
+const stuckPaymentLattice = (
+  overrides: Record<string, unknown> = {},
+  abandons = true,
+) => {
   const lattice = createArvoLattice({
     versions: declareVersions({
       [paymentV1.type]: { runTimeout: 20, maxRetryAttempts: 3, ...overrides },
@@ -42,46 +45,49 @@ const stuck = (overrides: Record<string, unknown> = {}, abandons = true) => {
 };
 
 /** Every attempt made at one kind of execution. */
-const attemptsAt = (lattice: ReturnType<typeof stuck>, contractType: string) =>
+const deliveryAttempts = (
+  lattice: ReturnType<typeof stuckPaymentLattice>,
+  contractType: string,
+) =>
   lattice.transcript.delivered
-    .filter((given) => given.event.to === contractType)
-    .map((given) => given.attempt);
+    .filter((delivery) => delivery.event.to === contractType)
+    .map((delivery) => delivery.attempt);
 
 describe('a worker that never comes back', () => {
   it('is not waited on past the time one attempt is given', async () => {
-    const lattice = stuck();
+    const lattice = stuckPaymentLattice();
     await lattice.publish(anOrder()).settle();
 
-    const refused = lattice.transcript.faults.map(
+    const faultKinds = lattice.transcript.faults.map(
       ({ fault }) => fault.faultKind,
     );
-    expect(new Set(refused)).toEqual(new Set(['run_timeout']));
+    expect(new Set(faultKinds)).toEqual(new Set(['run_timeout']));
   });
 
   it('is tried again, each attempt counted from the one before', async () => {
-    const lattice = stuck();
+    const lattice = stuckPaymentLattice();
     await lattice.publish(anOrder()).settle();
-    expect(attemptsAt(lattice, paymentV1.type)).toEqual([0, 1, 2, 3]);
+    expect(deliveryAttempts(lattice, paymentV1.type)).toEqual([0, 1, 2, 3]);
   });
 
   it('stops once the attempts the version allows are spent', async () => {
-    const lattice = stuck({ maxRetryAttempts: 1 });
+    const lattice = stuckPaymentLattice({ maxRetryAttempts: 1 });
     await lattice.publish(anOrder()).settle();
-    expect(attemptsAt(lattice, paymentV1.type)).toEqual([0, 1]);
+    expect(deliveryAttempts(lattice, paymentV1.type)).toEqual([0, 1]);
   });
 
   it('says another attempt is due until the last, and then says none is', async () => {
-    const lattice = stuck();
+    const lattice = stuckPaymentLattice();
     await lattice.publish(anOrder()).settle();
 
-    const verdicts = lattice.transcript.faults.map(
+    const retriesDue = lattice.transcript.faults.map(
       ({ fault }) => fault.retry !== null,
     );
-    expect(verdicts).toEqual([true, true, true, false]);
+    expect(retriesDue).toEqual([true, true, true, false]);
   });
 
   it('keeps the kind unchanged once the attempts are spent', async () => {
-    const lattice = stuck();
+    const lattice = stuckPaymentLattice();
     await lattice.publish(anOrder()).settle();
     expect(lattice.transcript.faults.at(-1)?.fault.faultKind).toBe(
       'run_timeout',
@@ -89,47 +95,47 @@ describe('a worker that never comes back', () => {
   });
 
   it('carries what giving up takes, only on the attempt that gave up', async () => {
-    const lattice = stuck();
+    const lattice = stuckPaymentLattice();
     await lattice.publish(anOrder()).settle();
 
-    const spent = lattice.transcript.faults.at(-1)?.fault;
-    expect(typeof spent?.abandonmentEvent).toBe('string');
-    expect(typeof spent?.abandonmentState).toBe('string');
+    const finalFault = lattice.transcript.faults.at(-1)?.fault;
+    expect(typeof finalFault?.abandonmentEvent).toBe('string');
+    expect(typeof finalFault?.abandonmentState).toBe('string');
     expect(lattice.transcript.abandoned).toHaveLength(1);
   });
 
   it('tells the order once, however many attempts were made', async () => {
-    const lattice = stuck();
+    const lattice = stuckPaymentLattice();
     await lattice.publish(anOrder()).settle();
 
-    const told = lattice.transcript.published.filter(
+    const errorEvents = lattice.transcript.published.filter(
       (event) => event.type === paymentV1.error.type,
     );
-    expect(told).toHaveLength(1);
+    expect(errorEvents).toHaveLength(1);
   });
 
   it('lets the order go on, one branch having failed', async () => {
-    const lattice = stuck();
+    const lattice = stuckPaymentLattice();
     await lattice.publish(anOrder()).settle();
 
-    const order = [...lattice.store.values()].find(
+    const orderRow = [...lattice.store.values()].find(
       (row) => row.source === orderV1.type,
     );
-    expect(order?.lifecycle).toBe('success');
+    expect(orderRow?.lifecycle).toBe('success');
   });
 
   it('writes nothing for an attempt that was abandoned, until it is', async () => {
-    const lattice = stuck({}, false);
+    const lattice = stuckPaymentLattice({}, false);
     await lattice.publish(anOrder()).settle();
 
-    const payment = [...lattice.store.values()].filter(
+    const paymentRows = [...lattice.store.values()].filter(
       (row) => row.source === paymentV1.type,
     );
-    expect(payment).toEqual([]);
+    expect(paymentRows).toEqual([]);
   });
 
   it('holds everything that must hold, with a branch given up on', async () => {
-    const lattice = stuck();
+    const lattice = stuckPaymentLattice();
     await lattice.publish(anOrder()).settle();
     await checkInvariants(lattice);
   });
@@ -146,7 +152,7 @@ describe('a version that waits as long as it takes', () => {
     lattice.behave(
       paymentV1.type,
       async (ctx: WorkerContext<typeof paymentV1>) => {
-        await new Promise((settle) => setTimeout(settle, 40));
+        await new Promise((resolve) => setTimeout(resolve, 40));
         await ctx.setState({ data: { stage: 'done', answers: 0 } });
         return ctx.build({
           type: 'evt_payment_charged',
@@ -184,7 +190,7 @@ describe('an execution that outlives the time the whole of it is given', () => {
     lattice.behave(
       paymentV1.type,
       async (ctx: WorkerContext<typeof paymentV1>) => {
-        await new Promise((settle) => setTimeout(settle, 60));
+        await new Promise((resolve) => setTimeout(resolve, 60));
         await ctx.setState({ data: { stage: 'done', answers: 0 } });
         return ctx.build({
           type: 'evt_payment_charged',
@@ -195,12 +201,12 @@ describe('an execution that outlives the time the whole of it is given', () => {
 
     await lattice.publish(anOrder()).settle();
 
-    const late = lattice.transcript.faults.find(
+    const timeoutFault = lattice.transcript.faults.find(
       ({ fault }) => fault.faultKind === 'execution_timeout',
     );
-    expect(late).toBeDefined();
-    expect(late?.fault.retry).toBeNull();
-    expect(late?.fault.message).toContain('executionTimeout');
+    expect(timeoutFault).toBeDefined();
+    expect(timeoutFault?.fault.retry).toBeNull();
+    expect(timeoutFault?.fault.message).toContain('executionTimeout');
   });
 
   it('is not given another attempt, no attempt being able to give time back', async () => {
@@ -223,7 +229,7 @@ describe('an execution that outlives the time the whole of it is given', () => {
     lattice.behave(
       paymentV1.type,
       async (ctx: WorkerContext<typeof paymentV1>) => {
-        await new Promise((settle) => setTimeout(settle, 60));
+        await new Promise((resolve) => setTimeout(resolve, 60));
         await ctx.setState({ data: { stage: 'done', answers: 0 } });
         return ctx.build({
           type: 'evt_payment_charged',
@@ -233,7 +239,7 @@ describe('an execution that outlives the time the whole of it is given', () => {
     );
     await lattice.publish(anOrder()).settle();
 
-    const atOrder = attemptsAt(lattice, orderV1.type);
-    expect(atOrder.filter((attempt) => attempt > 0)).toEqual([]);
+    const orderAttempts = deliveryAttempts(lattice, orderV1.type);
+    expect(orderAttempts.filter((attempt) => attempt > 0)).toEqual([]);
   });
 });

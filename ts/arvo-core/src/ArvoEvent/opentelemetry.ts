@@ -12,21 +12,25 @@ export type ArvoEventTraceContext = {
   tracestate: string | null;
 };
 
-const isSpanContext = (input: Span | SpanContext): input is SpanContext =>
-  typeof (input as SpanContext).traceId === 'string';
+const isSpanContext = (
+  spanOrContext: Span | SpanContext,
+): spanOrContext is SpanContext =>
+  typeof (spanOrContext as SpanContext).traceId === 'string';
 
 /**
  * Derives W3C `traceparent`/`tracestate` header strings from an OpenTelemetry
  * `Span` or `SpanContext`, so callers don't have to hand-format them.
  */
 export const traceContextFromSpan = (
-  input: Span | SpanContext,
+  spanOrContext: Span | SpanContext,
 ): ArvoEventTraceContext => {
-  const context = isSpanContext(input) ? input : input.spanContext();
-  const flags = context.traceFlags.toString(16).padStart(2, '0');
+  const spanContext = isSpanContext(spanOrContext)
+    ? spanOrContext
+    : spanOrContext.spanContext();
+  const traceFlags = spanContext.traceFlags.toString(16).padStart(2, '0');
   return {
-    traceparent: `00-${context.traceId}-${context.spanId}-${flags}`,
-    tracestate: context.traceState?.serialize() ?? null,
+    traceparent: `00-${spanContext.traceId}-${spanContext.spanId}-${traceFlags}`,
+    tracestate: spanContext.traceState?.serialize() ?? null,
   };
 };
 
@@ -56,7 +60,7 @@ const TRACEPARENT = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/;
  *
  * @param event - The event that arrived, by its trace headers.
  * @param tracer - What the new span is started on.
- * @param name - What to call the new span.
+ * @param spanName - What to call the new span.
  *
  * @example
  * ```typescript
@@ -68,14 +72,14 @@ const TRACEPARENT = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/;
 export const continueTraceFromEvent = (
   event: { traceparent: string | null; tracestate: string | null },
   tracer: Tracer,
-  name: string,
+  spanName: string,
 ): ArvoEventTraceContinuation | null => {
   if (event.traceparent === null) return null;
 
-  const parsed = TRACEPARENT.exec(event.traceparent);
-  if (parsed === null) return null;
+  const traceparentMatch = TRACEPARENT.exec(event.traceparent);
+  if (traceparentMatch === null) return null;
 
-  const [, traceId, spanId, flags] = parsed as unknown as [
+  const [, traceId, spanId, traceFlags] = traceparentMatch as unknown as [
     string,
     string,
     string,
@@ -84,7 +88,7 @@ export const continueTraceFromEvent = (
   const parentSpan = trace.wrapSpanContext({
     traceId,
     spanId,
-    traceFlags: Number.parseInt(flags, 16),
+    traceFlags: Number.parseInt(traceFlags, 16),
     isRemote: true,
     traceState:
       event.tracestate === null
@@ -92,6 +96,9 @@ export const continueTraceFromEvent = (
         : createTraceState(event.tracestate),
   });
 
-  const parent = trace.setSpan(context.active(), parentSpan);
-  return { span: tracer.startSpan(name, undefined, parent), parentSpan };
+  const parentContext = trace.setSpan(context.active(), parentSpan);
+  return {
+    span: tracer.startSpan(spanName, undefined, parentContext),
+    parentSpan,
+  };
 };

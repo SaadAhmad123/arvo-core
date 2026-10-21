@@ -7,7 +7,7 @@ import type {
 } from '../../../src/ArvoEventHandler/types/supplied.js';
 
 type Db = { find: () => string };
-type Scheduler = { at: (when: number) => void };
+type Scheduler = { at: (timestamp: number) => void };
 
 /**
  * What the declaration surface will do with the witness: infer both
@@ -19,7 +19,7 @@ type Scheduler = { at: (when: number) => void };
  * names nothing — which a conditional type cannot reproduce, since `infer`
  * yields `unknown` there rather than consulting the default.
  */
-const declaring = <
+const inferSupplied = <
   TDependencies extends ArvoDependencies = ArvoNone,
   TMechanismHooks extends ArvoMechanismHooks = ArvoNone,
 >(_param: {
@@ -31,41 +31,41 @@ const declaring = <
 
 describe('declaring the types a mechanism will supply', () => {
   it('infers the dependencies off the witness', () => {
-    const declared = declaring({
+    const inferredTypes = inferSupplied({
       types: {} as { dependencies: Db },
     });
-    expectTypeOf(declared.dependencies).toEqualTypeOf<Db>();
+    expectTypeOf(inferredTypes.dependencies).toEqualTypeOf<Db>();
   });
 
   it('infers the hooks off it too', () => {
-    const declared = declaring({
+    const inferredTypes = inferSupplied({
       types: {} as { mechanismHooks: Scheduler },
     });
-    expectTypeOf(declared.hooks).toEqualTypeOf<Scheduler>();
+    expectTypeOf(inferredTypes.hooks).toEqualTypeOf<Scheduler>();
   });
 
   it('infers both at once', () => {
-    const declared = declaring({
+    const inferredTypes = inferSupplied({
       types: {} as { dependencies: Db; mechanismHooks: Scheduler },
     });
-    expectTypeOf(declared.dependencies).toEqualTypeOf<Db>();
-    expectTypeOf(declared.hooks).toEqualTypeOf<Scheduler>();
+    expectTypeOf(inferredTypes.dependencies).toEqualTypeOf<Db>();
+    expectTypeOf(inferredTypes.hooks).toEqualTypeOf<Scheduler>();
   });
 
   it('declares nothing for the one left out', () => {
-    const declared = declaring({ types: {} as { dependencies: Db } });
-    expectTypeOf(declared.hooks).toEqualTypeOf<ArvoNone>();
+    const inferredTypes = inferSupplied({ types: {} as { dependencies: Db } });
+    expectTypeOf(inferredTypes.hooks).toEqualTypeOf<ArvoNone>();
   });
 
   it('declares nothing at all where the witness is omitted', () => {
-    const declared = declaring({});
-    expectTypeOf(declared.dependencies).toEqualTypeOf<ArvoNone>();
-    expectTypeOf(declared.hooks).toEqualTypeOf<ArvoNone>();
+    const inferredTypes = inferSupplied({});
+    expectTypeOf(inferredTypes.dependencies).toEqualTypeOf<ArvoNone>();
+    expectTypeOf(inferredTypes.hooks).toEqualTypeOf<ArvoNone>();
   });
 
   it('accepts a witness naming neither', () => {
-    const declared = declaring({ types: {} });
-    expectTypeOf(declared.dependencies).toEqualTypeOf<ArvoNone>();
+    const inferredTypes = inferSupplied({ types: {} });
+    expectTypeOf(inferredTypes.dependencies).toEqualTypeOf<ArvoNone>();
   });
 });
 

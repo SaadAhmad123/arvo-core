@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-28
+- **Amended by:** [ADR-016](./016-executor-middleware.md), which adds two kinds, `middleware_conflict` and `middleware_instantiation_failed`, to **The `fault_kind` vocabulary and retry verdicts**. Additive: nothing already there changes
 - **Scope:** Arvo ecosystem
 - **Amends:** AAM 1 membership (ADR-000) — places the fault object's field names and the value `ArvoHandlerFault` inside the model as a durable format; supplies the representation of two of the three failure boundaries ADR-000's *Explicit Failure Boundaries* names
 - **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), which defines the handler whose failures these are and the mechanism obligations that act on them; [ADR-007](./007-execution-record.md), which defines the record a fault carries at `failure`

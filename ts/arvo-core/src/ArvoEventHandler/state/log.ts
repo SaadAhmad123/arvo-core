@@ -29,7 +29,7 @@ export const logEvent = <TState extends ArvoExecutionState>(
   event: ArvoEvent,
   direction: ArvoTouchedEventDirection,
 ): TState =>
-  state.eventIds.some((logged) => logged.id === event.id)
+  state.eventIds.some((touchedEvent) => touchedEvent.id === event.id)
     ? state
     : mutateState(state, {
         eventIds: [...state.eventIds, { id: event.id, direction }],

@@ -15,26 +15,30 @@ import type { Decoded } from './index.js';
 const readString = (
   source: Record<string, unknown>,
   key: string,
-  required: boolean,
+  isRequired: boolean,
   issues: ErrorIssue[],
   path = key,
 ): string | undefined => {
   if (!(key in source)) {
-    if (required) issues.push(new ErrorIssue({ path, message: 'is required' }));
+    if (isRequired)
+      issues.push(new ErrorIssue({ path, message: 'is required' }));
     return undefined;
   }
-  const value = source[key];
-  if (typeof value !== 'string' || (required && value.length === 0)) {
+  const fieldValue = source[key];
+  if (
+    typeof fieldValue !== 'string' ||
+    (isRequired && fieldValue.length === 0)
+  ) {
     issues.push(
       new ErrorIssue({
         path,
-        message: required ? 'must be a non-empty string' : 'must be a string',
-        received: value,
+        message: isRequired ? 'must be a non-empty string' : 'must be a string',
+        received: fieldValue,
       }),
     );
     return undefined;
   }
-  return value;
+  return fieldValue;
 };
 
 /** Reads `wrapper[key]` as a required plain object, reporting exactly one issue on absence or the wrong type. Shared by `arvoeventdata`/`arvoeventbaggage`. */
@@ -48,63 +52,80 @@ const readWrapperObject = (
     issues.push(new ErrorIssue({ path, message: 'is required' }));
     return undefined;
   }
-  const value = wrapper[key];
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  const fieldValue = wrapper[key];
+  if (
+    fieldValue === null ||
+    typeof fieldValue !== 'object' ||
+    Array.isArray(fieldValue)
+  ) {
     issues.push(
-      new ErrorIssue({ path, message: 'must be an object', received: value }),
+      new ErrorIssue({
+        path,
+        message: 'must be an object',
+        received: fieldValue,
+      }),
     );
     return undefined;
   }
-  return value as Record<string, unknown>;
+  return fieldValue as Record<string, unknown>;
 };
 
-const checkSpecVersion = (data: CloudEvent, issues: ErrorIssue[]): void => {
-  if (data.specversion !== SPEC_VERSION) {
+const checkSpecVersion = (
+  cloudEvent: CloudEvent,
+  issues: ErrorIssue[],
+): void => {
+  if (cloudEvent.specversion !== SPEC_VERSION) {
     issues.push(
       new ErrorIssue({
         path: 'specversion',
         message: `must be exactly "${SPEC_VERSION}"`,
-        received: data.specversion,
+        received: cloudEvent.specversion,
       }),
     );
   }
 };
 
-const checkDataContentType = (data: CloudEvent, issues: ErrorIssue[]): void => {
-  const parsed = parseDataContentType(data.datacontenttype);
-  if (parsed?.mediaType !== ARVO_MEDIA_TYPE) {
+const checkDataContentType = (
+  cloudEvent: CloudEvent,
+  issues: ErrorIssue[],
+): void => {
+  const contentType = parseDataContentType(cloudEvent.datacontenttype);
+  if (contentType?.mediaType !== ARVO_MEDIA_TYPE) {
     issues.push(
       new ErrorIssue({
         path: 'datacontenttype',
         message: `must have media type "${ARVO_MEDIA_TYPE}"`,
-        received: data.datacontenttype,
+        received: cloudEvent.datacontenttype,
       }),
     );
     return;
   }
-  const paramNames = Object.keys(parsed.params);
+  const paramNames = Object.keys(contentType.params);
   const carriesOnlyVersion1 =
     paramNames.length === 1 &&
     paramNames[0] === 'version' &&
-    parsed.params.version === '1';
+    contentType.params.version === '1';
   if (!carriesOnlyVersion1) {
     issues.push(
       new ErrorIssue({
         path: 'datacontenttype',
         message: 'must carry exactly one parameter, version=1, and no others',
-        received: data.datacontenttype,
+        received: cloudEvent.datacontenttype,
       }),
     );
   }
 };
 
-const checkDataSchema = (data: CloudEvent, issues: ErrorIssue[]): void => {
-  if (data.dataschema !== DATA_SCHEMA) {
+const checkDataSchema = (
+  cloudEvent: CloudEvent,
+  issues: ErrorIssue[],
+): void => {
+  if (cloudEvent.dataschema !== DATA_SCHEMA) {
     issues.push(
       new ErrorIssue({
         path: 'dataschema',
         message: `must be exactly "${DATA_SCHEMA}"`,
-        received: data.dataschema,
+        received: cloudEvent.dataschema,
       }),
     );
   }
@@ -112,74 +133,78 @@ const checkDataSchema = (data: CloudEvent, issues: ErrorIssue[]): void => {
 
 /** Every scalar Arvo/tracing extension, decoded via the shared `readString` rule — one field each, in the same order the strict path has always checked them in. */
 const decodeScalarFields = (
-  raw: Record<string, unknown>,
+  cloudEventFields: Record<string, unknown>,
   issues: ErrorIssue[],
 ): Record<string, unknown> => ({
-  subject: readString(raw, 'subject', true, issues),
-  time: readString(raw, 'time', true, issues),
-  traceparent: readString(raw, 'traceparent', false, issues),
-  tracestate: readString(raw, 'tracestate', false, issues),
-  parentid: readString(raw, 'arvoparentid', false, issues),
-  initid: readString(raw, 'arvoinitid', false, issues),
-  executionid: readString(raw, 'arvoexecutionid', true, issues),
-  category: readString(raw, 'arvocategory', false, issues),
-  to: readString(raw, 'arvoto', false, issues),
-  domain: readString(raw, 'arvodomain', false, issues),
+  subject: readString(cloudEventFields, 'subject', true, issues),
+  time: readString(cloudEventFields, 'time', true, issues),
+  traceparent: readString(cloudEventFields, 'traceparent', false, issues),
+  tracestate: readString(cloudEventFields, 'tracestate', false, issues),
+  parentid: readString(cloudEventFields, 'arvoparentid', false, issues),
+  initid: readString(cloudEventFields, 'arvoinitid', false, issues),
+  executionid: readString(cloudEventFields, 'arvoexecutionid', true, issues),
+  category: readString(cloudEventFields, 'arvocategory', false, issues),
+  to: readString(cloudEventFields, 'arvoto', false, issues),
+  domain: readString(cloudEventFields, 'arvodomain', false, issues),
 });
 
 const decodeDepth = (
-  raw: Record<string, unknown>,
+  cloudEventFields: Record<string, unknown>,
   issues: ErrorIssue[],
   codec: DepthCodec,
 ): number | undefined => {
-  if (!('arvodepth' in raw)) {
+  if (!('arvodepth' in cloudEventFields)) {
     issues.push(new ErrorIssue({ path: 'arvodepth', message: 'is required' }));
     return undefined;
   }
-  const encoded = raw.arvodepth;
-  const decoded = typeof encoded === 'string' ? codec.decode(encoded) : null;
-  if (decoded === null) {
+  const encodedDepth = cloudEventFields.arvodepth;
+  const depth =
+    typeof encodedDepth === 'string' ? codec.decode(encodedDepth) : null;
+  if (depth === null) {
     issues.push(
       new ErrorIssue({
         path: 'arvodepth',
         message:
           'must be the canonical unsigned-decimal encoding of a non-negative integer',
-        received: encoded,
+        received: encodedDepth,
       }),
     );
     return undefined;
   }
-  return decoded;
+  return depth;
 };
 
 const decodeExecutionUnits = (
-  raw: Record<string, unknown>,
+  cloudEventFields: Record<string, unknown>,
   issues: ErrorIssue[],
   codec: ExecutionUnitsCodec,
 ): number | undefined => {
-  if (!('arvoexecutionunits' in raw)) return undefined;
-  const encoded = raw.arvoexecutionunits;
-  const decoded = typeof encoded === 'string' ? codec.decode(encoded) : null;
-  if (decoded === null) {
+  if (!('arvoexecutionunits' in cloudEventFields)) return undefined;
+  const encodedExecutionUnits = cloudEventFields.arvoexecutionunits;
+  const executionUnits =
+    typeof encodedExecutionUnits === 'string'
+      ? codec.decode(encodedExecutionUnits)
+      : null;
+  if (executionUnits === null) {
     issues.push(
       new ErrorIssue({
         path: 'arvoexecutionunits',
         message:
           'must be the canonical numeric-string encoding of a finite binary64 value',
-        received: encoded,
+        received: encodedExecutionUnits,
       }),
     );
     return undefined;
   }
-  return decoded;
+  return executionUnits;
 };
 
 /** Unwraps `data`'s three members, reporting the wrapper's own shape violations (not an object, wrong key set) plus each member's own via `readString`/`readWrapperObject`. */
 const decodeWrapper = (
-  data: CloudEvent,
+  cloudEvent: CloudEvent,
   issues: ErrorIssue[],
 ): Record<string, unknown> => {
-  const wrapper = data.data;
+  const wrapper = cloudEvent.data;
   if (
     wrapper === null ||
     typeof wrapper !== 'object' ||
@@ -223,26 +248,26 @@ const decodeWrapper = (
 };
 
 /** Strict Arvo-shaped decoding: every condition is checked individually, and all of them, not just the first failure, are reported together. */
-export const decodeStrict = (data: CloudEvent): Decoded => {
+export const decodeStrict = (cloudEvent: CloudEvent): Decoded => {
   const issues: ErrorIssue[] = [];
-  const raw = data as unknown as Record<string, unknown>;
+  const cloudEventFields = cloudEvent as unknown as Record<string, unknown>;
 
-  checkSpecVersion(data, issues);
-  checkDataContentType(data, issues);
-  checkDataSchema(data, issues);
+  checkSpecVersion(cloudEvent, issues);
+  checkDataContentType(cloudEvent, issues);
+  checkDataSchema(cloudEvent, issues);
 
   const candidate: Record<string, unknown> = {
-    id: data.id,
-    source: data.source,
-    type: data.type,
-    ...decodeScalarFields(raw, issues),
-    depth: decodeDepth(raw, issues, new DepthCodec()),
+    id: cloudEvent.id,
+    source: cloudEvent.source,
+    type: cloudEvent.type,
+    ...decodeScalarFields(cloudEventFields, issues),
+    depth: decodeDepth(cloudEventFields, issues, new DepthCodec()),
     executionunits: decodeExecutionUnits(
-      raw,
+      cloudEventFields,
       issues,
       new ExecutionUnitsCodec(),
     ),
-    ...decodeWrapper(data, issues),
+    ...decodeWrapper(cloudEvent, issues),
   };
 
   return { candidate, issues };

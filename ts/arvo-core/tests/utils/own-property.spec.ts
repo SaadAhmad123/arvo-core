@@ -2,18 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { readOwnProperty } from '../../src/utils/own-property.js';
 
 describe('reading a map by a key from outside', () => {
-  const declared = { '1.0.0': 'first', '1.1.0': 'second' };
+  const versionMap = { '1.0.0': 'first', '1.1.0': 'second' };
 
   it('finds what the map holds itself', () => {
-    expect(readOwnProperty(declared, '1.0.0')).toBe('first');
+    expect(readOwnProperty(versionMap, '1.0.0')).toBe('first');
   });
 
   it('finds nothing for a key the map never held', () => {
-    expect(readOwnProperty(declared, '9.9.9')).toBeNull();
+    expect(readOwnProperty(versionMap, '9.9.9')).toBeNull();
   });
 
   it('finds nothing for a property every object inherits', () => {
-    for (const inherited of [
+    for (const inheritedKey of [
       '__proto__',
       'constructor',
       'toString',
@@ -21,8 +21,8 @@ describe('reading a map by a key from outside', () => {
       'valueOf',
     ]) {
       expect(
-        readOwnProperty(declared, inherited),
-        `${inherited} resolved to something nobody declared`,
+        readOwnProperty(versionMap, inheritedKey),
+        `${inheritedKey} resolved to something nobody declared`,
       ).toBeNull();
     }
   });

@@ -6,7 +6,7 @@ import { ARVO_NO_STATE_SCHEMA } from '../../src/ArvoEventHandler/helpers/default
 import { setupArvoEventHandler } from '../../src/factories/setupArvoEventHandler.js';
 import { orderContract, paymentVersion } from './fixtures.js';
 
-const twoVersions = new ArvoContract({
+const twoVersionContract = new ArvoContract({
   type: 'com_report_build',
   versions: {
     '1.0.0': {
@@ -72,7 +72,9 @@ describe('a handler with nothing to send to', () => {
 });
 
 describe('a handler of several versions', () => {
-  const handler = setupArvoEventHandler({ contracts: { self: twoVersions } })
+  const handler = setupArvoEventHandler({
+    contracts: { self: twoVersionContract },
+  })
     .handler('1.0.0', { execute: executor })
     .handler('1.1.0', { execute: executor })
     .build();
@@ -88,13 +90,13 @@ describe('a handler of several versions', () => {
 
 describe('what a version remembers', () => {
   it('keeps the schema a version declared', () => {
-    const data = z.object({ orderId: z.string() });
+    const stateSchema = z.object({ orderId: z.string() });
     const handler = setupArvoEventHandler({
       contracts: { self: orderContract },
     })
-      .handler('1.0.0', { state: data, execute: executor })
+      .handler('1.0.0', { state: stateSchema, execute: executor })
       .build();
-    expect(handler.versions.get('1.0.0').dataSchema).toBe(data);
+    expect(handler.versions.get('1.0.0').dataSchema).toBe(stateSchema);
   });
 
   it('gives a version declaring none the schema that admits none', () => {
@@ -109,25 +111,25 @@ describe('what a version remembers', () => {
 
 describe('a version declared as its executor alone', () => {
   it('is built, and behaves as the object form does', () => {
-    const shorthand = setupArvoEventHandler({
+    const shorthandHandler = setupArvoEventHandler({
       contracts: { self: orderContract },
     })
       .handler('1.0.0', executor)
       .build();
-    const longhand = setupArvoEventHandler({
+    const longhandHandler = setupArvoEventHandler({
       contracts: { self: orderContract },
     })
       .handler('1.0.0', { execute: executor })
       .build();
-    expect(shorthand.versions.get('1.0.0').options).toEqual(
-      longhand.versions.get('1.0.0').options,
+    expect(shorthandHandler.versions.get('1.0.0').options).toEqual(
+      longhandHandler.versions.get('1.0.0').options,
     );
   });
 });
 
 describe('the options each version runs under', () => {
   const handler = setupArvoEventHandler({
-    contracts: { self: twoVersions },
+    contracts: { self: twoVersionContract },
     options: { maxRetryAttempts: 5, runTimeout: 10_000 },
   })
     .handler('1.0.0', { options: { maxDepth: 250 }, execute: executor })
@@ -167,14 +169,14 @@ describe('the types a mechanism will supply', () => {
 describe('a declaration that cannot work', () => {
   it('is refused where a version has no executor', () => {
     expect(() =>
-      setupArvoEventHandler({ contracts: { self: twoVersions } })
+      setupArvoEventHandler({ contracts: { self: twoVersionContract } })
         .handler('1.0.0', executor)
         .build(),
     ).toThrow(ArvoEventHandlerValidationError);
   });
 
   it('is refused where two capabilities share a type', () => {
-    const clashing = new ArvoContract({
+    const clashingContract = new ArvoContract({
       type: 'com_order_created',
       versions: {
         '1.0.0': { input: z.object({ of: z.string() }), outputs: {} },
@@ -184,7 +186,7 @@ describe('a declaration that cannot work', () => {
       setupArvoEventHandler({
         contracts: {
           self: orderContract,
-          services: { clashing: clashing.versions['1.0.0'] },
+          services: { clashing: clashingContract.versions['1.0.0'] },
         },
       })
         .handler('1.0.0', executor)

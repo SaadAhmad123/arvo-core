@@ -6,7 +6,7 @@ import { ErrorIssue } from '../../src/utils/error-issue.js';
  * `describeValue` is not exported — it is reached through the rendered
  * message, which is the only place its output is ever seen.
  */
-const messageFor = (received: unknown): string =>
+const renderedMessage = (received: unknown): string =>
   new ArvoEventValidationError([
     new ErrorIssue({ path: 'field', message: 'is wrong', received }),
   ]).message;
@@ -63,22 +63,22 @@ describe('ArvoEventValidationError', () => {
 
   describe('received value rendering, one case per type', () => {
     it('quotes a string so it cannot be mistaken for a number', () => {
-      expect(messageFor('3')).toContain('"3"');
+      expect(renderedMessage('3')).toContain('"3"');
     });
 
     it('renders a number bare, distinguishing it from the same digits as a string', () => {
-      const asNumber = messageFor(3);
-      expect(asNumber).toContain('received 3');
-      expect(asNumber).not.toContain('"3"');
+      const numberMessage = renderedMessage(3);
+      expect(numberMessage).toContain('received 3');
+      expect(numberMessage).not.toContain('"3"');
     });
 
     it('renders a boolean', () => {
-      expect(messageFor(true)).toContain('received true');
-      expect(messageFor(false)).toContain('received false');
+      expect(renderedMessage(true)).toContain('received true');
+      expect(renderedMessage(false)).toContain('received false');
     });
 
     it('renders null', () => {
-      expect(messageFor(null)).toContain('received null');
+      expect(renderedMessage(null)).toContain('received null');
     });
 
     it('shows no clause at all for undefined, rather than rendering it', () => {
@@ -86,73 +86,80 @@ describe('ArvoEventValidationError', () => {
       // issue omits the clause entirely when received is undefined. Its
       // 'undefined' rendering is covered through a stage cause in
       // tests/cloudevent/errors.spec.ts.
-      expect(messageFor(undefined)).not.toContain('received');
+      expect(renderedMessage(undefined)).not.toContain('received');
     });
 
     it('marks a bigint as one, since its digits alone would read as a number', () => {
-      expect(messageFor(10n)).toContain('10n (bigint)');
+      expect(renderedMessage(10n)).toContain('10n (bigint)');
     });
 
     it('describes a function rather than printing its source', () => {
-      expect(messageFor(() => 'x')).toContain('a function');
+      expect(renderedMessage(() => 'x')).toContain('a function');
     });
 
     it('renders a symbol via its description', () => {
-      expect(messageFor(Symbol('marker'))).toContain('Symbol(marker)');
+      expect(renderedMessage(Symbol('marker'))).toContain('Symbol(marker)');
     });
 
     it('summarises an array by length rather than printing it', () => {
-      expect(messageFor([1, 2, 3])).toContain('an array of 3');
+      expect(renderedMessage([1, 2, 3])).toContain('an array of 3');
     });
 
     it('summarises an empty array as length zero', () => {
-      expect(messageFor([])).toContain('an array of 0');
+      expect(renderedMessage([])).toContain('an array of 0');
     });
 
     it('serializes a plain object', () => {
-      expect(messageFor({ a: 1 })).toContain('{"a":1}');
+      expect(renderedMessage({ a: 1 })).toContain('{"a":1}');
     });
 
     it('falls back to a shape description for a cyclic object', () => {
-      const cyclic: Record<string, unknown> = {};
-      cyclic.self = cyclic;
-      expect(messageFor(cyclic)).toContain('an object');
+      const cyclicObject: Record<string, unknown> = {};
+      cyclicObject.self = cyclicObject;
+      expect(renderedMessage(cyclicObject)).toContain('an object');
     });
 
     it('falls back to a shape description when serializing yields undefined', () => {
       // A lone symbol-valued object serializes to undefined rather than throwing.
-      expect(messageFor(Symbol.iterator)).toContain('Symbol(Symbol.iterator)');
-      expect(messageFor({ toJSON: () => undefined })).toContain('an object');
+      expect(renderedMessage(Symbol.iterator)).toContain(
+        'Symbol(Symbol.iterator)',
+      );
+      expect(renderedMessage({ toJSON: () => undefined })).toContain(
+        'an object',
+      );
     });
 
     it('falls back to a shape description when toJSON throws', () => {
-      const hostile = {
+      const hostileObject = {
         toJSON() {
           throw new Error('nope');
         },
       };
-      expect(messageFor(hostile)).toContain('an object');
+      expect(renderedMessage(hostileObject)).toContain('an object');
     });
   });
 
   describe('truncation', () => {
     it('truncates a long string and marks it with an ellipsis', () => {
-      const message = messageFor('x'.repeat(500));
+      const message = renderedMessage('x'.repeat(500));
       expect(message).toContain('…');
       expect(message.length).toBeLessThan(300);
     });
 
     it('truncates a long serialized object', () => {
-      const wide = Object.fromEntries(
-        Array.from({ length: 100 }, (_, i) => [`key${i}`, i]),
+      const wideObject = Object.fromEntries(
+        Array.from({ length: 100 }, (_, keyIndex) => [
+          `key${keyIndex}`,
+          keyIndex,
+        ]),
       );
-      const message = messageFor(wide);
+      const message = renderedMessage(wideObject);
       expect(message).toContain('…');
       expect(message.length).toBeLessThan(300);
     });
 
     it('leaves a short string intact', () => {
-      const message = messageFor('short');
+      const message = renderedMessage('short');
       expect(message).toContain('"short"');
       expect(message).not.toContain('…');
     });

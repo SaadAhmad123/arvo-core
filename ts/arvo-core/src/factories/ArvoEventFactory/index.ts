@@ -101,7 +101,7 @@ export const createArvoEventFactory = <V extends VersionedArvoContract>(
   contract: V,
   options?: ContractEventOptions,
 ): ArvoEventFactory<V> => {
-  const built = tryCreateArvoEventFactory(contract, options);
-  if (built.ok) return built.value;
-  throw built.error;
+  const attempt = tryCreateArvoEventFactory(contract, options);
+  if (attempt.ok) return attempt.value;
+  throw attempt.error;
 };

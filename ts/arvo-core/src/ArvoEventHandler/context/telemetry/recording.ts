@@ -15,10 +15,10 @@
 export const recording = (record: () => void): void => {
   try {
     record();
-  } catch (refused) {
+  } catch (thrown) {
     console.warn(
       'arvo: a telemetry recording failed, and the execution carried on without it',
-      refused,
+      thrown,
     );
   }
 };
@@ -26,26 +26,26 @@ export const recording = (record: () => void): void => {
 /**
  * One reading of the span, or what stands in where it will not answer.
  *
- * A failed reading is written to `console.warn` and `instead` is used,
+ * A failed reading is written to `console.warn` and `fallback` is used,
  * so a span that refuses to say what trace it is on costs an event its
  * trace context rather than costing the workflow.
  *
  * @param read - What to read, which may throw.
- * @param instead - What to use where it does.
+ * @param fallback - What to use where it does.
  *
  * @example
  * ```typescript
  * const traceparent = reading(() => contextOf(span).traceparent, null);
  * ```
  */
-export const reading = <TRead>(read: () => TRead, instead: TRead): TRead => {
+export const reading = <TRead>(read: () => TRead, fallback: TRead): TRead => {
   try {
     return read();
-  } catch (refused) {
+  } catch (thrown) {
     console.warn(
       'arvo: a telemetry reading failed, and the execution carried on without it',
-      refused,
+      thrown,
     );
-    return instead;
+    return fallback;
   }
 };

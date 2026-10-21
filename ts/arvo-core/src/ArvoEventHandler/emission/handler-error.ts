@@ -32,22 +32,22 @@ export const buildHandlerErrorEvent = (
 ): ArvoEvent | null => {
   // Addressed to whoever opened the execution, so one whose opening event
   // is unknown has nobody to tell.
-  const caller = addressing.initEvent;
-  if (caller === null) return null;
+  const callingEvent = addressing.initEvent;
+  if (callingEvent === null) return null;
 
-  const built = createArvoEventFactory(self, {
+  const attempt = createArvoEventFactory(self, {
     domainCtx: { selfContract: self, triggeringEvent: addressing.event },
   }).tryCreateError({
     error: new Error(message),
     domain: domain ?? undefined,
     source: addressing.source,
     subject: addressing.subject,
-    to: caller.source,
+    to: callingEvent.source,
     executionid: addressing.parentExecutionId,
     parentid: addressing.event.id,
-    initid: caller.id,
+    initid: callingEvent.id,
     depth: addressing.depth,
   });
 
-  return built.ok ? built.value : null;
+  return attempt.ok ? attempt.value : null;
 };

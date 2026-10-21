@@ -4,7 +4,7 @@ import { ArvoContract } from '../../../src/ArvoContract/index.js';
 import { checkVersions } from '../../../src/ArvoEventHandler/helpers/check-versions.js';
 import { orderContract } from '../fixtures.js';
 
-const twoVersions = new ArvoContract({
+const twoVersionContract = new ArvoContract({
   type: 'com_report_build',
   versions: {
     '1.0.0': {
@@ -24,16 +24,16 @@ describe('a handler implements every version of its contract', () => {
   });
 
   it('accepts two versions each declared with an executor', () => {
-    expect(checkVersions(twoVersions, ['1.0.0', '1.1.0'])).toEqual([]);
+    expect(checkVersions(twoVersionContract, ['1.0.0', '1.1.0'])).toEqual([]);
   });
 
   it('accepts them in whatever order they were declared in', () => {
-    expect(checkVersions(twoVersions, ['1.1.0', '1.0.0'])).toEqual([]);
+    expect(checkVersions(twoVersionContract, ['1.1.0', '1.0.0'])).toEqual([]);
   });
 });
 
 describe('a version the contract declares and the handler does not', () => {
-  const issues = checkVersions(twoVersions, ['1.0.0']);
+  const issues = checkVersions(twoVersionContract, ['1.0.0']);
 
   it('is refused', () => {
     expect(issues).toHaveLength(1);
@@ -44,7 +44,7 @@ describe('a version the contract declares and the handler does not', () => {
   });
 
   it('reports every such version, not only the first', () => {
-    expect(checkVersions(twoVersions, [])).toHaveLength(2);
+    expect(checkVersions(twoVersionContract, [])).toHaveLength(2);
   });
 });
 
@@ -85,7 +85,7 @@ describe('a version declared more than once', () => {
 describe('two rules broken at once', () => {
   it('reports both rather than stopping at the first', () => {
     expect(
-      checkVersions(twoVersions, ['1.0.0', '1.0.0', '9.9.9']),
+      checkVersions(twoVersionContract, ['1.0.0', '1.0.0', '9.9.9']),
     ).toHaveLength(3);
   });
 });

@@ -17,14 +17,14 @@ const baseEvent = () =>
     dataschema: 'test://schema/v1',
   });
 
-const isThrown = async (
-  fn: () => Promise<unknown>,
+const thrownError = async (
+  operation: () => Promise<unknown>,
 ): Promise<CloudEventTransformationError> => {
   try {
-    await fn();
-  } catch (error) {
-    if (error instanceof CloudEventTransformationError) return error;
-    throw error;
+    await operation();
+  } catch (thrown) {
+    if (thrown instanceof CloudEventTransformationError) return thrown;
+    throw thrown;
   }
   throw new Error(
     'expected the promise to reject with a CloudEventTransformationError',
@@ -36,13 +36,13 @@ const passthroughStage = (): ICloudEventConverter & { calls: CloudEvent[] } => {
   const calls: CloudEvent[] = [];
   return {
     calls,
-    async convert(data) {
-      calls.push(data);
-      return data;
+    async convert(cloudEvent) {
+      calls.push(cloudEvent);
+      return cloudEvent;
     },
-    async revert(data) {
-      calls.push(data);
-      return data;
+    async revert(cloudEvent) {
+      calls.push(cloudEvent);
+      return cloudEvent;
     },
   };
 };
@@ -51,17 +51,17 @@ const passthroughStage = (): ICloudEventConverter & { calls: CloudEvent[] } => {
 const throwingStage = (
   message: string,
 ): ICloudEventConverter & { calls: number } => {
-  const state = { calls: 0 };
+  const callTally = { calls: 0 };
   return {
     get calls() {
-      return state.calls;
+      return callTally.calls;
     },
     async convert() {
-      state.calls++;
+      callTally.calls++;
       throw new Error(`convert: ${message}`);
     },
     async revert() {
-      state.calls++;
+      callTally.calls++;
       throw new Error(`revert: ${message}`);
     },
   } as ICloudEventConverter & { calls: number };
@@ -72,10 +72,10 @@ describe('CloudEventConverter', () => {
     it('defaults to the standard ArvoEvent<->CloudEvent mapping with no arguments', async () => {
       const converter = new CloudEventConverter();
       const event = baseEvent();
-      const ce = await converter.convert(event);
-      expect(ce.specversion).toBe('1.0');
-      const back = await converter.revert(ce);
-      expect(JSON.parse(JSON.stringify(back))).toEqual(
+      const cloudEvent = await converter.convert(event);
+      expect(cloudEvent.specversion).toBe('1.0');
+      const restoredEvent = await converter.revert(cloudEvent);
+      expect(JSON.parse(JSON.stringify(restoredEvent))).toEqual(
         JSON.parse(JSON.stringify(event)),
       );
     });
@@ -95,17 +95,17 @@ describe('CloudEventConverter', () => {
         },
       };
       const converter = new CloudEventConverter(customTransformer);
-      const ce = await converter.convert(baseEvent());
-      expect(ce.id).toBe('custom');
-      expect(ce.source).toBe('custom/source');
+      const cloudEvent = await converter.convert(baseEvent());
+      expect(cloudEvent.id).toBe('custom');
+      expect(cloudEvent.source).toBe('custom/source');
     });
 
     it('accepts an empty converters array explicitly, behaving like the default', async () => {
       const converter = new CloudEventConverter(undefined, []);
       const event = baseEvent();
-      const ce = await converter.convert(event);
-      const back = await converter.revert(ce);
-      expect(JSON.parse(JSON.stringify(back))).toEqual(
+      const cloudEvent = await converter.convert(event);
+      const restoredEvent = await converter.revert(cloudEvent);
+      expect(JSON.parse(JSON.stringify(restoredEvent))).toEqual(
         JSON.parse(JSON.stringify(event)),
       );
     });
@@ -115,70 +115,70 @@ describe('CloudEventConverter', () => {
     it('runs an appended stage forward on convert/tryConvert, after the base mapping', async () => {
       const stage = passthroughStage();
       const converter = new CloudEventConverter(undefined, [stage]);
-      const ce = await converter.convert(baseEvent());
+      const cloudEvent = await converter.convert(baseEvent());
       expect(stage.calls).toHaveLength(1);
-      expect(stage.calls[0]?.id).toBe(ce.id);
+      expect(stage.calls[0]?.id).toBe(cloudEvent.id);
     });
 
     it('unwinds an appended stage in reverse order before the base mapping runs on revert', async () => {
-      const order: string[] = [];
+      const callOrder: string[] = [];
       const stage: ICloudEventConverter = {
-        async convert(data) {
-          order.push('stage.convert');
-          return data;
+        async convert(cloudEvent) {
+          callOrder.push('stage.convert');
+          return cloudEvent;
         },
-        async revert(data) {
-          order.push('stage.revert');
-          return data;
+        async revert(cloudEvent) {
+          callOrder.push('stage.revert');
+          return cloudEvent;
         },
       };
       const converter = new CloudEventConverter(undefined, [stage]);
-      const ce = await converter.convert(baseEvent());
-      order.length = 0;
-      await converter.revert(ce);
-      expect(order).toEqual(['stage.revert']);
+      const cloudEvent = await converter.convert(baseEvent());
+      callOrder.length = 0;
+      await converter.revert(cloudEvent);
+      expect(callOrder).toEqual(['stage.revert']);
     });
 
     it('runs multiple appended stages forward in array order on convert', async () => {
-      const order: string[] = [];
-      const makeStage = (name: string): ICloudEventConverter => ({
-        async convert(data) {
-          order.push(`${name}.convert`);
-          return data;
+      const callOrder: string[] = [];
+      const namedStage = (name: string): ICloudEventConverter => ({
+        async convert(cloudEvent) {
+          callOrder.push(`${name}.convert`);
+          return cloudEvent;
         },
-        async revert(data) {
-          order.push(`${name}.revert`);
-          return data;
+        async revert(cloudEvent) {
+          callOrder.push(`${name}.revert`);
+          return cloudEvent;
         },
       });
       const converter = new CloudEventConverter(undefined, [
-        makeStage('a'),
-        makeStage('b'),
-        makeStage('c'),
+        namedStage('a'),
+        namedStage('b'),
+        namedStage('c'),
       ]);
       await converter.convert(baseEvent());
-      expect(order).toEqual(['a.convert', 'b.convert', 'c.convert']);
+      expect(callOrder).toEqual(['a.convert', 'b.convert', 'c.convert']);
     });
 
     it('unwinds multiple appended stages in reverse array order on revert', async () => {
-      const order: string[] = [];
-      const makeStage = (name: string): ICloudEventConverter => ({
-        async convert(data) {
-          return data;
+      const callOrder: string[] = [];
+      const namedStage = (name: string): ICloudEventConverter => ({
+        async convert(cloudEvent) {
+          return cloudEvent;
         },
-        async revert(data) {
-          order.push(`${name}.revert`);
-          return data;
+        async revert(cloudEvent) {
+          callOrder.push(`${name}.revert`);
+          return cloudEvent;
         },
       });
       const converter = new CloudEventConverter(undefined, [
-        makeStage('a'),
-        makeStage('b'),
-        makeStage('c'),
+        namedStage('a'),
+        namedStage('b'),
+        namedStage('c'),
       ]);
-      const ce = await converter.convert(baseEvent());
-      await converter.revert(ce);
-      expect(order).toEqual(['c.revert', 'b.revert', 'a.revert']);
+      const cloudEvent = await converter.convert(baseEvent());
+      await converter.revert(cloudEvent);
+      expect(callOrder).toEqual(['c.revert', 'b.revert', 'a.revert']);
     });
   });
 
@@ -186,16 +186,16 @@ describe('CloudEventConverter', () => {
     it('reports a convert-stage failure as kind: "stage", naming direction/stageIndex/cause', async () => {
       const stage = throwingStage('boom');
       const converter = new CloudEventConverter(undefined, [stage]);
-      const result = await converter.tryConvert(baseEvent());
-      expect(result.ok).toBe(false);
-      if (result.ok) throw new Error('unreachable');
-      expect(result.error.detail).toMatchObject({
+      const conversion = await converter.tryConvert(baseEvent());
+      expect(conversion.ok).toBe(false);
+      if (conversion.ok) throw new Error('unreachable');
+      expect(conversion.error.detail).toMatchObject({
         kind: 'stage',
         direction: 'convert',
         stageIndex: 1,
       });
-      if (result.error.detail.kind === 'stage') {
-        expect((result.error.detail.cause as Error).message).toBe(
+      if (conversion.error.detail.kind === 'stage') {
+        expect((conversion.error.detail.cause as Error).message).toBe(
           'convert: boom',
         );
       }
@@ -205,29 +205,29 @@ describe('CloudEventConverter', () => {
       const converter = new CloudEventConverter(undefined, [
         throwingStage('boom'),
       ]);
-      const error = await isThrown(() => converter.convert(baseEvent()));
+      const error = await thrownError(() => converter.convert(baseEvent()));
       expect(error.detail.kind).toBe('stage');
     });
 
     it('reports a revert-stage failure as kind: "stage", naming direction/stageIndex/cause', async () => {
       const stage = throwingStage('boom');
       const converter = new CloudEventConverter(undefined, [stage]);
-      const ce = new CloudEvent<Record<string, unknown>>({
+      const cloudEvent = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
         specversion: '1.0',
       });
-      const result = await converter.tryRevert(ce);
-      expect(result.ok).toBe(false);
-      if (result.ok) throw new Error('unreachable');
-      expect(result.error.detail).toMatchObject({
+      const reversion = await converter.tryRevert(cloudEvent);
+      expect(reversion.ok).toBe(false);
+      if (reversion.ok) throw new Error('unreachable');
+      expect(reversion.error.detail).toMatchObject({
         kind: 'stage',
         direction: 'revert',
         stageIndex: 1,
       });
-      if (result.error.detail.kind === 'stage') {
-        expect((result.error.detail.cause as Error).message).toBe(
+      if (reversion.error.detail.kind === 'stage') {
+        expect((reversion.error.detail.cause as Error).message).toBe(
           'revert: boom',
         );
       }
@@ -237,40 +237,40 @@ describe('CloudEventConverter', () => {
       const converter = new CloudEventConverter(undefined, [
         throwingStage('boom'),
       ]);
-      const ce = new CloudEvent<Record<string, unknown>>({
+      const cloudEvent = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
         specversion: '1.0',
       });
-      const error = await isThrown(() => converter.revert(ce));
+      const error = await thrownError(() => converter.revert(cloudEvent));
       expect(error.detail.kind).toBe('stage');
     });
 
     it('stops the convert pipeline at the first failing stage; a later stage never runs', async () => {
-      const later = passthroughStage();
+      const laterStage = passthroughStage();
       const converter = new CloudEventConverter(undefined, [
         throwingStage('boom'),
-        later,
+        laterStage,
       ]);
       await converter.tryConvert(baseEvent());
-      expect(later.calls).toHaveLength(0);
+      expect(laterStage.calls).toHaveLength(0);
     });
 
     it('stops the revert pipeline at the first failing stage; a later (earlier-in-array) stage never runs', async () => {
-      const earlierInArray = passthroughStage();
-      const ce = new CloudEvent<Record<string, unknown>>({
+      const earlierStage = passthroughStage();
+      const cloudEvent = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
         specversion: '1.0',
       });
       const converter = new CloudEventConverter(undefined, [
-        earlierInArray,
+        earlierStage,
         throwingStage('boom'),
       ]);
-      await converter.tryRevert(ce);
-      expect(earlierInArray.calls).toHaveLength(0);
+      await converter.tryRevert(cloudEvent);
+      expect(earlierStage.calls).toHaveLength(0);
     });
 
     it('numbers stageIndex correctly across multiple appended stages, for convert', async () => {
@@ -278,16 +278,16 @@ describe('CloudEventConverter', () => {
         passthroughStage(),
         throwingStage('boom'),
       ]);
-      const result = await converter.tryConvert(baseEvent());
-      if (result.ok) throw new Error('unreachable');
-      expect(result.error.detail).toMatchObject({
+      const conversion = await converter.tryConvert(baseEvent());
+      if (conversion.ok) throw new Error('unreachable');
+      expect(conversion.error.detail).toMatchObject({
         kind: 'stage',
         stageIndex: 2,
       });
     });
 
     it('numbers stageIndex correctly across multiple appended stages, for revert', async () => {
-      const ce = new CloudEvent<Record<string, unknown>>({
+      const cloudEvent = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
@@ -297,9 +297,9 @@ describe('CloudEventConverter', () => {
         passthroughStage(),
         throwingStage('boom'),
       ]);
-      const result = await converter.tryRevert(ce);
-      if (result.ok) throw new Error('unreachable');
-      expect(result.error.detail).toMatchObject({
+      const reversion = await converter.tryRevert(cloudEvent);
+      if (reversion.ok) throw new Error('unreachable');
+      expect(reversion.error.detail).toMatchObject({
         kind: 'stage',
         stageIndex: 2,
       });
@@ -315,9 +315,9 @@ describe('CloudEventConverter', () => {
         },
       };
       const converter = new CloudEventConverter(failingTransformer);
-      const result = await converter.tryConvert(baseEvent());
-      if (result.ok) throw new Error('unreachable');
-      expect(result.error.detail).toMatchObject({
+      const conversion = await converter.tryConvert(baseEvent());
+      if (conversion.ok) throw new Error('unreachable');
+      expect(conversion.error.detail).toMatchObject({
         kind: 'stage',
         direction: 'convert',
         stageIndex: 0,
@@ -329,34 +329,34 @@ describe('CloudEventConverter', () => {
         throwingStage('a'),
         throwingStage('b'),
       ]);
-      const convertResult = await converter.tryConvert(baseEvent());
-      const revertResult = await converter.tryRevert(
+      const conversion = await converter.tryConvert(baseEvent());
+      const reversion = await converter.tryRevert(
         new CloudEvent({ id: 'x', source: 's', type: 't', specversion: '1.0' }),
       );
-      expect(convertResult.ok).toBe(false);
-      expect(revertResult.ok).toBe(false);
+      expect(conversion.ok).toBe(false);
+      expect(reversion.ok).toBe(false);
     });
   });
 
   describe('CloudEventTransformationError passthrough (not double-wrapped)', () => {
     it('passes through a structural rejection from the base transformer as-is, not wrapped as kind: "stage"', async () => {
       const converter = new CloudEventConverter();
-      const ce = new CloudEvent<Record<string, unknown>>({
+      const cloudEvent = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
         specversion: '1.0',
       });
-      const result = await converter.tryRevert(ce, {
+      const reversion = await converter.tryRevert(cloudEvent, {
         dataschema: 'unknown/0.0.0',
       });
-      expect(result.ok).toBe(false);
-      if (result.ok) throw new Error('unreachable');
-      expect(result.error.detail.kind).toBe('foreign');
+      expect(reversion.ok).toBe(false);
+      if (reversion.ok) throw new Error('unreachable');
+      expect(reversion.error.detail.kind).toBe('foreign');
     });
 
     it("preserves a stage's own thrown CloudEventTransformationError unchanged when it throws one deliberately", async () => {
-      const deliberate = new CloudEventTransformationError({
+      const deliberateError = new CloudEventTransformationError({
         kind: 'stage',
         direction: 'convert',
         stageIndex: 99,
@@ -364,23 +364,23 @@ describe('CloudEventConverter', () => {
       });
       const stage: ICloudEventConverter = {
         async convert() {
-          throw deliberate;
+          throw deliberateError;
         },
-        async revert(data) {
-          return data;
+        async revert(cloudEvent) {
+          return cloudEvent;
         },
       };
       const converter = new CloudEventConverter(undefined, [stage]);
-      const result = await converter.tryConvert(baseEvent());
-      if (result.ok) throw new Error('unreachable');
-      expect(result.error).toBe(deliberate);
-      expect(result.error.detail).toMatchObject({ stageIndex: 99 });
+      const conversion = await converter.tryConvert(baseEvent());
+      if (conversion.ok) throw new Error('unreachable');
+      expect(conversion.error).toBe(deliberateError);
+      expect(conversion.error.detail).toMatchObject({ stageIndex: 99 });
     });
   });
 
   describe('foreignFallback reaches only the base transformer', () => {
     it('passes foreignFallback through to a custom transformer that declares the extra parameter', async () => {
-      let received: unknown;
+      let receivedFallback: unknown;
       const transformer: IArvoEventTransformer = {
         async convert() {
           return new CloudEvent({
@@ -390,36 +390,36 @@ describe('CloudEventConverter', () => {
             specversion: '1.0',
           });
         },
-        async revert(_data, foreignFallback) {
-          received = foreignFallback;
+        async revert(_cloudEvent, foreignFallback) {
+          receivedFallback = foreignFallback;
           return baseEvent();
         },
       };
       const converter = new CloudEventConverter(transformer);
-      const ce = new CloudEvent<Record<string, unknown>>({
+      const cloudEvent = new CloudEvent<Record<string, unknown>>({
         id: 'x',
         source: 's',
         type: 't',
         specversion: '1.0',
       });
-      await converter.revert(ce, { dataschema: 'unknown/0.0.0' });
-      expect(received).toEqual({ dataschema: 'unknown/0.0.0' });
+      await converter.revert(cloudEvent, { dataschema: 'unknown/0.0.0' });
+      expect(receivedFallback).toEqual({ dataschema: 'unknown/0.0.0' });
     });
 
     it('does not pass foreignFallback to an appended ICloudEventConverter stage', async () => {
       let receivedArgCount = -1;
       const stage: ICloudEventConverter = {
-        async convert(data) {
-          return data;
+        async convert(cloudEvent) {
+          return cloudEvent;
         },
-        async revert(...args: unknown[]) {
-          receivedArgCount = args.length;
-          return args[0] as CloudEvent;
+        async revert(...revertArguments: unknown[]) {
+          receivedArgCount = revertArguments.length;
+          return revertArguments[0] as CloudEvent;
         },
       };
       const converter = new CloudEventConverter(undefined, [stage]);
-      const ce = await converter.convert(baseEvent());
-      await converter.revert(ce, { dataschema: 'unknown/0.0.0' });
+      const cloudEvent = await converter.convert(baseEvent());
+      await converter.revert(cloudEvent, { dataschema: 'unknown/0.0.0' });
       expect(receivedArgCount).toBe(1);
     });
   });
@@ -428,14 +428,14 @@ describe('CloudEventConverter', () => {
     it('ICloudEventConverter requires both convert and revert', () => {
       // @ts-expect-error missing `revert`
       const _missingRevert: ICloudEventConverter = {
-        async convert(data) {
-          return data;
+        async convert(cloudEvent) {
+          return cloudEvent;
         },
       };
       // @ts-expect-error missing `convert`
       const _missingConvert: ICloudEventConverter = {
-        async revert(data) {
-          return data;
+        async revert(cloudEvent) {
+          return cloudEvent;
         },
       };
       expectTypeOf<ICloudEventConverter>().toHaveProperty('convert');
@@ -445,7 +445,7 @@ describe('CloudEventConverter', () => {
     it('IArvoEventTransformer requires both convert and revert, with revert accepting foreignFallback', () => {
       // @ts-expect-error missing `revert`
       const _missingRevert: IArvoEventTransformer = {
-        async convert(_data) {
+        async convert(_event) {
           return new CloudEvent({
             id: 'x',
             source: 's',
@@ -456,8 +456,8 @@ describe('CloudEventConverter', () => {
       };
       // @ts-expect-error missing `convert`
       const _missingConvert: IArvoEventTransformer = {
-        async revert(data) {
-          return data as never;
+        async revert(cloudEvent) {
+          return cloudEvent as never;
         },
       };
       expectTypeOf<IArvoEventTransformer['revert']>().parameters.toEqualTypeOf<

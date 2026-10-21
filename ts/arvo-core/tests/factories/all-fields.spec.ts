@@ -35,7 +35,7 @@ const ALL_FIELDS = [
 ] as const;
 
 /** Every field a caller may pass, each with a value distinct from any default. */
-const everything = {
+const allFieldValues = {
   id: 'event-1',
   parentid: 'parent-1',
   initid: 'init-1',
@@ -65,30 +65,30 @@ const contract = new ArvoContract({
     },
   },
 });
-const version = contract.versions['1.0.0'];
-const orders = createArvoEventFactory(version);
+const orderVersion = contract.versions['1.0.0'];
+const orderFactory = createArvoEventFactory(orderVersion);
 
 /** Asserts that every field a caller passed reached the event unchanged. */
-const carriesEverything = (event: ArvoEvent) => {
-  expect(event.id).toBe(everything.id);
-  expect(event.parentid).toBe(everything.parentid);
-  expect(event.initid).toBe(everything.initid);
-  expect(event.subject).toBe(everything.subject);
-  expect(event.executionid).toBe(everything.executionid);
-  expect(event.category).toBe(everything.category);
-  expect(event.depth).toBe(everything.depth);
-  expect(event.source).toBe(everything.source);
-  expect(event.to).toBe(everything.to);
-  expect(event.baggage).toEqual(everything.baggage);
-  expect(event.time).toBe(everything.time);
-  expect(event.traceparent).toBe(everything.traceparent);
-  expect(event.tracestate).toBe(everything.tracestate);
-  expect(event.executionunits).toBe(everything.executionunits);
+const expectEveryFieldCarried = (event: ArvoEvent) => {
+  expect(event.id).toBe(allFieldValues.id);
+  expect(event.parentid).toBe(allFieldValues.parentid);
+  expect(event.initid).toBe(allFieldValues.initid);
+  expect(event.subject).toBe(allFieldValues.subject);
+  expect(event.executionid).toBe(allFieldValues.executionid);
+  expect(event.category).toBe(allFieldValues.category);
+  expect(event.depth).toBe(allFieldValues.depth);
+  expect(event.source).toBe(allFieldValues.source);
+  expect(event.to).toBe(allFieldValues.to);
+  expect(event.baggage).toEqual(allFieldValues.baggage);
+  expect(event.time).toBe(allFieldValues.time);
+  expect(event.traceparent).toBe(allFieldValues.traceparent);
+  expect(event.tracestate).toBe(allFieldValues.tracestate);
+  expect(event.executionunits).toBe(allFieldValues.executionunits);
 };
 
 /** No field left holding a default, so nothing is asserted vacuously. */
-const nothingDefaulted = (event: ArvoEvent) => {
-  const untouched = new ArvoEvent({
+const expectNothingDefaulted = (event: ArvoEvent) => {
+  const defaultedEvent = new ArvoEvent({
     source: 'com.other',
     subject: 'other',
     type: event.type,
@@ -102,25 +102,25 @@ const nothingDefaulted = (event: ArvoEvent) => {
     'to',
     'executionunits',
   ] as const) {
-    expect(event[field]).not.toBe(untouched[field]);
+    expect(event[field]).not.toBe(defaultedEvent[field]);
   }
-  expect(event.depth).not.toBe(untouched.depth);
-  expect(event.baggage).not.toEqual(untouched.baggage);
+  expect(event.depth).not.toBe(defaultedEvent.depth);
+  expect(event.baggage).not.toEqual(defaultedEvent.baggage);
 };
 
 describe('createInput, given every field', () => {
-  const event = orders.createInput({
-    ...everything,
+  const event = orderFactory.createInput({
+    ...allFieldValues,
     domain: 'orders_priority',
     data: { items: ['book'], currency: 'USD' },
   });
 
   it('carries every field the caller passed', () => {
-    carriesEverything(event);
+    expectEveryFieldCarried(event);
   });
 
   it('leaves nothing at a default', () => {
-    nothingDefaulted(event);
+    expectNothingDefaulted(event);
   });
 
   it('still takes type and dataschema from the version', () => {
@@ -148,19 +148,19 @@ describe('createInput, given every field', () => {
 });
 
 describe('createOutput, given every field', () => {
-  const event = orders.createOutput({
-    ...everything,
+  const event = orderFactory.createOutput({
+    ...allFieldValues,
     type: 'com_order_created',
     domain: ArvoDomain.FROM_EVENT_CONTRACT,
     data: { order_id: 'o-1' },
   });
 
   it('carries every field the caller passed', () => {
-    carriesEverything(event);
+    expectEveryFieldCarried(event);
   });
 
   it('leaves nothing at a default', () => {
-    nothingDefaulted(event);
+    expectNothingDefaulted(event);
   });
 
   it('carries the emitted type and the version dataschema', () => {
@@ -174,19 +174,19 @@ describe('createOutput, given every field', () => {
 });
 
 describe('createError, given every field', () => {
-  const caught = new Error('boom');
-  const event = orders.createError({
-    ...everything,
+  const error = new Error('boom');
+  const event = orderFactory.createError({
+    ...allFieldValues,
     domain: ArvoDomain.LOCAL,
-    error: caught,
+    error,
   });
 
   it('carries every field the caller passed', () => {
-    carriesEverything(event);
+    expectEveryFieldCarried(event);
   });
 
   it('leaves nothing at a default', () => {
-    nothingDefaulted(event);
+    expectNothingDefaulted(event);
   });
 
   it('carries the handler error type and the version dataschema', () => {
@@ -198,7 +198,7 @@ describe('createError, given every field', () => {
     expect(event.data).toEqual({
       error_name: 'Error',
       error_message: 'boom',
-      error_stack: caught.stack,
+      error_stack: error.stack,
     });
   });
 
@@ -209,7 +209,7 @@ describe('createError, given every field', () => {
 
 describe('createArvoEvent, given every field', () => {
   const event = createArvoEvent({
-    ...everything,
+    ...allFieldValues,
     domain: 'orders_priority',
     type: 'com_order_create',
     dataschema: '#/com/order/create/1.0.0',
@@ -217,11 +217,11 @@ describe('createArvoEvent, given every field', () => {
   });
 
   it('carries every field the caller passed', () => {
-    carriesEverything(event);
+    expectEveryFieldCarried(event);
   });
 
   it('leaves nothing at a default', () => {
-    nothingDefaulted(event);
+    expectNothingDefaulted(event);
   });
 
   it('carries the type, dataschema, domain and payload it was given', () => {
@@ -233,50 +233,54 @@ describe('createArvoEvent, given every field', () => {
 });
 
 describe('cloneArvoEvent, replacing every field', () => {
-  const source = createArvoEvent({
+  const originalEvent = createArvoEvent({
     type: 'com_order_create',
     source: 'com.original',
     dataschema: '#/com/order/create/1.0.0',
     data: { items: [] },
   });
 
-  const clone = cloneArvoEvent(source, {
-    ...everything,
+  const clonedEvent = cloneArvoEvent(originalEvent, {
+    ...allFieldValues,
     domain: 'orders_priority',
     data: { items: ['replaced'] },
   });
 
   it('carries every replacement', () => {
-    carriesEverything(clone);
-    expect(clone.domain).toBe('orders_priority');
-    expect(clone.data).toEqual({ items: ['replaced'] });
+    expectEveryFieldCarried(clonedEvent);
+    expect(clonedEvent.domain).toBe('orders_priority');
+    expect(clonedEvent.data).toEqual({ items: ['replaced'] });
   });
 
   it('keeps the type and dataschema of the event it cloned', () => {
-    expect(clone.type).toBe(source.type);
-    expect(clone.dataschema).toBe(source.dataschema);
+    expect(clonedEvent.type).toBe(originalEvent.type);
+    expect(clonedEvent.dataschema).toBe(originalEvent.dataschema);
   });
 
   it('leaves the event it cloned untouched', () => {
-    expect(source.source).toBe('com.original');
-    expect(source.data).toEqual({ items: [] });
+    expect(originalEvent.source).toBe('com.original');
+    expect(originalEvent.data).toEqual({ items: [] });
   });
 });
 
 describe('a span in place of the trace headers', () => {
-  const span = {
+  const spanContext = {
     traceId: 'a'.repeat(32),
     spanId: 'b'.repeat(16),
     traceFlags: 1,
     traceState: { serialize: () => 'vendor=fromspan' },
   } as unknown as SpanContext;
 
-  const { traceparent: _tp, tracestate: _ts, ...withoutHeaders } = everything;
+  const {
+    traceparent: _traceparent,
+    tracestate: _tracestate,
+    ...headerlessFields
+  } = allFieldValues;
 
   it('derives both headers for an accepted event', () => {
-    const event = orders.createInput({
-      ...withoutHeaders,
-      span,
+    const event = orderFactory.createInput({
+      ...headerlessFields,
+      span: spanContext,
       data: { items: [] },
     });
     expect(event.traceparent).toBe(`00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`);
@@ -284,9 +288,9 @@ describe('a span in place of the trace headers', () => {
   });
 
   it('derives both headers for an emitted event', () => {
-    const event = orders.createOutput({
-      ...withoutHeaders,
-      span,
+    const event = orderFactory.createOutput({
+      ...headerlessFields,
+      span: spanContext,
       type: 'com_order_created',
       data: { order_id: 'o-1' },
     });
@@ -294,9 +298,9 @@ describe('a span in place of the trace headers', () => {
   });
 
   it('derives both headers for a handler error event', () => {
-    const event = orders.createError({
-      ...withoutHeaders,
-      span,
+    const event = orderFactory.createError({
+      ...headerlessFields,
+      span: spanContext,
       error: new Error('boom'),
     });
     expect(event.traceparent).toBe(`00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`);
@@ -304,8 +308,8 @@ describe('a span in place of the trace headers', () => {
 
   it('derives both headers for an event with no contract', () => {
     const event = createArvoEvent({
-      ...withoutHeaders,
-      span,
+      ...headerlessFields,
+      span: spanContext,
       type: 'com_order_create',
       dataschema: '#/com/order/create/1.0.0',
       data: {},

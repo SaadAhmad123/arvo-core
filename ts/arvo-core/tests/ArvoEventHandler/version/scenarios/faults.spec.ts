@@ -67,15 +67,15 @@ const anOrder = (overrides: Record<string, unknown> = {}) =>
   });
 
 /** Every kind this file reached, so the set can be judged at the end. */
-const reached = new Set<ArvoFaultKind>();
+const reachedFaultKinds = new Set<ArvoFaultKind>();
 
 /** One execution, run to its fault. */
-const faulted = async (
+const runToFault = async (
   param: Record<string, unknown>,
-  which: keyof ReturnType<typeof declareVersions>[string] = '1.0.0',
+  versionNumber: keyof ReturnType<typeof declareVersions>[string] = '1.0.0',
   versions = declareVersions(),
 ): Promise<ArvoHandlerFault> => {
-  const version = versions[orderV1.type]?.[which];
+  const version = versions[orderV1.type]?.[versionNumber];
   const event = (param.event as ArvoEvent) ?? anOrder();
   try {
     await version?.execute({
@@ -89,22 +89,22 @@ const faulted = async (
       telemetry: telemetry(),
       ...param,
     } as never);
-  } catch (raised) {
-    const fault = raised as ArvoHandlerFault;
-    reached.add(fault.faultKind);
+  } catch (thrown) {
+    const fault = thrown as ArvoHandlerFault;
+    reachedFaultKinds.add(fault.faultKind);
     return fault;
   }
   throw new Error('expected this execution to fault');
 };
 
 /** An order that has asked its two services and is waiting on them. */
-const waiting = async () => {
+const awaitingOrder = async () => {
   const versions = declareVersions();
-  const opening = anOrder();
-  const executionId = await deriveArvoExecutionId(opening);
+  const orderEvent = anOrder();
+  const executionId = await deriveArvoExecutionId(orderEvent);
   const response = await versions[orderV1.type]?.['1.0.0']?.execute({
     entry: 'init',
-    event: opening,
+    event: orderEvent,
     state: null,
     executionId,
     attempt: 0,
@@ -116,16 +116,16 @@ const waiting = async () => {
   if (response?.kind !== 'produced') throw new Error('expected it to produce');
   return {
     versions,
-    opening,
+    orderEvent,
     executionId,
     row: response.state as JSONObject,
-    asked: response.events as ArvoEvent[],
+    requests: response.events as ArvoEvent[],
   };
 };
 
 /** An answer to one of the requests that execution made. */
 const answerTo = (
-  asked: ArvoEvent,
+  request: ArvoEvent,
   executionId: string,
   overrides: Record<string, unknown> = {},
 ) =>
@@ -133,40 +133,42 @@ const answerTo = (
     createArvoEventFactory(inventoryV1).createOutput({
       type: 'evt_inventory_reserved',
       source: inventoryV1.type,
-      subject: asked.subject,
+      subject: request.subject,
       to: orderV1.type,
       data: { held: 1 },
     }),
     {
-      parentid: asked.id,
-      initid: asked.id,
+      parentid: request.id,
+      initid: request.id,
       executionid: executionId,
-      depth: asked.depth,
+      depth: request.depth,
       ...overrides,
     },
   );
 
 /** Answering that execution, with whatever this row is made to be. */
-const followup = async (
-  built: Awaited<ReturnType<typeof waiting>>,
+const runFollowupToFault = async (
+  scenario: Awaited<ReturnType<typeof awaitingOrder>>,
   param: Record<string, unknown> = {},
 ) =>
-  faulted(
+  runToFault(
     {
       entry: 'followup',
-      event: answerTo(built.asked[0] as ArvoEvent, built.executionId),
-      state: built.row,
-      executionId: built.executionId,
+      event: answerTo(scenario.requests[0] as ArvoEvent, scenario.executionId),
+      state: scenario.row,
+      executionId: scenario.executionId,
       ...param,
     },
     '1.0.0',
-    built.versions,
+    scenario.versions,
   );
 
 describe('what refuses an execution on the way in', () => {
   it('a stored record that will not read back', async () => {
-    const built = await waiting();
-    const fault = await followup(built, { state: { nothing: 'much' } });
+    const scenario = await awaitingOrder();
+    const fault = await runFollowupToFault(scenario, {
+      state: { nothing: 'much' },
+    });
     expect(fault.faultKind).toBe('record_event_unrestorable');
     expect(fault.retry).toBeNull();
     expect(fault.abandonmentEvent).toBeNull();
@@ -174,26 +176,26 @@ describe('what refuses an execution on the way in', () => {
   });
 
   it('a stored record whose own fields contradict it', async () => {
-    const built = await waiting();
-    const fault = await followup(built, {
-      state: { ...built.row, depth: 9 },
+    const scenario = await awaitingOrder();
+    const fault = await runFollowupToFault(scenario, {
+      state: { ...scenario.row, depth: 9 },
     });
     expect(fault.faultKind).toBe('record_invalid');
     expect(fault.retry).toBeNull();
-    expect(fault.violations.some((broken) => broken.includes('depth'))).toBe(
-      true,
-    );
+    expect(
+      fault.violations.some((violation) => violation.includes('depth')),
+    ).toBe(true);
     expect(typeof fault.abandonmentEvent).toBe('string');
     expect(typeof fault.abandonmentState).toBe('string');
   });
 
   it('an event arriving deeper than the version allows', async () => {
-    const deep = cloneArvoEvent(anOrder(), {
+    const deepEvent = cloneArvoEvent(anOrder(), {
       depth: 3,
       parentid: 'something-above',
     });
-    const fault = await faulted(
-      { event: deep },
+    const fault = await runToFault(
+      { event: deepEvent },
       '1.0.0',
       declareVersions({ [orderV1.type]: { maxDepth: 3 } }),
     );
@@ -204,9 +206,9 @@ describe('what refuses an execution on the way in', () => {
   });
 
   it('a record belonging to another version of this contract', async () => {
-    const built = await waiting();
-    const fault = await followup(built, {
-      state: { ...built.row, version: '1.1.0' },
+    const scenario = await awaitingOrder();
+    const fault = await runFollowupToFault(scenario, {
+      state: { ...scenario.row, version: '1.1.0' },
     });
     expect(fault.faultKind).toBe('version_not_declared');
     expect(fault.retry).toBeNull();
@@ -215,9 +217,9 @@ describe('what refuses an execution on the way in', () => {
   });
 
   it('an event reaching an execution that has already ended', async () => {
-    const built = await waiting();
-    const fault = await followup(built, {
-      state: { ...built.row, lifecycle: 'success' },
+    const scenario = await awaitingOrder();
+    const fault = await runFollowupToFault(scenario, {
+      state: { ...scenario.row, lifecycle: 'success' },
     });
     expect(fault.faultKind).toBe('lifecycle_terminal');
     expect(fault.retry).toBeNull();
@@ -226,11 +228,11 @@ describe('what refuses an execution on the way in', () => {
   });
 
   it('an execution that has outlived the time it is allowed', async () => {
-    const old = cloneArvoEvent(anOrder(), {
+    const staleEvent = cloneArvoEvent(anOrder(), {
       time: new Date(Date.now() - 60_000).toISOString(),
     });
-    const fault = await faulted(
-      { event: old },
+    const fault = await runToFault(
+      { event: staleEvent },
       '1.0.0',
       declareVersions({ [orderV1.type]: { executionTimeout: 1_000 } }),
     );
@@ -243,22 +245,22 @@ describe('what refuses an execution on the way in', () => {
   it('an event that names nowhere to go', async () => {
     // Built without a contract, because a contract's factory addresses
     // every event it makes and this one must name nowhere.
-    const unaddressed = createArvoEvent({
+    const unaddressedEvent = createArvoEvent({
       source: 'com.web.checkout',
       subject: 'order-1',
       type: orderV1.type,
       dataschema: orderV1.dataschema,
       data: { items: ['book'] },
     });
-    const fault = await faulted({ event: unaddressed });
+    const fault = await runToFault({ event: unaddressedEvent });
     expect(fault.faultKind).toBe('event_unaddressed');
     expect(fault.retry).toBeNull();
   });
 
   it('an event that does not belong to the execution it arrived with', async () => {
-    const built = await waiting();
-    const fault = await followup(built, {
-      event: answerTo(built.asked[0] as ArvoEvent, built.executionId, {
+    const scenario = await awaitingOrder();
+    const fault = await runFollowupToFault(scenario, {
+      event: answerTo(scenario.requests[0] as ArvoEvent, scenario.executionId, {
         subject: 'another-workflow',
       }),
     });
@@ -268,9 +270,9 @@ describe('what refuses an execution on the way in', () => {
   });
 
   it('an answer to something nothing asked for', async () => {
-    const built = await waiting();
-    const fault = await followup(built, {
-      event: answerTo(built.asked[0] as ArvoEvent, built.executionId, {
+    const scenario = await awaitingOrder();
+    const fault = await runFollowupToFault(scenario, {
+      event: answerTo(scenario.requests[0] as ArvoEvent, scenario.executionId, {
         initid: 'never-asked',
       }),
     });
@@ -281,7 +283,7 @@ describe('what refuses an execution on the way in', () => {
   });
 
   it('dependencies that would not resolve, which may resolve later', async () => {
-    const fault = await faulted({
+    const fault = await runToFault({
       dependencies: openedPerExecution(() => {
         throw new Error('the pool is exhausted');
       }).dependency,
@@ -295,14 +297,14 @@ describe('what refuses an execution on the way in', () => {
 });
 
 describe('what refuses an execution once its executor has run', () => {
-  const misbehaving = (behave: (ctx: OrderContext) => unknown) =>
-    faulted({ dependencies: heldDependencies({ behave }).dependency });
+  const runBehaviourToFault = (behave: (ctx: OrderContext) => unknown) =>
+    runToFault({ dependencies: heldDependencies({ behave }).dependency });
 
   it('an executor that did not come back in time', async () => {
     const versions = declareVersions({
       [orderV1.type]: { runTimeout: 20 },
     });
-    const fault = await faulted(
+    const fault = await runToFault(
       {
         dependencies: heldDependencies({
           behave: () => new Promise(() => undefined),
@@ -316,7 +318,7 @@ describe('what refuses an execution once its executor has run', () => {
   });
 
   it('an executor that ended the execution and answered nobody', async () => {
-    const fault = await misbehaving(async (ctx) => {
+    const fault = await runBehaviourToFault(async (ctx) => {
       await ctx.setState({ data: { stage: 'stopping', answers: 0 } });
       ctx.cancel('the customer withdrew the order');
     });
@@ -327,7 +329,7 @@ describe('what refuses an execution once its executor has run', () => {
   });
 
   it('an executor that raised a fault of its own', async () => {
-    const fault = await misbehaving(async (ctx) => {
+    const fault = await runBehaviourToFault(async (ctx) => {
       throw await ctx.fault({
         faultKind: 'executor_raised',
         message: 'the gateway refused',
@@ -338,7 +340,7 @@ describe('what refuses an execution once its executor has run', () => {
   });
 
   it('an executor that returned something that is not an event', async () => {
-    const fault = await misbehaving(async (ctx) => {
+    const fault = await runBehaviourToFault(async (ctx) => {
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
       return 'nearly an event';
     });
@@ -349,13 +351,15 @@ describe('what refuses an execution once its executor has run', () => {
   });
 
   it('an event whose payload its own schema refuses', async () => {
-    const fault = await misbehaving(async (ctx) => {
+    const fault = await runBehaviourToFault(async (ctx) => {
       await ctx.setState({ data: { stage: 'done', answers: 0 } });
-      const asked = await ctx.build({
+      const chargeRequest = await ctx.build({
         type: 'com_payment_charge',
         data: { amount: 1 },
       });
-      return cloneArvoEvent(asked, { data: { amount: 'free' } as never });
+      return cloneArvoEvent(chargeRequest, {
+        data: { amount: 'free' } as never,
+      });
     });
     expect(fault.faultKind).toBe('emission_schema_rejected');
     expect(fault.retry).toBeNull();
@@ -363,7 +367,7 @@ describe('what refuses an execution once its executor has run', () => {
 
   it('an event that would be sent deeper than the version allows', async () => {
     const versions = declareVersions({ [orderV1.type]: { maxDepth: 1 } });
-    const fault = await faulted(
+    const fault = await runToFault(
       {
         dependencies: heldDependencies({
           behave: async (ctx: OrderContext) => {
@@ -383,7 +387,7 @@ describe('what refuses an execution once its executor has run', () => {
   });
 
   it('a write the version own state schema refuses', async () => {
-    const fault = await misbehaving(async (ctx) => {
+    const fault = await runBehaviourToFault(async (ctx) => {
       await ctx.setState({ data: { stage: 42 } as never });
     });
     expect(fault.faultKind).toBe('state_schema_rejected');
@@ -391,7 +395,7 @@ describe('what refuses an execution once its executor has run', () => {
   });
 
   it('an executor that finished having remembered nothing', async () => {
-    const fault = await misbehaving(async (ctx) =>
+    const fault = await runBehaviourToFault(async (ctx) =>
       ctx.build({ type: 'evt_order_fulfilled', data: { order_id: 'o-1' } }),
     );
     expect(fault.faultKind).toBe('state_schema_rejected');
@@ -404,7 +408,7 @@ describe('what refuses an execution once its executor has run', () => {
     // write was attempted.
     const circular: Record<string, unknown> = {};
     circular.self = circular;
-    const writing = createArvoEventFactory(auditV1).createInput({
+    const auditEvent = createArvoEventFactory(auditV1).createInput({
       source: 'com.web.checkout',
       subject: 'order-1',
       to: auditV1.type,
@@ -415,9 +419,9 @@ describe('what refuses an execution once its executor has run', () => {
     try {
       await versions[auditV1.type]?.['1.0.0']?.execute({
         entry: 'init',
-        event: writing,
+        event: auditEvent,
         state: null,
-        executionId: await deriveArvoExecutionId(writing),
+        executionId: await deriveArvoExecutionId(auditEvent),
         attempt: 0,
         dependencies: heldDependencies({
           behave: async (ctx: AuditContext) => {
@@ -427,9 +431,9 @@ describe('what refuses an execution once its executor has run', () => {
         hooks: {},
         telemetry: telemetry(),
       } as never);
-    } catch (raised) {
-      const fault = raised as ArvoHandlerFault;
-      reached.add(fault.faultKind);
+    } catch (thrown) {
+      const fault = thrown as ArvoHandlerFault;
+      reachedFaultKinds.add(fault.faultKind);
       expect(fault.faultKind).toBe('state_not_serializable');
       expect(fault.retry).toBeNull();
       expect(fault.message).toContain('ctx.setState()');
@@ -441,7 +445,7 @@ describe('what refuses an execution once its executor has run', () => {
 
 describe('what every fault carries, whichever it is', () => {
   it('names the execution it happened to, where one was resolved', async () => {
-    const fault = await faulted({
+    const fault = await runToFault({
       dependencies: openedPerExecution(() => {
         throw new Error('no');
       }).dependency,
@@ -453,14 +457,14 @@ describe('what every fault carries, whichever it is', () => {
   });
 
   it('survives being written out, for whatever stores it', async () => {
-    const fault = await faulted({
+    const fault = await runToFault({
       dependencies: openedPerExecution(() => {
         throw new Error('no');
       }).dependency,
     });
-    const written = JSON.parse(JSON.stringify(fault.toJSON()));
-    expect(written.faultKind).toBe('dependency_resolution_failed');
-    expect(written.retry.retryInMs).toBeGreaterThan(0);
+    const faultJson = JSON.parse(JSON.stringify(fault.toJSON()));
+    expect(faultJson.faultKind).toBe('dependency_resolution_failed');
+    expect(faultJson.retry.retryInMs).toBeGreaterThan(0);
   });
 });
 
@@ -495,9 +499,9 @@ describe('the vocabulary a version can raise', () => {
       'state_not_serializable',
     ];
 
-    const owed = everyKind.filter(
-      (kind) => !BEFORE_A_VERSION_IS_KNOWN.includes(kind),
+    const versionFaultKinds = everyKind.filter(
+      (faultKind) => !BEFORE_A_VERSION_IS_KNOWN.includes(faultKind),
     );
-    expect([...reached].sort()).toEqual(owed.sort());
+    expect([...reachedFaultKinds].sort()).toEqual(versionFaultKinds.sort());
   });
 });

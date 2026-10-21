@@ -29,19 +29,19 @@ import type { ArvoServiceMap } from '../types/services.js';
  */
 export const checkServices = (services: ArvoServiceMap): ErrorIssue[] => {
   const issues: ErrorIssue[] = [];
-  const firstDeclaredAs = new Map<string, string>();
+  const localNameByUri = new Map<string, string>();
 
   for (const [localName, service] of Object.entries(services)) {
-    const already = firstDeclaredAs.get(service.uri);
-    if (already === undefined) {
-      firstDeclaredAs.set(service.uri, localName);
+    const earlierLocalName = localNameByUri.get(service.uri);
+    if (earlierLocalName === undefined) {
+      localNameByUri.set(service.uri, localName);
       continue;
     }
 
     issues.push(
       new ErrorIssue({
         path: `services${pathSegmentForKey(localName)}`,
-        message: `declares ${service.uri} a second time, already declared as '${already}'. A service is one contract at one version, and a response names only its own version, so two declarations of one contract leave nothing to check it against`,
+        message: `declares ${service.uri} a second time, already declared as '${earlierLocalName}'. A service is one contract at one version, and a response names only its own version, so two declarations of one contract leave nothing to check it against`,
       }),
     );
   }

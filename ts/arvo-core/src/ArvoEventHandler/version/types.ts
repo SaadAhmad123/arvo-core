@@ -9,6 +9,7 @@ import type {
   ArvoEventHandlerExecutor,
   ArvoExecutorEmission,
 } from '../types/execute.js';
+import type { ArvoEventHandlerMiddlewareEntry } from '../types/middleware.js';
 import type { ArvoEventHandlerOptions } from '../types/options.js';
 import type {
   ArvoAnyServiceResponse,
@@ -72,6 +73,20 @@ export type ArvoEventHandlerVersionParam<
    * nothing; it exists so both can be named.
    */
   types?: ArvoDeclaredTypes<TDependencies, TMechanismHooks>;
+
+  /**
+   * The layers the handler declared around every version's executor, or
+   * `null` where it declared none. Already judged.
+   */
+  middleware:
+    | readonly ArvoEventHandlerMiddlewareEntry<
+        VersionedArvoContract,
+        TServices,
+        z.$ZodObject,
+        TDependencies,
+        TMechanismHooks
+      >[]
+    | null;
 };
 
 /** What every execution of a version brings with it, however it arrived. */
@@ -106,6 +121,20 @@ type ArvoVersionExecuteCommon<
    * was never asked.
    */
   hooks: TMechanismHooks | null;
+  /**
+   * Layers supplied for this execution alone, or `null` where none were.
+   * Not yet judged: a way to make one is called, and every identifier
+   * checked, before any layer runs.
+   */
+  middleware:
+    | readonly ArvoEventHandlerMiddlewareEntry<
+        VersionedArvoContract,
+        ArvoServiceMap,
+        z.$ZodObject,
+        TDependencies,
+        TMechanismHooks
+      >[]
+    | null;
   /** This execution's telemetry, built by whatever runs the handler. */
   telemetry: ArvoExecutionContextTelemetry;
 
@@ -171,8 +200,13 @@ export type ArvoEventHandlerVersionExecuteParam<
  * does afterwards is accepted.
  */
 export type ArvoExecutorRun =
-  | { readonly kind: 'returned'; readonly returned: ArvoExecutorEmission }
-  | { readonly kind: 'raised'; readonly raised: unknown }
+  | {
+      readonly kind: 'returned';
+      readonly emission: ArvoExecutorEmission;
+      /** When the executor returned. */
+      readonly returnedAt: number;
+    }
+  | { readonly kind: 'raised'; readonly thrown: unknown }
   | { readonly kind: 'outran' };
 
 /**

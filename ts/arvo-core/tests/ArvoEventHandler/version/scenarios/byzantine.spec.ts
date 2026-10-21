@@ -41,7 +41,7 @@ const anOrder = (subject = 'order-1') =>
   });
 
 /** An order asking two services, answering once both reply. */
-const asking = (
+const orderLattice = (
   lattice = createArvoLattice({
     versions: declareVersions(),
     seed: 37,
@@ -69,29 +69,32 @@ const asking = (
   // Both services do their work and say nothing, so the order is still
   // waiting when the answers in this file arrive — which is the only
   // state in which a wrong answer can do any harm.
-  for (const quiet of [inventoryV1.type, paymentV1.type]) {
-    lattice.behave(quiet, async (ctx: WorkerContext<typeof inventoryV1>) => {
-      await ctx.setState({ data: { stage: 'quiet', answers: 0 } });
-    });
+  for (const serviceType of [inventoryV1.type, paymentV1.type]) {
+    lattice.behave(
+      serviceType,
+      async (ctx: WorkerContext<typeof inventoryV1>) => {
+        await ctx.setState({ data: { stage: 'quiet', answers: 0 } });
+      },
+    );
   }
   return lattice;
 };
 
 /** An order that has asked, with what it asked for in hand. */
-const asked = async () => {
-  const lattice = asking();
+const orderAwaitingAnswers = async () => {
+  const lattice = orderLattice();
   await lattice.publish(anOrder()).settle();
 
   const requests = lattice.transcript.published.filter(
     (event) => event.initid === null && event.parentid !== null,
   );
-  const order = [...lattice.store.entries()].find(
+  const [executionId] = [...lattice.store.entries()].find(
     ([, row]) => row.source === orderV1.type,
   ) as [string, Record<string, unknown>];
 
   return {
     lattice,
-    executionId: order[0],
+    executionId,
     toInventory: requests.find(
       (event) => event.type === inventoryV1.type,
     ) as ArvoEvent,
@@ -116,109 +119,120 @@ const properAnswer = (request: ArvoEvent, executionId: string) =>
   });
 
 /** That answer, spoiled in one way, and what the order makes of it. */
-const spoiled = async (
+const injectSpoiledAnswer = async (
   overrides: Record<string, unknown>,
 ): Promise<{
-  kind: ArvoFaultKind | null;
-  lattice: Awaited<ReturnType<typeof asked>>['lattice'];
+  faultKind: ArvoFaultKind | null;
+  lattice: Awaited<ReturnType<typeof orderAwaitingAnswers>>['lattice'];
 }> => {
-  const { lattice, executionId, toInventory } = await asked();
+  const { lattice, executionId, toInventory } = await orderAwaitingAnswers();
   lattice.inject(
     cloneArvoEvent(properAnswer(toInventory, executionId), overrides),
   );
   await lattice.settle();
   return {
-    kind: lattice.transcript.faults.at(-1)?.fault.faultKind ?? null,
+    faultKind: lattice.transcript.faults.at(-1)?.fault.faultKind ?? null,
     lattice,
   };
 };
 
 describe('a service that answers the wrong thing', () => {
   it('answers in a workflow that is not the one it was asked in', async () => {
-    const { kind } = await spoiled({ subject: 'another-workflow' });
-    expect(kind).toBe('addressing_mismatch');
+    const { faultKind } = await injectSpoiledAnswer({
+      subject: 'another-workflow',
+    });
+    expect(faultKind).toBe('addressing_mismatch');
   });
 
   it('answers naming an execution that did not ask', async () => {
-    const { kind, lattice } = await spoiled({ executionid: 'f'.repeat(64) });
+    const { faultKind, lattice } = await injectSpoiledAnswer({
+      executionid: 'f'.repeat(64),
+    });
 
     // It never reaches this execution at all: an answer is routed by the
     // execution it names, and that one has no record. Nothing of this
     // one is touched, and the diagnosis belongs one layer up.
-    expect(kind).toBeNull();
+    expect(faultKind).toBeNull();
     expect(
       lattice.transcript.delivered.some(
-        (given) => given.executionId === 'f'.repeat(64),
+        (delivery) => delivery.executionId === 'f'.repeat(64),
       ),
     ).toBe(false);
   });
 
   it('answers a request that was never made', async () => {
-    const { kind } = await spoiled({ initid: 'never-asked' });
-    expect(kind).toBe('response_unawaited');
+    const { faultKind } = await injectSpoiledAnswer({ initid: 'never-asked' });
+    expect(faultKind).toBe('response_unawaited');
   });
 
   it('answers without saying what it answers', async () => {
-    const { kind } = await spoiled({ initid: null as never });
-    expect(kind).toBe('response_unawaited');
+    const { faultKind } = await injectSpoiledAnswer({ initid: null as never });
+    expect(faultKind).toBe('response_unawaited');
   });
 
   it('answers something addressed elsewhere', async () => {
-    const { kind, lattice } = await spoiled({ to: 'com.somewhere.else' });
+    const { faultKind, lattice } = await injectSpoiledAnswer({
+      to: 'com.somewhere.else',
+    });
 
     // Addressed away from this handler, it is routed away from it: no
     // execution of this contract ever sees it.
-    expect(kind).toBeNull();
+    expect(faultKind).toBeNull();
     expect(
-      lattice.transcript.delivered.map((given) => given.event.to),
+      lattice.transcript.delivered.map((delivery) => delivery.event.to),
     ).not.toContain('com.somewhere.else');
   });
 
   it('answers from deeper than it was asked at', async () => {
-    const { kind } = await spoiled({ depth: 7 });
+    const { faultKind } = await injectSpoiledAnswer({ depth: 7 });
     // depth is not addressing: a wrong one is accepted here and caught
     // by the bound, which is what the bound is for
-    expect(kind).toBeNull();
+    expect(faultKind).toBeNull();
   });
 
   it('names the field that disagrees, where one reaches this execution', async () => {
-    const { lattice } = await spoiled({ subject: 'another-workflow' });
-    const refused = lattice.transcript.faults.at(-1)?.fault;
+    const { lattice } = await injectSpoiledAnswer({
+      subject: 'another-workflow',
+    });
+    const fault = lattice.transcript.faults.at(-1)?.fault;
     expect(
-      refused?.violations.some((broken) => broken.includes('subject')),
+      fault?.violations.some((violation) => violation.includes('subject')),
     ).toBe(true);
   });
 
   it('leaves the execution waiting on what it is still owed', async () => {
-    const { lattice } = await spoiled({ subject: 'another-workflow' });
-    const order = [...lattice.store.values()].find(
+    const { lattice } = await injectSpoiledAnswer({
+      subject: 'another-workflow',
+    });
+    const orderRow = [...lattice.store.values()].find(
       (row) => row.source === orderV1.type,
     );
-    expect(order?.lifecycle).toBe('waiting');
+    expect(orderRow?.lifecycle).toBe('waiting');
   });
 
   it('publishes nothing on behalf of an execution it did not move', async () => {
-    const { lattice } = await spoiled({ initid: 'never-asked' });
-    const answered = lattice.transcript.published.filter(
+    const { lattice } = await injectSpoiledAnswer({ initid: 'never-asked' });
+    const callerAnswers = lattice.transcript.published.filter(
       (event) => event.to === 'com.web.checkout',
     );
-    expect(answered).toEqual([]);
+    expect(callerAnswers).toEqual([]);
   });
 });
 
 describe('two services that answer as though they were one', () => {
   it('refuses the second answer carrying an id the first already used', async () => {
-    const { lattice, executionId, toInventory, toPayment } = await asked();
-    const first = properAnswer(toInventory, executionId);
+    const { lattice, executionId, toInventory, toPayment } =
+      await orderAwaitingAnswers();
+    const inventoryAnswer = properAnswer(toInventory, executionId);
 
     // a second service replying with the first one's event id, which
     // ADR-001 requires to be unique across the ecosystem
-    const impostor = cloneArvoEvent(first, {
+    const impostor = cloneArvoEvent(inventoryAnswer, {
       initid: toPayment.id,
       parentid: toPayment.id,
     });
 
-    lattice.inject(first);
+    lattice.inject(inventoryAnswer);
     await lattice.settle();
     lattice.inject(impostor);
     await lattice.settle();
@@ -226,15 +240,15 @@ describe('two services that answer as though they were one', () => {
     // the trail already holds that id as received, so the second is a
     // repeat rather than an answer, and the order is still owed one
     expect(lattice.transcript.discarded.length).toBeGreaterThan(0);
-    const order = [...lattice.store.values()].find(
+    const orderRow = [...lattice.store.values()].find(
       (row) => row.source === orderV1.type,
     );
-    expect(order?.lifecycle).toBe('waiting');
+    expect(orderRow?.lifecycle).toBe('waiting');
   });
 
   it('leaves the store exactly as a lie found it', async () => {
-    const { lattice, executionId, toInventory } = await asked();
-    const before = JSON.stringify([...lattice.store.entries()]);
+    const { lattice, executionId, toInventory } = await orderAwaitingAnswers();
+    const storeSnapshot = JSON.stringify([...lattice.store.entries()]);
 
     lattice.inject(
       cloneArvoEvent(properAnswer(toInventory, executionId), {
@@ -243,11 +257,12 @@ describe('two services that answer as though they were one', () => {
     );
     await lattice.settle();
 
-    expect(JSON.stringify([...lattice.store.entries()])).toBe(before);
+    expect(JSON.stringify([...lattice.store.entries()])).toBe(storeSnapshot);
   });
 
   it('holds everything that must hold, once the truth arrives', async () => {
-    const { lattice, executionId, toInventory, toPayment } = await asked();
+    const { lattice, executionId, toInventory, toPayment } =
+      await orderAwaitingAnswers();
     lattice.inject(properAnswer(toInventory, executionId));
     lattice.inject(
       cloneArvoEvent(properAnswer(toPayment, executionId), {
@@ -269,29 +284,32 @@ describe('two services that answer as though they were one', () => {
     nothingOutlivesItsEnd(lattice);
     await everyRecordIsUnderItsOwnIdentity(lattice);
 
-    const order = [...lattice.store.values()].find(
+    const orderRow = [...lattice.store.values()].find(
       (row) => row.source === orderV1.type,
     );
-    expect(order?.lifecycle).toBe('success');
+    expect(orderRow?.lifecycle).toBe('success');
   });
 });
 
 describe('a service from a version this handler never declared', () => {
   it('is refused, the answer naming a contract nothing asked', async () => {
-    const { lattice, executionId, toInventory } = await asked();
+    const { lattice, executionId, toInventory } = await orderAwaitingAnswers();
 
     // the same service, rolled forward to a version this handler does
     // not declare: the type is unchanged, so only the schema it names
     // says anything is different
-    const newer = cloneArvoEvent(properAnswer(toInventory, executionId), {
-      dataschema: `${inventoryV1.uri}/2.0.0`,
-    });
-    lattice.inject(newer);
+    const newerVersionAnswer = cloneArvoEvent(
+      properAnswer(toInventory, executionId),
+      {
+        dataschema: `${inventoryV1.uri}/2.0.0`,
+      },
+    );
+    lattice.inject(newerVersionAnswer);
     await lattice.settle();
 
-    const order = [...lattice.store.values()].find(
+    const orderRow = [...lattice.store.values()].find(
       (row) => row.source === orderV1.type,
     );
-    expect(order?.lifecycle).toBe('waiting');
+    expect(orderRow?.lifecycle).toBe('waiting');
   });
 });

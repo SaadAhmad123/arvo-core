@@ -67,7 +67,7 @@ const diagnoseSegment = (path: string, segment: string): ErrorIssue | null => {
 };
 
 /**
- * Checks `data` against the version grammar, reporting the outcome as a
+ * Checks `candidate` against the version grammar, reporting the outcome as a
  * value rather than throwing.
  *
  * Staged, because a single anchored pattern can only answer yes or no: each
@@ -77,23 +77,23 @@ const diagnoseSegment = (path: string, segment: string): ErrorIssue | null => {
  * alone. Once the shape holds, every bad segment is reported together.
  */
 const tryCheck = (
-  data: unknown,
+  candidate: unknown,
 ): Result<ArvoSemanticVersion, ArvoSemanticVersionCheckError> => {
-  if (typeof data !== 'string') {
+  if (typeof candidate !== 'string') {
     return fromNeverthrow(
       err(
         new ArvoSemanticVersionCheckError([
           new ErrorIssue({
             path: 'version',
             message: 'must be a string',
-            received: data,
+            received: candidate,
           }),
         ]),
       ),
     );
   }
 
-  const segments = data.split('.');
+  const segments = candidate.split('.');
   if (segments.length !== 3) {
     return fromNeverthrow(
       err(
@@ -101,26 +101,26 @@ const tryCheck = (
           new ErrorIssue({
             path: 'version',
             message: `must have exactly three '.'-separated segments, found ${segments.length}`,
-            received: data,
+            received: candidate,
           }),
         ]),
       ),
     );
   }
 
-  const issues = SEGMENT_NAMES.map((name, index) =>
-    diagnoseSegment(name, segments[index] as string),
+  const issues = SEGMENT_NAMES.map((segmentName, segmentIndex) =>
+    diagnoseSegment(segmentName, segments[segmentIndex] as string),
   ).filter((issue): issue is ErrorIssue => issue !== null);
 
   if (issues.length > 0) {
     return fromNeverthrow(err(new ArvoSemanticVersionCheckError(issues)));
   }
 
-  return fromNeverthrow(ok(data as ArvoSemanticVersion));
+  return fromNeverthrow(ok(candidate as ArvoSemanticVersion));
 };
 
 /**
- * Whether `data` is a valid {@link ArvoSemanticVersion}.
+ * Whether `candidate` is a valid {@link ArvoSemanticVersion}.
  *
  * Narrows at the call site, so a value that passes needs no cast. Answers
  * only yes or no — reach for {@link tryCheck} where the caller has to be
@@ -130,7 +130,8 @@ const tryCheck = (
  * second copy of the grammar, which could not then disagree with the first.
  * The cost is an object allocation per call.
  */
-const check = (data: unknown): data is ArvoSemanticVersion => tryCheck(data).ok;
+const check = (candidate: unknown): candidate is ArvoSemanticVersion =>
+  tryCheck(candidate).ok;
 
 /**
  * The runtime authority on {@link ArvoSemanticVersion}, sharing the type's

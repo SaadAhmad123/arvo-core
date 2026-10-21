@@ -51,7 +51,7 @@ export type ChargeBehaviour = 'succeeds' | 'errors' | 'faults' | 'flaky';
 
 /** How the two behave, identically in every thread that runs them. */
 export const declareThreadedVersions = (
-  charges: ChargeBehaviour = 'succeeds',
+  chargeBehaviour: ChargeBehaviour = 'succeeds',
 ) => ({
   [orderContract.type]: {
     '1.0.0': new ArvoEventHandlerVersion({
@@ -59,6 +59,7 @@ export const declareThreadedVersions = (
       options: ARVO_DEFAULT_HANDLER_OPTIONS,
       state: workState,
       declaresState: true,
+      middleware: null,
       // the built package is loaded at runtime, so the context's own type
       // is not available to annotate this with
       execute: async (ctx: any) => {
@@ -83,10 +84,15 @@ export const declareThreadedVersions = (
       options: ARVO_DEFAULT_HANDLER_OPTIONS,
       state: workState,
       declaresState: true,
+      middleware: null,
       // as above
       execute: async (ctx: any) => {
-        if (charges === 'errors') throw new Error('the gateway is down');
-        if (charges === 'faults' || (charges === 'flaky' && ctx.attempt < 2)) {
+        if (chargeBehaviour === 'errors')
+          throw new Error('the gateway is down');
+        if (
+          chargeBehaviour === 'faults' ||
+          (chargeBehaviour === 'flaky' && ctx.attempt < 2)
+        ) {
           throw await ctx.fault({
             faultKind: 'executor_raised',
             message: 'the gateway did not answer in time',

@@ -24,20 +24,20 @@ import type { ArvoEventHandlerOptions } from '../types/options.js';
  * ```
  */
 export const resolveOptions = (
-  declared: Partial<ArvoEventHandlerOptions> | null,
-  fallback: ArvoEventHandlerOptions,
+  declaredOptions: Partial<ArvoEventHandlerOptions> | null,
+  fallbackOptions: ArvoEventHandlerOptions,
 ): ArvoEventHandlerOptions => {
-  const settled = { ...fallback };
-  if (declared === null) return settled;
+  const options = { ...fallbackOptions };
+  if (declaredOptions === null) return options;
 
-  for (const key of Object.keys(
-    fallback,
+  for (const optionName of Object.keys(
+    fallbackOptions,
   ) as (keyof ArvoEventHandlerOptions)[]) {
-    const written = declared[key];
-    if (written === undefined) continue;
+    const option = declaredOptions[optionName];
+    if (option === undefined) continue;
     // one assignment for differently typed options; the key is the same
     // on both sides, which is what the loop exists to say
-    (settled as Record<string, unknown>)[key] = written;
+    (options as Record<string, unknown>)[optionName] = option;
   }
-  return settled;
+  return options;
 };

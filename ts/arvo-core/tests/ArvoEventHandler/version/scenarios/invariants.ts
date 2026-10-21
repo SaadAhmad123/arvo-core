@@ -14,7 +14,7 @@ import type { ArvoLattice } from './lattice.js';
  */
 
 /** Where an event sits in the trail of the execution that handled it. */
-type Logged = { id: string; direction: 'received' | 'emitted' };
+type TrailEntry = { id: string; direction: 'received' | 'emitted' };
 
 /**
  * Every event an execution produced to complete something, which answers
@@ -50,29 +50,31 @@ const rows = (lattice: ArvoLattice): [string, JSONObject][] => [
  * undo.
  */
 export const everyRequestAnsweredOnce = (lattice: ArvoLattice): void => {
-  const answers = new Map<string, number>();
+  const answerCounts = new Map<string, number>();
   for (const answer of completions(lattice)) {
-    const asked = answer.initid as string;
-    answers.set(asked, (answers.get(asked) ?? 0) + 1);
+    const requestId = answer.initid as string;
+    answerCounts.set(requestId, (answerCounts.get(requestId) ?? 0) + 1);
   }
 
-  const twice = [...answers.entries()].filter(([, count]) => count > 1);
-  expect(twice, 'a request answered more than once').toEqual([]);
+  const answeredTwice = [...answerCounts.entries()].filter(
+    ([, count]) => count > 1,
+  );
+  expect(answeredTwice, 'a request answered more than once').toEqual([]);
 
   const unanswered = requests(lattice)
-    .filter((asked) => !answers.has(asked.id))
-    .filter((asked) => asked.domain === null)
-    .filter((asked) => !stillParked(lattice, asked));
+    .filter((request) => !answerCounts.has(request.id))
+    .filter((request) => request.domain === null)
+    .filter((request) => !stillParked(lattice, request));
   expect(
-    unanswered.map((asked) => asked.type),
+    unanswered.map((request) => request.type),
     'a request nothing ever answered',
   ).toEqual([]);
 };
 
 /** Whether this request is one something outside the lattice still holds. */
-const stillParked = (lattice: ArvoLattice, asked: ArvoEvent): boolean =>
-  [...lattice.parked.values()].some((waiting) =>
-    waiting.some((event) => event.id === asked.id),
+const stillParked = (lattice: ArvoLattice, request: ArvoEvent): boolean =>
+  [...lattice.parked.values()].some((parkedEvents) =>
+    parkedEvents.some((event) => event.id === request.id),
   );
 
 /**
@@ -84,15 +86,15 @@ const stillParked = (lattice: ArvoLattice, asked: ArvoEvent): boolean =>
  * execution in a state no lifecycle describes.
  */
 export const nothingLeaksFromAFaultedRound = (lattice: ArvoLattice): void => {
-  const published = new Set(
+  const publishedIds = new Set(
     lattice.transcript.published.map((event) => event.id),
   );
   for (const { fault } of lattice.transcript.faults) {
     if (fault.abandonmentEvent === null) continue;
     const abandonment = JSON.parse(fault.abandonmentEvent) as { id: string };
-    const wasPublished = published.has(abandonment.id);
+    const wasPublished = publishedIds.has(abandonment.id);
     const wasAbandoned = lattice.transcript.abandoned.some(
-      (given) => given.fault === fault,
+      (abandonedExecution) => abandonedExecution.fault === fault,
     );
     expect(
       !wasPublished || wasAbandoned,
@@ -112,11 +114,11 @@ export const nothingLeaksFromAFaultedRound = (lattice: ArvoLattice): void => {
  */
 export const everyRecordReadsBack = (lattice: ArvoLattice): void => {
   for (const [executionId, row] of rows(lattice)) {
-    const written = JSON.stringify(row);
+    const rowJson = JSON.stringify(row);
     expect(
-      JSON.stringify(JSON.parse(written)),
+      JSON.stringify(JSON.parse(rowJson)),
       `the record for ${executionId} does not survive being written out`,
-    ).toBe(written);
+    ).toBe(rowJson);
   }
 };
 
@@ -128,20 +130,20 @@ export const everyRecordReadsBack = (lattice: ArvoLattice): void => {
  * can no longer tell a concurrent write from an ordinary one.
  */
 export const revisionsAdvanceOneAtATime = (lattice: ArvoLattice): void => {
-  const seen = new Map<string, number[]>();
+  const revisionsByExecution = new Map<string, number[]>();
   for (const { executionId, row } of lattice.transcript.committed) {
-    const at = seen.get(executionId) ?? [];
-    at.push(Number(row.casVersion));
-    seen.set(executionId, at);
+    const revisions = revisionsByExecution.get(executionId) ?? [];
+    revisions.push(Number(row.casVersion));
+    revisionsByExecution.set(executionId, revisions);
   }
 
-  for (const [executionId, revisions] of seen) {
+  for (const [executionId, revisions] of revisionsByExecution) {
     expect(revisions[0], `${executionId} did not open at revision 0`).toBe(0);
-    for (let at = 1; at < revisions.length; at += 1) {
+    for (let index = 1; index < revisions.length; index += 1) {
       expect(
-        revisions[at],
-        `${executionId} jumped from ${revisions[at - 1]} to ${revisions[at]}`,
-      ).toBe((revisions[at - 1] as number) + 1);
+        revisions[index],
+        `${executionId} jumped from ${revisions[index - 1]} to ${revisions[index]}`,
+      ).toBe((revisions[index - 1] as number) + 1);
     }
   }
 };
@@ -159,22 +161,22 @@ export const revisionsAdvanceOneAtATime = (lattice: ArvoLattice): void => {
  * count would make an unbounded chain look flat.
  */
 export const everyEventSitsWhereItSaysItDoes = (lattice: ArvoLattice): void => {
-  const byId = new Map(
+  const eventsById = new Map(
     lattice.transcript.published.map((event) => [event.id, event]),
   );
 
   for (const [executionId, row] of rows(lattice)) {
-    const sitsAt = Number(row.depth);
-    for (const logged of row.eventIds as Logged[]) {
-      if (logged.direction !== 'emitted') continue;
-      const sent = byId.get(logged.id);
-      if (sent === undefined) continue;
+    const rowDepth = Number(row.depth);
+    for (const trailEntry of row.eventIds as TrailEntry[]) {
+      if (trailEntry.direction !== 'emitted') continue;
+      const emittedEvent = eventsById.get(trailEntry.id);
+      if (emittedEvent === undefined) continue;
 
-      const opensAnother = sent.initid === null;
+      const opensAnother = emittedEvent.initid === null;
       expect(
-        sent.depth,
-        `${sent.type} left ${executionId} at the wrong level`,
-      ).toBe(opensAnother ? sitsAt + 1 : sitsAt);
+        emittedEvent.depth,
+        `${emittedEvent.type} left ${executionId} at the wrong level`,
+      ).toBe(opensAnother ? rowDepth + 1 : rowDepth);
     }
   }
 };
@@ -187,18 +189,19 @@ export const everyEventSitsWhereItSaysItDoes = (lattice: ArvoLattice): void => {
  * about the workflow afterwards is told a story with a piece missing.
  */
 export const everyEventStaysInItsWorkflow = (lattice: ArvoLattice): void => {
-  const byId = new Map(
+  const eventsById = new Map(
     lattice.transcript.published.map((event) => [event.id, event]),
   );
 
   for (const event of lattice.transcript.published) {
     expect(event.subject, 'an event belonging to no workflow').toBeTruthy();
-    const caused = event.parentid === null ? null : byId.get(event.parentid);
-    if (caused === undefined || caused === null) continue;
+    const parentEvent =
+      event.parentid === null ? null : eventsById.get(event.parentid);
+    if (parentEvent === undefined || parentEvent === null) continue;
     expect(
       event.subject,
       `${event.type} left the workflow its cause belonged to`,
-    ).toBe(caused.subject);
+    ).toBe(parentEvent.subject);
   }
 };
 
@@ -210,16 +213,16 @@ export const everyEventStaysInItsWorkflow = (lattice: ArvoLattice): void => {
  * then needs a merge rule the model does not have.
  */
 export const baggageNeverDrifts = (lattice: ArvoLattice): void => {
-  const perWorkflow = new Map<string, string>();
+  const baggageBySubject = new Map<string, string>();
   for (const event of lattice.transcript.published) {
-    const carried = JSON.stringify(event.baggage);
-    const first = perWorkflow.get(event.subject);
-    if (first === undefined) {
-      perWorkflow.set(event.subject, carried);
+    const baggage = JSON.stringify(event.baggage);
+    const firstBaggage = baggageBySubject.get(event.subject);
+    if (firstBaggage === undefined) {
+      baggageBySubject.set(event.subject, baggage);
       continue;
     }
-    expect(carried, `${event.subject} carries two different baggages`).toBe(
-      first,
+    expect(baggage, `${event.subject} carries two different baggages`).toBe(
+      firstBaggage,
     );
   }
 };
@@ -232,11 +235,11 @@ export const baggageNeverDrifts = (lattice: ArvoLattice): void => {
  * handler that should never have seen it.
  */
 export const nothingParkedWasDelivered = (lattice: ArvoLattice): void => {
-  const given = lattice.transcript.delivered.filter(
+  const parkedDeliveries = lattice.transcript.delivered.filter(
     ({ event }) => event.domain !== null,
   );
   expect(
-    given.map(({ event }) => event.type),
+    parkedDeliveries.map(({ event }) => event.type),
     'a handler was given an event that had left the lattice',
   ).toEqual([]);
 };
@@ -250,15 +253,15 @@ export const nothingParkedWasDelivered = (lattice: ArvoLattice): void => {
  */
 export const nothingAwaitsWhatWasNeverSent = (lattice: ArvoLattice): void => {
   for (const [executionId, row] of rows(lattice)) {
-    const sent = new Set(
-      (row.eventIds as Logged[])
-        .filter((logged) => logged.direction === 'emitted')
-        .map((logged) => logged.id),
+    const emittedIds = new Set(
+      (row.eventIds as TrailEntry[])
+        .filter((trailEntry) => trailEntry.direction === 'emitted')
+        .map((trailEntry) => trailEntry.id),
     );
-    for (const [awaited] of row.inFlightEventMap as [string, unknown][]) {
+    for (const [awaitedId] of row.inFlightEventMap as [string, unknown][]) {
       expect(
-        sent.has(awaited),
-        `${executionId} awaits ${awaited}, which it never sent`,
+        emittedIds.has(awaitedId),
+        `${executionId} awaits ${awaitedId}, which it never sent`,
       ).toBe(true);
     }
   }
@@ -275,10 +278,12 @@ export const everyRecordIsUnderItsOwnIdentity = async (
   lattice: ArvoLattice,
 ): Promise<void> => {
   for (const [executionId, row] of rows(lattice)) {
-    const opening = row.initEvent as { dataschema: string; id: string };
-    const derived = await deriveArvoExecutionId(opening as ArvoEvent);
+    const initEvent = row.initEvent as { dataschema: string; id: string };
+    const derivedExecutionId = await deriveArvoExecutionId(
+      initEvent as ArvoEvent,
+    );
     expect(
-      derived,
+      derivedExecutionId,
       `${executionId} holds a record its opening event does not derive to`,
     ).toBe(executionId);
   }
@@ -291,16 +296,16 @@ export const everyRecordIsUnderItsOwnIdentity = async (
  * wrote over it would erase how a workflow actually finished.
  */
 export const nothingOutlivesItsEnd = (lattice: ArvoLattice): void => {
-  const ended = new Map<string, string>();
+  const endedLifecycles = new Map<string, string>();
   for (const { executionId, row } of lattice.transcript.committed) {
-    const was = ended.get(executionId);
+    const endedLifecycle = endedLifecycles.get(executionId);
     expect(
-      was,
-      `${executionId} was written again after ending at ${was}`,
+      endedLifecycle,
+      `${executionId} was written again after ending at ${endedLifecycle}`,
     ).toBeUndefined();
     const lifecycle = String(row.lifecycle);
     if (['success', 'error', 'cancelled', 'failure'].includes(lifecycle)) {
-      ended.set(executionId, lifecycle);
+      endedLifecycles.set(executionId, lifecycle);
     }
   }
 };

@@ -22,27 +22,30 @@ import { ScenarioStore } from './store.js';
  * slowing it.
  */
 
-const opening = (subject: string) => ({
+const openingFields = (subject: string) => ({
   source: 'com.web.checkout',
   subject,
   to: fulfilContract.type,
 });
 
-const atVersion = (version: '1.0.0' | '1.1.0' | '2.0.0', subject: string) => {
+const openingEvent = (
+  version: '1.0.0' | '1.1.0' | '2.0.0',
+  subject: string,
+) => {
   if (version === '1.1.0') {
     return createArvoEventFactory(fulfilV11).createInput({
-      ...opening(subject),
+      ...openingFields(subject),
       data: { items: ['book'], rush: true },
     });
   }
   if (version === '2.0.0') {
     return createArvoEventFactory(fulfilV2).createInput({
-      ...opening(subject),
+      ...openingFields(subject),
       data: { items: ['book'] },
     });
   }
   return createArvoEventFactory(fulfilV1).createInput({
-    ...opening(subject),
+    ...openingFields(subject),
     data: { items: ['book'] },
   });
 };
@@ -53,213 +56,220 @@ describe('ten thousand executions through one handler', () => {
     const store = new ScenarioStore();
     const versions = ['1.0.0', '1.1.0', '2.0.0'] as const;
 
-    const began = Date.now();
-    for (let at = 0; at < 10_000; at += 1) {
-      const version = versions[at % 3] as (typeof versions)[number];
-      const ran = await handler.execute({
-        event: atVersion(version, `order-${at}`),
+    const startMs = Date.now();
+    for (let orderIndex = 0; orderIndex < 10_000; orderIndex += 1) {
+      const version = versions[orderIndex % 3] as (typeof versions)[number];
+      const outcome = await handler.execute({
+        event: openingEvent(version, `order-${orderIndex}`),
         state: store.resolver,
         attempt: 0,
       });
-      if (ran.kind !== 'produced') throw new Error(`order-${at} did not open`);
-      store.commit(ran.state);
+      if (outcome.kind !== 'produced')
+        throw new Error(`order-${orderIndex} did not open`);
+      store.commit(outcome.state);
     }
-    const took = Date.now() - began;
+    const elapsedMs = Date.now() - startMs;
 
     expect(store.rows.size).toBe(10_000);
     // every one under its own identity, so none collided
     expect(new Set([...store.rows.keys()]).size).toBe(10_000);
-    expect(took, `ten thousand took ${took}ms`).toBeLessThan(20_000);
+    expect(elapsedMs, `ten thousand took ${elapsedMs}ms`).toBeLessThan(20_000);
   }, 60_000);
 
   it('places the last event as cheaply as the first', async () => {
     const handler = declareHandler();
     const store = new ScenarioStore();
 
-    const timing = async (subject: string) => {
-      const began = performance.now();
-      const ran = await handler.execute({
-        event: atVersion('1.0.0', subject),
+    const timeOpening = async (subject: string) => {
+      const startMs = performance.now();
+      const outcome = await handler.execute({
+        event: openingEvent('1.0.0', subject),
         state: store.resolver,
         attempt: 0,
       });
-      if (ran.kind === 'produced') store.commit(ran.state);
-      return performance.now() - began;
+      if (outcome.kind === 'produced') store.commit(outcome.state);
+      return performance.now() - startMs;
     };
 
-    const first = await timing('order-first');
-    for (let at = 0; at < 2_000; at += 1) await timing(`order-${at}`);
-    const last = await timing('order-last');
+    const firstOpeningMs = await timeOpening('order-first');
+    for (let orderIndex = 0; orderIndex < 2_000; orderIndex += 1)
+      await timeOpening(`order-${orderIndex}`);
+    const lastOpeningMs = await timeOpening('order-last');
 
     // generous, because one measurement is noisy; what it refuses is a
     // cost that grows with how many executions the store already holds
-    expect(last, `first ${first}ms, last ${last}ms`).toBeLessThan(
-      Math.max(first * 50, 50),
-    );
+    expect(
+      lastOpeningMs,
+      `first ${firstOpeningMs}ms, last ${lastOpeningMs}ms`,
+    ).toBeLessThan(Math.max(firstOpeningMs * 50, 50));
   }, 60_000);
 });
 
 describe('the boundaries, where an off-by-one would live', () => {
   it('runs a contract whose only version is the one asked for', async () => {
     const handler = declareHandler();
-    const ran = await handler.execute({
-      event: atVersion('2.0.0', 'order-1'),
+    const outcome = await handler.execute({
+      event: openingEvent('2.0.0', 'order-1'),
       state: new ScenarioStore().resolver,
       attempt: 0,
     });
-    expect(ran.kind).toBe('produced');
+    expect(outcome.kind).toBe('produced');
   });
 
   it('refuses a dataschema with no version to read', async () => {
     const handler = declareHandler();
-    const refused = await handler.tryExecute({
-      event: cloneArvoEvent(atVersion('1.0.0', 'order-1'), {
+    const refusal = await handler.tryExecute({
+      event: cloneArvoEvent(openingEvent('1.0.0', 'order-1'), {
         dataschema: 'nothing-separable',
       }),
       state: new ScenarioStore().resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.faultKind).toBe('event_unclassifiable');
+    expect(!refusal.ok && refusal.error.faultKind).toBe('event_unclassifiable');
   });
 
   it('reads the version from the last separator, not the first', async () => {
     // the contract's own uri carries separators, so splitting anywhere
     // else hands part of it to the version
     expect(fulfilContract.uri.includes('/')).toBe(true);
-    const ran = await declareHandler().execute({
-      event: atVersion('1.0.0', 'order-1'),
+    const outcome = await declareHandler().execute({
+      event: openingEvent('1.0.0', 'order-1'),
       state: new ScenarioStore().resolver,
       attempt: 0,
     });
-    expect(ran.kind === 'produced' && ran.state.version).toBe('1.0.0');
+    expect(outcome.kind === 'produced' && outcome.state.version).toBe('1.0.0');
   });
 
   it('takes the first attempt and the last alike', async () => {
     const handler = declareHandler();
     for (const attempt of [0, 3, 99]) {
-      const ran = await handler.execute({
-        event: atVersion('1.0.0', `order-${attempt}`),
+      const outcome = await handler.execute({
+        event: openingEvent('1.0.0', `order-${attempt}`),
         state: new ScenarioStore().resolver,
         attempt,
       });
-      expect(ran.kind).toBe('produced');
+      expect(outcome.kind).toBe('produced');
     }
   });
 
   it('tells an empty row from no row at all', async () => {
     const handler = declareHandler();
-    const empty = await handler.tryExecute({
-      event: atVersion('1.0.0', 'order-1'),
+    const refusal = await handler.tryExecute({
+      event: openingEvent('1.0.0', 'order-1'),
       state: () => ({}),
       attempt: 0,
     });
     // something is stored, so an opening event may not open a second
-    expect(!empty.ok && empty.error.faultKind).toBe('record_unexpected');
+    expect(!refusal.ok && refusal.error.faultKind).toBe('record_unexpected');
   });
 });
 
 describe('payloads chosen to be awkward', () => {
   const handler = declareHandler();
-  const store = () => new ScenarioStore();
+  const freshStore = () => new ScenarioStore();
 
   it('refuses a type that is a property every object has', async () => {
-    const refused = await handler.tryExecute({
-      event: cloneArvoEvent(atVersion('1.0.0', 'order-1'), {
+    const refusal = await handler.tryExecute({
+      event: cloneArvoEvent(openingEvent('1.0.0', 'order-1'), {
         type: 'constructor',
       }),
-      state: store().resolver,
+      state: freshStore().resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.faultKind).toBe('type_not_receivable');
+    expect(!refusal.ok && refusal.error.faultKind).toBe('type_not_receivable');
   });
 
   it('carries a workflow name of emoji and surrogate pairs', async () => {
-    const ran = await handler.execute({
-      event: atVersion('1.0.0', 'order-🧾-𝔘𝔫𝔦𝔠𝔬𝔡𝔢'),
-      state: store().resolver,
+    const outcome = await handler.execute({
+      event: openingEvent('1.0.0', 'order-🧾-𝔘𝔫𝔦𝔠𝔬𝔡𝔢'),
+      state: freshStore().resolver,
       attempt: 0,
     });
-    expect(ran.kind === 'produced' && ran.state.subject).toBe(
+    expect(outcome.kind === 'produced' && outcome.state.subject).toBe(
       'order-🧾-𝔘𝔫𝔦𝔠𝔬𝔡𝔢',
     );
   });
 
   it('carries a payload of a thousand items', async () => {
-    const many = Array.from({ length: 1_000 }, (_, at) => `item-${at}`);
-    const ran = await handler.execute({
+    const items = Array.from(
+      { length: 1_000 },
+      (_, itemIndex) => `item-${itemIndex}`,
+    );
+    const outcome = await handler.execute({
       event: createArvoEventFactory(fulfilV1).createInput({
-        ...opening('order-many'),
-        data: { items: many },
+        ...openingFields('order-many'),
+        data: { items },
       }),
-      state: store().resolver,
+      state: freshStore().resolver,
       attempt: 0,
     });
-    expect(ran.kind).toBe('produced');
+    expect(outcome.kind).toBe('produced');
   });
 
   it('refuses a version named for a property every object inherits', async () => {
-    for (const crafted of ['__proto__', 'constructor', 'toString']) {
-      const refused = await handler.tryExecute({
-        event: cloneArvoEvent(atVersion('1.0.0', 'order-1'), {
-          dataschema: `${fulfilContract.uri}/${crafted}`,
+    for (const craftedName of ['__proto__', 'constructor', 'toString']) {
+      const refusal = await handler.tryExecute({
+        event: cloneArvoEvent(openingEvent('1.0.0', 'order-1'), {
+          dataschema: `${fulfilContract.uri}/${craftedName}`,
         }),
-        state: store().resolver,
+        state: freshStore().resolver,
         attempt: 0,
       });
       expect(
-        !refused.ok && refused.error.faultKind,
-        `${crafted} was not refused`,
+        !refusal.ok && refusal.error.faultKind,
+        `${craftedName} was not refused`,
       ).toBe('event_unclassifiable');
     }
   });
 
   it('refuses a type named for one, rather than finding what it inherits', async () => {
-    for (const crafted of ['constructor', 'toString', 'valueOf']) {
-      const refused = await handler.tryExecute({
-        event: cloneArvoEvent(atVersion('1.0.0', 'order-1'), {
-          type: crafted,
+    for (const craftedName of ['constructor', 'toString', 'valueOf']) {
+      const refusal = await handler.tryExecute({
+        event: cloneArvoEvent(openingEvent('1.0.0', 'order-1'), {
+          type: craftedName,
         }),
-        state: store().resolver,
+        state: freshStore().resolver,
         attempt: 0,
       });
       expect(
-        !refused.ok && refused.error.faultKind,
-        `${crafted} was not refused`,
+        !refusal.ok && refusal.error.faultKind,
+        `${craftedName} was not refused`,
       ).toBe('type_not_receivable');
     }
   });
 
   it('refuses an answer typed for one, on the way back in', async () => {
-    const opened = await handler.execute({
-      event: atVersion('1.0.0', 'order-1'),
-      state: store().resolver,
+    const openingOutcome = await handler.execute({
+      event: openingEvent('1.0.0', 'order-1'),
+      state: freshStore().resolver,
       attempt: 0,
     });
-    if (opened.kind !== 'produced') throw new Error('nothing was opened');
+    if (openingOutcome.kind !== 'produced')
+      throw new Error('nothing was opened');
 
-    const held = new ScenarioStore();
-    held.commit(opened.state);
+    const committedStore = new ScenarioStore();
+    committedStore.commit(openingOutcome.state);
 
-    const crafted = cloneArvoEvent(
+    const craftedAnswer = cloneArvoEvent(
       createArvoEventFactory(inventoryV1).createOutput({
         type: 'evt_inventory_reserved',
         source: inventoryV1.type,
         subject: 'order-1',
         to: fulfilContract.type,
-        executionid: String(opened.state.executionId),
-        initid: opened.events[0]?.id,
-        parentid: opened.events[0]?.id,
+        executionid: String(openingOutcome.state.executionId),
+        initid: openingOutcome.events[0]?.id,
+        parentid: openingOutcome.events[0]?.id,
         data: { held: 1 },
       }),
       { type: 'constructor' },
     );
 
-    const refused = await handler.tryExecute({
-      event: crafted,
-      state: held.resolver,
+    const refusal = await handler.tryExecute({
+      event: craftedAnswer,
+      state: committedStore.resolver,
       attempt: 0,
     });
-    expect(!refused.ok && refused.error.faultKind).toBe('type_not_receivable');
+    expect(!refusal.ok && refusal.error.faultKind).toBe('type_not_receivable');
   });
 });
 
@@ -268,68 +278,72 @@ describe('a handler holds nothing between executions', () => {
     const handler = declareHandler();
     const store = new ScenarioStore();
 
-    const first = await handler.execute({
-      event: atVersion('1.0.0', 'order-first'),
+    const v1Outcome = await handler.execute({
+      event: openingEvent('1.0.0', 'order-first'),
       state: store.resolver,
       attempt: 0,
     });
-    if (first.kind !== 'produced') throw new Error('not opened');
-    store.commit(first.state);
+    if (v1Outcome.kind !== 'produced') throw new Error('not opened');
+    store.commit(v1Outcome.state);
 
-    const second = await handler.execute({
-      event: atVersion('1.1.0', 'order-second'),
+    const v11Outcome = await handler.execute({
+      event: openingEvent('1.1.0', 'order-second'),
       state: store.resolver,
       attempt: 0,
     });
-    if (second.kind !== 'produced') throw new Error('not opened');
-    store.commit(second.state);
+    if (v11Outcome.kind !== 'produced') throw new Error('not opened');
+    store.commit(v11Outcome.state);
 
     // the first is resumed after the second ran, and remembers only
     // what it wrote
-    const answered = await handler.execute({
+    const answerOutcome = await handler.execute({
       event: createArvoEventFactory(inventoryV1).createOutput({
         type: 'evt_inventory_reserved',
         source: inventoryV1.type,
         subject: 'order-first',
         to: fulfilContract.type,
-        executionid: String(first.state.executionId),
-        initid: first.events[0]?.id,
-        parentid: first.events[0]?.id,
+        executionid: String(v1Outcome.state.executionId),
+        initid: v1Outcome.events[0]?.id,
+        parentid: v1Outcome.events[0]?.id,
         data: { held: 1 },
       }),
       state: store.resolver,
       attempt: 0,
     });
 
-    expect(answered.kind === 'produced' && answered.state.version).toBe(
-      '1.0.0',
-    );
-    expect(answered.kind === 'produced' && answered.state.subject).toBe(
-      'order-first',
-    );
+    expect(
+      answerOutcome.kind === 'produced' && answerOutcome.state.version,
+    ).toBe('1.0.0');
+    expect(
+      answerOutcome.kind === 'produced' && answerOutcome.state.subject,
+    ).toBe('order-first');
   });
 
   it('is the same handler however many executions have passed through it', async () => {
     const handler = declareHandler();
     const store = new ScenarioStore();
-    for (let at = 0; at < 200; at += 1) {
-      const ran = await handler.execute({
-        event: atVersion('1.0.0', `order-${at}`),
+    for (let orderIndex = 0; orderIndex < 200; orderIndex += 1) {
+      const outcome = await handler.execute({
+        event: openingEvent('1.0.0', `order-${orderIndex}`),
         state: store.resolver,
         attempt: 0,
       });
-      if (ran.kind === 'produced') store.commit(ran.state);
+      if (outcome.kind === 'produced') store.commit(outcome.state);
     }
 
-    const after = await handler.execute({
-      event: atVersion('1.0.0', 'order-after'),
+    const laterOutcome = await handler.execute({
+      event: openingEvent('1.0.0', 'order-after'),
       state: store.resolver,
       attempt: 0,
     });
-    expect(after.kind === 'produced' && after.state.casVersion).toBe(0);
-    expect(after.kind === 'produced' && after.state.data).toEqual({
-      stage: 'asking',
-      answers: 0,
-    });
+    expect(
+      laterOutcome.kind === 'produced' && laterOutcome.state.casVersion,
+    ).toBe(0);
+    expect(laterOutcome.kind === 'produced' && laterOutcome.state.data).toEqual(
+      {
+        stage: 'asking',
+        answers: 0,
+      },
+    );
   });
 });

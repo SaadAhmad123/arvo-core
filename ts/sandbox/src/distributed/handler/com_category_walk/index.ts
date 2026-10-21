@@ -1,6 +1,7 @@
 import { setupArvoEventHandler } from 'arvo-core';
 import { z } from 'zod';
 import type { DistributedDependencies } from '../dependencies.js';
+import { HANDLER_MIDDLEWARE, tenantFor } from '../middleware/index.js';
 import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { categoryWalkContract, categoryWalkV1 } from './contract.js';
 
@@ -36,6 +37,7 @@ export const categoryWalkHandler = setupArvoEventHandler({
   },
   types: {} as { dependencies: DistributedDependencies },
   telemetry: HANDLER_TELEMETRY,
+  middleware: HANDLER_MIDDLEWARE,
   options: {
     runTimeout: 15_000,
     maxRetryAttempts: 3,
@@ -53,6 +55,7 @@ export const categoryWalkHandler = setupArvoEventHandler({
       deepest: z.number(),
     }),
     execute: async (ctx) => {
+      await tenantFor(ctx);
       const requested = ctx.state.initEvent.data;
       // Declared and not supplied. A mechanism hands what it has to
       // whichever handler an event names, so the member is checked

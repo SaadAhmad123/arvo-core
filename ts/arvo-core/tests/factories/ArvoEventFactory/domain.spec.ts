@@ -6,7 +6,7 @@ import type { ArvoDomainInput } from '../../../src/ArvoDomain/types.js';
 import { ArvoEvent } from '../../../src/ArvoEvent/index.js';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
 
-const version = (domain?: string) =>
+const orderVersion = (domain?: string) =>
   new ArvoContract({
     type: 'com_order_create',
     ...(domain === undefined ? {} : { domain }),
@@ -18,10 +18,10 @@ const version = (domain?: string) =>
     },
   }).versions['1.0.0'];
 
-const withDomain = createArvoEventFactory(version('orders'));
-const withoutDomain = createArvoEventFactory(version());
+const factoryWithDomain = createArvoEventFactory(orderVersion('orders'));
+const factoryWithoutDomain = createArvoEventFactory(orderVersion());
 
-const selfContract = version('services');
+const selfContract = orderVersion('services');
 
 const triggeringEvent = new ArvoEvent({
   source: 'com.inbound',
@@ -32,46 +32,46 @@ const triggeringEvent = new ArvoEvent({
   domain: 'inbound',
 });
 
-const built = (
-  ...args: Parameters<typeof withDomain.createInput>
-): string | null => withDomain.createInput(...args).domain;
+const inputDomain = (
+  ...createInputArgs: Parameters<typeof factoryWithDomain.createInput>
+): string | null => factoryWithDomain.createInput(...createInputArgs).domain;
 
 describe('a domain not supplied', () => {
   it('leaves the event with none, even where the contract declares one', () => {
     // Nothing is inherited silently: a caller asks with FROM_EVENT_CONTRACT.
-    expect(built({ source: 'com.web', data: {} })).toBeNull();
+    expect(inputDomain({ source: 'com.web', data: {} })).toBeNull();
   });
 });
 
 describe('a domain supplied outright', () => {
   it('is used as it stands', () => {
     expect(
-      built({ source: 'com.web', data: {}, domain: 'orders_priority' }),
+      inputDomain({ source: 'com.web', data: {}, domain: 'orders_priority' }),
     ).toBe('orders_priority');
   });
 
   it('reaches validation when empty rather than being swallowed', () => {
-    const attempt = withDomain.tryCreateInput({
+    const createResult = factoryWithDomain.tryCreateInput({
       source: 'com.web',
       data: {},
       domain: '',
     });
-    expect(attempt.ok).toBe(false);
-    if (attempt.ok) return;
-    expect(attempt.error.issues[0]?.path).toBe('domain');
+    expect(createResult.ok).toBe(false);
+    if (createResult.ok) return;
+    expect(createResult.error.issues[0]?.path).toBe('domain');
   });
 });
 
 describe('a domain read from a named source', () => {
   it('reads nothing for LOCAL', () => {
     expect(
-      built({ source: 'com.web', data: {}, domain: ArvoDomain.LOCAL }),
+      inputDomain({ source: 'com.web', data: {}, domain: ArvoDomain.LOCAL }),
     ).toBeNull();
   });
 
   it("reads the event contract's own", () => {
     expect(
-      built({
+      inputDomain({
         source: 'com.web',
         data: {},
         domain: ArvoDomain.FROM_EVENT_CONTRACT,
@@ -80,11 +80,11 @@ describe('a domain read from a named source', () => {
   });
 
   it("reads the building contract's, bound on the factory", () => {
-    const bound = createArvoEventFactory(version('orders'), {
+    const boundFactory = createArvoEventFactory(orderVersion('orders'), {
       domainCtx: { selfContract },
     });
     expect(
-      bound.createInput({
+      boundFactory.createInput({
         source: 'com.web',
         data: {},
         domain: ArvoDomain.FROM_SELF_CONTRACT,
@@ -93,11 +93,11 @@ describe('a domain read from a named source', () => {
   });
 
   it("reads the triggering event's, bound on the factory", () => {
-    const bound = createArvoEventFactory(version('orders'), {
+    const boundFactory = createArvoEventFactory(orderVersion('orders'), {
       domainCtx: { triggeringEvent },
     });
     expect(
-      bound.createInput({
+      boundFactory.createInput({
         source: 'com.web',
         data: {},
         domain: ArvoDomain.FROM_TRIGGERING_EVENT,
@@ -108,7 +108,7 @@ describe('a domain read from a named source', () => {
 
 describe('options bound on the factory', () => {
   // Bound once, so they have to reach every builder and not just the first.
-  const bound = createArvoEventFactory(version('orders'), {
+  const boundFactory = createArvoEventFactory(orderVersion('orders'), {
     domainCtx: { triggeringEvent },
   });
   const param: { source: string; domain: ArvoDomainInput } = {
@@ -117,25 +117,32 @@ describe('options bound on the factory', () => {
   };
 
   it('reaches the event the version takes in', () => {
-    expect(bound.createInput({ ...param, data: {} }).domain).toBe('inbound');
+    expect(boundFactory.createInput({ ...param, data: {} }).domain).toBe(
+      'inbound',
+    );
   });
 
   it('reaches an event the version puts out', () => {
     expect(
-      bound.createOutput({ ...param, type: 'com_order_created', data: {} })
-        .domain,
+      boundFactory.createOutput({
+        ...param,
+        type: 'com_order_created',
+        data: {},
+      }).domain,
     ).toBe('inbound');
   });
 
   it("reaches the version's handler error event", () => {
     expect(
-      bound.createError({ ...param, error: new Error('failed') }).domain,
+      boundFactory.createError({ ...param, error: new Error('failed') }).domain,
     ).toBe('inbound');
   });
 
   it('leave a symbol unresolved when the factory was given none', () => {
-    const unbound = createArvoEventFactory(version('orders'));
-    expect(unbound.createInput({ ...param, data: {} }).domain).toBeNull();
+    const unboundFactory = createArvoEventFactory(orderVersion('orders'));
+    expect(
+      unboundFactory.createInput({ ...param, data: {} }).domain,
+    ).toBeNull();
   });
 });
 
@@ -161,46 +168,51 @@ describe("options bound on the factory are the factory's own", () => {
   };
 
   it('ignores a source swapped after it was bound', () => {
-    const ctx = { triggeringEvent };
-    const bound = createArvoEventFactory(version('orders'), {
-      domainCtx: ctx,
+    const domainCtx = { triggeringEvent };
+    const boundFactory = createArvoEventFactory(orderVersion('orders'), {
+      domainCtx,
     });
 
-    const before = bound.createInput(param).domain;
-    ctx.triggeringEvent = laterEvent;
-    const after = bound.createInput(param).domain;
+    const domainBeforeSwap = boundFactory.createInput(param).domain;
+    domainCtx.triggeringEvent = laterEvent;
+    const domainAfterSwap = boundFactory.createInput(param).domain;
 
-    expect(before).toBe('inbound');
-    expect(after).toBe('inbound');
+    expect(domainBeforeSwap).toBe('inbound');
+    expect(domainAfterSwap).toBe('inbound');
   });
 
   it('ignores a whole context replaced after it was bound', () => {
     const options: { domainCtx?: { triggeringEvent: ArvoEvent } } = {
       domainCtx: { triggeringEvent },
     };
-    const bound = createArvoEventFactory(version('orders'), options);
+    const boundFactory = createArvoEventFactory(
+      orderVersion('orders'),
+      options,
+    );
 
     options.domainCtx = { triggeringEvent: laterEvent };
 
-    expect(bound.createInput(param).domain).toBe('inbound');
+    expect(boundFactory.createInput(param).domain).toBe('inbound');
   });
 
   it('holds options that name no source at all', () => {
     // Bound, but with nothing in them -- a symbol has nothing to read.
-    const bound = createArvoEventFactory(version('orders'), {});
-    expect(bound.options).toEqual({});
-    expect(bound.createInput(param).domain).toBeNull();
+    const boundFactory = createArvoEventFactory(orderVersion('orders'), {});
+    expect(boundFactory.options).toEqual({});
+    expect(boundFactory.createInput(param).domain).toBeNull();
   });
 
   it('holds nothing where nothing was bound', () => {
-    expect(createArvoEventFactory(version('orders')).options).toBeUndefined();
+    expect(
+      createArvoEventFactory(orderVersion('orders')).options,
+    ).toBeUndefined();
   });
 });
 
 describe('a source with nothing to give', () => {
   it('reads none from a contract declaring none', () => {
     expect(
-      withoutDomain.createInput({
+      factoryWithoutDomain.createInput({
         source: 'com.web',
         data: {},
         domain: ArvoDomain.FROM_EVENT_CONTRACT,
@@ -210,7 +222,7 @@ describe('a source with nothing to give', () => {
 
   it('reads none where the source was not supplied at all', () => {
     expect(
-      built({
+      inputDomain({
         source: 'com.web',
         data: {},
         domain: ArvoDomain.FROM_TRIGGERING_EVENT,
@@ -228,8 +240,14 @@ describe('a request never reaching the event', () => {
       ArvoDomain.FROM_TRIGGERING_EVENT,
     ];
     for (const domain of everySymbol) {
-      const value = built({ source: 'com.web', data: {}, domain });
-      expect(value === null || typeof value === 'string').toBe(true);
+      const resolvedDomain = inputDomain({
+        source: 'com.web',
+        data: {},
+        domain,
+      });
+      expect(
+        resolvedDomain === null || typeof resolvedDomain === 'string',
+      ).toBe(true);
     }
   });
 });

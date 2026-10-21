@@ -13,12 +13,12 @@ import type { ChargeBehaviour } from './contracts.js';
  */
 
 /** An event as it travels: written out, the way a broker carries one. */
-type Carried = { readonly written: string; readonly to: string | null };
+type CarriedEvent = { readonly written: string; readonly to: string | null };
 
 /** One thread, and what it is doing. */
 type Lane = {
   readonly worker: Worker;
-  held: Carried | null;
+  held: CarriedEvent | null;
   alive: boolean;
 };
 
@@ -40,6 +40,8 @@ export type ThreadedBrokerOptions = {
   readonly slowly?: number;
   /** Whether every event is carried twice, as an at-least-once bus does. */
   readonly duplicate?: boolean;
+  /** Whether the order handler declares layers around its executor. */
+  readonly layered?: boolean;
 };
 
 export class ThreadedBroker {
@@ -55,33 +57,44 @@ export class ThreadedBroker {
     abandoned: [],
   };
 
-  readonly #events = new ArvoEventSerializer({ type: 'arvoevent' });
+  readonly #serializer = new ArvoEventSerializer({ type: 'arvoevent' });
   readonly #lanes: Lane[] = [];
-  readonly #queue: Carried[] = [];
+  readonly #queue: CarriedEvent[] = [];
   readonly #attempts = new Map<string, number>();
-  #settled: (() => void) | null = null;
-  readonly #howMany: number;
+  #onSettled: (() => void) | null = null;
+  readonly #threadCount: number;
   readonly #charges: ChargeBehaviour;
-  readonly #slowly: number;
+  readonly #holdMs: number;
   readonly #duplicate: boolean;
+  readonly #layered: boolean;
 
-  constructor(howMany: number, options: ThreadedBrokerOptions = {}) {
-    this.#howMany = howMany;
+  constructor(threadCount: number, options: ThreadedBrokerOptions = {}) {
+    this.#threadCount = threadCount;
     this.#charges = options.charges ?? 'succeeds';
-    this.#slowly = options.slowly ?? 0;
+    this.#holdMs = options.slowly ?? 0;
     this.#duplicate = options.duplicate === true;
+    this.#layered = options.layered === true;
   }
 
   /** Starts every thread, each loading the built package for itself. */
   start(): Promise<this> {
-    const at = new URL('./runner.mts', import.meta.url);
-    for (let which = 0; which < this.#howMany; which += 1) {
-      const worker = new Worker(at, {
-        workerData: { charges: this.#charges },
+    const runnerUrl = new URL('./runner.mts', import.meta.url);
+    for (
+      let threadIndex = 0;
+      threadIndex < this.#threadCount;
+      threadIndex += 1
+    ) {
+      const worker = new Worker(runnerUrl, {
+        workerData: { charges: this.#charges, layered: this.#layered },
       });
       const lane: Lane = { worker, held: null, alive: true };
-      worker.on('message', (said) => void this.#heard(lane, said));
-      worker.on('error', (raised) => this.#broke(lane, raised));
+      worker.on(
+        'message',
+        (message) => void this.#handleMessage(lane, message),
+      );
+      worker.on('error', (workerError) =>
+        this.#handleWorkerError(lane, workerError),
+      );
       worker.unref();
       this.#lanes.push(lane);
     }
@@ -99,124 +112,128 @@ export class ThreadedBroker {
   }
 
   /** Kills one of the threads still running, whatever it was in the middle of. */
-  async kill(which: number): Promise<void> {
-    const lane = this.#live()[which];
+  async kill(threadIndex: number): Promise<void> {
+    const lane = this.#liveLanes()[threadIndex];
     if (lane === undefined) return;
 
     lane.alive = false;
-    const held = lane.held;
+    const inFlight = lane.held;
     lane.held = null;
     await lane.worker.terminate();
 
-    if (held) {
+    if (inFlight) {
       this.transcript.died += 1;
-      this.#queue.push(held);
+      this.#queue.push(inFlight);
     }
     this.#pump();
   }
 
   /** An event into the broker, to be given to whichever thread is free. */
   async publish(event: unknown): Promise<this> {
-    const written = await this.#events.trySerialize(event as never);
-    if (!written.ok) return this;
+    const serialization = await this.#serializer.trySerialize(event as never);
+    if (!serialization.ok) return this;
 
-    const plain = JSON.parse(written.value) as {
+    const publishedEvent = JSON.parse(serialization.value) as {
       type: string;
       to: string | null;
       subject: string;
     };
-    this.transcript.published.push(plain);
+    this.transcript.published.push(publishedEvent);
 
-    const carried = { written: written.value, to: plain.to };
-    this.#queue.push(carried);
-    if (this.#duplicate) this.#queue.push(carried);
+    const queuedEvent = { written: serialization.value, to: publishedEvent.to };
+    this.#queue.push(queuedEvent);
+    if (this.#duplicate) this.#queue.push(queuedEvent);
     return this;
   }
 
   /** Runs until every thread is idle and nothing is queued. */
-  async settle(within = 20_000): Promise<this> {
+  async settle(timeoutMs = 20_000): Promise<this> {
     this.#pump();
     if (this.#isQuiet()) return this;
 
-    await new Promise<void>((done, fail) => {
-      const giveUp = setTimeout(() => {
-        this.#settled = null;
-        fail(new Error('these threads did not settle'));
-      }, within);
-      this.#settled = () => {
-        clearTimeout(giveUp);
-        this.#settled = null;
-        done();
+    await new Promise<void>((resolve, reject) => {
+      const giveUpTimer = setTimeout(() => {
+        this.#onSettled = null;
+        reject(new Error('these threads did not settle'));
+      }, timeoutMs);
+      this.#onSettled = () => {
+        clearTimeout(giveUpTimer);
+        this.#onSettled = null;
+        resolve();
       };
     });
     return this;
   }
 
-  #live(): Lane[] {
+  #liveLanes(): Lane[] {
     return this.#lanes.filter((lane) => lane.alive);
   }
 
   #isQuiet(): boolean {
     return (
       this.#queue.length === 0 &&
-      this.#live().every((lane) => lane.held === null)
+      this.#liveLanes().every((lane) => lane.held === null)
     );
   }
 
   /** Hands work to every thread that is free, all at once. */
   #pump(): void {
-    for (const lane of this.#live()) {
+    for (const lane of this.#liveLanes()) {
       if (lane.held !== null) continue;
-      const carried = this.#queue.shift();
-      if (carried === undefined) break;
+      const queuedEvent = this.#queue.shift();
+      if (queuedEvent === undefined) break;
 
-      lane.held = carried;
+      lane.held = queuedEvent;
       lane.worker.postMessage({
         kind: 'run',
-        event: carried.written,
-        attempt: this.#attempts.get(carried.written) ?? 0,
-        slowly: this.#slowly,
+        event: queuedEvent.written,
+        attempt: this.#attempts.get(queuedEvent.written) ?? 0,
+        slowly: this.#holdMs,
       });
     }
-    if (this.#isQuiet()) this.#settled?.();
+    if (this.#isQuiet()) this.#onSettled?.();
   }
 
   /** A thread that died rather than answered. */
-  #broke(lane: Lane, raised: Error): void {
-    const held = lane.held;
+  #handleWorkerError(lane: Lane, workerError: Error): void {
+    const inFlight = lane.held;
     lane.held = null;
-    this.transcript.broken.push(raised.message);
-    if (held) this.#queue.push(held);
+    this.transcript.broken.push(workerError.message);
+    if (inFlight) this.#queue.push(inFlight);
     this.#pump();
   }
 
   /** What one thread said, which is either a read or an outcome. */
-  async #heard(lane: Lane, said: Record<string, unknown>): Promise<void> {
+  async #handleMessage(
+    lane: Lane,
+    message: Record<string, unknown>,
+  ): Promise<void> {
     // A read is not the end of the work: the thread is still holding it.
-    if (said.kind === 'read') {
+    if (message.kind === 'read') {
       lane.worker.postMessage({
         kind: 'read',
-        at: said.at,
-        row: this.store.get(String(said.executionId)) ?? null,
+        at: message.at,
+        row: this.store.get(String(message.executionId)) ?? null,
       });
       return;
     }
 
-    const held = lane.held;
+    const inFlight = lane.held;
     lane.held = null;
-    if (held === null) return;
+    if (inFlight === null) return;
 
-    if (said.kind === 'discarded') this.transcript.discarded += 1;
+    if (message.kind === 'discarded') this.transcript.discarded += 1;
 
-    if (said.kind === 'produced') {
-      const row = said.state as Record<string, unknown>;
+    if (message.kind === 'produced') {
+      const row = message.state as Record<string, unknown>;
       const executionId = String(row.executionId);
-      const now = this.store.get(executionId) ?? null;
-      const expected = now === null ? 0 : Number(now.casVersion) + 1;
+      const committedRow = this.store.get(executionId) ?? null;
+      const expectedCasVersion =
+        committedRow === null ? 0 : Number(committedRow.casVersion) + 1;
 
-      if (Number(row.casVersion) !== expected) {
+      if (Number(row.casVersion) !== expectedCasVersion) {
         this.transcript.conflicts += 1;
-        this.#queue.push(held);
+        this.#queue.push(inFlight);
       } else {
         this.store.set(executionId, row);
         this.transcript.committed.push({
@@ -224,33 +241,33 @@ export class ThreadedBroker {
           casVersion: Number(row.casVersion),
           version: String(row.version),
         });
-        for (const leaving of said.events as string[]) {
-          await this.publish(JSON.parse(leaving));
+        for (const outgoingEvent of message.events as string[]) {
+          await this.publish(JSON.parse(outgoingEvent));
         }
       }
     }
 
-    if (said.kind === 'faulted') {
-      this.transcript.faults.push(String(said.faultKind));
-      if (said.retryable === true) {
+    if (message.kind === 'faulted') {
+      this.transcript.faults.push(String(message.faultKind));
+      if (message.retryable === true) {
         this.#attempts.set(
-          held.written,
-          (this.#attempts.get(held.written) ?? 0) + 1,
+          inFlight.written,
+          (this.#attempts.get(inFlight.written) ?? 0) + 1,
         );
-        this.#queue.push(held);
-      } else if (said.faultKind !== 'record_unexpected') {
+        this.#queue.push(inFlight);
+      } else if (message.faultKind !== 'record_unexpected') {
         // a broker that repeats itself must not read its own repeat as a
         // failure, which is what an opening event for an execution that
         // already exists is
-        this.transcript.abandoned.push(String(said.executionId));
-        if (said.abandonmentState !== null) {
+        this.transcript.abandoned.push(String(message.executionId));
+        if (message.abandonmentState !== null) {
           this.store.set(
-            String(said.executionId),
-            JSON.parse(String(said.abandonmentState)),
+            String(message.executionId),
+            JSON.parse(String(message.abandonmentState)),
           );
         }
-        if (said.abandonmentEvent !== null) {
-          await this.publish(JSON.parse(String(said.abandonmentEvent)));
+        if (message.abandonmentEvent !== null) {
+          await this.publish(JSON.parse(String(message.abandonmentEvent)));
         }
       }
     }

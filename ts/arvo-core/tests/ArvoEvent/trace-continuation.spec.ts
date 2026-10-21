@@ -11,22 +11,24 @@ const TRACE_ID = '0af7651916cd43dd8448eb211c80319c';
 const SPAN_ID = 'b7ad6b7169203331';
 
 /** A tracer that records what it was asked to start, and under what parent. */
-const spy = () => {
-  const started: { name: string; parentId: string | undefined }[] = [];
+const recordingTracer = () => {
+  const startedSpans: { name: string; parentId: string | undefined }[] = [];
   const tracer = {
-    startSpan: (name: string, _options: unknown, parent: unknown) => {
-      const of = trace.getSpan(
-        (parent ?? otelContext.active()) as Parameters<typeof trace.getSpan>[0],
+    startSpan: (name: string, _options: unknown, parentContext: unknown) => {
+      const parentSpan = trace.getSpan(
+        (parentContext ?? otelContext.active()) as Parameters<
+          typeof trace.getSpan
+        >[0],
       );
-      started.push({ name, parentId: of?.spanContext().spanId });
+      startedSpans.push({ name, parentId: parentSpan?.spanContext().spanId });
       return trace.getTracer('fallback').startSpan(name);
     },
   } as unknown as Tracer;
-  return { tracer, started };
+  return { tracer, started: startedSpans };
 };
 
 /** An event by its trace headers alone, which is all this reads. */
-const arriving = (
+const traceHeaders = (
   traceparent: string | null,
   tracestate: string | null = null,
 ) => ({
@@ -36,87 +38,93 @@ const arriving = (
 
 describe('continuing the trace an event arrived on', () => {
   it('gives back both ends of the join', () => {
-    const joined = continueTraceFromEvent(
-      arriving(`00-${TRACE_ID}-${SPAN_ID}-01`),
-      spy().tracer,
+    const joinedTrace = continueTraceFromEvent(
+      traceHeaders(`00-${TRACE_ID}-${SPAN_ID}-01`),
+      recordingTracer().tracer,
       'delivery',
     );
-    expect(joined?.span).toBeDefined();
-    expect(joined?.parentSpan).toBeDefined();
+    expect(joinedTrace?.span).toBeDefined();
+    expect(joinedTrace?.parentSpan).toBeDefined();
   });
 
   it('rebuilds the producer span from the headers', () => {
-    const joined = continueTraceFromEvent(
-      arriving(`00-${TRACE_ID}-${SPAN_ID}-01`),
-      spy().tracer,
+    const joinedTrace = continueTraceFromEvent(
+      traceHeaders(`00-${TRACE_ID}-${SPAN_ID}-01`),
+      recordingTracer().tracer,
       'delivery',
     );
-    const parent = joined?.parentSpan.spanContext();
-    expect(parent?.traceId).toBe(TRACE_ID);
-    expect(parent?.spanId).toBe(SPAN_ID);
-    expect(parent?.traceFlags).toBe(TraceFlags.SAMPLED);
+    const producerSpanContext = joinedTrace?.parentSpan.spanContext();
+    expect(producerSpanContext?.traceId).toBe(TRACE_ID);
+    expect(producerSpanContext?.spanId).toBe(SPAN_ID);
+    expect(producerSpanContext?.traceFlags).toBe(TraceFlags.SAMPLED);
   });
 
   it('marks that span remote, it having happened elsewhere', () => {
-    const joined = continueTraceFromEvent(
-      arriving(`00-${TRACE_ID}-${SPAN_ID}-01`),
-      spy().tracer,
+    const joinedTrace = continueTraceFromEvent(
+      traceHeaders(`00-${TRACE_ID}-${SPAN_ID}-01`),
+      recordingTracer().tracer,
       'delivery',
     );
-    expect(joined?.parentSpan.spanContext().isRemote).toBe(true);
+    expect(joinedTrace?.parentSpan.spanContext().isRemote).toBe(true);
   });
 
   it('starts the new span under that parent, not under whatever was active', () => {
-    const watched = spy();
+    const recorder = recordingTracer();
     continueTraceFromEvent(
-      arriving(`00-${TRACE_ID}-${SPAN_ID}-01`),
-      watched.tracer,
+      traceHeaders(`00-${TRACE_ID}-${SPAN_ID}-01`),
+      recorder.tracer,
       'delivery',
     );
-    expect(watched.started).toEqual([{ name: 'delivery', parentId: SPAN_ID }]);
+    expect(recorder.started).toEqual([{ name: 'delivery', parentId: SPAN_ID }]);
   });
 
   it('carries the trace state the event arrived with', () => {
-    const joined = continueTraceFromEvent(
-      arriving(`00-${TRACE_ID}-${SPAN_ID}-01`, 'vendor=value'),
-      spy().tracer,
+    const joinedTrace = continueTraceFromEvent(
+      traceHeaders(`00-${TRACE_ID}-${SPAN_ID}-01`, 'vendor=value'),
+      recordingTracer().tracer,
       'delivery',
     );
-    expect(joined?.parentSpan.spanContext().traceState?.get('vendor')).toBe(
-      'value',
-    );
+    expect(
+      joinedTrace?.parentSpan.spanContext().traceState?.get('vendor'),
+    ).toBe('value');
   });
 
   it('carries no trace state where the event had none', () => {
-    const joined = continueTraceFromEvent(
-      arriving(`00-${TRACE_ID}-${SPAN_ID}-01`),
-      spy().tracer,
+    const joinedTrace = continueTraceFromEvent(
+      traceHeaders(`00-${TRACE_ID}-${SPAN_ID}-01`),
+      recordingTracer().tracer,
       'delivery',
     );
-    expect(joined?.parentSpan.spanContext().traceState).toBeUndefined();
+    expect(joinedTrace?.parentSpan.spanContext().traceState).toBeUndefined();
   });
 
   it('reads the flags the producer set', () => {
-    const joined = continueTraceFromEvent(
-      arriving(`00-${TRACE_ID}-${SPAN_ID}-00`),
-      spy().tracer,
+    const joinedTrace = continueTraceFromEvent(
+      traceHeaders(`00-${TRACE_ID}-${SPAN_ID}-00`),
+      recordingTracer().tracer,
       'delivery',
     );
-    expect(joined?.parentSpan.spanContext().traceFlags).toBe(TraceFlags.NONE);
+    expect(joinedTrace?.parentSpan.spanContext().traceFlags).toBe(
+      TraceFlags.NONE,
+    );
   });
 });
 
 describe('an event with no trace to continue', () => {
   it("gives back nothing, the decision to start one being the caller's", () => {
     expect(
-      continueTraceFromEvent(arriving(null), spy().tracer, 'delivery'),
+      continueTraceFromEvent(
+        traceHeaders(null),
+        recordingTracer().tracer,
+        'delivery',
+      ),
     ).toBeNull();
   });
 
   it('starts nothing', () => {
-    const watched = spy();
-    continueTraceFromEvent(arriving(null), watched.tracer, 'delivery');
-    expect(watched.started).toEqual([]);
+    const recorder = recordingTracer();
+    continueTraceFromEvent(traceHeaders(null), recorder.tracer, 'delivery');
+    expect(recorder.started).toEqual([]);
   });
 
   it.each([
@@ -131,7 +139,11 @@ describe('an event with no trace to continue', () => {
     'treats %s as none, a span parented to nonsense being worse',
     (_label, traceparent) => {
       expect(
-        continueTraceFromEvent(arriving(traceparent), spy().tracer, 'delivery'),
+        continueTraceFromEvent(
+          traceHeaders(traceparent),
+          recordingTracer().tracer,
+          'delivery',
+        ),
       ).toBeNull();
     },
   );

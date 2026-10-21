@@ -99,6 +99,10 @@ export type {
   ArvoExecutorEmission,
 } from './ArvoEventHandler/types/execute.js';
 export type {
+  ArvoEventHandlerMiddlewareEntry,
+  IArvoEventHandlerMiddleware,
+} from './ArvoEventHandler/types/middleware.js';
+export type {
   ArvoCollectMode,
   ArvoEventHandlerOptions,
   ArvoRetryDelayFn,
