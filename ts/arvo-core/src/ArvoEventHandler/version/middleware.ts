@@ -25,12 +25,12 @@ import type { ArvoExecutorRun, ArvoGateRefusal } from './types.js';
  * How far one run of the chain has got, shared with whatever is timing it.
  *
  * Mutable on purpose: the clock and the chain run side by side, and each
- * needs to see what the other has done. Once `abandoned` is set, nothing
+ * needs to see what the other has done. Once `outran` is set, nothing
  * further runs and nothing further is recorded.
  */
 export type ArvoMiddlewareProgress = {
-  /** The clock fired: run nothing further, record nothing further. */
-  abandoned: boolean;
+  /** The run clock fired first: run nothing further, record nothing further. */
+  outran: boolean;
   /** When the executor was entered, or `null` where it has not been. */
   executorStartedAt: number | null;
   /** When the executor returned, or `null` where it has not. */
@@ -41,7 +41,7 @@ export type ArvoMiddlewareProgress = {
 
 /** A run of the chain that has not started. */
 export const createArvoMiddlewareProgress = (): ArvoMiddlewareProgress => ({
-  abandoned: false,
+  outran: false,
   executorStartedAt: null,
   returnedAt: null,
   returned: undefined,
@@ -161,7 +161,7 @@ export const runMiddleware = async <TContext>(param: {
 
   try {
     for (const layer of layers) {
-      if (progress.abandoned) return { kind: 'raised', raised: undefined };
+      if (progress.outran) return { kind: 'raised', raised: undefined };
       if (layer.before === undefined) continue;
       markStage(telemetry, 'middleware_before_entered', {
         'middleware.id': layer.id,
@@ -172,7 +172,7 @@ export const runMiddleware = async <TContext>(param: {
       });
     }
 
-    if (progress.abandoned) return { kind: 'raised', raised: undefined };
+    if (progress.outran) return { kind: 'raised', raised: undefined };
     progress.executorStartedAt = Date.now();
     const returned = await param.executor(ctx);
     progress.returnedAt = Date.now();
@@ -188,21 +188,21 @@ export const runMiddleware = async <TContext>(param: {
     : progress.returned;
 
   for (const layer of [...layers].reverse()) {
-    if (progress.abandoned) break;
+    if (progress.outran) break;
     if (layer.after === undefined) continue;
     markStage(telemetry, 'middleware_after_entered', {
       'middleware.id': layer.id,
     });
     try {
       await layer.after(ctx as never, emission);
-      if (!progress.abandoned) {
+      if (!progress.outran) {
         markStage(telemetry, 'middleware_after_returned', {
           'middleware.id': layer.id,
         });
       }
     } catch (raised) {
       // An outcome already decided is not undone by what follows it.
-      if (!progress.abandoned) {
+      if (!progress.outran) {
         markStage(telemetry, 'middleware_after_failed', {
           'middleware.id': layer.id,
           ...describeRaised(raised),

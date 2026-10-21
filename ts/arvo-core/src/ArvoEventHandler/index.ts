@@ -196,12 +196,10 @@ export class ArvoEventHandler<
 
     if (issues.length > 0) throw new ArvoEventHandlerValidationError(issues);
 
-    // The one place an omitted list and an empty one meet: everything
-    // below reads null for no layers.
+    // omitted and empty meet here: everything below reads null for none
+    const declared = setup.middleware ?? [];
     const middleware =
-      setup.middleware === undefined || setup.middleware.length === 0
-        ? null
-        : Object.freeze([...setup.middleware]);
+      declared.length === 0 ? null : Object.freeze([...declared]);
 
     const versions = new Map<string, ArvoEventHandlerVersion>();
     for (const declared of setup.versions) {
@@ -221,8 +219,7 @@ export class ArvoEventHandler<
           state: declared.state,
           declaresState: declared.declaresState,
           execute: declared.execute,
-          // held at the handler's own types; a version is held at the
-          // map's, as its executor already is
+          // the map holds a version at its own types, as it does its executor
           middleware: middleware as
             | readonly ArvoEventHandlerMiddlewareEntry[]
             | null,
@@ -564,8 +561,7 @@ export class ArvoEventHandler<
       // omits, everything below reads null.
       dependencies: param.dependencies ?? null,
       hooks: param.hooks ?? null,
-      // a null from a caller no compiler saw reads as none, and anything
-      // that is not a list is carried on to be refused as no layer
+      // null from an untyped caller is none; a non-list goes on to be refused
       middleware:
         param.middleware === undefined ||
         param.middleware === null ||

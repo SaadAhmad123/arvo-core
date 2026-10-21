@@ -125,8 +125,7 @@ export class ArvoExecutionContext<
   // member being replaced without also stopping a write.
   #state: ArvoContextState<TSelf, TServices, TDataSchema>;
 
-  // No prototype, so a key that names something every object has is
-  // written as itself rather than reaching what it names.
+  // no prototype: a key such as `__proto__` is stored as itself
   readonly #middleware: Record<string, unknown> = Object.create(null);
 
   constructor(
@@ -216,8 +215,8 @@ export class ArvoExecutionContext<
   }
 
   /**
-   * Leaves a value for everything that runs inside this layer: the layers
-   * after it and the executor.
+   * Leaves a value for what runs after this point: inner layers and the
+   * executor.
    *
    * Written once per key, readable through {@link middleware} from now
    * on, and never part of what this execution remembers.

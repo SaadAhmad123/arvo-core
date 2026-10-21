@@ -96,15 +96,13 @@ export type ArvoEventHandlerSetupParam<
 
   /**
    * Layers around every version's executor: each a layer, or a way to
-   * make one per execution. Before parts run in this order, inside any
-   * layers an execution is supplied; after parts in reverse.
+   * make one. Before parts run in this order, inside any layers an
+   * execution is supplied; after parts in reverse.
    *
-   * A layer may change what the executor sees, and so what an execution
-   * concludes; it never decides what is emitted. No two may share an
-   * identifier. See `IArvoEventHandlerMiddleware`.
+   * No two may share an identifier, or `build` refuses the declaration.
+   * A way to make one is not called here, but once per execution.
    */
-  // Checked against what the handler declares, never used to infer it: a
-  // layer written for any handler would otherwise widen the declaration.
+  // NoInfer: a layer written for any handler must not widen this declaration
   middleware?: readonly ArvoEventHandlerMiddlewareEntry<
     VersionedArvoContract,
     NoInfer<TServices>,

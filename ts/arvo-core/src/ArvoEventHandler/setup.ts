@@ -129,8 +129,7 @@ export class ArvoEventHandlerSetup<
     });
     this.options = param.options ?? null;
     this.telemetry = param.telemetry;
-    // Copied where it is a list; anything else is kept as given for build
-    // to refuse, and a null from a caller no compiler saw reads as none.
+    // a non-list is kept for build to refuse; null from an untyped caller is none
     this.middleware = Array.isArray(param.middleware)
       ? Object.freeze([...param.middleware])
       : (param.middleware ?? undefined);

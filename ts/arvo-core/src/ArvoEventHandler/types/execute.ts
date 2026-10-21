@@ -143,9 +143,12 @@ export type ArvoEventHandlerExecuteParam<
 
   /**
    * Layers around the executor for this execution only: each a layer, or
-   * a way to make one. They run outside any the handler declared — their
-   * before parts first, their after parts last — and no identifier may
-   * repeat one already in use.
+   * a way to make one, called once here. They run outside any the handler
+   * declared — before parts first, after parts last.
+   *
+   * An identifier already in use fails the execution as
+   * `middleware_conflict`; a way to make one that throws or yields no
+   * layer, as `middleware_instantiation_failed`. Neither is retried.
    *
    * See `IArvoEventHandlerMiddleware` for what a layer may do.
    */

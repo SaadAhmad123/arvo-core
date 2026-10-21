@@ -385,7 +385,7 @@ describe('once the clock has fired', () => {
         {
           id: 'slow',
           before: async () => {
-            progress.abandoned = true;
+            progress.outran = true;
           },
         },
         { id: 'next', before: after },
@@ -409,7 +409,7 @@ describe('once the clock has fired', () => {
         {
           id: 'cut',
           after: () => {
-            progress.abandoned = true;
+            progress.outran = true;
             throw new Error('too late to matter');
           },
         },

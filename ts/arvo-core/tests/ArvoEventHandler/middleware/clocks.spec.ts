@@ -80,7 +80,7 @@ describe('the clock firing, by where it fires', () => {
       layers: [{ id: 'watcher', after }],
       ctx,
       executor: () => {
-        progress.abandoned = true;
+        progress.outran = true;
         return [initEvent];
       },
       telemetry: telemetry().telemetry,

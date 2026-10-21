@@ -10,20 +10,9 @@ import type { ArvoDependencies, ArvoMechanismHooks } from './supplied.js';
  * A layer around a version's executor: a part that runs before it, a part
  * that runs after it, and a name.
  *
- * Declared on a handler, a layer runs for every version; supplied with an
- * execution, for that execution only. Supplied layers run outside declared
- * ones: before parts in that order and then the executor, after parts in
- * reverse.
- *
- * Nothing either part returns is read. The executor alone decides what an
- * execution emits; a layer influences what the executor sees, through the
- * context, and may observe what it returned.
- *
- * A layer listed as an instance serves every execution of the handler,
- * several at once, so it keeps nothing about one execution on itself —
- * that travels through `ctx.setMiddleware`. A layer listed as a way to make
- * one serves a single execution and may hold what it learns. See
- * {@link ArvoEventHandlerMiddlewareEntry}.
+ * A layer may change what the executor sees, never what it emits: nothing
+ * either part returns is read. An instance serves every execution at once,
+ * so it keeps nothing about one on itself — use `ctx.setMiddleware`.
  *
  * See `docs/adr/016-executor-middleware.md`.
  *
@@ -55,20 +44,16 @@ export interface IArvoEventHandlerMiddleware<
   TDependencies extends ArvoDependencies = ArvoDependencies,
   TMechanismHooks extends ArvoMechanismHooks = ArvoMechanismHooks,
 > {
-  /**
-   * What names this layer on the span and in a fault. Unique among the
-   * layers of one execution.
-   */
+  /** Names this layer on the span and in a fault. Unique within an execution. */
   readonly id: TId;
 
   /**
    * Runs before the executor, and may do what an executor may.
    *
    * @param ctx - The context the executor will be given.
-   * @throws Anything. Nothing after it runs — no further layer, not the
-   * executor — and the execution fails as though the executor had raised
-   * what this raised: a fault built through `ctx.fault` stays a fault,
-   * anything else becomes the handler error event.
+   * @throws Anything, which stops everything after it and fails the
+   * execution as the executor raising it would: a fault built through
+   * `ctx.fault` stays a fault, anything else is the handler error event.
    */
   before?(
     ctx: ArvoExecutionContext<
@@ -81,16 +66,16 @@ export interface IArvoEventHandlerMiddleware<
   ): PromiseAble<void>;
 
   /**
-   * Runs after the executor returned, and only then. Sees what it
-   * returned and cannot change it.
+   * Runs after the executor returned, and only then. Nothing it does
+   * changes what the execution produces.
    *
-   * Under the same run clock as the executor: where it runs out here, the
+   * Under the executor's run clock: where the clock runs out here, the
    * executor's return stands and the remaining after parts are skipped.
    *
    * @param ctx - The context the executor was given.
    * @param emission - What the executor returned, read-only.
-   * @throws Anything. Recorded on the span and discarded; the executor's
-   * return stands, and the remaining after parts still run.
+   * @throws Anything, which is recorded on the span and discarded; the
+   * remaining after parts still run.
    */
   after?(
     ctx: ArvoExecutionContext<
@@ -108,10 +93,16 @@ export interface IArvoEventHandlerMiddleware<
  * One entry in a list of layers: a layer, or a way to make one.
  *
  * A way to make one is called once per execution, before any layer runs,
- * and the layer it returns serves that execution alone — which is what
- * lets it hold what it learns on itself. A call that fails, or returns
- * something that is not a layer, fails the execution as
- * `middleware_instantiation_failed`, which no further attempt fixes.
+ * and the layer it returns serves that execution alone, so it may hold
+ * what it learns on itself.
+ *
+ * @example
+ * ```typescript
+ * const entries: ArvoEventHandlerMiddlewareEntry[] = [
+ *   new RequireTenant(),     // one instance, every execution
+ *   () => new Stopwatch(),   // a fresh one per execution
+ * ];
+ * ```
  */
 export type ArvoEventHandlerMiddlewareEntry<
   TSelf extends VersionedArvoContract = VersionedArvoContract,

@@ -336,8 +336,7 @@ export class ArvoEventHandlerVersion<
       deliveredEventId: collected.triggeringEvent.id,
     });
 
-    // Every layer this execution will run, judged before any runs, so a
-    // refusal here leaves nothing half-done.
+    // judged before any layer runs, so a refusal leaves nothing half-done
     const layers = await resolveMiddleware(param.middleware, this.#middleware);
     if (layers !== null && 'faultKind' in layers) {
       throw await this.#faultFor(param, collected, layers);
@@ -405,8 +404,7 @@ export class ArvoEventHandlerVersion<
       return this.#reportFailedWork(param, ctx.state, entered.raised);
     }
 
-    // Read at the moment the executor returned, which it has by now: what
-    // the after parts took changes neither verdict.
+    // read at the executor's return: after parts change neither verdict
     const atReturn = concluded();
     await this.#refuseOnClocks(
       param,
@@ -832,9 +830,7 @@ export class ArvoEventHandlerVersion<
     concluded: () => ArvoContextState<TSelf, TServices, TDataSchema>;
   }> {
     const progress = createArvoMiddlewareProgress();
-    // What the execution had come to when the executor returned. After
-    // parts run on the same context, and nothing they write may reach
-    // what is produced: the outcome was decided at this moment.
+    // the record as the executor left it: nothing an after part writes may reach it
     let atReturn: ArvoContextState<TSelf, TServices, TDataSchema> | null = null;
     // read only where the executor returned, which is where it was set
     const concluded = () =>
@@ -855,7 +851,7 @@ export class ArvoEventHandlerVersion<
       telemetry: ctx.telemetry,
       progress,
     }).then((entered) => {
-      if (atReturn !== null && ctx.state !== atReturn && !progress.abandoned) {
+      if (atReturn !== null && ctx.state !== atReturn && !progress.outran) {
         markStage(ctx.telemetry, 'middleware_after_write_discarded');
       }
       return entered;
@@ -877,9 +873,8 @@ export class ArvoEventHandlerVersion<
       const entered = await Promise.race([running, clock]);
       if (entered.kind !== 'outran') return { entered, progress, concluded };
 
-      progress.abandoned = true;
-      // Run out in an after part: the executor's return is already
-      // decided, so it stands and the remaining after parts are skipped.
+      progress.outran = true;
+      // ran out in an after part: the executor's return stands
       if (progress.returnedAt !== null) {
         markStage(ctx.telemetry, 'middleware_after_cut');
         return {

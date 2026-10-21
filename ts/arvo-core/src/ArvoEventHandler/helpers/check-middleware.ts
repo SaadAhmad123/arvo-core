@@ -67,7 +67,7 @@ export const describeUnlikeLayer = (
  *
  * @example
  * ```typescript
- * checkMiddleware([new RequireTenant(), () => new Stopwatch()]);
+ * checkMiddleware([{ id: 'audit', after: record }, () => ({ id: 'timer' })]);
  * ```
  */
 export const checkMiddleware = (
