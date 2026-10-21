@@ -8,6 +8,7 @@ import { ArvoComposedMiddleware } from '../../../../src/ArvoEventHandler/version
 
 const createFrom = (supplied: unknown, declared: unknown) =>
   tryCreateArvoComposedMiddleware({
+    // deliberately untyped: these lists exercise the factory's own checks
     supplied: supplied as never,
     declared: declared as never,
     abortSignal: new AbortController().signal,
@@ -82,15 +83,33 @@ describe('layers that break a rule', () => {
   });
 });
 
-describe('anything else the constructor throws', () => {
-  it('goes up as it was thrown, not as a refusal', async () => {
-    const readFailure = new Error('id could not be read');
+describe('a layer whose id cannot be read', () => {
+  it('is refused, not thrown', async () => {
     const unreadableLayer = {
       get id(): string {
+        throw new Error('id could not be read');
+      },
+    };
+    const attempt = await createFrom([unreadableLayer], []);
+    expect(!attempt.ok && attempt.error).toBeInstanceOf(
+      ArvoComposedMiddlewareValidationError,
+    );
+  });
+});
+
+describe('anything else thrown while building the composite', () => {
+  it('goes up as it was thrown, not as a refusal', async () => {
+    const readFailure = new Error('the signal could not be read');
+    const hostileParam = {
+      supplied: [],
+      declared: [],
+      get abortSignal(): AbortSignal {
         throw readFailure;
       },
     };
-    await expect(createFrom([unreadableLayer], [])).rejects.toBe(readFailure);
+    await expect(tryCreateArvoComposedMiddleware(hostileParam)).rejects.toBe(
+      readFailure,
+    );
   });
 });
 

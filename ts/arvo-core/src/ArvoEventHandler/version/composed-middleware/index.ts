@@ -2,6 +2,7 @@ import type { Attributes } from '@opentelemetry/api';
 import type * as z from 'zod/v4/core';
 import type { VersionedArvoContract } from '../../../ArvoContract/versioned/index.js';
 import { ErrorIssue } from '../../../utils/error-issue.js';
+import { textOfThrown } from '../../../utils/thrown-text.js';
 import type { ArvoExecutionContext } from '../../context/index.js';
 import { layerShapeIssues } from '../../helpers/check-middleware.js';
 import type { ArvoExecutorEmission } from '../../types/execute.js';
@@ -15,11 +16,31 @@ import { type ArvoExecutionStage, markStage } from '../telemetry.js';
 import { ArvoComposedMiddlewareValidationError } from './errors.js';
 import { middlewarePosition } from './position.js';
 
-/** What was thrown, as span attributes. */
-const describeThrown = (thrown: unknown): Attributes =>
-  thrown instanceof Error
-    ? { 'error.name': thrown.name, 'error.message': thrown.message }
-    : { 'error.name': typeof thrown, 'error.message': String(thrown) };
+/** What kind of thing was thrown: an Error's name, else its type. */
+const kindOfThrown = (thrown: unknown): string => {
+  try {
+    return thrown instanceof Error ? String(thrown.name) : typeof thrown;
+  } catch {
+    return 'Error';
+  }
+};
+
+/** What was thrown, as span attributes. Never throws itself. */
+const describeThrown = (thrown: unknown): Attributes => ({
+  'error.name': kindOfThrown(thrown),
+  'error.message': textOfThrown(thrown),
+});
+
+/**
+ * A layer's parts, each read once and checked, held beside the layer they
+ * came from so each part is still called on it.
+ */
+type ArvoCheckedLayer = {
+  readonly layer: IArvoEventHandlerMiddleware;
+  readonly id: string;
+  readonly before: IArvoEventHandlerMiddleware['before'];
+  readonly after: IArvoEventHandlerMiddleware['after'];
+};
 
 /** Why a shape issue stops the identifier pass. */
 const IDENTIFIERS_NOT_COMPARABLE =
@@ -61,9 +82,10 @@ export class ArvoComposedMiddleware<
 
   /**
    * The layers, in the order their before parts run, typed as a handler
-   * declares them: for any version's context.
+   * declares them: for any version's context. Each part was read once,
+   * when it was checked, and that is the part run.
    */
-  readonly #layers: readonly IArvoEventHandlerMiddleware[];
+  readonly #layers: readonly ArvoCheckedLayer[];
 
   /** Aborted by the version when the run clock fires. */
   readonly #abortSignal: AbortSignal;
@@ -96,9 +118,7 @@ export class ArvoComposedMiddleware<
       })),
     ];
 
-    this.#validate(positionedEntries);
-
-    this.#layers = positionedEntries.map(({ layer }) => layer);
+    this.#layers = this.#validate(positionedEntries);
     this.#abortSignal = param.abortSignal;
     this.#suppliedCount = param.supplied.length;
     this.#declaredCount = param.declared.length;
@@ -120,21 +140,56 @@ export class ArvoComposedMiddleware<
    * Judges the layers in two passes, throwing at the first that fails:
    * every entry must be a layer, then no two may share an identifier.
    *
+   * Each layer's parts are read once, here: a part read again later could
+   * be something other than what was checked.
+   *
    * @param positionedEntries - Every entry, in run order, with where it sits.
+   * @returns Every layer with its parts as read and checked.
    * @throws {ArvoComposedMiddlewareValidationError} Naming every entry that
-   * is not a layer, or else every repeated identifier.
+   * is not a layer or cannot be read, or else every repeated identifier.
    */
   #validate(
     positionedEntries: readonly {
       layer: IArvoEventHandlerMiddleware;
       position: string;
     }[],
-  ): void {
+  ): readonly ArvoCheckedLayer[] {
     // identifiers are compared only once every entry is known to be a layer
     const shapeIssues: ErrorIssue[] = [];
+    const checkedLayers: {
+      checkedLayer: ArvoCheckedLayer;
+      position: string;
+    }[] = [];
     // a caller no compiler saw may have handed over anything as a layer
     for (const { layer, position } of positionedEntries) {
-      shapeIssues.push(...layerShapeIssues(layer, position));
+      if (typeof layer !== 'object' || layer === null) {
+        shapeIssues.push(...layerShapeIssues(layer, position));
+        continue;
+      }
+      let partsAsRead: Omit<ArvoCheckedLayer, 'layer'>;
+      try {
+        partsAsRead = {
+          id: layer.id,
+          before: layer.before,
+          after: layer.after,
+        };
+      } catch (thrown) {
+        shapeIssues.push(
+          new ErrorIssue({
+            path: position,
+            message: `could not be read: ${textOfThrown(thrown)}`,
+          }),
+        );
+        continue;
+      }
+      const partIssues = layerShapeIssues(partsAsRead, position);
+      shapeIssues.push(...partIssues);
+      if (partIssues.length === 0) {
+        checkedLayers.push({
+          checkedLayer: { layer, ...partsAsRead },
+          position,
+        });
+      }
     }
     if (shapeIssues.length > 0) {
       throw new ArvoComposedMiddlewareValidationError(
@@ -154,8 +209,8 @@ export class ArvoComposedMiddleware<
 
     const conflictIssues: ErrorIssue[] = [];
     const firstPositionById = new Map<string, string>();
-    for (const { layer, position } of positionedEntries) {
-      const layerId = layer.id;
+    for (const { checkedLayer, position } of checkedLayers) {
+      const layerId = checkedLayer.id;
       const earlierPosition = firstPositionById.get(layerId);
       if (earlierPosition === undefined) {
         firstPositionById.set(layerId, position);
@@ -175,6 +230,7 @@ export class ArvoComposedMiddleware<
         conflictIssues,
       );
     }
+    return checkedLayers.map(({ checkedLayer }) => checkedLayer);
   }
 
   /**
@@ -193,12 +249,15 @@ export class ArvoComposedMiddleware<
       TMechanismHooks
     >,
   ): Promise<void> {
-    for (const layer of this.#layers) {
+    for (const checkedLayer of this.#layers) {
       if (this.#abortSignal.aborted) return;
-      if (layer.before === undefined) continue;
-      this.#markPart(ctx, 'middleware_before_entered', layer);
-      await layer.before(this.#contextForLayers(ctx));
-      this.#markPart(ctx, 'middleware_before_returned', layer);
+      if (checkedLayer.before === undefined) continue;
+      this.#markPart(ctx, 'middleware_before_entered', checkedLayer);
+      await checkedLayer.before.call(
+        checkedLayer.layer,
+        this.#contextForLayers(ctx),
+      );
+      this.#markPart(ctx, 'middleware_before_returned', checkedLayer);
     }
   }
 
@@ -224,19 +283,23 @@ export class ArvoComposedMiddleware<
     )
       ? Object.freeze(emission)
       : emission;
-    for (const layer of [...this.#layers].reverse()) {
+    for (const checkedLayer of [...this.#layers].reverse()) {
       if (this.#abortSignal.aborted) return;
-      if (layer.after === undefined) continue;
-      this.#markPart(ctx, 'middleware_after_entered', layer);
+      if (checkedLayer.after === undefined) continue;
+      this.#markPart(ctx, 'middleware_after_entered', checkedLayer);
       try {
-        await layer.after(this.#contextForLayers(ctx), readOnlyEmission);
-        this.#markPart(ctx, 'middleware_after_returned', layer);
+        await checkedLayer.after.call(
+          checkedLayer.layer,
+          this.#contextForLayers(ctx),
+          readOnlyEmission,
+        );
+        this.#markPart(ctx, 'middleware_after_returned', checkedLayer);
       } catch (thrown) {
         // never rethrow: an after part cannot change the outcome
         this.#markPart(
           ctx,
           'middleware_after_failed',
-          layer,
+          checkedLayer,
           describeThrown(thrown),
         );
       }

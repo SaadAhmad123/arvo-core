@@ -4,6 +4,7 @@ import type { VersionedArvoContract } from '../../../ArvoContract/versioned/inde
 import { fromNeverthrow } from '../../../result.js';
 import type { AsyncResult } from '../../../types.js';
 import { ErrorIssue } from '../../../utils/error-issue.js';
+import { textOfThrown } from '../../../utils/thrown-text.js';
 import type { ArvoEventHandlerMiddlewareEntry } from '../../types/middleware.js';
 import type { ArvoServiceMap } from '../../types/services.js';
 import type {
@@ -15,7 +16,7 @@ import {
   ArvoComposedMiddlewareValidationError,
 } from './errors.js';
 import { ArvoComposedMiddleware } from './index.js';
-import { middlewarePosition } from './position.js';
+import { type ArvoMiddlewareSource, middlewarePosition } from './position.js';
 import { tryResolveMiddleware } from './resolve.js';
 
 /** What the layers of one execution are built from. */
@@ -64,10 +65,14 @@ export const tryCreateArvoComposedMiddleware = async <
     { source: 'supplied' as const, entries: param.supplied ?? [] },
     { source: 'declared' as const, entries: param.declared ?? [] },
   ];
-  const listIssues = sides
-    .filter(({ entries }) => !Array.isArray(entries))
-    .map(
-      ({ source, entries }) =>
+  const listIssues: ErrorIssue[] = [];
+  const listsAsRead: Record<
+    ArvoMiddlewareSource,
+    ArvoEventHandlerMiddlewareEntry[]
+  > = { supplied: [], declared: [] };
+  for (const { source, entries } of sides) {
+    if (!Array.isArray(entries)) {
+      listIssues.push(
         new ErrorIssue({
           path: middlewarePosition(source),
           message:
@@ -76,13 +81,29 @@ export const tryCreateArvoComposedMiddleware = async <
           blockingReason:
             'no middleware entry was checked, since the list itself is not an array',
         }),
-    );
+      );
+      continue;
+    }
+    try {
+      // read once, every slot filled: a hole becomes undefined, which the constructor refuses
+      listsAsRead[source] = Array.from(entries);
+    } catch (thrown) {
+      listIssues.push(
+        new ErrorIssue({
+          path: middlewarePosition(source),
+          message: `could not be read: ${textOfThrown(thrown)}`,
+          blockingReason:
+            'no middleware entry was checked, since the list itself could not be read',
+        }),
+      );
+    }
+  }
   if (listIssues.length > 0) {
     return fromNeverthrow(
       err(
         new ArvoComposedMiddlewareValidationError(
           'middleware_instantiation_failed',
-          'This execution was not run: its middleware must be given as an array. No middleware ran and the handler was not called.',
+          'This execution was not run: its middleware must be given as an array that can be read. No middleware ran and the handler was not called.',
           listIssues,
         ),
       ),
@@ -90,8 +111,8 @@ export const tryCreateArvoComposedMiddleware = async <
   }
 
   const resolution = await tryResolveMiddleware(
-    param.supplied ?? [],
-    param.declared ?? [],
+    listsAsRead.supplied,
+    listsAsRead.declared,
   );
   if (!resolution.ok) return resolution;
 

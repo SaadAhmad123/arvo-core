@@ -204,6 +204,20 @@ describe('walkPayload', () => {
       expect(issueMessages(walkResult)[0]).toContain('a bare string');
     });
 
+    it('reports a value thrown from toJSON that has no text of its own', () => {
+      const walkResult = walkPayload(
+        {
+          hostile: {
+            toJSON() {
+              throw Object.create(null);
+            },
+          },
+        },
+        'data',
+      );
+      expect(issueMessages(walkResult)[0]).toContain('toJSON() threw');
+    });
+
     it('catches a cycle created through toJSON rather than exhausting the stack', () => {
       const loopingObject: Record<string, unknown> = {};
       loopingObject.toJSON = () => ({ back: loopingObject });

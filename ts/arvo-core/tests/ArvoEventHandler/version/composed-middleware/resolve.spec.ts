@@ -27,6 +27,7 @@ describe('entries that are already layers', () => {
   });
 
   it('pass through even where they are not layers, for the constructor to judge', async () => {
+    // deliberately invalid entries: resolution must hand them on unjudged
     const resolved = await resolvedOrThrow([42 as never], ['text' as never]);
     expect(resolved.supplied).toEqual([42]);
     expect(resolved.declared).toEqual(['text']);

@@ -2,6 +2,7 @@ import type * as z from 'zod/v4/core';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { ArvoSemanticVersion } from '../../semver/index.js';
+import { textOfThrown } from '../../utils/thrown-text.js';
 import { arvoIdempotencyKeysFor } from '../context/idempotency.js';
 import { ArvoExecutionContext } from '../context/index.js';
 import type { ArvoContextState } from '../context/types.js';
@@ -729,9 +730,9 @@ export class ArvoEventHandlerVersion<
     } catch (thrown) {
       throw await this.#entryFaultFor(param, record, {
         faultKind: 'dependency_resolution_failed',
-        message: `the dependencies for ${this.#contractAtVersion} could not be opened, so your executor was never entered: ${thrown instanceof Error ? thrown.message : String(thrown)}. Another attempt may succeed`,
+        message: `the dependencies for ${this.#contractAtVersion} could not be opened, so your executor was never entered: ${textOfThrown(thrown)}. Another attempt may succeed`,
         violations: [],
-        cause: thrown instanceof Error ? thrown.message : String(thrown),
+        cause: textOfThrown(thrown),
       });
     }
   }
@@ -1039,7 +1040,7 @@ export class ArvoEventHandlerVersion<
     record: ArvoContextState<TSelf, TServices, TDataSchema>,
     thrown: unknown,
   ): Promise<ArvoEventHandlerExecuteResponse> {
-    const message = thrown instanceof Error ? thrown.message : String(thrown);
+    const message = textOfThrown(thrown);
 
     const handlerErrorEvent = buildHandlerErrorEvent(
       this.contracts.self,

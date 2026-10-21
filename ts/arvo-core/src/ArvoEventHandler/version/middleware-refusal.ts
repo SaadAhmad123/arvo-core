@@ -1,3 +1,4 @@
+import { textOfThrown } from '../../utils/thrown-text.js';
 import {
   type ArvoComposedMiddlewareResolutionError,
   ArvoComposedMiddlewareValidationError,
@@ -29,8 +30,7 @@ export const refusalFrom = (
       violations: error.issues.map((issue) => issue.toString()),
     };
   }
-  const thrownMessage =
-    error.cause instanceof Error ? error.cause.message : String(error.cause);
+  const thrownMessage = textOfThrown(error.cause);
   return {
     faultKind: error.faultKind,
     message: error.message,

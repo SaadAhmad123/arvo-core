@@ -2,6 +2,7 @@ import {
   buildErrorIssueMessage,
   type ErrorIssue,
 } from '../../../utils/error-issue.js';
+import { textOfThrown } from '../../../utils/thrown-text.js';
 import type { ArvoFaultKind } from '../../fault/types.js';
 
 /** The two faults the layers of an execution can become before any runs. */
@@ -67,10 +68,7 @@ export class ArvoComposedMiddlewareResolutionError extends Error {
    * @param param.thrown - What calling it threw, kept as the cause.
    */
   constructor(param: { position: string; thrown: unknown }) {
-    const thrownMessage =
-      param.thrown instanceof Error
-        ? param.thrown.message
-        : String(param.thrown);
+    const thrownMessage = textOfThrown(param.thrown);
     super(
       `This execution was not run: ${param.position} is a function that should return a middleware, and calling it threw: ${thrownMessage}. No middleware ran and the handler was not called. Fix the function, or pass the middleware object itself`,
       { cause: param.thrown },

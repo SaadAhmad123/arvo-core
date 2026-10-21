@@ -11,6 +11,7 @@ import type { AsyncResult, JSONObject } from '../types.js';
 import type { ErrorIssue } from '../utils/error-issue.js';
 import { pathSegmentForKey } from '../utils/issue-path.js';
 import { readOwnProperty } from '../utils/own-property.js';
+import { textOfThrown } from '../utils/thrown-text.js';
 import { ArvoExecutionContextTelemetry } from './context/telemetry/index.js';
 import type { ArvoLogger } from './context/telemetry/types.js';
 import { ArvoEventHandlerValidationError } from './errors.js';
@@ -503,7 +504,7 @@ export class ArvoEventHandler<
         faultKind: 'state_resolution_failed',
         message: `the store could not be read for ${executionId}, so nothing says whether this execution exists. Another attempt may reach it`,
         violations: [],
-        cause: thrown instanceof Error ? thrown.message : String(thrown),
+        cause: textOfThrown(thrown),
       });
     }
   }

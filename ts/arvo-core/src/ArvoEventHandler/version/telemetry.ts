@@ -1,5 +1,6 @@
 import type { Attributes } from '@opentelemetry/api';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
+import { textOfThrown } from '../../utils/thrown-text.js';
 import type { ArvoExecutionContextTelemetry } from '../context/telemetry/index.js';
 import type { ArvoEntryKind } from '../context/types.js';
 import type { ArvoExecutionState } from '../state/index.js';
@@ -224,6 +225,6 @@ export const markSwallowed = (
   thrown: unknown,
 ): void => {
   telemetry.addEvent(`swallowed.${failure}`, {
-    message: thrown instanceof Error ? thrown.message : String(thrown),
+    message: textOfThrown(thrown),
   });
 };

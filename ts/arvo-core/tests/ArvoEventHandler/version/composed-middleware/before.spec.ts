@@ -22,7 +22,7 @@ describe('before', () => {
       loggingLayer('a'),
       loggingLayer('b'),
       loggingLayer('c'),
-    ]).before(markingContext as never);
+    ]).before(markingContext);
     expect(partOrder).toEqual(['a', 'b', 'c']);
     expect(
       contextsSeen.every((seenContext) => seenContext === markingContext),
@@ -32,7 +32,7 @@ describe('before', () => {
   it('passes over a layer with no before part, marking nothing for it', async () => {
     const { markingContext, recordedMarks } = createMarkingContext();
     await composeLayers([{ id: 'only_after', after: () => undefined }]).before(
-      markingContext as never,
+      markingContext,
     );
     expect(recordedMarks).toEqual([]);
   });
@@ -47,7 +47,7 @@ describe('before', () => {
       }
     }
     const counterLayer = new Counter();
-    await composeLayers([counterLayer]).before(markingContext as never);
+    await composeLayers([counterLayer]).before(markingContext);
     expect(counterLayer.calls).toBe(1);
   });
 
@@ -56,7 +56,7 @@ describe('before', () => {
     await composeLayers([
       { id: 'a', before: () => undefined },
       { id: 'b', before: async () => undefined },
-    ]).before(markingContext as never);
+    ]).before(markingContext);
     expect(stagesWithLayer(recordedMarks)).toEqual([
       ['middleware_before_entered', 'a'],
       ['middleware_before_returned', 'a'],
@@ -73,7 +73,7 @@ describe('before', () => {
   it('never names the composite itself in a mark', async () => {
     const { markingContext, recordedMarks } = createMarkingContext();
     await composeLayers([{ id: 'a', before: () => undefined }]).before(
-      markingContext as never,
+      markingContext,
     );
     expect(
       recordedMarks.some(
@@ -95,7 +95,7 @@ describe('before', () => {
           },
         },
         { id: 'fast', before: () => void partOrder.push('fast') },
-      ]).before(markingContext as never);
+      ]).before(markingContext);
       expect(partOrder).toEqual(['slow', 'fast']);
     });
 
@@ -106,7 +106,7 @@ describe('before', () => {
         before: () => ({ type: 'evt_smuggled' }),
       } as unknown as IArvoEventHandlerMiddleware;
       await expect(
-        composeLayers([returningLayer]).before(markingContext as never),
+        composeLayers([returningLayer]).before(markingContext),
       ).resolves.toBeUndefined();
     });
   });
@@ -131,9 +131,7 @@ describe('a before part that throws', () => {
         },
       },
     ]);
-    await expect(composite.before(markingContext as never)).rejects.toBe(
-      beforeFailure,
-    );
+    await expect(composite.before(markingContext)).rejects.toBe(beforeFailure);
     expect(laterPartRan).toBe(false);
     expect(stagesWithLayer(recordedMarks)).toEqual([
       ['middleware_before_entered', 'broken'],
@@ -150,7 +148,7 @@ describe('a before part that throws', () => {
             throw 'plain text';
           },
         },
-      ]).before(markingContext as never),
+      ]).before(markingContext),
     ).rejects.toBe('plain text');
   });
 });
@@ -171,7 +169,7 @@ describe('before, once the clock has fired', () => {
         },
       ],
       abortController,
-    ).before(markingContext as never);
+    ).before(markingContext);
     expect(partRan).toBe(false);
     expect(recordedMarks).toEqual([]);
   });
@@ -196,7 +194,7 @@ describe('before, once the clock has fired', () => {
         },
       ],
       abortController,
-    ).before(markingContext as never);
+    ).before(markingContext);
     expect(nextPartRan).toBe(false);
     expect(recordedMarks).toEqual([
       [

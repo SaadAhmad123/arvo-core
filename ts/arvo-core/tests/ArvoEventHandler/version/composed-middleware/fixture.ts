@@ -1,3 +1,4 @@
+import type { ArvoExecutionContext } from '../../../../src/ArvoEventHandler/context/index.js';
 import type { IArvoEventHandlerMiddleware } from '../../../../src/ArvoEventHandler/types/middleware.js';
 import { ArvoComposedMiddleware } from '../../../../src/ArvoEventHandler/version/composed-middleware/index.js';
 
@@ -10,16 +11,18 @@ export type RecordedMark = [stage: string, attributes: Record<string, unknown>];
  */
 export const createMarkingContext = () => {
   const recordedMarks: RecordedMark[] = [];
-  const markingContext = {
-    telemetry: {
-      addEvent: (eventName: string, attributes?: Record<string, unknown>) => {
-        recordedMarks.push([
-          eventName.replace(/^stage\./, ''),
-          { ...(attributes ?? {}) },
-        ]);
-      },
+  const telemetryDouble = {
+    addEvent: (eventName: string, attributes?: Record<string, unknown>) => {
+      recordedMarks.push([
+        eventName.replace(/^stage\./, ''),
+        { ...(attributes ?? {}) },
+      ]);
     },
   };
+  // a test double: the composite reads only telemetry from the context
+  const markingContext = {
+    telemetry: telemetryDouble,
+  } as unknown as ArvoExecutionContext;
   return { markingContext, recordedMarks };
 };
 
@@ -40,6 +43,7 @@ export const composeEntries = (entries: {
   declared: readonly unknown[];
 }) =>
   new ArvoComposedMiddleware({
+    // deliberately unchecked: these entries exercise the constructor's own checks
     supplied: entries.supplied as never,
     declared: entries.declared as never,
     abortSignal: new AbortController().signal,

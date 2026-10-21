@@ -6,6 +6,7 @@ import type {
   JSONValue,
 } from '../types.js';
 import { ErrorIssue } from '../utils/error-issue.js';
+import { textOfThrown } from '../utils/thrown-text.js';
 
 /**
  * The outcome of walking a value: the normalized, frozen result and every
@@ -176,7 +177,7 @@ const walk = (
       issues.push(
         new ErrorIssue({
           path,
-          message: `toJSON() threw: ${thrown instanceof Error ? thrown.message : String(thrown)}`,
+          message: `toJSON() threw: ${textOfThrown(thrown)}`,
         }),
       );
       return null;

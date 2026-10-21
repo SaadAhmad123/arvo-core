@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { IArvoEventHandlerMiddleware } from '../../../../src/ArvoEventHandler/types/middleware.js';
+import { initEvent } from '../../fixtures.js';
 import {
   composeLayers,
   createMarkingContext,
   stagesWithLayer,
 } from './fixture.js';
 
-const emittedEvents = () => [{ type: 'evt_a' }, { type: 'evt_b' }] as never;
+const emittedEvents = () => [initEvent, initEvent];
 
 describe('after', () => {
   it('runs the after parts in reverse order, each with the context and the emission', async () => {
@@ -26,7 +27,7 @@ describe('after', () => {
       loggingLayer('a'),
       loggingLayer('b'),
       loggingLayer('c'),
-    ]).after(markingContext as never, emission);
+    ]).after(markingContext, emission);
     expect(partOrder).toEqual(['c', 'b', 'a']);
     expect(
       emissionsSeen.every((seenEmission) => seenEmission === emission),
@@ -47,7 +48,7 @@ describe('after', () => {
           }
         },
       },
-    ]).after(markingContext as never, emittedEvents());
+    ]).after(markingContext, emittedEvents());
     expect(pushFailure).toBeInstanceOf(TypeError);
   });
 
@@ -58,22 +59,16 @@ describe('after', () => {
       id: 'watcher',
       after: (_, emission) => void emissionsSeen.push(emission),
     };
-    const oneEvent = { type: 'evt_one' } as never;
-    await composeLayers([watchingLayer]).after(
-      markingContext as never,
-      oneEvent,
-    );
-    await composeLayers([watchingLayer]).after(
-      markingContext as never,
-      undefined,
-    );
+    const oneEvent = initEvent;
+    await composeLayers([watchingLayer]).after(markingContext, oneEvent);
+    await composeLayers([watchingLayer]).after(markingContext, undefined);
     expect(emissionsSeen).toEqual([oneEvent, undefined]);
   });
 
   it('passes over a layer with no after part, marking nothing for it', async () => {
     const { markingContext, recordedMarks } = createMarkingContext();
     await composeLayers([{ id: 'only_before', before: () => undefined }]).after(
-      markingContext as never,
+      markingContext,
       undefined,
     );
     expect(recordedMarks).toEqual([]);
@@ -84,7 +79,7 @@ describe('after', () => {
     await composeLayers([
       { id: 'a', after: () => undefined },
       { id: 'b', after: async () => undefined },
-    ]).after(markingContext as never, undefined);
+    ]).after(markingContext, undefined);
     expect(stagesWithLayer(recordedMarks)).toEqual([
       ['middleware_after_entered', 'b'],
       ['middleware_after_returned', 'b'],
@@ -106,10 +101,7 @@ describe('after', () => {
         after: () => ({ type: 'evt_smuggled' }),
       } as unknown as IArvoEventHandlerMiddleware;
       await expect(
-        composeLayers([returningLayer]).after(
-          markingContext as never,
-          undefined,
-        ),
+        composeLayers([returningLayer]).after(markingContext, undefined),
       ).resolves.toBeUndefined();
     });
   });
@@ -132,7 +124,7 @@ describe('an after part that throws', () => {
           throw new TypeError('bad audit row');
         },
       },
-    ]).after(markingContext as never, undefined);
+    ]).after(markingContext, undefined);
     expect(earlierLayerRan).toBe(true);
     expect(recordedMarks[1]).toEqual([
       'middleware_after_failed',
@@ -154,7 +146,7 @@ describe('an after part that throws', () => {
           throw 'plain text';
         },
       },
-    ]).after(markingContext as never, undefined);
+    ]).after(markingContext, undefined);
     expect(recordedMarks[1]?.[1]).toMatchObject({
       'error.name': 'string',
       'error.message': 'plain text',
@@ -171,7 +163,7 @@ describe('an after part that throws', () => {
             throw new Error('boom');
           },
         },
-      ]).after(markingContext as never, undefined),
+      ]).after(markingContext, undefined),
     ).resolves.toBeUndefined();
   });
 });
@@ -192,7 +184,7 @@ describe('after, once the clock has fired', () => {
         },
       ],
       abortController,
-    ).after(markingContext as never, undefined);
+    ).after(markingContext, undefined);
     expect(partRan).toBe(false);
     expect(recordedMarks).toEqual([]);
   });
@@ -217,7 +209,7 @@ describe('after, once the clock has fired', () => {
         },
       ],
       abortController,
-    ).after(markingContext as never, undefined);
+    ).after(markingContext, undefined);
     expect(nextPartRan).toBe(false);
     expect(recordedMarks).toEqual([
       [
@@ -245,7 +237,7 @@ describe('after, once the clock has fired', () => {
         },
       ],
       abortController,
-    ).after(markingContext as never, undefined);
+    ).after(markingContext, undefined);
     expect(recordedMarks[1]).toEqual([
       'middleware_after_failed',
       {
