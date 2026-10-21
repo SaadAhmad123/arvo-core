@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ArvoEventHandlerMiddlewareEntry } from '../../../src/ArvoEventHandler/types/middleware.js';
+import { chanceFrom } from '../version/scenarios/chance.js';
 import {
   answeringExecutor,
   executeOrder,
@@ -16,19 +17,13 @@ import {
  * part, around a random executor. What the execution must come to is
  * predicted from the protocol's rules alone, then several executions of
  * the scenario run at once and each is checked against the prediction. A
- * failing scenario names its seed, so it can be run again exactly.
+ * failing scenario names its seed, so it can be run again exactly: every
+ * choice and every wait in it is drawn from that seed.
  */
 
-/** A small seeded generator, so a scenario is the same every run. */
+/** Seeded choices, so a scenario is the same every run. */
 const createRandom = (seed: number) => {
-  let generatorState = seed >>> 0;
-  const nextFraction = () => {
-    generatorState = (generatorState + 0x6d2b79f5) >>> 0;
-    let mixed = generatorState;
-    mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
-    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
-    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4_294_967_296;
-  };
+  const nextFraction = chanceFrom(seed);
   return {
     pick: <TChoice>(choices: readonly TChoice[]): TChoice =>
       choices[Math.floor(nextFraction() * choices.length)] as TChoice,
@@ -71,11 +66,17 @@ type LayerPlan = {
   madePerExecution: boolean;
   beforeBehaviour: BeforeBehaviour;
   afterBehaviour: AfterBehaviour;
+  /** How long a `wait` before part waits, in milliseconds. */
+  beforeWaitMs: number;
+  /** How long a `wait` after part waits, in milliseconds. */
+  afterWaitMs: number;
 };
 
 type Scenario = {
   layerPlans: LayerPlan[];
   executorBehaviour: (typeof EXECUTOR_BEHAVIOURS)[number];
+  /** How long the executor waits before it acts, in milliseconds. */
+  executorWaitMs: number;
 };
 
 /** What an execution of a scenario must come to. */
@@ -84,8 +85,13 @@ type Prediction =
   | { outcome: 'handler_error' }
   | { outcome: 'fault'; faultKind: string };
 
+/** Where the waits are drawn from, apart from the shape of a scenario. */
+const TIMING_SEED_OFFSET = 1_000_000;
+
 const planScenario = (seed: number): Scenario => {
   const random = createRandom(seed);
+  // a stream of its own, so drawing the waits leaves every seed's scenario as it was
+  const timingRandom = createRandom(seed + TIMING_SEED_OFFSET);
   const layerCount = random.integerBelow(7);
   const layerPlans = Array.from({ length: layerCount }, (_, layerIndex) => ({
     layerId: `layer_${layerIndex}`,
@@ -93,8 +99,14 @@ const planScenario = (seed: number): Scenario => {
     madePerExecution: random.pick([true, false]),
     beforeBehaviour: random.pick(BEFORE_BEHAVIOURS),
     afterBehaviour: random.pick(AFTER_BEHAVIOURS),
+    beforeWaitMs: timingRandom.integerBelow(3),
+    afterWaitMs: timingRandom.integerBelow(3),
   }));
-  return { layerPlans, executorBehaviour: random.pick(EXECUTOR_BEHAVIOURS) };
+  return {
+    layerPlans,
+    executorBehaviour: random.pick(EXECUTOR_BEHAVIOURS),
+    executorWaitMs: timingRandom.integerBelow(2),
+  };
 };
 
 /** Before parts in run order: every supplied layer, then every declared. */
@@ -144,7 +156,7 @@ const buildLayer = (
         case 'pass':
           return;
         case 'wait':
-          await sleep(Math.random() * 3);
+          await sleep(layerPlan.beforeWaitMs);
           return;
         case 'write_state':
           await ctx.setState({
@@ -178,7 +190,7 @@ const buildLayer = (
         case 'pass':
           return;
         case 'wait':
-          await sleep(Math.random() * 3);
+          await sleep(layerPlan.afterWaitMs);
           return;
         case 'write_state':
           await ctx.setState({ data: { stage: `after_${layerPlan.layerId}` } });
@@ -244,7 +256,7 @@ describe('seeded chaos', () => {
       const handler = orderHandler({
         middleware: entriesFrom('declared'),
         execute: async (ctx) => {
-          await sleep(Math.random() * 2);
+          await sleep(scenario.executorWaitMs);
           if (scenario.executorBehaviour === 'throw_error') {
             throw new Error('the executor failed');
           }

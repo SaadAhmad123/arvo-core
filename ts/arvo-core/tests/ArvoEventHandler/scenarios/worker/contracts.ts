@@ -54,6 +54,19 @@ export type ChargeBehaviour = 'succeeds' | 'errors';
  * what it learns on itself. The executor answers with both, so an answer
  * carrying another workflow's subject is cross-talk made visible.
  */
+/**
+ * A wait of up to a few milliseconds, the same for one subject every run
+ * and different across subjects, so executions interleave. Worked out
+ * here rather than drawn from a seeded sequence because a worker thread
+ * loads this file outside the test runner, where the shared one cannot
+ * be imported.
+ */
+const waitForSubject = (subject: string): number =>
+  [...subject].reduce(
+    (characterSum, character) => characterSum + character.charCodeAt(0),
+    0,
+  ) % 3;
+
 const declareLayers = () => [
   {
     id: 'shared_marker',
@@ -71,7 +84,9 @@ const declareLayers = () => [
         setMiddleware: (key: string, payload: unknown) => Promise<void>;
       }) => {
         learnedSubject = ctx.state.subject;
-        await new Promise((resolve) => setTimeout(resolve, Math.random() * 3));
+        await new Promise((resolve) =>
+          setTimeout(resolve, waitForSubject(learnedSubject)),
+        );
         await ctx.setMiddleware('held', learnedSubject);
       },
     };
