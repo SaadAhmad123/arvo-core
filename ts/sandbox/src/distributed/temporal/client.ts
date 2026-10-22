@@ -9,7 +9,7 @@ import { OpenTelemetryWorkflowClientInterceptor } from '@temporalio/interceptors
 import {
   type ArvoEvent,
   ArvoEventSerializer,
-  cloneArvoEvent,
+  mutateArvoEvent,
   traceContextFromSpan,
 } from 'arvo-core';
 import { checkSource, continuing } from '../shared/entering.js';
@@ -139,7 +139,7 @@ export const answerFromOutside = async (
 
   return startRun(
     client,
-    cloneArvoEvent(param.answer, {
+    mutateArvoEvent(param.answer, {
       traceparent: trace.traceparent ?? undefined,
       tracestate: trace.tracestate ?? undefined,
     }),
