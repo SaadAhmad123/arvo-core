@@ -36,3 +36,4 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | [ADR-015](./015-no-ordering-guarantee.md) | No Ordering Guarantee | Accepted |
 | [ADR-016](./016-executor-middleware.md) | Executor Middleware | Accepted |
 | [ADR-017](./017-dispatcher.md) | The Dispatcher | Accepted |
+| [ADR-018](./018-trace-context-across-layers.md) | Trace Context Across Layers | Accepted |
