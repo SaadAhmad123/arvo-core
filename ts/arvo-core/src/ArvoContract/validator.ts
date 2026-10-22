@@ -4,11 +4,9 @@ import { ErrorIssue } from '../utils/error-issue.js';
 import { pathSegmentForKey } from '../utils/issue-path.js';
 import { isUriReference } from '../utils/uri.js';
 import { handlerErrorType } from './handler-error.js';
+import { isContractIdentifier } from './identifier.js';
 import type { ArvoContractParam, ArvoContractVersionParam } from './types.js';
 import type { VersionedArvoContractParam } from './versioned/types.js';
-
-/** Lowercase alphanumeric segments joined by single underscores. */
-const IDENTIFIER_GRAMMAR = /^[a-z0-9]+(_[a-z0-9]+)*$/;
 
 const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
   typeof candidate === 'object' &&
@@ -41,7 +39,7 @@ const checkIdentifier = (
     );
     return;
   }
-  if (!IDENTIFIER_GRAMMAR.test(identifier)) {
+  if (!isContractIdentifier(identifier)) {
     pushIssue(
       issues,
       path,

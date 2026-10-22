@@ -2,8 +2,8 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 ## 1. One copy of the identifier grammar
 
-- [ ] 1.1 Write `tests/ArvoContract/identifier.spec.ts`: the predicate accepts lowercase alphanumeric segments joined by single underscores, and refuses uppercase, a leading, trailing or doubled underscore, a dot, a hyphen and the empty string.
-- [ ] 1.2 Add `src/ArvoContract/identifier.ts` holding the grammar and the predicate. **Replaces** the private `IDENTIFIER_GRAMMAR` in `src/ArvoContract/validator.ts`, which imports the predicate instead. Every existing `tests/ArvoContract/` test passes unedited.
+- [x] 1.1 Write `tests/ArvoContract/identifier.spec.ts`: the predicate accepts lowercase alphanumeric segments joined by single underscores, and refuses uppercase, a leading, trailing or doubled underscore, a dot, a hyphen and the empty string.
+- [x] 1.2 Add `src/ArvoContract/identifier.ts` holding the grammar and the predicate. **Replaces** the private `IDENTIFIER_GRAMMAR` in `src/ArvoContract/validator.ts`, which imports the predicate instead. Every existing `tests/ArvoContract/` test passes unedited.
 
 ## 2. `handler_not_found` through the fault factory
 
