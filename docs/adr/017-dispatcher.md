@@ -4,7 +4,7 @@
 - **Date:** 2026-10-22
 - **Scope:** Arvo ecosystem
 - **Amends:** [ADR-006](./006-arvoeventhandler-protocol.md), **The residual case: two handlers on one contract version** — the set of handlers that sentence calls an *execution context* is given a name and a definition here, and the SHOULD it places on a mechanism becomes a MUST on a dispatcher; one additive sentence. [ADR-008](./008-execution-faults-and-abandonment.md), **The `fault_kind` vocabulary and retry verdicts** — adds one kind, `handler_not_found`; and **`lifecycle_terminal` yields neither** — adds `handler_not_found` to the kinds that carry no abandonment pair. Everything is additive: nothing already there is replaced
-- **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), which defines the handler this ADR gathers into sets, what a mechanism supplies to it, and what a mechanism owes it; [ADR-008](./008-execution-faults-and-abandonment.md), which defines the fault this ADR adds one kind to; [ADR-010](./010-delivery-classification-and-entry-validation.md), whose gate step 1 is where the one cross-handler defect this ADR checks would otherwise surface; [ADR-011](./011-dependency-lifetime.md) and [ADR-012](./012-absent-dependencies-and-hooks.md), which fix what a dispatcher may and may not do about dependencies; [ADR-016](./016-executor-middleware.md), which already permits "anything running several handlers" to supply layers
+- **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), which defines the handler this ADR gathers into sets, what a mechanism supplies to it, and what a mechanism owes it; [ADR-008](./008-execution-faults-and-abandonment.md), which defines the fault this ADR adds one kind to; [ADR-010](./010-delivery-classification-and-entry-validation.md), whose gate step 1 is where the one cross-handler defect this ADR checks would otherwise surface; [ADR-011](./011-dependency-lifetime.md) and [ADR-012](./012-absent-dependencies-and-hooks.md), which fix what a dispatcher may and may not do about dependencies; [ADR-016](./016-executor-middleware.md), which already permits "anything running several handlers" to supply middleware layers
 - **Addresses:** nothing ADR-000 deferred. It names a thing ADR-006 already relies on without naming
 - **Left deferred:** everything a mechanism does between one delivery and the next — where events wait, how they are committed, where each goes, retry, abandonment. See **Left deferred**
 
@@ -14,7 +14,7 @@ Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-a
 
 ### What this ADR defines
 
-That several handlers MAY be gathered into one **dispatcher**: a set of handlers entered as one, through the handler's own signature. What a dispatcher checks about its set when it is declared, and what it refuses. How it picks the handler for a delivered event. That it returns the handler's response unchanged, and does nothing else: it writes nothing, routes nothing, retries nothing, abandons nothing, and holds nothing between calls. One fault of its own, for an event no handler in the set takes. What a dispatcher can say about a name standing outside its set. And that the layers a dispatcher carries are supplied to every handler in it, as ADR-016 already permits.
+That several handlers MAY be gathered into one **dispatcher**: a set of handlers entered as one, through the handler's own signature. What a dispatcher checks about its set when it is declared, and what it refuses. How it picks the handler for a delivered event. That it returns the handler's response unchanged, and does nothing else: it writes nothing, routes nothing, retries nothing, abandons nothing, and holds nothing between calls. One fault of its own, for an event no handler in the set takes. What a dispatcher can say about a name standing outside its set. And that the middleware layers a dispatcher carries are supplied to every handler in it, as ADR-016 already permits.
 
 ### What this ADR deliberately does not define
 
@@ -54,9 +54,9 @@ A dispatcher could be left as each language's convenience. It is not, for the re
 
 ### A dispatcher is a set of handlers, entered as one
 
-**Several handlers MAY be gathered into a dispatcher.** A dispatcher is a set of handlers, each implementing its own self contract, together with the layers the set supplies to every handler in it (**Layers of the set**). It is entered as a handler is entered: given a delivered event and the inputs a mechanism supplies to a handler ([ADR-006](./006-arvoeventhandler-protocol.md), **What the mechanism calls**), it returns what a handler returns.
+**Several handlers MAY be gathered into a dispatcher.** A dispatcher is a set of handlers, each implementing its own self contract, together with the middleware layers the set supplies to every handler in it (**Middleware layers of the set**). It is entered as a handler is entered: given a delivered event and the inputs a mechanism supplies to a handler ([ADR-006](./006-arvoeventhandler-protocol.md), **What the mechanism calls**), it returns what a handler returns.
 
-**A dispatcher's entry MUST take exactly what a handler's entry takes, less the layers supplied per execution, and MUST return exactly what a handler's entry returns.** The same inputs, under the same names: the event, the state function, the attempt number, the dependencies and the hooks. The same outcomes, unchanged: the events and the next record, a discard, or a fault. Two inputs widen and nothing else changes: where a handler takes its own one dependency object, a dispatcher takes one such object per handler, keyed by the handler's self contract `type`, and hands each handler its own; where a handler takes its own declared hooks, a dispatcher takes hooks every handler in the set can accept. A mechanism written against a handler is therefore written against a dispatcher, and reads the two alike. Layers are the one input a dispatcher does not take at entry, because its layers are fixed when it is declared (**Layers of the set**).
+**A dispatcher's entry MUST take exactly what a handler's entry takes, less the middleware layers supplied per execution, and MUST return exactly what a handler's entry returns.** The same inputs, under the same names: the event, the state function, the attempt number, the dependencies and the hooks. The same outcomes, unchanged: the events and the next record, a discard, or a fault. Two inputs widen and nothing else changes: where a handler takes its own one dependency object, a dispatcher takes one such object per handler, keyed by the handler's self contract `type`, and hands each handler its own; where a handler takes its own declared hooks, a dispatcher takes hooks every handler in the set can accept. A mechanism written against a handler is therefore written against a dispatcher, and reads the two alike. Middleware layers are the one input a dispatcher does not take at entry, because its middleware layers are fixed when it is declared (**Middleware layers of the set**).
 
 **A dispatcher holds nothing between calls.** It has no store, no queue, no clock, no memory of any delivery. Everything it knows, it knew when it was declared.
 
@@ -84,7 +84,7 @@ A dispatcher could be left as each language's convenience. It is not, for the re
 
 1. Find the handler whose self contract `type` is `event.to`. Where none is, the dispatcher raises its own fault, `handler_not_found` (**`handler_not_found`**). An event carrying no `to` ends here too: the handler whose gate would have said `event_unaddressed` is never reached.
 2. Take, from the dependencies the caller supplied, the entry for that handler and no other. Where none is, the handler is entered with absence, exactly as ADR-012 requires. The dispatcher opens nothing.
-3. Enter the handler with the event, the state function, the attempt number, that handler's dependencies, the hooks, and the set's layers as the layers supplied for this execution ([ADR-016](./016-executor-middleware.md), **Where layers are declared**).
+3. Enter the handler with the event, the state function, the attempt number, that handler's dependencies, the hooks, and the set's middleware layers as the middleware layers supplied for this execution ([ADR-016](./016-executor-middleware.md), **Where middleware layers are declared**).
 4. Return the handler's response as it is.
 
 **The response is the handler's own, unchanged.** A dispatcher MUST NOT alter, wrap, filter or interpret it. What the handler returned — events and the next record, a discard, or a fault — is what the dispatcher's caller receives, with the handler's own reasons. ADR-006 says of these outcomes that "a caller that cannot tell them apart cannot tell a repeat from a lost execution"; a dispatcher that interpreted them would take that distinction away from the mechanism, which is the party that needs it.
@@ -98,7 +98,7 @@ Each of the following is the mechanism's, under ADR-006 **Required of infrastruc
 - **Retry.** It does not read a fault's retry verdict, re-enter a handler, or put an event anywhere to be tried again. Obligation 4 is the mechanism's.
 - **Abandon.** It does not read or act on a fault's abandonment pair. Obligation 3 is the mechanism's, and ADR-008 makes abandonment a policy the mechanism chooses.
 - **Interpret a repeat.** It does not treat `record_unexpected` as a signal to stop, nor a discard as anything but a discard. ADR-010 says a mechanism *may* so treat them; "may" is policy, and policy is the mechanism's.
-- **Supply anything of its own.** It passes through the state function, the attempt number, the dependencies and the hooks it was given, and adds only its layers.
+- **Supply anything of its own.** It passes through the state function, the attempt number, the dependencies and the hooks it was given, and adds only its middleware layers.
 
 The rule is deliberately a list of prohibitions rather than a definition of a mechanism. A dispatcher is small so that the things that differ between mechanisms stay with the mechanism, and a mechanism that is wrong about one of them is wrong alone.
 
@@ -124,13 +124,13 @@ A mechanism answers whoever sent an event in by addressing the answer to that se
 
 Who holds such a name, and what it does with it, is the mechanism's and is not defined here. The check is a dispatcher's because the three rules need the set and the name together, and the set is the dispatcher's.
 
-### Layers of the set
+### Middleware layers of the set
 
-**A dispatcher MAY carry layers, and where it does, it supplies them to every handler it enters as that execution's supplied layers**, in the position ADR-016 fixes for layers "supplied per execution by whatever runs the handler" ([ADR-016](./016-executor-middleware.md), **Where layers are declared**, **The order is fixed**). Nothing about layers is new here: the dispatcher is the "anything running several handlers" that ADR-016 already names as a party that supplies them.
+**A dispatcher MAY carry middleware layers, and where it does, it supplies them to every handler it enters as that execution's supplied middleware layers**, in the position ADR-016 fixes for middleware layers "supplied per execution by whatever runs the handler" ([ADR-016](./016-executor-middleware.md), **Where middleware layers are declared**, **The order is fixed**). Nothing about middleware layers is new here: the dispatcher is the "anything running several handlers" that ADR-016 already names as a party that supplies them.
 
-**The layers of a set are fixed when the set is declared.** A dispatcher does not accept layers call by call, and a mechanism that wants a layer of its own in every executor it runs declares the dispatcher with it. The layers a handler runs under are therefore a property of the set it belongs to, not of any one event.
+**The middleware layers of a set are fixed when the set is declared.** A dispatcher does not accept middleware layers call by call, and a mechanism that wants a middleware layer of its own in every executor it runs declares the dispatcher with it. The middleware layers a handler runs under are therefore a property of the set it belongs to, not of any one event.
 
-**A dispatcher judges nothing about its layers.** Whether two of them share an identifier, whether a listed operation returns a layer, whether a layer misbehaves: each is already the handler's to refuse under ADR-016 (`middleware_conflict`, `middleware_instantiation_failed`), and a dispatcher that checked them first would hold a second copy of the handler's rule.
+**A dispatcher judges nothing about its middleware layers.** Whether two of them share an identifier, whether a listed operation returns a middleware layer, whether a middleware layer misbehaves: each is already the handler's to refuse under ADR-016 (`middleware_conflict`, `middleware_instantiation_failed`), and a dispatcher that checked them first would hold a second copy of the handler's rule.
 
 ### What a dispatcher can be asked
 
@@ -163,7 +163,7 @@ Rejected, in steps, each for the same reason. Every one of those mechanics depen
 
 ### A dispatcher-level middleware of its own
 
-Considered: layers around the whole dispatcher call, observing the delivery and the response. Rejected because ADR-016 already decided it, under **Nothing of the kind exists outside the handler**, and a second kind of layer beside the handler's would be two mechanisms for one job. A dispatcher carries ADR-016's layers and nothing else.
+Considered: middleware layers around the whole dispatcher call, observing the delivery and the response. Rejected because ADR-016 already decided it, under **Nothing of the kind exists outside the handler**, and a second kind of middleware layer beside the handler's would be two mechanisms for one job. A dispatcher carries ADR-016's middleware layers and nothing else.
 
 ### Refusing a dependency entry that names no handler
 
@@ -217,7 +217,7 @@ dispatcher
                                                     (a convenience an implementation may offer;
                                                      the result is still one flat set)
 
-    middlewares                                     optional; ADR-016 layers, supplied to every
+    middlewares                                     optional; ADR-016 middleware layers, supplied to every
         require_tenant                              handler here on every call, fixed at declaration;
         () → measure_duration                       not judged here — the handler refuses a defect
 
