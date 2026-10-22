@@ -2,9 +2,10 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-22
+- **Revised:** 2026-10-22, in place and before any implementation, to adopt [ADR-018](./018-trace-context-across-layers.md) under **Telemetry**; the one exception it adds to **What a dispatcher does not do** is marked there
 - **Scope:** Arvo ecosystem
 - **Amends:** [ADR-006](./006-arvoeventhandler-protocol.md), **The residual case: two handlers on one contract version** — the set of handlers that sentence calls an *execution context* is given a name and a definition here, and the SHOULD it places on a mechanism becomes a MUST on a dispatcher; one additive sentence. [ADR-008](./008-execution-faults-and-abandonment.md), **The `fault_kind` vocabulary and retry verdicts** — adds one kind, `handler_not_found`; and **`lifecycle_terminal` yields neither** — adds `handler_not_found` to the kinds that carry no abandonment pair. Everything is additive: nothing already there is replaced
-- **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), which defines the handler this ADR gathers into sets, what a mechanism supplies to it, and what a mechanism owes it; [ADR-008](./008-execution-faults-and-abandonment.md), which defines the fault this ADR adds one kind to; [ADR-010](./010-delivery-classification-and-entry-validation.md), whose gate step 1 is where the one cross-handler defect this ADR checks would otherwise surface; [ADR-011](./011-dependency-lifetime.md) and [ADR-012](./012-absent-dependencies-and-hooks.md), which fix what a dispatcher may and may not do about dependencies; [ADR-016](./016-executor-middleware.md), which already permits "anything running several handlers" to supply middleware layers
+- **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), which defines the handler this ADR gathers into sets, what a mechanism supplies to it, and what a mechanism owes it; [ADR-008](./008-execution-faults-and-abandonment.md), which defines the fault this ADR adds one kind to; [ADR-010](./010-delivery-classification-and-entry-validation.md), whose gate step 1 is where the one cross-handler defect this ADR checks would otherwise surface; [ADR-011](./011-dependency-lifetime.md) and [ADR-012](./012-absent-dependencies-and-hooks.md), which fix what a dispatcher may and may not do about dependencies; [ADR-016](./016-executor-middleware.md), which already permits "anything running several handlers" to supply middleware layers; [ADR-018](./018-trace-context-across-layers.md), which fixes how a party that carries an event joins the event's trace
 - **Addresses:** nothing ADR-000 deferred. It names a thing ADR-006 already relies on without naming
 - **Left deferred:** everything a mechanism does between one delivery and the next — where events wait, how they are committed, where each goes, retry, abandonment. See **Left deferred**
 
@@ -84,7 +85,7 @@ A dispatcher could be left as each language's convenience. It is not, for the re
 
 1. Find the handler whose self contract `type` is `event.to`. Where none is, the dispatcher raises its own fault, `handler_not_found` (**`handler_not_found`**). An event carrying no `to` ends here too: the handler whose gate would have said `event_unaddressed` is never reached.
 2. Take, from the dependencies the caller supplied, the entry for that handler and no other. Where none is, the handler is entered with absence, exactly as ADR-012 requires. The dispatcher opens nothing.
-3. Enter the handler with the event, the state function, the attempt number, that handler's dependencies, the hooks, and the set's middleware layers as the middleware layers supplied for this execution ([ADR-016](./016-executor-middleware.md), **Where middleware layers are declared**).
+3. Enter the handler with the event — as ADR-018 has a layer hand it on: a copy whose trace context names the dispatcher's span where that span is recording, the event itself otherwise (**Telemetry**) — the state function, the attempt number, that handler's dependencies, the hooks, and the set's middleware layers as the middleware layers supplied for this execution ([ADR-016](./016-executor-middleware.md), **Where middleware layers are declared**).
 4. Return the handler's response as it is.
 
 **The response is the handler's own, unchanged.** A dispatcher MUST NOT alter, wrap, filter or interpret it. What the handler returned — events and the next record, a discard, or a fault — is what the dispatcher's caller receives, with the handler's own reasons. ADR-006 says of these outcomes that "a caller that cannot tell them apart cannot tell a repeat from a lost execution"; a dispatcher that interpreted them would take that distinction away from the mechanism, which is the party that needs it.
@@ -98,7 +99,7 @@ Each of the following is the mechanism's, under ADR-006 **Required of infrastruc
 - **Retry.** It does not read a fault's retry verdict, re-enter a handler, or put an event anywhere to be tried again. Obligation 4 is the mechanism's.
 - **Abandon.** It does not read or act on a fault's abandonment pair. Obligation 3 is the mechanism's, and ADR-008 makes abandonment a policy the mechanism chooses.
 - **Interpret a repeat.** It does not treat `record_unexpected` as a signal to stop, nor a discard as anything but a discard. ADR-010 says a mechanism *may* so treat them; "may" is policy, and policy is the mechanism's.
-- **Supply anything of its own.** It passes through the state function, the attempt number, the dependencies and the hooks it was given, and adds only its middleware layers.
+- **Supply anything of its own.** It passes through the state function, the attempt number, the dependencies and the hooks it was given, and adds only its middleware layers — and, as the one exception ADR-018 makes for every layer, the trace context of the copy it hands the handler (**Telemetry**). Nothing else about the event changes.
 
 The rule is deliberately a list of prohibitions rather than a definition of a mechanism. A dispatcher is small so that the things that differ between mechanisms stay with the mechanism, and a mechanism that is wrong about one of them is wrong alone.
 
@@ -135,6 +136,14 @@ Who holds such a name, and what it does with it, is the mechanism's and is not d
 ### What a dispatcher can be asked
 
 Beside its one verb, a dispatcher answers three questions about its set, each a read and none a write: whether a given `type` is one a handler in the set implements; whether a given name may stand outside the set (**A name standing outside the set**); and the largest run timeout any version in the set declares ([ADR-009](./009-execution-bounds.md), **Timeouts**), so that a mechanism can bound how long it waits on a dispatcher without reading every handler itself. An implementation MAY answer further questions of the same kind, read-only and about the set, and MUST NOT answer any that reach a delivery.
+
+### Telemetry
+
+**A dispatcher is a layer under ADR-018, and it always records.** For every call it opens exactly one span continuing the event's trace, and it enters the handler with a copy of the event whose trace context names that span, differing from the event in nothing else; where the span is not recording, it enters the handler with the event unchanged ([ADR-018](./018-trace-context-across-layers.md), **What a layer hands on**). The handler's span therefore opens inside the dispatcher's, and the handler's response — the events it emitted, their trace context included — is returned exactly as returned.
+
+**The dispatcher records on its span only what is its own:** that it was entered, which handler it picked, and the one fault it raises itself, `handler_not_found`, recorded as ADR-006 has a handler record a fault on its delivery span. It records nothing the handler records on its own span. What a dispatcher's span is called, and which attributes it carries, is API shape.
+
+A dispatcher records always rather than optionally because it may be entered by something that records nothing, and then its one fault would be seen nowhere.
 
 ## Consequences
 
