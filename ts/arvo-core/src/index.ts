@@ -15,6 +15,21 @@ export type {
 } from './ArvoContract/types.js';
 export { VersionedArvoContract } from './ArvoContract/versioned/index.js';
 export type { VersionedArvoContractParam } from './ArvoContract/versioned/types.js';
+export { ArvoDispatcherValidationError } from './ArvoDispatcher/errors.js';
+export { ArvoDispatcher } from './ArvoDispatcher/index.js';
+export type {
+  ArvoDispatcherExecuteParam,
+  ArvoDispatcherMember,
+  ArvoDispatcherMiddlewareMember,
+  ArvoDispatcherOptions,
+  ArvoDispatcherSet,
+} from './ArvoDispatcher/types.js';
+export type {
+  ArvoAnyEventHandler,
+  DependenciesOf,
+  HandlersOf,
+  HooksOf,
+} from './ArvoDispatcher/typing.js';
 export { ArvoDomain } from './ArvoDomain/index.js';
 export type {
   ArvoDomainContext,
@@ -138,6 +153,10 @@ export {
   createArvoContract,
   tryCreateArvoContract,
 } from './factories/createArvoContract.js';
+export {
+  createArvoDispatcher,
+  tryCreateArvoDispatcher,
+} from './factories/createArvoDispatcher.js';
 export {
   createArvoEvent,
   tryCreateArvoEvent,

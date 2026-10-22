@@ -42,11 +42,11 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 ## 7. The factories and the public surface
 
-- [ ] 7.1 Write `tests/factories/createArvoDispatcher.spec.ts`: `tryCreateArvoDispatcher` returns the dispatcher, returns the validation error as `Err`, and rethrows anything else; `createArvoDispatcher` returns or throws the same.
-- [ ] 7.2 Add `src/factories/createArvoDispatcher.ts`, following `src/factories/createArvoContract.ts`.
-- [ ] 7.3 Export `ArvoDispatcher`, `createArvoDispatcher`, `tryCreateArvoDispatcher`, `ArvoDispatcherValidationError`, `ArvoDispatcherOptions` and `ArvoDispatcherExecuteParam` from `src/index.ts`, with a test that each is reachable from the package entry.
+- [x] 7.1 Write `tests/factories/createArvoDispatcher.spec.ts`: `tryCreateArvoDispatcher` returns the dispatcher, returns the validation error as `Err`, and rethrows anything else; `createArvoDispatcher` returns or throws the same.
+- [x] 7.2 Add `src/factories/createArvoDispatcher.ts`, following `src/factories/createArvoContract.ts`.
+- [x] 7.3 Export `ArvoDispatcher`, `createArvoDispatcher`, `tryCreateArvoDispatcher`, `ArvoDispatcherValidationError`, `ArvoDispatcherOptions` and `ArvoDispatcherExecuteParam` from `src/index.ts`, with a test that each is reachable from the package entry. Also export the member and set types the options name, and the set-level type helpers, so a caller can annotate a dispatcher's members and dependencies without reaching into a source path.
 
 ## 8. Proof
 
-- [ ] 8.1 Full suite with coverage at 100% bar the guards already uncovered, lint and typecheck clean, `pnpm build` clean.
-- [ ] 8.2 The sandbox, built against the new package and left unedited, still typechecks; a failure there is reported, not fixed in this change.
+- [x] 8.1 Full suite with coverage at 100% bar the guards already uncovered, lint and typecheck clean, `pnpm build` clean.
+- [x] 8.2 The sandbox, built against the new package and left unedited, still typechecks; a failure there is reported, not fixed in this change.
