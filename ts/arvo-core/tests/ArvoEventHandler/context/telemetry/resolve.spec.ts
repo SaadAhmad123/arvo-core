@@ -27,8 +27,13 @@ describe('resolving where a party records', () => {
     expect(resolved.meter).toBeNull();
   });
 
-  it('keeps a meter or logger given as null as null', () => {
-    const resolved = resolveTelemetry({ meter: null, logger: null });
+  it('takes a meter or logger given as null, as untyped code could, as none', () => {
+    const resolved = resolveTelemetry({
+      // @ts-expect-error deliberately invalid: null from code no type checker saw
+      meter: null,
+      // @ts-expect-error deliberately invalid: null from code no type checker saw
+      logger: null,
+    });
     expect(resolved.meter).toBeNull();
     expect(resolved.logger).toBeNull();
   });

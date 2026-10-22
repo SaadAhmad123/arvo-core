@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createArvoEventFactory } from '../../src/factories/ArvoEventFactory/index.js';
 import { setupArvoEventHandler } from '../../src/factories/setupArvoEventHandler.js';
+import type { ArvoTelemetryParam } from '../../src/index.js';
 import type { JSONObject } from '../../src/types.js';
 import {
   recordingLogger,
@@ -147,5 +148,24 @@ describe('where an execution records, given with the execution', () => {
       attempt: 0,
     });
     expect(spanRecorder.finishedSpans()).toEqual([]);
+  });
+
+  it('takes telemetry typed from the package entry, built once and given to every call', async () => {
+    const spanRecorder = recordingProvider();
+    const telemetry: ArvoTelemetryParam = { tracer: spanRecorder.tracer };
+    const handler = orderHandler();
+    await handler.execute({
+      event: anOrder('order-1'),
+      state: noStoredRecord(),
+      attempt: 0,
+      telemetry,
+    });
+    await handler.execute({
+      event: anOrder('order-2'),
+      state: noStoredRecord(),
+      attempt: 0,
+      telemetry,
+    });
+    expect(executionSpans(spanRecorder.finishedSpans())).toHaveLength(2);
   });
 });

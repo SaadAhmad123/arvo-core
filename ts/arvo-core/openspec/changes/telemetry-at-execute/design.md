@@ -54,7 +54,7 @@ Three rules follow from it:
 
 1. **Resolved once per call, at its start.** Nothing is resolved at build, and nothing resolved for one call is kept for the next.
 2. **A dispatcher always passes telemetry to the handler.** The handler never meets an `undefined` telemetry inside a dispatcher, so it never looks up a default of its own.
-3. **A dispatcher passes on what it resolved, not what it was given.** Given `{ tracer }`, the handler is entered with `{ tracer, meter: null, logger: null }`: the same tracer, and none for the parts nobody gave.
+3. **A dispatcher passes on what it resolved, not what it was given.** It always passes the tracer it resolved, and a meter or logger only where one was given. Given nothing, the handler is entered with `{ tracer }`: the default the dispatcher took, which the handler uses as given. The meter and logger, absent, resolve to none again inside the handler. Leaving them out keeps the telemetry type free of `null`, as the package's optional-inputs rule requires.
 
 ### The flow after this change
 
@@ -78,11 +78,11 @@ dispatcher.tryExecute({ event, state, attempt, dependencies?, hooks?, telemetry?
   ├─ handler.tryExecute({
   │     event:      the copy naming the dispatcher's span, or the event (unchanged),
   │     state, attempt, dependencies, hooks, middleware   (unchanged),
-  │     telemetry:  resolved                          ← always; the same object
+  │     telemetry:  { tracer, meter?, logger? }       ← always; the parts it resolved
   │  })
   │      │
-  │      └─ inside the handler: resolveTelemetry(resolved)
-  │           every part is present, so nothing is defaulted:
+  │      └─ inside the handler: resolveTelemetry(those parts)
+  │           the tracer is present, so no default is taken:
   │           same tracer, same meter, same logger
   │
   └─ span.end()

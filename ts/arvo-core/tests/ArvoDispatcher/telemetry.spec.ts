@@ -307,8 +307,8 @@ describe('where a dispatcher records, given with each call', () => {
     const telemetryGivenToHandler =
       handlerExecuteSpy.mock.calls[0]?.[0].telemetry;
     expect(telemetryGivenToHandler?.tracer).toBeDefined();
-    expect(telemetryGivenToHandler?.meter).toBeNull();
-    expect(telemetryGivenToHandler?.logger).toBeNull();
+    expect(telemetryGivenToHandler).not.toHaveProperty('meter');
+    expect(telemetryGivenToHandler).not.toHaveProperty('logger');
   });
 
   it('enters the handler with the very tracer, meter and logger it was given', async () => {
@@ -331,17 +331,15 @@ describe('where a dispatcher records, given with each call', () => {
     expect(telemetryGivenToHandler?.logger).toBe(logger);
   });
 
-  it('fills what was not given with none, and passes on what it resolved', async () => {
+  it('passes on only the parts it holds, the handler resolving the rest to none', async () => {
     const handlerExecuteSpy = vi.spyOn(
       ArvoEventHandler.prototype,
       'tryExecute',
     );
     const spanRecorder = recordingProvider();
     await enterDispatcher(orderDispatcher(), { tracer: spanRecorder.tracer });
-    expect(handlerExecuteSpy.mock.calls[0]?.[0].telemetry).toEqual({
+    expect(handlerExecuteSpy.mock.calls[0]?.[0].telemetry).toStrictEqual({
       tracer: spanRecorder.tracer,
-      meter: null,
-      logger: null,
     });
   });
 

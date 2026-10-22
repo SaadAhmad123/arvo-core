@@ -19,5 +19,6 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 ## 3. Close out
 
-- [ ] 3.1 Run the whole suite with coverage, lint, typecheck and build from `ts/arvo-core`. Confirm `src/index.ts` exports nothing that names the removed option or property.
-- [ ] 3.2 Validate the change with `node_modules/.bin/openspec validate telemetry-at-execute --strict`.
+- [x] 3.1 Run the whole suite with coverage, lint, typecheck and build from `ts/arvo-core`. Confirm `src/index.ts` exports nothing that names the removed option or property.
+- [x] 3.2 Validate the change with `node_modules/.bin/openspec validate telemetry-at-execute --strict`.
+- [x] 3.3 Export `ArvoTelemetryParam` from `src/index.ts`, now that callers pass it on every call. **Replaces** its `meter?: Meter | null` and `logger?: ArvoLogger | null` with plain optional members, per the optional-inputs rule, and updates its TSDoc in `src/ArvoEventHandler/context/telemetry/resolve.ts`. Add `src/ArvoDispatcher/helpers/telemetry-for-handler.ts`, with its spec, so the dispatcher passes on the tracer and only the parts that were given.

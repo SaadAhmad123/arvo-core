@@ -57,6 +57,7 @@ export type {
 } from './ArvoEventHandler/context/idempotency.js';
 export { ArvoExecutionContext } from './ArvoEventHandler/context/index.js';
 export { ArvoExecutionContextTelemetry } from './ArvoEventHandler/context/telemetry/index.js';
+export type { ArvoTelemetryParam } from './ArvoEventHandler/context/telemetry/resolve.js';
 export type {
   ArvoLogger,
   ArvoLogRecord,

@@ -25,6 +25,7 @@ import {
   flattenMembers,
 } from './helpers/flatten.js';
 import { longestRunTimeoutMs } from './helpers/longest-run-timeout.js';
+import { telemetryForHandler } from './helpers/telemetry-for-handler.js';
 import type {
   ArvoDispatcherExecuteParam,
   ArvoDispatcherMember,
@@ -249,7 +250,7 @@ export class ArvoDispatcher<
         attempt: param.attempt,
         ...(dependency === undefined ? {} : { dependencies: dependency }),
         ...(param.hooks === undefined ? {} : { hooks: param.hooks }),
-        telemetry: resolvedTelemetry,
+        telemetry: telemetryForHandler(resolvedTelemetry),
         ...(this.middlewares.length === 0
           ? {}
           : { middleware: this.middlewares }),
