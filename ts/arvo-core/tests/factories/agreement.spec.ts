@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ArvoContract } from '../../src/ArvoContract/index.js';
 import { createArvoEventFactory } from '../../src/factories/ArvoEventFactory/index.js';
+import { mutateArvoEvent } from '../../src/factories/mutateArvoEvent.js';
 
 /**
  * What ties building to reading. The two share no code — asserting takes an
@@ -80,6 +81,21 @@ describe('an event built from a version is one that version accepts', () => {
     const assertedEvent = orderVersion.assert(event, 'com_order_created');
     expect(assertedEvent.scope).toBe('output');
     expect(assertedEvent.event.data.order_id).toBe('o-1');
+  });
+
+  it('accepts what was built after it is mutated, the mutation being the same event', () => {
+    const event = orderFactory.createInput({
+      source: 'com.web.checkout',
+      subject: 'order-42',
+      data: { items: ['book'] },
+    });
+    const continued = mutateArvoEvent(event, {
+      traceparent: `00-${'9'.repeat(32)}-${'8'.repeat(16)}-01`,
+    });
+
+    const assertedEvent = orderVersion.assert(continued);
+    expect(assertedEvent.scope).toBe('input');
+    expect(assertedEvent.event.id).toBe(event.id);
   });
 
   it('is accepted by the contract as well as the version', () => {

@@ -25,15 +25,17 @@ What exists and shapes the approach:
 
 ## Decisions
 
-### 1. Built through `tryCreateArvoEvent`
+### 1. Built through `ArvoEvent.tryParse`
 
-`tryMutateArvoEvent` builds the result with `tryCreateArvoEvent`, so the result is validated by the one path every standalone event takes, and a failure is the same `ArvoEventValidationError` every builder reports. `mutateArvoEvent` unwraps it, as `createArvoEvent` unwraps its primitive.
+`tryMutateArvoEvent` merges the event's stored fields with the replacements and hands the result to `ArvoEvent.tryParse`, the constructor's entry for input with no static shape. The result is validated by the same constructor every event passes through, and a failure is the same `ArvoEventValidationError` every builder reports. `mutateArvoEvent` unwraps it, as `createArvoEvent` unwraps its primitive.
 
-**Alternative considered:** `ArvoEvent.tryParse`, which takes `unknown` and so accepts the stored fields with their `null`s directly. Rejected: it is the parser for events arriving from elsewhere, and a mutation is building, not parsing.
+Why not `tryCreateArvoEvent`, which the first draft chose: its parameter is typed to the result's `type` and `data`, and the merged fields cannot be shown to have those types. The result's type is "the event's, unless the mutation replaces it", which inside the function is `mutation.type ?? event.type`: a union the compiler will not accept where the exact result type is required. `cloneArvoEvent` crosses the same wall with a cast; `ts/arvo-core/AGENTS.md` forbids one here. `tryParse` takes `unknown`, so the merged fields need no cast, and the generic arguments say what the result is typed as, exactly as they do on every other builder.
+
+**Alternative considered:** overload signatures over a wide implementation. No cast either, but it hides the same unprovable claim behind a second syntax and adds two signatures to read.
 
 ### 2. Carrying the original without a cast
 
-The event's fields are named one by one, so a change to the event's shape fails at compile time in this file. A field holding a value is carried; a field holding `null` is left out, and the validator gives it back as `null`. Every field that cannot be `null` — `id`, `time`, `subject`, `executionid`, `depth`, `source`, `type`, `data`, `dataschema`, `baggage` — is always carried, so no default ever replaces one of the event's own values. The result is exactly the event, with no cast and no reliance on the input type accepting `null`.
+The event's fields are named one by one, so a change to the event's shape fails at compile time in this file. Every field is carried as it stands, `null`s included, because `tryParse` accepts the stored shape; nothing is left for a default to fill, so no default ever replaces one of the event's own values. The result is exactly the event, with no cast.
 
 **Alternative considered:** spreading the event and casting, as `tryCloneArvoEvent` does. Rejected by `ts/arvo-core/AGENTS.md`: the types can be made to flow, so no cast is warranted.
 
