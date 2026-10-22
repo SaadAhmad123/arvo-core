@@ -214,7 +214,7 @@ On every entry the dispatcher SHALL open exactly one span continuing the event's
 
 Where that span is recording, the dispatcher SHALL enter the handler with a copy of the event whose trace headers name the span and which is identical to the event in every other field. Where the span is not recording, it SHALL enter the handler with the event as it is. The event the dispatcher was given SHALL NOT be altered.
 
-The dispatcher SHALL mark on its span that it was entered and which handler it picked. It SHALL NOT record on its span anything the handler records on its own.
+The dispatcher SHALL mark on its span that it was entered and which handler it picked. It SHALL NOT record on its span anything the handler records on its own. It SHALL mark its span successful once a handler has been entered and has returned, whatever the handler returned, and failed where no handler takes the event. Where something that is not a fault is thrown, it SHALL record it on its span, mark the span failed, and let it propagate as thrown.
 
 #### Scenario: The span continues the event's trace
 
@@ -251,6 +251,21 @@ The dispatcher SHALL mark on its span that it was entered and which handler it p
 
 - **WHEN** a dispatcher enters a handler
 - **THEN** its span records that it was entered and which handler was picked
+
+#### Scenario: The span is successful once a handler returns
+
+- **WHEN** the picked handler returns, with events or with a fault of its own
+- **THEN** the dispatcher's span is marked successful
+
+#### Scenario: The span is failed where nothing takes the event
+
+- **WHEN** no handler in the set takes the event's `to`
+- **THEN** the dispatcher's span is marked failed
+
+#### Scenario: Something thrown that is not a fault is recorded
+
+- **WHEN** entering the handler throws something that is not a fault
+- **THEN** the dispatcher records it on its span, marks the span failed, and the thrown value propagates unchanged
 
 #### Scenario: Nothing of the handler's is recorded again
 

@@ -1,12 +1,22 @@
 import { err, ok } from 'neverthrow';
+import type { ArvoEvent } from '../ArvoEvent/index.js';
+import { continueTraceFromEvent } from '../ArvoEvent/opentelemetry.js';
+import { ArvoExecutionContextTelemetry } from '../ArvoEventHandler/context/telemetry/index.js';
+import { recording } from '../ArvoEventHandler/context/telemetry/recording.js';
 import {
   type ArvoResolvedTelemetry,
   resolveTelemetry,
 } from '../ArvoEventHandler/context/telemetry/resolve.js';
+import { createArvoHandlerFault } from '../ArvoEventHandler/fault/factory.js';
+import type { ArvoHandlerFault } from '../ArvoEventHandler/fault/index.js';
+import type { IArvoEventHandlerDependency } from '../ArvoEventHandler/types/dependency.js';
+import type { ArvoEventHandlerExecuteResponse } from '../ArvoEventHandler/types/execute.js';
 import type { ArvoEventHandlerMiddlewareEntry } from '../ArvoEventHandler/types/middleware.js';
+import { mutateArvoEvent } from '../factories/mutateArvoEvent.js';
 import { fromNeverthrow } from '../result.js';
-import type { Result } from '../types.js';
+import type { AsyncResult, Result } from '../types.js';
 import { ErrorIssue } from '../utils/error-issue.js';
+import { textOfThrown } from '../utils/thrown-text.js';
 import { ArvoDispatcherValidationError } from './errors.js';
 import { checkCallerName } from './helpers/check-caller-name.js';
 import { checkEmpty } from './helpers/check-empty.js';
@@ -19,11 +29,21 @@ import {
 } from './helpers/flatten.js';
 import { longestRunTimeoutMs } from './helpers/longest-run-timeout.js';
 import type {
+  ArvoDispatcherExecuteParam,
   ArvoDispatcherMember,
   ArvoDispatcherOptions,
   ArvoDispatcherSet,
 } from './types.js';
-import type { ArvoAnyEventHandler } from './typing.js';
+import type { ArvoAnyEventHandler, HandlersOf } from './typing.js';
+
+/** The name of the one span a dispatcher opens per call. */
+const ARVO_DISPATCHER_SPAN_NAME = 'arvo.dispatcher.execute';
+
+/** Every handler a list of members holds, as the entry parameter reads them. */
+type ArvoHandlersOfMembers<TMembers> = Extract<
+  HandlersOf<TMembers>,
+  readonly ArvoAnyEventHandler[]
+>;
 
 /** Whether a value is a dispatcher, and so a set whose lists are taken. */
 const isDispatcher = (candidate: unknown): candidate is ArvoDispatcherSet =>
@@ -146,6 +166,155 @@ export class ArvoDispatcher<
       throw new ArvoDispatcherValidationError(issues);
     }
     return flattened;
+  }
+
+  /**
+   * Enters the handler the event's `to` names, reporting a fault rather than
+   * throwing.
+   *
+   * Takes exactly what a handler takes, less layers: `dependencies` holds one
+   * entry per handler, keyed by its self contract `type`, and the picked
+   * handler is given its own or none; `hooks` is one value every handler can
+   * accept. Returns what the handler returned, unchanged.
+   *
+   * Where no handler in the set implements `to`, or the event carries none,
+   * the fault is `handler_not_found`: not retryable, and carrying nothing to
+   * abandon with. Anything thrown that is not a fault propagates as thrown.
+   *
+   * Opens one span per call, continuing the event's trace, and enters the
+   * handler with a copy of the event naming that span where it is recording,
+   * or the event itself where it is not. The event given is not modified.
+   * The span is marked successful once a handler has been entered and has
+   * returned, whatever it returned, and failed where no handler takes the
+   * event or something that is not a fault is thrown, which is recorded on
+   * the span and then propagates as thrown.
+   *
+   * @param param - The event, the state function, the attempt, and the
+   * dependencies and hooks for the set.
+   *
+   * @example
+   * const executed = await dispatcher.tryExecute({ event, state, attempt: 0 });
+   * if (executed.ok) executed.value.kind; // 'produced' | 'discarded'
+   * else executed.error.faultKind;
+   */
+  async tryExecute(
+    param: ArvoDispatcherExecuteParam<ArvoHandlersOfMembers<TMembers>>,
+  ): AsyncResult<ArvoEventHandlerExecuteResponse, ArvoHandlerFault> {
+    const continuedTrace = continueTraceFromEvent(
+      param.event,
+      this.telemetry.tracer,
+      ARVO_DISPATCHER_SPAN_NAME,
+    );
+    const span =
+      continuedTrace?.span ??
+      this.telemetry.tracer.startSpan(ARVO_DISPATCHER_SPAN_NAME);
+    const telemetry = new ArvoExecutionContextTelemetry({
+      span,
+      meter: this.telemetry.meter,
+      logger: this.telemetry.logger,
+    });
+
+    try {
+      telemetry.addEvent('dispatcher.entered');
+      const contractType = param.event.to;
+      const handler =
+        contractType === null
+          ? undefined
+          : this.#handlersByType.get(contractType);
+      if (handler === undefined) {
+        return fromNeverthrow(
+          err(await this.#refuseUnhandled(param, telemetry)),
+        );
+      }
+      telemetry.addEvent('dispatcher.picked', {
+        'contract.type': handler.contracts.self.type,
+      });
+
+      const dependenciesByType: Readonly<
+        Record<string, IArvoEventHandlerDependency<any> | undefined>
+      > = param.dependencies ?? {};
+      const dependency = Object.hasOwn(
+        dependenciesByType,
+        handler.contracts.self.type,
+      )
+        ? dependenciesByType[handler.contracts.self.type]
+        : undefined;
+
+      const executed = await handler.tryExecute({
+        event: this.#inwardEvent(param.event, telemetry),
+        state: param.state,
+        attempt: param.attempt,
+        ...(dependency === undefined ? {} : { dependencies: dependency }),
+        ...(param.hooks === undefined ? {} : { hooks: param.hooks }),
+        ...(this.middlewares.length === 0
+          ? {}
+          : { middleware: this.middlewares }),
+      });
+      // the dispatcher's work is done whatever the handler concluded; a
+      // handler's fault is the handler's, recorded on the handler's own span
+      telemetry.setSpanOk();
+      return executed;
+    } catch (thrown) {
+      // not a fault, so not the Result's to report; seen on the trace and rethrown as it came
+      recording(() =>
+        span.recordException(
+          thrown instanceof Error ? thrown : textOfThrown(thrown),
+        ),
+      );
+      telemetry.setSpanError(textOfThrown(thrown));
+      throw thrown;
+    } finally {
+      span.end();
+    }
+  }
+
+  /**
+   * Enters the handler the event's `to` names, throwing a fault.
+   *
+   * Identical to {@link ArvoDispatcher.tryExecute} in every rule.
+   *
+   * @param param - The event, the state function, the attempt, and the
+   * dependencies and hooks for the set.
+   * @throws {ArvoHandlerFault} The handler's own, or `handler_not_found`.
+   *
+   * @example
+   * const response = await dispatcher.execute({ event, state, attempt: 0 });
+   */
+  async execute(
+    param: ArvoDispatcherExecuteParam<ArvoHandlersOfMembers<TMembers>>,
+  ): Promise<ArvoEventHandlerExecuteResponse> {
+    const executed = await this.tryExecute(param);
+    if (executed.ok) return executed.value;
+    throw executed.error;
+  }
+
+  /** The event a handler is entered with: a copy naming the dispatcher's span, where it records. */
+  #inwardEvent(
+    event: ArvoEvent,
+    telemetry: ArvoExecutionContextTelemetry,
+  ): ArvoEvent {
+    return telemetry.span.isRecording()
+      ? mutateArvoEvent(event, { span: telemetry.span })
+      : event;
+  }
+
+  /** The fault for an event no handler in the set takes, recorded on the dispatcher's span. */
+  #refuseUnhandled(
+    param: ArvoDispatcherExecuteParam<ArvoHandlersOfMembers<TMembers>>,
+    telemetry: ArvoExecutionContextTelemetry,
+  ): Promise<ArvoHandlerFault> {
+    const handledTypes = [...this.#handlersByType.keys()].join(', ');
+    return createArvoHandlerFault({
+      contracts: null,
+      event: param.event,
+      attempt: param.attempt,
+      telemetry,
+      faultKind: 'handler_not_found',
+      message:
+        param.event.to === null
+          ? `the event carries no to, so no handler here can be picked; a dispatcher enters the handler whose self contract type is the event's to (handled here: ${handledTypes})`
+          : `no handler here implements ${param.event.to}; a dispatcher enters only the handler whose self contract type is the event's to (handled here: ${handledTypes})`,
+    });
   }
 
   /**

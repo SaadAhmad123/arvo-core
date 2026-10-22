@@ -12,6 +12,7 @@
 - **Layers of the set**, accepted at construction only and handed to every handler as its supplied layers. The dispatcher judges nothing about them.
 - **One span per call, under [ADR-018](../../../../../docs/adr/018-trace-context-across-layers.md).** The dispatcher continues the event's trace, enters the handler with a copy of the event naming its span where the span records, marks the pick, and records `handler_not_found` on it. It takes an optional `telemetry` option shaped as a handler's. It depends on `mutateArvoEvent` from the `mutate-event` change.
 - **One telemetry resolver for every party.** `resolveTelemetry` and `ArvoTelemetryParam` move the handler and the dispatcher onto one default. **BREAKING** for telemetry only: a handler's default tracer is now named `arvo-core`, as ADR-018 asks, rather than after its contract type.
+- **OpenTelemetry API 1.10.** **BREAKING** for consumers on API 1.9: the peer dependency becomes `^1.10.0`, the version the package is now compiled and tested against, and `@opentelemetry/sdk-trace` 3.0 joins the dev dependencies for the span tests.
 - **Exports** from `src/index.ts` for the class, its two factories, its validation error, and its option and parameter types.
 
 ## Capabilities

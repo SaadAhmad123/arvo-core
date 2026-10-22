@@ -56,7 +56,8 @@
     "@biomejs/biome": "2.5.5",
     "@changesets/cli": "2.31.1",
     "@fission-ai/openspec": "^1.7.0",
-    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/api": "1.10.0",
+    "@opentelemetry/sdk-trace": "3.0.0",
     "@types/node": "22.20.1",
     "@vitest/coverage-v8": "5.0.4",
     "cloudevents": "10.0.0",
@@ -67,7 +68,7 @@
     "zod": "4.4.3"
   },
   "peerDependencies": {
-    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/api": "^1.10.0",
     "cloudevents": "^10.0.0",
     "zod": "^4.0.0"
   },
