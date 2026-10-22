@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ArvoDomain } from '../../../../src/ArvoDomain/index.js';
 import type { ArvoEvent } from '../../../../src/ArvoEvent/index.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../../src/factories/mutateArvoEvent.js';
 import {
   declareVersions,
   type OrderContext,
@@ -76,7 +76,7 @@ const reviewDecision = (
   reviewRequest: ArvoEvent,
   overrides: Record<string, unknown> = {},
 ) =>
-  cloneArvoEvent(
+  mutateArvoEvent(
     createArvoEventFactory(reviewV1).createOutput({
       type: 'evt_review_decided',
       source: reviewV1.type,
@@ -283,7 +283,7 @@ describe('everything the outside world does wrong', () => {
   it('answers with the service own failure: an answer like any other', async () => {
     const { lattice, reviewRequest } = await awaitingReview();
     lattice.inject(
-      cloneArvoEvent(
+      mutateArvoEvent(
         createArvoEventFactory(reviewV1).createError({
           source: reviewV1.type,
           subject: reviewRequest.subject,

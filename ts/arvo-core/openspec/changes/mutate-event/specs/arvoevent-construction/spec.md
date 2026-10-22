@@ -64,54 +64,70 @@ The event mutated SHALL NOT be altered.
 
 ### Requirement: The Trace Context Of A Mutation
 
-Where an event is mutated, the system SHALL resolve the result's trace context exactly as it resolves a clone's: a span supplied among the replacements first, then a trace header supplied among the replacements, then the header the event carries; a span replacing the trace context whole, a header replacing only itself; and a span whose context carries no valid trace treated as not supplied.
+Where an event is mutated, the system SHALL resolve the result's trace context by precedence: a span supplied among the replacements first, then a trace header supplied among the replacements, then the header the event carries.
 
-#### Scenario: Trace context resolved as for a clone
+A span SHALL replace the trace context whole, the event's own contributing nothing. A supplied header SHALL replace only itself, the other being carried across.
 
-- **WHEN** the same event is mutated and cloned with the same trace replacements
-- **THEN** the two results carry the same trace context
+A span whose context carries no valid trace SHALL be treated as not supplied, and the result SHALL carry the event's own trace context.
 
-#### Scenario: A trace replacement keeps the event's identity
-
-- **WHEN** an event is mutated with only a span supplied
-- **THEN** the result carries the trace context derived from that span
+#### Scenario: A span supplied among the replacements
+- **WHEN** an event carrying a trace context is mutated with a span supplied
+- **THEN** the result's trace context is the one derived from that span
 - **AND** every other field is the event's own, identity included
+
+#### Scenario: A span replaces the trace context whole
+- **WHEN** an event carrying both trace headers is mutated with a span carrying no trace state
+- **THEN** the result reports no trace state, rather than the event's
+
+#### Scenario: Both headers supplied
+- **WHEN** an event carrying a trace context is mutated with both trace headers supplied
+- **THEN** the result carries both supplied headers
+
+#### Scenario: One header supplied
+- **WHEN** an event carrying both trace headers is mutated with only one of them supplied
+- **THEN** the result carries the supplied one
+- **AND** carries the event's own for the other
+
+#### Scenario: Neither supplied
+- **WHEN** an event carrying a trace context is mutated with no span and no trace header supplied
+- **THEN** the result carries the event's trace context
+
+#### Scenario: Nothing to carry and nothing supplied
+- **WHEN** an event carrying no trace context is mutated with nothing trace-related supplied
+- **THEN** the result carries none
+
+#### Scenario: A span with no valid trace
+- **WHEN** an event carrying a trace context is mutated with a span whose context carries no valid trace
+- **THEN** the result carries the event's own trace context
+
+#### Scenario: A span with no valid trace and nothing to carry
+- **WHEN** an event carrying no trace context is mutated with a span whose context carries no valid trace
+- **THEN** the result carries no trace context
 
 ## MODIFIED Requirements
 
+### Requirement: Cloning An Event
+
+The system SHALL build an event carrying the same field values as an existing event, every field included, the event's identity, its time and its trace context among them. Cloning SHALL take no replacements: a field is replaced by mutating an event.
+
+Nothing SHALL be inferred from the relationship between the two: the causal fields SHALL be carried as they stand, and the clone SHALL NOT be made a descendant of its source.
+
+The event cloned SHALL NOT be altered.
+
+#### Scenario: Every field carried across
+- **WHEN** an event is cloned
+- **THEN** the clone carries the same value as its source for every field, identity, time and trace context included
+
+#### Scenario: Causality is not inferred
+- **WHEN** an event is cloned
+- **THEN** the clone's causal fields are its source's, not values derived from it
+
+#### Scenario: The source is untouched
+- **WHEN** an event is cloned
+- **THEN** the event that was cloned is unchanged
+
+## REMOVED Requirements
+
 ### Requirement: The Trace Context Of A Clone
-
-Where an event is cloned, the system SHALL resolve the clone's trace context by precedence: a span supplied among the replacements first, then a trace header supplied among the replacements, then the header the cloned event carries.
-
-A span SHALL replace the trace context whole, the cloned event's own contributing nothing. A supplied header SHALL replace only itself, the other being carried across.
-
-A span whose context carries no valid trace SHALL be treated as not supplied, and the clone SHALL carry the cloned event's own trace context.
-
-#### Scenario: A span supplied among the replacements
-- **WHEN** an event carrying a trace context is cloned with a span supplied
-- **THEN** the clone's trace context is the one derived from that span
-
-#### Scenario: A span replaces the trace context whole
-- **WHEN** an event carrying both trace headers is cloned with a span carrying no trace state
-- **THEN** the clone reports no trace state, rather than the cloned event's
-
-#### Scenario: Both headers supplied
-- **WHEN** an event carrying a trace context is cloned with both trace headers supplied
-- **THEN** the clone carries both supplied headers
-
-#### Scenario: One header supplied
-- **WHEN** an event carrying both trace headers is cloned with only one of them supplied
-- **THEN** the clone carries the supplied one
-- **AND** carries the cloned event's own for the other
-
-#### Scenario: Neither supplied
-- **WHEN** an event carrying a trace context is cloned with no span and no trace header supplied
-- **THEN** the clone carries the cloned event's trace context
-
-#### Scenario: Nothing to carry and nothing supplied
-- **WHEN** an event carrying no trace context is cloned with nothing supplied
-- **THEN** the clone carries none
-
-#### Scenario: A span with no valid trace
-- **WHEN** an event carrying a trace context is cloned with a span whose context carries no valid trace
-- **THEN** the clone carries the cloned event's trace context
+**Reason**: A clone takes no replacements, so it has no trace context to resolve beyond carrying its source's. Replacing trace context, by a span or by header, is a mutation.
+**Migration**: Replace `cloneArvoEvent(event, { span })`, and any clone with replacements, with `mutateArvoEvent(event, { span })`; the precedence and every other rule are those of *The Trace Context Of A Mutation*.

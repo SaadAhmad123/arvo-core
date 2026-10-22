@@ -13,7 +13,7 @@ No ADR governs this change. It is API shape, which [ADR-004](../../../../../docs
 - **The result is typed from the original** unless the mutation replaces `type` or `data`, in which case the replacement's type takes effect.
 - **A span with no trace behind it is ignored**, leaving the event's trace headers as they were, so the operation behaves the same whether or not tracing is set up.
 - **A new exported type, `ArvoEventMutation`**, and both functions, from `src/index.ts`.
-- **`cloneArvoEvent` becomes a thin wrapper over `tryMutateArvoEvent`.** The two did one job twice. Its signature and its guidance to give a clone a new `id` stay; its cast goes. One edge changes: a span carrying no valid trace now leaves the clone's trace headers as its source's instead of writing an all-zero header.
+- **`cloneArvoEvent` becomes a pure copy, with no replacements, built over `tryMutateArvoEvent`.** **BREAKING**: its second parameter is removed; a clone with replacements is a mutation. Its `try` pair, its guidance to give a copy sent alongside its source a new `id`, and its result type stay; its cast goes.
 
 ## Capabilities
 
@@ -23,13 +23,13 @@ None.
 
 ### Modified Capabilities
 
-- `arvoevent-construction`: adds mutating an event, and the trace context of a mutation, beside cloning; modifies the trace context of a clone for a span carrying no valid trace. The existing requirements for the non-throwing primitive and its throwing companion, and for reporting every failure as an event validation failure, already cover every variant and apply unchanged.
+- `arvoevent-construction`: adds mutating an event and the trace context of a mutation; modifies cloning to take no replacements; removes the trace context of a clone, which a clone now carries as it stands. The existing requirements for the non-throwing primitive and its throwing companion, and for reporting every failure as an event validation failure, already cover every variant and apply unchanged.
 
 ## Impact
 
 - **New code**: `src/factories/mutateArvoEvent.ts`; one small export from `src/ArvoEvent/opentelemetry.ts` (the existing private span-or-context helper) so the mutation can test a span's trace for validity.
-- **Changed code**: `src/factories/cloneArvoEvent.ts` is reimplemented over the mutation, losing its cast and its private trace helper; `src/index.ts` gains the new exports.
-- **No new dependencies.** No signature changes. The one behaviour change is the invalid-span edge in cloning, above.
+- **Changed code**: `src/factories/cloneArvoEvent.ts` becomes a pure copy over the mutation, losing its replacements parameter, its cast and its private trace helper; `src/index.ts` gains the new exports.
+- **No new dependencies.** One signature changes: `cloneArvoEvent` and `tryCloneArvoEvent` lose their replacements parameter. The package is unpublished, so no consumer outside this repository is affected; the sandbox's clone-with-replacements call sites move to `mutateArvoEvent` in their own change.
 
 ## Not in scope
 

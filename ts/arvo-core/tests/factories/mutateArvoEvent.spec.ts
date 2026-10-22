@@ -2,7 +2,6 @@ import type { SpanContext } from '@opentelemetry/api';
 import { trace } from '@opentelemetry/api';
 import { describe, expect, it } from 'vitest';
 import { ArvoEvent } from '../../src/ArvoEvent/index.js';
-import { cloneArvoEvent } from '../../src/factories/cloneArvoEvent.js';
 import {
   mutateArvoEvent,
   tryMutateArvoEvent,
@@ -230,50 +229,56 @@ describe('mutating an event', () => {
 });
 
 describe("a mutation's trace context", () => {
-  /** Each trace case the clone's requirement names, as replacements. */
-  const traceCases = [
-    ['a span', { span: spanWithoutState }],
-    ['a span with trace state', { span: spanWithState }],
-    [
-      'both headers',
-      {
-        traceparent: `00-${'9'.repeat(32)}-${'8'.repeat(16)}-01`,
-        tracestate: 'vendor=override',
-      },
-    ],
-    [
-      'one header',
-      { traceparent: `00-${'9'.repeat(32)}-${'8'.repeat(16)}-01` },
-    ],
-    ['neither', { to: 'com.audit.log' }],
-  ] as const;
+  const replacementHeader = `00-${'9'.repeat(32)}-${'8'.repeat(16)}-01`;
 
-  describe.each(traceCases)(
-    'resolves %s as a clone does',
-    (_name, replacements) => {
-      it('on an event carrying a trace context', () => {
-        const mutated = mutateArvoEvent(fullEvent, replacements);
-        const cloned = cloneArvoEvent(fullEvent, replacements);
-        expect(mutated.traceparent).toBe(cloned.traceparent);
-        expect(mutated.tracestate).toBe(cloned.tracestate);
-      });
-
-      it('on an event carrying none', () => {
-        const mutated = mutateArvoEvent(bareEvent, replacements);
-        const cloned = cloneArvoEvent(bareEvent, replacements);
-        expect(mutated.traceparent).toBe(cloned.traceparent);
-        expect(mutated.tracestate).toBe(cloned.tracestate);
-      });
-    },
-  );
-
-  it('a span replaces both headers and nothing else', () => {
+  it("takes a replacement span over the event's headers, replacing both", () => {
     const mutated = mutateArvoEvent(fullEvent, { span: spanWithoutState });
     expect(mutated.traceparent).toBe(
       `00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`,
     );
     expect(mutated.tracestate).toBeNull();
     expectSameExcept(mutated, fullEvent, ['traceparent', 'tracestate']);
+  });
+
+  it("takes a span's own trace state where it has one", () => {
+    expect(mutateArvoEvent(fullEvent, { span: spanWithState }).tracestate).toBe(
+      'vendor=fromspan',
+    );
+  });
+
+  it('takes both replacement headers', () => {
+    const mutated = mutateArvoEvent(fullEvent, {
+      traceparent: replacementHeader,
+      tracestate: 'vendor=override',
+    });
+    expect(mutated.traceparent).toBe(replacementHeader);
+    expect(mutated.tracestate).toBe('vendor=override');
+  });
+
+  it('replaces one header and carries the other across', () => {
+    const mutated = mutateArvoEvent(fullEvent, {
+      traceparent: replacementHeader,
+    });
+    expect(mutated.traceparent).toBe(replacementHeader);
+    expect(mutated.tracestate).toBe('vendor=original');
+  });
+
+  it("carries the event's own where nothing trace-related is replaced", () => {
+    const mutated = mutateArvoEvent(fullEvent, { to: 'com.audit.log' });
+    expect(mutated.traceparent).toBe(fullEvent.traceparent);
+    expect(mutated.tracestate).toBe(fullEvent.tracestate);
+  });
+
+  it('carries none where the event carried none and nothing is replaced', () => {
+    const mutated = mutateArvoEvent(bareEvent, { to: 'com.audit.log' });
+    expect(mutated.traceparent).toBeNull();
+    expect(mutated.tracestate).toBeNull();
+  });
+
+  it('takes a span where the event carried nothing', () => {
+    expect(
+      mutateArvoEvent(bareEvent, { span: spanWithoutState }).traceparent,
+    ).toBe(`00-${'a'.repeat(32)}-${'b'.repeat(16)}-01`);
   });
 
   it("a span with no valid trace leaves the event's own trace context", () => {

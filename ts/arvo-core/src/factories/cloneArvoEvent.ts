@@ -1,106 +1,48 @@
-import type { Span, SpanContext } from '@opentelemetry/api';
 import type { ArvoEventValidationError } from '../ArvoEvent/errors.js';
 import type { ArvoEvent } from '../ArvoEvent/index.js';
-import { traceContextFromSpan } from '../ArvoEvent/opentelemetry.js';
-import type { ArvoEventParam } from '../ArvoEvent/types.js';
 import type { Result } from '../types.js';
-import { tryCreateArvoEvent } from './createArvoEvent.js';
-
-/** A span if there is one, else an overridden header, else the event's own. */
-const cloneTraceContext = <T extends string, D extends Record<string, any>>(
-  event: ArvoEvent<T, D>,
-  overrides: {
-    traceparent?: string;
-    tracestate?: string;
-    span?: Span | SpanContext;
-  },
-) => {
-  if (overrides.span) return traceContextFromSpan(overrides.span);
-
-  return {
-    traceparent: overrides.traceparent ?? event.traceparent,
-    tracestate: overrides.tracestate ?? event.tracestate,
-  };
-};
+import { tryMutateArvoEvent } from './mutateArvoEvent.js';
 
 /**
- * An existing event with the fields you replace, reporting an invalid result
- * rather than throwing.
+ * A copy of an existing event, reporting an invalid result rather than
+ * throwing.
  *
- * No contract is involved: a clone is the event it was given, so any event may
- * be cloned. Everything you do not replace is copied, `id` and `time`
- * included — a clone sent alongside its source needs a new `id`, consumers
- * deduplicating on that field alone. Nothing is derived: a clone is not a
- * child of its source, and `parentid`, `initid` and `depth` come across as
- * they stand. A field you give as `undefined` replaces nothing, the same as
- * leaving it out; pass `null` to clear one that may be absent.
- *
- * Trace context takes a replacement `span` first, then a replacement
- * `traceparent` or `tracestate` field by field, then the cloned event's own. A
- * `span` replaces both, so a span carrying no trace state leaves the clone
- * with none.
- *
- * A replacement that breaks a structural rule of an event comes back as an
- * error naming every rule that broke.
+ * Every field is copied, `id` and `time` included — a copy sent alongside its
+ * source needs a new `id`, consumers deduplicating on that field alone, and
+ * {@link tryMutateArvoEvent} is how a field is replaced. Nothing is derived:
+ * a copy is not a child of its source. The event copied is not modified.
  *
  * @example
- * const attempt = tryCloneArvoEvent(emitted, { to: 'com.audit.log' });
- * if (attempt.ok) send(attempt.value);
- * else attempt.error.issues.forEach((issue) => log(issue.path, issue.message));
+ * const attempt = tryCloneArvoEvent(emitted);
+ * if (attempt.ok) attempt.value.id === emitted.id; // true
  */
 export const tryCloneArvoEvent = <
   T extends string,
   D extends Record<string, any>,
 >(
   event: ArvoEvent<T, D>,
-  overrides: Partial<ArvoEventParam<T, D>> = {},
-): Result<ArvoEvent<T, D>, ArvoEventValidationError> => {
-  const { span: _span, ...fieldOverrides } = overrides as {
-    span?: Span | SpanContext;
-  };
-
-  const replacements = Object.fromEntries(
-    Object.entries(fieldOverrides).filter(
-      ([, override]) => override !== undefined,
-    ),
-  );
-
-  return tryCreateArvoEvent<T, D>({
-    ...event,
-    ...replacements,
-    ...cloneTraceContext(event, overrides),
-  } as Parameters<typeof tryCreateArvoEvent<T, D>>[0]);
-};
+): Result<ArvoEvent<T, D>, ArvoEventValidationError> =>
+  tryMutateArvoEvent<T, D, T, D>(event, {});
 
 /**
- * An existing event with the fields you replace, throwing if the result would
- * be invalid.
+ * A copy of an existing event, throwing if the result would be invalid.
  *
- * No contract is involved: a clone is the event it was given, so any event may
- * be cloned. Everything you do not replace is copied, `id` and `time`
- * included — a clone sent alongside its source needs a new `id`, consumers
- * deduplicating on that field alone. Nothing is derived: a clone is not a
- * child of its source, and `parentid`, `initid` and `depth` come across as
- * they stand. A field you give as `undefined` replaces nothing, the same as
- * leaving it out; pass `null` to clear one that may be absent.
+ * Every field is copied, `id` and `time` included — a copy sent alongside its
+ * source needs a new `id`, consumers deduplicating on that field alone, and
+ * {@link mutateArvoEvent} is how a field is replaced. Nothing is derived: a
+ * copy is not a child of its source. The event copied is not modified.
  *
- * Trace context takes a replacement `span` first, then a replacement
- * `traceparent` or `tracestate` field by field, then the cloned event's own. A
- * `span` replaces both, so a span carrying no trace state leaves the clone
- * with none.
- *
- * @throws {ArvoEventValidationError} If a replacement breaks a structural rule
+ * @throws {ArvoEventValidationError} If the copy would break a structural rule
  * of an event. The message names every rule that broke.
  *
  * @example
- * const routed = cloneArvoEvent(emitted, { to: 'com.audit.log', id: freshId });
- * routed.data;  // the source event's payload, typed as it was
+ * const copied = cloneArvoEvent(emitted);
+ * copied.toString() === emitted.toString(); // true
  */
 export const cloneArvoEvent = <T extends string, D extends Record<string, any>>(
   event: ArvoEvent<T, D>,
-  overrides?: Partial<ArvoEventParam<T, D>>,
 ): ArvoEvent<T, D> => {
-  const attempt = tryCloneArvoEvent(event, overrides);
+  const attempt = tryCloneArvoEvent(event);
   if (attempt.ok) return attempt.value;
   throw attempt.error;
 };

@@ -5,7 +5,7 @@ import type { ArvoEvent } from '../../../../src/ArvoEvent/index.js';
 import { ArvoExecutionContextTelemetry } from '../../../../src/ArvoEventHandler/context/telemetry/index.js';
 import type { ArvoHandlerFault } from '../../../../src/ArvoEventHandler/fault/index.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../../src/factories/mutateArvoEvent.js';
 import type { JSONObject } from '../../../../src/types.js';
 import {
   declareVersions,
@@ -102,7 +102,7 @@ const withdrawableLattice = (lattice = latticeWith()) => {
 
 /** What a person decides, put back into the lattice. */
 const reviewDecision = (reviewRequest: ArvoEvent) =>
-  cloneArvoEvent(
+  mutateArvoEvent(
     createArvoEventFactory(reviewV1).createOutput({
       type: 'evt_review_decided',
       source: reviewV1.type,
@@ -205,7 +205,9 @@ describe('an order a customer withdraws while it is waiting', () => {
 
     // somebody decides a second time, on an order already withdrawn
     lattice.inject(
-      cloneArvoEvent(reviewDecision(reviewRequest), { id: 'a-second-opinion' }),
+      mutateArvoEvent(reviewDecision(reviewRequest), {
+        id: 'a-second-opinion',
+      }),
     );
     await lattice.settle();
 

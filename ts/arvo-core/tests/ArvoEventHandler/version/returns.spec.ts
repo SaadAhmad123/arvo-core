@@ -10,7 +10,7 @@ import {
   settleRecord,
 } from '../../../src/ArvoEventHandler/version/returns.js';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import {
   initEvent,
   orderVersion,
@@ -90,7 +90,7 @@ describe('what a batch must be to leave the handler', () => {
   });
 
   it('refuses a type this version may not emit', () => {
-    const strayEvent = cloneArvoEvent(completion(), {
+    const strayEvent = mutateArvoEvent(completion(), {
       type: 'com_order_shipped' as never,
     });
     expect(refuse([strayEvent])?.faultKind).toBe('emission_not_permitted');
@@ -112,7 +112,7 @@ describe('what a batch must be to leave the handler', () => {
   });
 
   it('refuses a payload the schema its type selects will not have', () => {
-    const invalidEvent = cloneArvoEvent(completion(), {
+    const invalidEvent = mutateArvoEvent(completion(), {
       data: { order_id: 42 } as never,
     });
     expect(refuse([invalidEvent])?.faultKind).toBe('emission_schema_rejected');
@@ -125,7 +125,7 @@ describe('what a batch must be to leave the handler', () => {
         '1.0.0': { input: z.strictObject({ amount: z.number() }), outputs: {} },
       },
     }).versions['1.0.0'];
-    const extraFieldEvent = cloneArvoEvent(
+    const extraFieldEvent = mutateArvoEvent(
       createArvoEventFactory(strictVersion).createInput({
         source: orderVersion.type,
         subject: initEvent.subject,
@@ -144,7 +144,7 @@ describe('what a batch must be to leave the handler', () => {
   });
 
   it('refuses one that would sit deeper than this version allows', () => {
-    const deepEvent = cloneArvoEvent(request(), {
+    const deepEvent = mutateArvoEvent(request(), {
       depth: 10,
       parentid: initEvent.id,
     });
@@ -154,7 +154,7 @@ describe('what a batch must be to leave the handler', () => {
   });
 
   it('counts the events at fault against the batch, and says none were emitted', () => {
-    const invalidEvent = cloneArvoEvent(completion(), {
+    const invalidEvent = mutateArvoEvent(completion(), {
       data: { order_id: 42 } as never,
     });
     const refusal = refuse([invalidEvent, request()]);
@@ -164,10 +164,10 @@ describe('what a batch must be to leave the handler', () => {
   });
 
   it('counts more than one in the plural, so the sentence reads', () => {
-    const invalidEvent = cloneArvoEvent(completion(), {
+    const invalidEvent = mutateArvoEvent(completion(), {
       data: { order_id: 42 } as never,
     });
-    const strayEvent = cloneArvoEvent(request(), {
+    const strayEvent = mutateArvoEvent(request(), {
       type: 'com_nothing' as never,
     });
     expect(refuse([invalidEvent, strayEvent])?.message).toContain(
@@ -176,10 +176,10 @@ describe('what a batch must be to leave the handler', () => {
   });
 
   it('reports every event at fault, not merely the first', () => {
-    const invalidEvent = cloneArvoEvent(completion(), {
+    const invalidEvent = mutateArvoEvent(completion(), {
       data: { order_id: 42 } as never,
     });
-    const strayEvent = cloneArvoEvent(request(), {
+    const strayEvent = mutateArvoEvent(request(), {
       type: 'com_nothing' as never,
     });
     expect(refuse([invalidEvent, strayEvent])?.violations).toHaveLength(2);

@@ -5,7 +5,7 @@ import { ArvoDomain } from '../../../src/ArvoDomain/index.js';
 import { createArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/factory.js';
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import {
   chargedEvent,
   initEvent,
@@ -223,7 +223,7 @@ describe('what the execution would be abandoned with', () => {
   });
 
   it('sends it down the path the event that caused the execution came on', async () => {
-    const domainedChargedEvent = cloneArvoEvent(chargedEvent, {
+    const domainedChargedEvent = mutateArvoEvent(chargedEvent, {
       domain: 'human',
     });
     const fault = await buildFault(

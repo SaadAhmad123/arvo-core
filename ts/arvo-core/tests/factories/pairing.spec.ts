@@ -9,10 +9,6 @@ import {
   tryCreateArvoEventFactory,
 } from '../../src/factories/ArvoEventFactory/index.js';
 import {
-  cloneArvoEvent,
-  tryCloneArvoEvent,
-} from '../../src/factories/cloneArvoEvent.js';
-import {
   createArvoEvent,
   tryCreateArvoEvent,
 } from '../../src/factories/createArvoEvent.js';
@@ -76,13 +72,6 @@ const builderPairs = [
         dataschema: '#/x/1.0.0',
         data: {},
       }),
-  ],
-  [
-    'cloneArvoEvent',
-    () => cloneArvoEvent(event),
-    () => tryCloneArvoEvent(event),
-    () => cloneArvoEvent(event, { to: '' }),
-    () => tryCloneArvoEvent(event, { to: '' }),
   ],
   [
     'mutateArvoEvent',

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ArvoEvent } from '../../../../src/ArvoEvent/index.js';
 import type { ArvoFaultKind } from '../../../../src/ArvoEventHandler/fault/types.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../../src/factories/mutateArvoEvent.js';
 import {
   declareVersions,
   inventoryV1,
@@ -127,7 +127,7 @@ const injectSpoiledAnswer = async (
 }> => {
   const { lattice, executionId, toInventory } = await orderAwaitingAnswers();
   lattice.inject(
-    cloneArvoEvent(properAnswer(toInventory, executionId), overrides),
+    mutateArvoEvent(properAnswer(toInventory, executionId), overrides),
   );
   await lattice.settle();
   return {
@@ -227,7 +227,7 @@ describe('two services that answer as though they were one', () => {
 
     // a second service replying with the first one's event id, which
     // ADR-001 requires to be unique across the ecosystem
-    const impostor = cloneArvoEvent(inventoryAnswer, {
+    const impostor = mutateArvoEvent(inventoryAnswer, {
       initid: toPayment.id,
       parentid: toPayment.id,
     });
@@ -251,7 +251,7 @@ describe('two services that answer as though they were one', () => {
     const storeSnapshot = JSON.stringify([...lattice.store.entries()]);
 
     lattice.inject(
-      cloneArvoEvent(properAnswer(toInventory, executionId), {
+      mutateArvoEvent(properAnswer(toInventory, executionId), {
         subject: 'another-workflow',
       }),
     );
@@ -265,7 +265,7 @@ describe('two services that answer as though they were one', () => {
       await orderAwaitingAnswers();
     lattice.inject(properAnswer(toInventory, executionId));
     lattice.inject(
-      cloneArvoEvent(properAnswer(toPayment, executionId), {
+      mutateArvoEvent(properAnswer(toPayment, executionId), {
         parentid: toPayment.id,
         initid: toPayment.id,
       }),
@@ -298,7 +298,7 @@ describe('a service from a version this handler never declared', () => {
     // the same service, rolled forward to a version this handler does
     // not declare: the type is unchanged, so only the schema it names
     // says anything is different
-    const newerVersionAnswer = cloneArvoEvent(
+    const newerVersionAnswer = mutateArvoEvent(
       properAnswer(toInventory, executionId),
       {
         dataschema: `${inventoryV1.uri}/2.0.0`,

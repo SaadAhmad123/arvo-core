@@ -5,7 +5,7 @@ import type { ArvoHandlerFault } from '../../../../src/ArvoEventHandler/fault/in
 import { deriveArvoExecutionId } from '../../../../src/ArvoEventHandler/helpers/execution-id.js';
 import type { ArvoEventHandlerExecuteResponse } from '../../../../src/ArvoEventHandler/types/execute.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../../src/factories/mutateArvoEvent.js';
 import { heldDependencies } from '../../dependency.js';
 import { declareVersions, type OrderContext, orderV1 } from './fixture.js';
 
@@ -102,7 +102,7 @@ describe('an executor that returns what it must not', () => {
         type: 'evt_order_fulfilled',
         data: { order_id: 'o-1' },
       });
-      return [answer, cloneArvoEvent(answer, { id: 'a-second-answer' })];
+      return [answer, mutateArvoEvent(answer, { id: 'a-second-answer' })];
     });
     expect(fault.faultKind).toBe('emission_not_permitted');
     expect(
@@ -141,7 +141,7 @@ describe('an executor that returns what it must not', () => {
         type: 'com_payment_charge',
         data: { amount: 1 },
       });
-      return cloneArvoEvent(chargeRequest, {
+      return mutateArvoEvent(chargeRequest, {
         type: 'com_nothing_declared' as never,
       });
     });

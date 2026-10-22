@@ -11,9 +11,8 @@ import type { ArvoEventFields, ArvoEventParam } from '../ArvoEvent/types.js';
 import type { Result } from '../types.js';
 
 /**
- * The fields of an event a mutation may replace, in the shape an event is
- * built from on its own. Trace context is a `span` or the two headers, never
- * both. A field given as `undefined` replaces nothing.
+ * The fields to replace on an existing event: any field an event is built
+ * from, in that same shape. A field given as `undefined` replaces nothing.
  *
  * For code built on `arvo-core` that carries events between a producer and
  * a consumer. An event an executor or an application emits is built from its
@@ -69,10 +68,11 @@ const traceHeadersFor = (
  * a consumer — a runtime, a mechanism, a framework, a test harness. An event
  * an executor or an application emits is built from its contract instead.
  *
- * Every field is carried, identity and time included, and nothing is
- * derived: the result is not a descendant of the event. The result keeps the
- * event's type and payload type unless you replace them. A field you give as
- * `undefined` replaces nothing, the same as leaving it out.
+ * Any field may be replaced, alone or with others. Every field not replaced
+ * is carried, identity and time included, and nothing is derived: the result
+ * is not a descendant of the event. The result keeps the event's type and
+ * payload type unless you replace them. A field you give as `undefined`
+ * replaces nothing, the same as leaving it out.
  *
  * Trace context takes a replacement `span` first, then a replacement
  * `traceparent` or `tracestate` field by field, then the event's own. A
@@ -80,8 +80,8 @@ const traceHeadersFor = (
  * treated as not given.
  *
  * @example
- * const attempt = tryMutateArvoEvent(event, { span });
- * if (attempt.ok) attempt.value.id === event.id; // true
+ * const attempt = tryMutateArvoEvent(event, { to: 'com.audit.log', executionunits: 3 });
+ * if (attempt.ok) attempt.value.id === event.id; // true: the same event
  * else attempt.error.issues.forEach((issue) => log(issue.path, issue.message));
  */
 export const tryMutateArvoEvent = <
@@ -103,7 +103,7 @@ export const tryMutateArvoEvent = <
   );
 
   // The merged fields have no static shape the compiler can tie to the
-  // result's type, so they enter through the constructor's unknown-input door.
+  // result's type; tryCreateArvoEvent's typed input would need a cast here.
   return ArvoEvent.tryParse<TType, TData>({
     ...fieldsOf(event),
     ...replacements,
@@ -127,9 +127,12 @@ export const tryMutateArvoEvent = <
  * of an event. The message names every rule that broke.
  *
  * @example
- * const continued = mutateArvoEvent(event, { span });
- * continued.id === event.id;         // true: the same event, carried forward
- * continued.traceparent;             // names the span
+ * const audited = mutateArvoEvent(event, {
+ *   type: 'com_order_audited',
+ *   data: { ...event.data, audited: true },
+ * });
+ * audited.id === event.id;   // true: the same event, with two fields replaced
+ * audited.type;              // 'com_order_audited', typed as the literal
  */
 export const mutateArvoEvent = <
   T extends string,

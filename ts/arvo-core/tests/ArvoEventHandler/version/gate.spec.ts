@@ -7,8 +7,8 @@ import {
   refuseTerminal,
   refuseUnawaited,
 } from '../../../src/ArvoEventHandler/version/gate.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
 import { createArvoEvent } from '../../../src/factories/createArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import { chargedEvent, initEvent, orderVersion } from '../fixtures.js';
 import { buildState } from '../state/fixtures.js';
 
@@ -99,7 +99,7 @@ describe('whether an execution has outlived its time', () => {
 });
 
 describe('whether the event, the handler and the record agree', () => {
-  const addressedEvent = cloneArvoEvent(initEvent, { to: orderVersion.type });
+  const addressedEvent = mutateArvoEvent(initEvent, { to: orderVersion.type });
 
   it('admits an event addressed here, with no record to check', () => {
     expect(refuseMisaddressed(orderVersion, addressedEvent, null)).toBeNull();
@@ -120,7 +120,7 @@ describe('whether the event, the handler and the record agree', () => {
 
   it('says how many fields disagree, where the record and the event do', () => {
     const state = buildState({ source: 'com_something_else' });
-    const strayEvent = cloneArvoEvent(chargedEvent, {
+    const strayEvent = mutateArvoEvent(chargedEvent, {
       to: 'com.somewhere.else',
       parentid: initEvent.id,
       executionid: 'somewhere-else',
@@ -143,7 +143,7 @@ describe('whether the event, the handler and the record agree', () => {
   });
 
   it('refuses one addressed elsewhere', () => {
-    const misaddressedEvent = cloneArvoEvent(initEvent, {
+    const misaddressedEvent = mutateArvoEvent(initEvent, {
       to: 'com.somewhere.else',
     });
     const refusal = refuseMisaddressed(orderVersion, misaddressedEvent, null);
@@ -153,7 +153,7 @@ describe('whether the event, the handler and the record agree', () => {
 
   it('admits one agreeing with the record on every count', () => {
     const state = buildState();
-    const answerEvent = cloneArvoEvent(chargedEvent, {
+    const answerEvent = mutateArvoEvent(chargedEvent, {
       to: orderVersion.type,
       executionid: state.executionId,
       subject: state.subject,
@@ -163,7 +163,7 @@ describe('whether the event, the handler and the record agree', () => {
 
   it('refuses one answering a different execution', () => {
     const state = buildState();
-    const strayEvent = cloneArvoEvent(chargedEvent, {
+    const strayEvent = mutateArvoEvent(chargedEvent, {
       to: orderVersion.type,
       parentid: initEvent.id,
       executionid: 'somewhere-else',
@@ -179,7 +179,7 @@ describe('whether the event, the handler and the record agree', () => {
 
   it('refuses one from a different workflow', () => {
     const state = buildState();
-    const strayEvent = cloneArvoEvent(chargedEvent, {
+    const strayEvent = mutateArvoEvent(chargedEvent, {
       to: orderVersion.type,
       parentid: initEvent.id,
       executionid: state.executionId,
@@ -193,7 +193,7 @@ describe('whether the event, the handler and the record agree', () => {
 
   it('refuses a record naming a contract this handler does not implement', () => {
     const state = buildState({ source: 'com_something_else' });
-    const answerEvent = cloneArvoEvent(chargedEvent, {
+    const answerEvent = mutateArvoEvent(chargedEvent, {
       to: orderVersion.type,
       executionid: state.executionId,
       subject: state.subject,
@@ -206,7 +206,7 @@ describe('whether the event, the handler and the record agree', () => {
 
   it('reports every disagreement together, not merely the first', () => {
     const state = buildState({ source: 'com_something_else' });
-    const strayEvent = cloneArvoEvent(chargedEvent, {
+    const strayEvent = mutateArvoEvent(chargedEvent, {
       to: 'com.somewhere.else',
       parentid: initEvent.id,
       executionid: 'somewhere-else',
@@ -227,12 +227,12 @@ describe('whether a response was awaited', () => {
     });
 
   it('admits one answering an outstanding request', () => {
-    const answer = cloneArvoEvent(chargedEvent, { initid: 'charge-request' });
+    const answer = mutateArvoEvent(chargedEvent, { initid: 'charge-request' });
     expect(refuseUnawaited(stateAwaiting(null), answer)).toBeNull();
   });
 
   it('refuses one naming no request', () => {
-    const unaddressedEvent = cloneArvoEvent(chargedEvent, {
+    const unaddressedEvent = mutateArvoEvent(chargedEvent, {
       initid: null as never,
     });
     expect(
@@ -241,7 +241,7 @@ describe('whether a response was awaited', () => {
   });
 
   it('says a reply must name what it answers, where it names nothing', () => {
-    const unaddressedEvent = cloneArvoEvent(chargedEvent, {
+    const unaddressedEvent = mutateArvoEvent(chargedEvent, {
       initid: null as never,
     });
     const refusal = refuseUnawaited(stateAwaiting(null), unaddressedEvent);
@@ -250,7 +250,7 @@ describe('whether a response was awaited', () => {
   });
 
   it('refuses one naming a request never made', () => {
-    const strangerEvent = cloneArvoEvent(chargedEvent, {
+    const strangerEvent = mutateArvoEvent(chargedEvent, {
       initid: 'never-asked',
     });
     const refusal = refuseUnawaited(stateAwaiting(null), strangerEvent);
@@ -259,7 +259,7 @@ describe('whether a response was awaited', () => {
   });
 
   it('refuses a second answer to one already answered', () => {
-    const answer = cloneArvoEvent(chargedEvent, { initid: 'charge-request' });
+    const answer = mutateArvoEvent(chargedEvent, { initid: 'charge-request' });
     const refusal = refuseUnawaited(stateAwaiting(answer), answer);
     expect(refusal?.message).toContain('already has an answer');
   });

@@ -5,7 +5,7 @@ import type { ArvoHandlerFault } from '../../../../src/ArvoEventHandler/fault/in
 import { deriveArvoExecutionId } from '../../../../src/ArvoEventHandler/helpers/execution-id.js';
 import type { ArvoEventHandlerExecuteResponse } from '../../../../src/ArvoEventHandler/types/execute.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../../src/factories/mutateArvoEvent.js';
 import { heldDependencies } from '../../dependency.js';
 import {
   type AuditContext,
@@ -34,7 +34,7 @@ const executionTelemetry = () =>
   });
 
 const anOrder = (overrides: Record<string, unknown> = {}) =>
-  cloneArvoEvent(
+  mutateArvoEvent(
     createArvoEventFactory(orderV1).createInput({
       source: 'com.web.checkout',
       subject: 'order-1',

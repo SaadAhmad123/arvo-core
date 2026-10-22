@@ -5,8 +5,8 @@ import { ArvoContract } from '../../src/ArvoContract/index.js';
 import { ArvoDomain } from '../../src/ArvoDomain/index.js';
 import { ArvoEvent } from '../../src/ArvoEvent/index.js';
 import { createArvoEventFactory } from '../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../src/factories/cloneArvoEvent.js';
 import { createArvoEvent } from '../../src/factories/createArvoEvent.js';
+import { mutateArvoEvent } from '../../src/factories/mutateArvoEvent.js';
 
 /**
  * Every field an event has, so nothing a caller may pass goes unexercised.
@@ -240,7 +240,7 @@ describe('cloneArvoEvent, replacing every field', () => {
     data: { items: [] },
   });
 
-  const clonedEvent = cloneArvoEvent(originalEvent, {
+  const clonedEvent = mutateArvoEvent(originalEvent, {
     ...allFieldValues,
     domain: 'orders_priority',
     data: { items: ['replaced'] },

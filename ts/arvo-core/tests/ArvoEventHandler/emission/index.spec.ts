@@ -8,7 +8,7 @@ import { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/inde
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
 import { createInitArvoExecutionState } from '../../../src/ArvoEventHandler/state/factory.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import {
   initEvent,
   orderVersion,
@@ -310,7 +310,7 @@ describe('which processing path an emitted event takes', () => {
 
   /** An execution of the domained contract, triggered by a domained event. */
   const reviewingContext = () => {
-    const triggeringEvent = cloneArvoEvent(initEvent, {
+    const triggeringEvent = mutateArvoEvent(initEvent, {
       dataschema: reviewedOrder.dataschema,
       domain: 'inherited',
     });

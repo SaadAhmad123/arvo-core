@@ -6,8 +6,8 @@ import type { ArvoHandlerFault } from '../../../../src/ArvoEventHandler/fault/in
 import type { ArvoFaultKind } from '../../../../src/ArvoEventHandler/fault/types.js';
 import { deriveArvoExecutionId } from '../../../../src/ArvoEventHandler/helpers/execution-id.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
 import { createArvoEvent } from '../../../../src/factories/createArvoEvent.js';
+import { mutateArvoEvent } from '../../../../src/factories/mutateArvoEvent.js';
 import type { JSONObject } from '../../../../src/types.js';
 import { heldDependencies, openedPerExecution } from '../../dependency.js';
 import {
@@ -129,7 +129,7 @@ const answerTo = (
   executionId: string,
   overrides: Record<string, unknown> = {},
 ) =>
-  cloneArvoEvent(
+  mutateArvoEvent(
     createArvoEventFactory(inventoryV1).createOutput({
       type: 'evt_inventory_reserved',
       source: inventoryV1.type,
@@ -190,7 +190,7 @@ describe('what refuses an execution on the way in', () => {
   });
 
   it('an event arriving deeper than the version allows', async () => {
-    const deepEvent = cloneArvoEvent(anOrder(), {
+    const deepEvent = mutateArvoEvent(anOrder(), {
       depth: 3,
       parentid: 'something-above',
     });
@@ -228,7 +228,7 @@ describe('what refuses an execution on the way in', () => {
   });
 
   it('an execution that has outlived the time it is allowed', async () => {
-    const staleEvent = cloneArvoEvent(anOrder(), {
+    const staleEvent = mutateArvoEvent(anOrder(), {
       time: new Date(Date.now() - 60_000).toISOString(),
     });
     const fault = await runToFault(
@@ -357,7 +357,7 @@ describe('what refuses an execution once its executor has run', () => {
         type: 'com_payment_charge',
         data: { amount: 1 },
       });
-      return cloneArvoEvent(chargeRequest, {
+      return mutateArvoEvent(chargeRequest, {
         data: { amount: 'free' } as never,
       });
     });

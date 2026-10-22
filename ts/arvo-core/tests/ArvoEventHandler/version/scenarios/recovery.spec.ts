@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ArvoDomain } from '../../../../src/ArvoDomain/index.js';
 import type { ArvoEvent } from '../../../../src/ArvoEvent/index.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../../src/factories/mutateArvoEvent.js';
 import {
   declareVersions,
   type OrderContext,
@@ -290,7 +290,7 @@ describe('a workflow nobody is coming back for', () => {
     // an operator, a week later, with nothing of the original process
     // left alive: the record and the request's id are the whole of what
     // resuming it takes
-    const operatorDecision = cloneArvoEvent(
+    const operatorDecision = mutateArvoEvent(
       createArvoEventFactory(reviewV1).createOutput({
         type: 'evt_review_decided',
         source: 'com.ops.console',
@@ -342,7 +342,7 @@ describe('a workflow nobody is coming back for', () => {
     }
 
     resumingLattice.inject(
-      cloneArvoEvent(
+      mutateArvoEvent(
         createArvoEventFactory(reviewV1).createOutput({
           type: 'evt_review_decided',
           source: reviewV1.type,
@@ -394,7 +394,7 @@ describe('a workflow nobody is coming back for', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 60));
     lattice.inject(
-      cloneArvoEvent(
+      mutateArvoEvent(
         createArvoEventFactory(reviewV1).createOutput({
           type: 'evt_review_decided',
           source: reviewV1.type,

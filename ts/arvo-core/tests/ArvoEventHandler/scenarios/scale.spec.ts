@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import {
   declareHandler,
   fulfilContract,
@@ -119,7 +119,7 @@ describe('the boundaries, where an off-by-one would live', () => {
   it('refuses a dataschema with no version to read', async () => {
     const handler = declareHandler();
     const refusal = await handler.tryExecute({
-      event: cloneArvoEvent(openingEvent('1.0.0', 'order-1'), {
+      event: mutateArvoEvent(openingEvent('1.0.0', 'order-1'), {
         dataschema: 'nothing-separable',
       }),
       state: new ScenarioStore().resolver,
@@ -170,7 +170,7 @@ describe('payloads chosen to be awkward', () => {
 
   it('refuses a type that is a property every object has', async () => {
     const refusal = await handler.tryExecute({
-      event: cloneArvoEvent(openingEvent('1.0.0', 'order-1'), {
+      event: mutateArvoEvent(openingEvent('1.0.0', 'order-1'), {
         type: 'constructor',
       }),
       state: freshStore().resolver,
@@ -209,7 +209,7 @@ describe('payloads chosen to be awkward', () => {
   it('refuses a version named for a property every object inherits', async () => {
     for (const craftedName of ['__proto__', 'constructor', 'toString']) {
       const refusal = await handler.tryExecute({
-        event: cloneArvoEvent(openingEvent('1.0.0', 'order-1'), {
+        event: mutateArvoEvent(openingEvent('1.0.0', 'order-1'), {
           dataschema: `${fulfilContract.uri}/${craftedName}`,
         }),
         state: freshStore().resolver,
@@ -225,7 +225,7 @@ describe('payloads chosen to be awkward', () => {
   it('refuses a type named for one, rather than finding what it inherits', async () => {
     for (const craftedName of ['constructor', 'toString', 'valueOf']) {
       const refusal = await handler.tryExecute({
-        event: cloneArvoEvent(openingEvent('1.0.0', 'order-1'), {
+        event: mutateArvoEvent(openingEvent('1.0.0', 'order-1'), {
           type: craftedName,
         }),
         state: freshStore().resolver,
@@ -250,7 +250,7 @@ describe('payloads chosen to be awkward', () => {
     const committedStore = new ScenarioStore();
     committedStore.commit(openingOutcome.state);
 
-    const craftedAnswer = cloneArvoEvent(
+    const craftedAnswer = mutateArvoEvent(
       createArvoEventFactory(inventoryV1).createOutput({
         type: 'evt_inventory_reserved',
         source: inventoryV1.type,

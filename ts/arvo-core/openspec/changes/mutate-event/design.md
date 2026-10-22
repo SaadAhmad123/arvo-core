@@ -66,15 +66,13 @@ export const tryMutateArvoEvent = <
 
 Where the mutation gives no `type` or `data`, there is nothing to infer `TType` or `TData` from, so each falls back to its default, the original's `T` and `D`. Where it gives one, it is inferred from it; `const` keeps a `type` as its literal string rather than widening it to `string`.
 
-### 6. `cloneArvoEvent` becomes a thin wrapper over the mutation
+### 6. `cloneArvoEvent` becomes a pure copy over the mutation
 
-Clone and mutation carry the same fields, take the same input, treat `undefined` the same, and resolve trace context by the same precedence. Two implementations of one job is the two-mechanisms problem `project.md` warns against, so `tryCloneArvoEvent` becomes one line over `tryMutateArvoEvent`, with its own type parameters for both the event's and the result's types: `tryMutateArvoEvent<T, D, T, D>(event, overrides ?? {})`. `cloneArvoEvent` keeps unwrapping `tryCloneArvoEvent`.
+Clone and mutation with replacements were one operation under two names, which is the two-mechanisms problem `project.md` warns against, and the second name invited the misuse this change exists to end: cloning an event to carry it forward and giving it a new `id`. So cloning narrows to what its name says. `tryCloneArvoEvent(event)` is `tryMutateArvoEvent<T, D, T, D>(event, {})`, and `cloneArvoEvent` unwraps it. Replacing anything is a mutation.
 
-What stays: clone's public signature, unchanged, so no caller is broken; its TSDoc, which tells a caller to give a clone sent alongside its source a new `id` — the one thing that makes a clone a clone; and every existing clone test.
+What stays: the `try` / plain pair, as every builder has; the result typed as the source; the TSDoc's guidance that a copy sent alongside its source needs a new `id`, now pointing at the mutation as the way to give it one. What goes: the replacements parameter, the cast, the private trace helper. A copy of a valid event cannot fail for any input a caller can supply, so the pair's `Err` is reachable only through the constructor's own validation of a value that is not a well-formed event.
 
-What goes: the cast in `tryCloneArvoEvent`, and its private trace-resolution helper.
-
-What changes: one edge. A span whose context carries no valid trace now leaves the clone's trace headers as its source's, where before it wrote an all-zero header into the clone. The spec's trace-context requirement for a clone is modified to say so. A `null` passed by an untyped caller to clear a field still reaches the validator and still clears it, as before.
+**Alternative considered:** keeping clone with replacements as a thin wrapper, differing from the mutation only in its result type. Rejected: two names for one behaviour, and the name that means "another event" is the one that gets reached for to carry the same event forward.
 
 ### 7. Documented as an advanced capability
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import { declareWalker, walkContract, walkV1 } from './fixture.js';
 import { ScenarioStore } from './store.js';
 
@@ -158,7 +158,7 @@ describe('an event that is neither a request nor a reply', () => {
     if (parent.kind !== 'produced') throw new Error('nothing was asked');
     store.commit(parent.state);
 
-    const unplaceableEvent = cloneArvoEvent(parent.events[0] as never, {
+    const unplaceableEvent = mutateArvoEvent(parent.events[0] as never, {
       type: 'evt_nothing_declared',
     });
     const refusal = await walker.tryExecute({

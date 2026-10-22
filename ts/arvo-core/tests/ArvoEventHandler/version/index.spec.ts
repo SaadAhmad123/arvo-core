@@ -12,7 +12,7 @@ import type {
 } from '../../../src/ArvoEventHandler/types/supplied.js';
 import { ArvoEventHandlerVersion } from '../../../src/ArvoEventHandler/version/index.js';
 import type { ArvoEventHandlerVersionParam } from '../../../src/ArvoEventHandler/version/types.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import type { JSONObject } from '../../../src/types.js';
 import { heldDependencies, openedPerExecution } from '../dependency.js';
 import {
@@ -93,7 +93,7 @@ const answerTo = (
   request: ArvoEvent,
   overrides: Record<string, unknown> = {},
 ) =>
-  cloneArvoEvent(chargedEvent, {
+  mutateArvoEvent(chargedEvent, {
     to: orderVersion.type,
     subject: initEvent.subject,
     executionid: EXECUTION_ID,
@@ -207,7 +207,7 @@ describe('opening an execution', () => {
   });
 
   it('tells the caller but stores nothing, where it is refused on the way in', async () => {
-    const misaddressedEvent = cloneArvoEvent(initEvent, {
+    const misaddressedEvent = mutateArvoEvent(initEvent, {
       to: 'com.somewhere.else',
     });
     const fault = await faultFrom(open({ event: misaddressedEvent }));
@@ -534,7 +534,7 @@ describe('what an execution may not do on the way in', () => {
     const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, maxDepth: 1 },
     });
-    const deepEvent = cloneArvoEvent(initEvent, {
+    const deepEvent = mutateArvoEvent(initEvent, {
       depth: 1,
       parentid: 'something-above',
     });
@@ -543,7 +543,7 @@ describe('what an execution may not do on the way in', () => {
   });
 
   it('may not arrive addressed somewhere else', async () => {
-    const misaddressedEvent = cloneArvoEvent(initEvent, {
+    const misaddressedEvent = mutateArvoEvent(initEvent, {
       to: 'com.somewhere.else',
     });
     const fault = await faultFrom(open({ event: misaddressedEvent }));
@@ -554,7 +554,7 @@ describe('what an execution may not do on the way in', () => {
     const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, executionTimeout: 1 },
     });
-    const staleEvent = cloneArvoEvent(initEvent, {
+    const staleEvent = mutateArvoEvent(initEvent, {
       time: new Date(Date.now() - 60_000).toISOString(),
     });
     const fault = await faultFrom(open({ event: staleEvent }, version));
@@ -582,7 +582,7 @@ describe('what an executor may not return', () => {
           type: 'com_order_created',
           data: { order_id: 'o-1' },
         });
-        return [answer, cloneArvoEvent(answer, { id: 'a-second-answer' })];
+        return [answer, mutateArvoEvent(answer, { id: 'a-second-answer' })];
       },
     });
     const fault = await faultFrom(open({}, version));
@@ -779,7 +779,7 @@ describe('an executor that does not come back', () => {
       },
       execute: () => new Promise(() => undefined),
     });
-    const recentEvent = cloneArvoEvent(initEvent, {
+    const recentEvent = mutateArvoEvent(initEvent, {
       time: new Date(Date.now() - 50).toISOString(),
     });
     const fault = await faultFrom(open({ event: recentEvent }, version));
@@ -829,7 +829,7 @@ describe('what the clocks say when an executor returns', () => {
         await new Promise((resolve) => setTimeout(resolve, 30));
       },
     });
-    const partwayEvent = cloneArvoEvent(initEvent, {
+    const partwayEvent = mutateArvoEvent(initEvent, {
       time: new Date(Date.now() - 40).toISOString(),
     });
     const fault = await faultFrom(open({ event: partwayEvent }, version));
@@ -870,7 +870,7 @@ describe('what the clocks say when an executor returns', () => {
         await new Promise((resolve) => setTimeout(resolve, 40));
       },
     });
-    const recentEvent = cloneArvoEvent(initEvent, {
+    const recentEvent = mutateArvoEvent(initEvent, {
       time: new Date(Date.now() - 50).toISOString(),
     });
     const fault = await faultFrom(open({ event: recentEvent }, version));
@@ -916,7 +916,7 @@ describe('what one execution records as it goes', () => {
 
   it('stops at the stage that refused it, so a reader sees how far it got', async () => {
     const telemetrySpy = watchingTelemetry();
-    const misaddressedEvent = cloneArvoEvent(initEvent, {
+    const misaddressedEvent = mutateArvoEvent(initEvent, {
       to: 'com.somewhere.else',
     });
     await faultFrom(
@@ -1085,7 +1085,7 @@ describe('what a fault tells whoever has to fix it', () => {
     const version = declareVersion({
       options: { ...ARVO_DEFAULT_HANDLER_OPTIONS, executionTimeout: 1 },
     });
-    const staleEvent = cloneArvoEvent(initEvent, {
+    const staleEvent = mutateArvoEvent(initEvent, {
       time: new Date(Date.now() - 60_000).toISOString(),
     });
     const fault = await faultFrom(open({ event: staleEvent }, version));

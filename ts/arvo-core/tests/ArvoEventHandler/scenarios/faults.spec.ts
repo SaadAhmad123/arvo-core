@@ -3,7 +3,7 @@ import type { ArvoEvent } from '../../../src/ArvoEvent/index.js';
 import type { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import type { ArvoEventHandlerExecuteParam } from '../../../src/ArvoEventHandler/types/execute.js';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import type { JSONObject } from '../../../src/types.js';
 import { heldDependencies, openedPerExecution } from '../dependency.js';
 import {
@@ -128,7 +128,7 @@ describe('an event naming a contract nothing declared', () => {
 describe('an event naming a version nothing declares', () => {
   it('is event_unclassifiable rather than anything about its type', async () => {
     const { fault } = await runToFault({
-      event: cloneArvoEvent(anOrder(), {
+      event: mutateArvoEvent(anOrder(), {
         dataschema: `${fulfilContract.uri}/9.9.9`,
       }),
     });
@@ -163,7 +163,7 @@ describe('a service answering at a version this handler did not declare', () => 
 
 describe('an event whose stated role contradicts what it was placed as', () => {
   const miscategorisedEvent = () =>
-    cloneArvoEvent(anOrder(), {
+    mutateArvoEvent(anOrder(), {
       category: 'io.arvo.complete',
       initid: 'a-request-somewhere-else',
     });
@@ -354,7 +354,7 @@ describe('an execution at a version the handler no longer runs', () => {
 describe('an event the contract it named cannot send here', () => {
   it('is type_not_receivable for a type it never takes in', async () => {
     const { fault } = await runToFault({
-      event: cloneArvoEvent(anOrder(), { type: 'evt_order_fulfilled' }),
+      event: mutateArvoEvent(anOrder(), { type: 'evt_order_fulfilled' }),
     });
     expect(fault.faultKind).toBe('type_not_receivable');
     expect(fault.retry).toBeNull();
@@ -362,7 +362,7 @@ describe('an event the contract it named cannot send here', () => {
 
   it('is event_schema_rejected for a payload its schema refuses', async () => {
     const { fault } = await runToFault({
-      event: cloneArvoEvent(anOrder(), {
+      event: mutateArvoEvent(anOrder(), {
         data: { items: [7] as unknown as string[] },
       }),
     });
@@ -371,7 +371,7 @@ describe('an event the contract it named cannot send here', () => {
 
   it('names every part of the payload that was wrong, not only the first', async () => {
     const { fault } = await runToFault({
-      event: cloneArvoEvent(anOrder(), {
+      event: mutateArvoEvent(anOrder(), {
         data: { items: [7, 8] as unknown as string[] },
       }),
     });
@@ -380,7 +380,7 @@ describe('an event the contract it named cannot send here', () => {
 
   it('can still tell the caller, an opening event naming where it came from', async () => {
     const { fault } = await runToFault({
-      event: cloneArvoEvent(anOrder(), {
+      event: mutateArvoEvent(anOrder(), {
         data: { items: [7] as unknown as string[] },
       }),
     });
@@ -397,7 +397,7 @@ describe('what every refusal has in common', () => {
         new ScenarioStore().misbehave({ kind: 'unreachable' }),
       ),
       await runToFault({
-        event: cloneArvoEvent(anOrder(), { type: 'evt_order_fulfilled' }),
+        event: mutateArvoEvent(anOrder(), { type: 'evt_order_fulfilled' }),
       }),
       await runToFault(
         { event: execution.order },
@@ -475,7 +475,7 @@ describe('what the handler passes through from the version unaltered', () => {
     // this contract and addressed elsewhere is placed and then refused
     // for disagreeing about where it was going
     const { fault } = await runToFault({
-      event: cloneArvoEvent(anOrder(), { to: 'com_somebody_else' }),
+      event: mutateArvoEvent(anOrder(), { to: 'com_somebody_else' }),
     });
     expect(fault.faultKind).toBe('addressing_mismatch');
     expect(fault.violations.join(' ')).toContain('com_somebody_else');
