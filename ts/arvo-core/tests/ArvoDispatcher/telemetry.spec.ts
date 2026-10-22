@@ -1,4 +1,4 @@
-import { SpanStatusCode } from '@opentelemetry/api';
+import { metrics as metricsApi, SpanStatusCode } from '@opentelemetry/api';
 import {
   InMemorySpanExporter,
   type ReadableSpan,
@@ -12,6 +12,11 @@ import { ArvoHandlerFault } from '../../src/ArvoEventHandler/fault/index.js';
 import { ArvoEventHandler } from '../../src/ArvoEventHandler/index.js';
 import { fromNeverthrow } from '../../src/result.js';
 import {
+  recordingLogger,
+  recordingProvider,
+  unregisterProviders,
+} from '../recording-provider.js';
+import {
   CALLER_TRACEPARENT,
   DISPATCHER_SPAN,
   fakeStore,
@@ -21,6 +26,7 @@ import {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  unregisterProviders();
 });
 
 /** A dispatcher and its handler, both recording into one in-memory exporter. */
@@ -31,23 +37,27 @@ const traced = () => {
   });
   const tracer = provider.getTracer('dispatcher-test');
   const order = orderHandlerUnderTest();
-  const dispatcher = new ArvoDispatcher({
-    handlers: [order],
-    telemetry: { tracer },
-  });
+  const dispatcher = new ArvoDispatcher({ handlers: [order] });
   const run = (event = orderRequest({ traceparent: CALLER_TRACEPARENT })) =>
-    dispatcher.tryExecute({ event, state: fakeStore().read(), attempt: 0 });
-  const finished = () => exporter.getFinishedSpans();
+    dispatcher.tryExecute({
+      event,
+      state: fakeStore().read(),
+      attempt: 0,
+      telemetry: { tracer },
+    });
+  const finishedSpans = () => exporter.getFinishedSpans();
   const dispatcherSpan = (): ReadableSpan => {
-    const spans = finished().filter((span) => span.name === DISPATCHER_SPAN);
+    const spans = finishedSpans().filter(
+      (span) => span.name === DISPATCHER_SPAN,
+    );
     if (spans.length !== 1) {
       throw new Error(`expected one dispatcher span, found ${spans.length}`);
     }
     return spans[0] as ReadableSpan;
   };
   const handlerSpan = (): ReadableSpan | undefined =>
-    finished().find((span) => span.name !== DISPATCHER_SPAN);
-  return { dispatcher, run, finished, dispatcherSpan, handlerSpan };
+    finishedSpans().find((span) => span.name !== DISPATCHER_SPAN);
+  return { dispatcher, run, finishedSpans, dispatcherSpan, handlerSpan };
 };
 
 const handlerFault = () =>
@@ -115,38 +125,44 @@ describe('a dispatcher’s span', () => {
 
   it('enters the handler with a copy naming its span, every other field the event’s', async () => {
     const { run, dispatcherSpan } = traced();
-    const entered = vi.spyOn(ArvoEventHandler.prototype, 'tryExecute');
-    const given = orderRequest({ traceparent: CALLER_TRACEPARENT });
-    await run(given);
-    const received = entered.mock.calls[0]?.[0].event;
-    expect(received?.traceparent).toContain(
+    const handlerExecuteSpy = vi.spyOn(
+      ArvoEventHandler.prototype,
+      'tryExecute',
+    );
+    const deliveredEvent = orderRequest({ traceparent: CALLER_TRACEPARENT });
+    await run(deliveredEvent);
+    const eventReceivedByHandler = handlerExecuteSpy.mock.calls[0]?.[0].event;
+    expect(eventReceivedByHandler?.traceparent).toContain(
       dispatcherSpan().spanContext().spanId,
     );
-    expect(received?.id).toBe(given.id);
-    expect(received?.subject).toBe(given.subject);
-    expect(received?.data).toEqual(given.data);
-    expect(received?.time).toBe(given.time);
+    expect(eventReceivedByHandler?.id).toBe(deliveredEvent.id);
+    expect(eventReceivedByHandler?.subject).toBe(deliveredEvent.subject);
+    expect(eventReceivedByHandler?.data).toEqual(deliveredEvent.data);
+    expect(eventReceivedByHandler?.time).toBe(deliveredEvent.time);
   });
 
   it('leaves the event it was given unchanged', async () => {
     const { run } = traced();
-    const given = orderRequest({ traceparent: CALLER_TRACEPARENT });
-    const before = given.toString();
-    await run(given);
-    expect(given.toString()).toBe(before);
+    const deliveredEvent = orderRequest({ traceparent: CALLER_TRACEPARENT });
+    const serializedBeforeTheCall = deliveredEvent.toString();
+    await run(deliveredEvent);
+    expect(deliveredEvent.toString()).toBe(serializedBeforeTheCall);
   });
 
   it('enters the handler with the event itself where its span is not recording', async () => {
     // no SDK is registered globally, so the default tracer's spans do not record
     const order = orderHandlerUnderTest();
-    const entered = vi.spyOn(ArvoEventHandler.prototype, 'tryExecute');
-    const given = orderRequest({ traceparent: CALLER_TRACEPARENT });
+    const handlerExecuteSpy = vi.spyOn(
+      ArvoEventHandler.prototype,
+      'tryExecute',
+    );
+    const deliveredEvent = orderRequest({ traceparent: CALLER_TRACEPARENT });
     await new ArvoDispatcher({ handlers: [order] }).tryExecute({
-      event: given,
+      event: deliveredEvent,
       state: fakeStore().read(),
       attempt: 0,
     });
-    expect(entered.mock.calls[0]?.[0].event).toBe(given);
+    expect(handlerExecuteSpy.mock.calls[0]?.[0].event).toBe(deliveredEvent);
   });
 
   it('returns the handler’s events with the handler’s trace context', async () => {
@@ -229,5 +245,159 @@ describe('the status of a dispatcher’s span', () => {
     await expect(run()).rejects.toBe('a bare string');
     expect(exceptionsOn(dispatcherSpan())).toHaveLength(1);
     expect(dispatcherSpan().status.message).toContain('a bare string');
+  });
+});
+
+describe('where a dispatcher records, given with each call', () => {
+  const orderDispatcher = () =>
+    new ArvoDispatcher({ handlers: [orderHandlerUnderTest()] });
+
+  const enterDispatcher = (
+    dispatcher: ReturnType<typeof orderDispatcher>,
+    telemetry?: Parameters<typeof dispatcher.tryExecute>[0]['telemetry'],
+    event = orderRequest(),
+  ) =>
+    dispatcher.tryExecute({
+      event,
+      state: fakeStore().read(),
+      attempt: 0,
+      ...(telemetry === undefined ? {} : { telemetry }),
+    });
+
+  const spansByKind = (spans: ReadableSpan[]) => ({
+    dispatcher: spans.filter((span) => span.name === DISPATCHER_SPAN),
+    handler: spans.filter((span) => span.name !== DISPATCHER_SPAN),
+  });
+
+  it('starts its span and the handler’s on the tracer given with the call', async () => {
+    const spanRecorder = recordingProvider();
+    await enterDispatcher(orderDispatcher(), { tracer: spanRecorder.tracer });
+    const spans = spansByKind(spanRecorder.finishedSpans());
+    expect(spans.dispatcher).toHaveLength(1);
+    expect(spans.handler).toHaveLength(1);
+  });
+
+  it('records both through the provider registered at the call where none is given', async () => {
+    const spanRecorder = recordingProvider();
+    spanRecorder.registerAsAnApplicationWould();
+    await enterDispatcher(orderDispatcher());
+    const spans = spansByKind(spanRecorder.finishedSpans());
+    expect(spans.dispatcher).toHaveLength(1);
+    expect(spans.handler).toHaveLength(1);
+  });
+
+  it('records both through a provider registered after the dispatcher was built', async () => {
+    const dispatcher = orderDispatcher();
+    const spanRecorder = recordingProvider();
+    spanRecorder.registerAsAnApplicationWould();
+    await enterDispatcher(dispatcher);
+    const spans = spansByKind(spanRecorder.finishedSpans());
+    expect(spans.dispatcher).toHaveLength(1);
+    expect(spans.handler[0]?.parentSpanContext?.spanId).toBe(
+      spans.dispatcher[0]?.spanContext().spanId,
+    );
+  });
+
+  it('enters the handler with telemetry where none was given', async () => {
+    const handlerExecuteSpy = vi.spyOn(
+      ArvoEventHandler.prototype,
+      'tryExecute',
+    );
+    await enterDispatcher(orderDispatcher());
+    const telemetryGivenToHandler =
+      handlerExecuteSpy.mock.calls[0]?.[0].telemetry;
+    expect(telemetryGivenToHandler?.tracer).toBeDefined();
+    expect(telemetryGivenToHandler?.meter).toBeNull();
+    expect(telemetryGivenToHandler?.logger).toBeNull();
+  });
+
+  it('enters the handler with the very tracer, meter and logger it was given', async () => {
+    const handlerExecuteSpy = vi.spyOn(
+      ArvoEventHandler.prototype,
+      'tryExecute',
+    );
+    const spanRecorder = recordingProvider();
+    const logger = recordingLogger();
+    const meter = metricsApi.getMeter('given');
+    await enterDispatcher(orderDispatcher(), {
+      tracer: spanRecorder.tracer,
+      meter,
+      logger,
+    });
+    const telemetryGivenToHandler =
+      handlerExecuteSpy.mock.calls[0]?.[0].telemetry;
+    expect(telemetryGivenToHandler?.tracer).toBe(spanRecorder.tracer);
+    expect(telemetryGivenToHandler?.meter).toBe(meter);
+    expect(telemetryGivenToHandler?.logger).toBe(logger);
+  });
+
+  it('fills what was not given with none, and passes on what it resolved', async () => {
+    const handlerExecuteSpy = vi.spyOn(
+      ArvoEventHandler.prototype,
+      'tryExecute',
+    );
+    const spanRecorder = recordingProvider();
+    await enterDispatcher(orderDispatcher(), { tracer: spanRecorder.tracer });
+    expect(handlerExecuteSpy.mock.calls[0]?.[0].telemetry).toEqual({
+      tracer: spanRecorder.tracer,
+      meter: null,
+      logger: null,
+    });
+  });
+
+  it('starts each call’s spans on its own tracer, and neither on the other’s', async () => {
+    const dispatcher = orderDispatcher();
+    const providerForOrderOne = recordingProvider();
+    const providerForOrderTwo = recordingProvider();
+    await enterDispatcher(
+      dispatcher,
+      { tracer: providerForOrderOne.tracer },
+      orderRequest({ subject: 'order-1' }),
+    );
+    await enterDispatcher(
+      dispatcher,
+      { tracer: providerForOrderTwo.tracer },
+      orderRequest({ subject: 'order-2' }),
+    );
+    const subjectsRecordedBy = (
+      provider: ReturnType<typeof recordingProvider>,
+    ) =>
+      spansByKind(provider.finishedSpans()).handler.map(
+        (span) => span.attributes['arvo.subject'],
+      );
+    expect(subjectsRecordedBy(providerForOrderOne)).toEqual(['order-1']);
+    expect(subjectsRecordedBy(providerForOrderTwo)).toEqual(['order-2']);
+    expect(
+      spansByKind(providerForOrderOne.finishedSpans()).dispatcher,
+    ).toHaveLength(1);
+    expect(
+      spansByKind(providerForOrderTwo.finishedSpans()).dispatcher,
+    ).toHaveLength(1);
+  });
+
+  it('records a miss on the tracer given with the call', async () => {
+    const spanRecorder = recordingProvider();
+    await enterDispatcher(
+      orderDispatcher(),
+      { tracer: spanRecorder.tracer },
+      orderRequest({ to: 'com_nowhere' }),
+    );
+    const [missSpan] = spansByKind(spanRecorder.finishedSpans()).dispatcher;
+    expect(missSpan?.status.code).toBe(SpanStatusCode.ERROR);
+  });
+
+  it('ignores telemetry named in a declaration by code no type checker saw', async () => {
+    const spanRecorder = recordingProvider();
+    const declaration = {
+      handlers: [orderHandlerUnderTest()],
+      telemetry: { tracer: spanRecorder.tracer },
+    };
+    // deliberately invalid: a declaration naming telemetry, as untyped code could write
+    await new ArvoDispatcher(declaration).tryExecute({
+      event: orderRequest(),
+      state: fakeStore().read(),
+      attempt: 0,
+    });
+    expect(spanRecorder.finishedSpans()).toEqual([]);
   });
 });

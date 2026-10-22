@@ -1,4 +1,3 @@
-import type { ArvoTelemetryParam } from '../ArvoEventHandler/context/telemetry/resolve.js';
 import type { ArvoEventHandlerExecuteParam } from '../ArvoEventHandler/types/execute.js';
 import type { ArvoEventHandlerMiddlewareEntry } from '../ArvoEventHandler/types/middleware.js';
 import type { ArvoNone } from '../ArvoEventHandler/types/supplied.js';
@@ -38,21 +37,34 @@ export type ArvoDispatcherOptions<
    * or dispatchers whose layers are taken at that position. Omit for none.
    */
   middlewares?: readonly ArvoDispatcherMiddlewareMember[];
-  /** Where the dispatcher's own span, counter and log are written. */
-  telemetry?: ArvoTelemetryParam;
 };
 
 /**
  * What a dispatcher is entered with: what a handler is entered with, less
  * layers. `dependencies` holds one entry per handler, keyed by its self
  * contract `type`; `hooks` is one value every handler can accept.
+ *
+ * `telemetry` is resolved once, when the call begins, as a handler resolves
+ * it: as given, or otherwise the default. The dispatcher records with it and
+ * always enters the handler with that same resolved telemetry, so the handler
+ * takes no default of its own. Nothing is kept for the next call.
+ *
+ * @example
+ * ```typescript
+ * const param: ArvoDispatcherExecuteParam<typeof handlers> = {
+ *   event,
+ *   state,
+ *   attempt: 0,
+ *   telemetry: { tracer, logger },
+ * };
+ * ```
  */
 export type ArvoDispatcherExecuteParam<
   THandlers extends
     readonly ArvoAnyEventHandler[] = readonly ArvoAnyEventHandler[],
 > = Pick<
   ArvoEventHandlerExecuteParam<ArvoNone, ArvoNone>,
-  'event' | 'state' | 'attempt'
+  'event' | 'state' | 'attempt' | 'telemetry'
 > & {
   dependencies?: DependenciesOf<THandlers>;
   hooks?: HooksOf<THandlers>;

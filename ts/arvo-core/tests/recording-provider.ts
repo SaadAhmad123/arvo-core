@@ -32,7 +32,7 @@ export const recordingProvider = () => {
   return {
     provider,
     tracer: provider.getTracer('test'),
-    finished: (): ReadableSpan[] => exporter.getFinishedSpans(),
+    finishedSpans: (): ReadableSpan[] => exporter.getFinishedSpans(),
     /** Registers the provider globally, as an SDK loaded through `require` does. */
     registerAsAnApplicationWould: () => {
       requiredApi.trace.setGlobalTracerProvider(provider);

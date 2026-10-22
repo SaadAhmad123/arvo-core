@@ -154,7 +154,7 @@ export type ArvoEventHandlerExecuteParam<
    *
    * @example
    * ```typescript
-   * await handler.execute({ event, state, attempt: 0, telemetry: { tracer, logger } });
+   * telemetry: { tracer, logger }
    * ```
    */
   telemetry?: ArvoTelemetryParam;

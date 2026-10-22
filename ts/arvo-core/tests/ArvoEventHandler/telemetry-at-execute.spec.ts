@@ -29,111 +29,123 @@ const anOrder = (subject = 'order-1') =>
     data: { items: ['book'] },
   });
 
-const noRecord = () => (): JSONObject | null => null;
+const noStoredRecord = () => (): JSONObject | null => null;
 
 const executionSpans = (
-  finished: ReturnType<ReturnType<typeof recordingProvider>['finished']>,
-) => finished.filter((span) => span.name === EXECUTION_SPAN);
+  finishedSpans: ReturnType<
+    ReturnType<typeof recordingProvider>['finishedSpans']
+  >,
+) => finishedSpans.filter((span) => span.name === EXECUTION_SPAN);
 
 describe('where an execution records, given with the execution', () => {
   it('starts the span on the tracer given with the call', async () => {
-    const recording = recordingProvider();
+    const spanRecorder = recordingProvider();
     await orderHandler().execute({
       event: anOrder(),
-      state: noRecord(),
+      state: noStoredRecord(),
       attempt: 0,
-      telemetry: { tracer: recording.tracer },
+      telemetry: { tracer: spanRecorder.tracer },
     });
-    expect(executionSpans(recording.finished())).toHaveLength(1);
+    expect(executionSpans(spanRecorder.finishedSpans())).toHaveLength(1);
   });
 
   it('records through the provider registered at the call where none is given', async () => {
-    const recording = recordingProvider();
-    recording.registerAsAnApplicationWould();
+    const spanRecorder = recordingProvider();
+    spanRecorder.registerAsAnApplicationWould();
     await orderHandler().execute({
       event: anOrder(),
-      state: noRecord(),
+      state: noStoredRecord(),
       attempt: 0,
     });
-    expect(executionSpans(recording.finished())).toHaveLength(1);
+    expect(executionSpans(spanRecorder.finishedSpans())).toHaveLength(1);
   });
 
   it('records through a provider registered after the handler was built', async () => {
     const handler = orderHandler();
-    const recording = recordingProvider();
-    recording.registerAsAnApplicationWould();
-    await handler.execute({ event: anOrder(), state: noRecord(), attempt: 0 });
-    expect(executionSpans(recording.finished())).toHaveLength(1);
+    const spanRecorder = recordingProvider();
+    spanRecorder.registerAsAnApplicationWould();
+    await handler.execute({
+      event: anOrder(),
+      state: noStoredRecord(),
+      attempt: 0,
+    });
+    expect(executionSpans(spanRecorder.finishedSpans())).toHaveLength(1);
   });
 
   it('starts each execution’s span on its own tracer, and neither on the other’s', async () => {
     const handler = orderHandler();
-    const first = recordingProvider();
-    const second = recordingProvider();
+    const providerForOrderOne = recordingProvider();
+    const providerForOrderTwo = recordingProvider();
     await handler.execute({
       event: anOrder('order-1'),
-      state: noRecord(),
+      state: noStoredRecord(),
       attempt: 0,
-      telemetry: { tracer: first.tracer },
+      telemetry: { tracer: providerForOrderOne.tracer },
     });
     await handler.execute({
       event: anOrder('order-2'),
-      state: noRecord(),
+      state: noStoredRecord(),
       attempt: 0,
-      telemetry: { tracer: second.tracer },
+      telemetry: { tracer: providerForOrderTwo.tracer },
     });
-    const subjectsOn = (recording: ReturnType<typeof recordingProvider>) =>
-      executionSpans(recording.finished()).map(
+    const subjectsRecordedBy = (
+      provider: ReturnType<typeof recordingProvider>,
+    ) =>
+      executionSpans(provider.finishedSpans()).map(
         (span) => span.attributes['arvo.subject'],
       );
-    expect(subjectsOn(first)).toEqual(['order-1']);
-    expect(subjectsOn(second)).toEqual(['order-2']);
+    expect(subjectsRecordedBy(providerForOrderOne)).toEqual(['order-1']);
+    expect(subjectsRecordedBy(providerForOrderTwo)).toEqual(['order-2']);
   });
 
   it('keeps nothing given for one execution for the next', async () => {
     const handler = orderHandler();
     const logger = recordingLogger();
-    const recording = recordingProvider();
+    const spanRecorder = recordingProvider();
     await handler.execute({
       event: anOrder('order-1'),
-      state: noRecord(),
+      state: noStoredRecord(),
       attempt: 0,
-      telemetry: { tracer: recording.tracer, logger },
+      telemetry: { tracer: spanRecorder.tracer, logger },
     });
-    const loggedByFirst = logger.records.length;
-    expect(loggedByFirst).toBeGreaterThan(0);
+    const recordsLoggedByOrderOne = logger.records.length;
+    expect(recordsLoggedByOrderOne).toBeGreaterThan(0);
 
     await handler.execute({
       event: anOrder('order-2'),
-      state: noRecord(),
+      state: noStoredRecord(),
       attempt: 0,
-      telemetry: { tracer: recording.tracer },
+      telemetry: { tracer: spanRecorder.tracer },
     });
     // given only a tracer, the second execution logs nowhere
-    expect(logger.records).toHaveLength(loggedByFirst);
-    expect(executionSpans(recording.finished())).toHaveLength(2);
+    expect(logger.records).toHaveLength(recordsLoggedByOrderOne);
+    expect(executionSpans(spanRecorder.finishedSpans())).toHaveLength(2);
   });
 
   it('records nothing and still executes where no telemetry is given and no provider is registered', async () => {
     const response = await orderHandler().execute({
       event: anOrder(),
-      state: noRecord(),
+      state: noStoredRecord(),
       attempt: 0,
     });
     expect(response.kind).toBe('produced');
   });
 
   it('ignores telemetry named in a declaration by code no type checker saw', async () => {
-    const recording = recordingProvider();
+    const spanRecorder = recordingProvider();
     const declaration = {
       contracts: { self: orderContract },
-      telemetry: { tracer: recording.tracer },
+      telemetry: { tracer: spanRecorder.tracer },
     };
     // deliberately invalid: a declaration naming telemetry, as untyped code could write
     const handler = setupArvoEventHandler(declaration)
       .handler('1.0.0', async () => {})
       .build();
-    await handler.execute({ event: anOrder(), state: noRecord(), attempt: 0 });
-    expect(recording.finished()).toEqual([]);
+    await handler.execute({
+      event: anOrder(),
+      state: noStoredRecord(),
+      attempt: 0,
+    });
+    expect(spanRecorder.finishedSpans()).toEqual([]);
   });
 });

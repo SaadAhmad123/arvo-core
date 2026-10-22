@@ -276,21 +276,20 @@ export class ArvoEventHandler<
   async tryExecute(
     param: ArvoEventHandlerExecuteParam<TDependencies, TMechanismHooks>,
   ): AsyncResult<ArvoEventHandlerExecuteResponse, ArvoHandlerFault> {
-    // resolved here, at the call, so a default tracer comes from whatever
-    // provider is registered now rather than when the handler was built
-    const resolved = resolveTelemetry(param.telemetry);
+    // at the call, never at build: a tracer taken before an SDK registers stays silent
+    const resolvedTelemetry = resolveTelemetry(param.telemetry);
     const continuedTrace = continueTraceFromEvent(
       param.event,
-      resolved.tracer,
+      resolvedTelemetry.tracer,
       `${this.contracts.self.type}.execute`,
     );
     const span =
       continuedTrace?.span ??
-      resolved.tracer.startSpan(`${this.contracts.self.type}.execute`);
+      resolvedTelemetry.tracer.startSpan(`${this.contracts.self.type}.execute`);
     const telemetry = new ArvoExecutionContextTelemetry({
       span,
-      meter: resolved.meter,
-      logger: resolved.logger,
+      meter: resolvedTelemetry.meter,
+      logger: resolvedTelemetry.logger,
     });
 
     try {

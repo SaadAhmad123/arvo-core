@@ -1,15 +1,9 @@
-import { trace } from '@opentelemetry/api';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ArvoDispatcher } from '../../src/ArvoDispatcher/index.js';
 import { setupArvoEventHandler } from '../../src/factories/setupArvoEventHandler.js';
 import { paymentContract } from '../ArvoEventHandler/fixtures.js';
-import {
-  auditContract,
-  auditHandler,
-  orderHandler,
-  paymentHandler,
-} from './fixtures.js';
+import { auditContract, orderHandler, paymentHandler } from './fixtures.js';
 
 const handlerWithRunTimeout = (
   contract: typeof paymentContract | typeof auditContract,
@@ -80,26 +74,5 @@ describe('asking a dispatcher about its set', () => {
       ],
     });
     expect(mixed.longestRunTimeoutMs).toBe(4_000);
-  });
-});
-
-describe('the telemetry a dispatcher records with', () => {
-  it('takes the tracer, meter and logger it was given', () => {
-    const tracer = trace.getTracer('given');
-    const logger = { emit: () => undefined };
-    const dispatcher = new ArvoDispatcher({
-      handlers: [auditHandler()],
-      telemetry: { tracer, logger },
-    });
-    expect(dispatcher.telemetry.tracer).toBe(tracer);
-    expect(dispatcher.telemetry.logger).toBe(logger);
-    expect(dispatcher.telemetry.meter).toBeNull();
-  });
-
-  it('records through the global tracer, with no meter or logger, where none is given', () => {
-    const { telemetry } = new ArvoDispatcher({ handlers: [auditHandler()] });
-    expect(telemetry.tracer).toBeDefined();
-    expect(telemetry.meter).toBeNull();
-    expect(telemetry.logger).toBeNull();
   });
 });

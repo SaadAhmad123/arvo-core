@@ -3,10 +3,7 @@ import type { ArvoEvent } from '../ArvoEvent/index.js';
 import { continueTraceFromEvent } from '../ArvoEvent/opentelemetry.js';
 import { ArvoExecutionContextTelemetry } from '../ArvoEventHandler/context/telemetry/index.js';
 import { recording } from '../ArvoEventHandler/context/telemetry/recording.js';
-import {
-  type ArvoResolvedTelemetry,
-  resolveTelemetry,
-} from '../ArvoEventHandler/context/telemetry/resolve.js';
+import { resolveTelemetry } from '../ArvoEventHandler/context/telemetry/resolve.js';
 import { createArvoHandlerFault } from '../ArvoEventHandler/fault/factory.js';
 import type { ArvoHandlerFault } from '../ArvoEventHandler/fault/index.js';
 import type { IArvoEventHandlerDependency } from '../ArvoEventHandler/types/dependency.js';
@@ -82,15 +79,12 @@ export class ArvoDispatcher<
   /** The layers supplied to every handler on every call, flattened, in order. */
   readonly middlewares: readonly ArvoEventHandlerMiddlewareEntry[];
 
-  /** Where the dispatcher's own span, counter and log are written. */
-  readonly telemetry: ArvoResolvedTelemetry;
-
   readonly #handlersByType: ReadonlyMap<string, ArvoAnyEventHandler>;
 
   readonly #longestRunTimeoutMs: number | null;
 
   /**
-   * @param options - The handlers, the layers and the telemetry. See
+   * @param options - The handlers and the layers. See
    * {@link ArvoDispatcherOptions} for the rules a declaration is held to.
    * @throws {ArvoDispatcherValidationError} If the declaration breaks any
    * rule, naming every rule it broke.
@@ -101,7 +95,6 @@ export class ArvoDispatcher<
     this.members = options.handlers;
     this.handlers = Object.freeze([...flattened.handlers]);
     this.middlewares = Object.freeze([...flattened.middlewares]);
-    this.telemetry = resolveTelemetry(options.telemetry);
     this.#handlersByType = new Map(
       flattened.handlers.map((handler) => [
         handler.contracts.self.type,
@@ -177,6 +170,9 @@ export class ArvoDispatcher<
    * handler is given its own or none; `hooks` is one value every handler can
    * accept. Returns what the handler returned, unchanged.
    *
+   * The dispatcher and the handler it enters both record with the call's
+   * `telemetry`; see {@link ArvoDispatcherExecuteParam}.
+   *
    * Where no handler in the set implements `to`, or the event carries none,
    * the fault is `handler_not_found`: not retryable, and carrying nothing to
    * abandon with. Anything thrown that is not a fault propagates as thrown.
@@ -190,28 +186,35 @@ export class ArvoDispatcher<
    * the span and then propagates as thrown.
    *
    * @param param - The event, the state function, the attempt, and the
-   * dependencies and hooks for the set.
+   * dependencies, hooks and telemetry for the set.
    *
    * @example
-   * const executed = await dispatcher.tryExecute({ event, state, attempt: 0 });
+   * const executed = await dispatcher.tryExecute({
+   *   event,
+   *   state,
+   *   attempt: 0,
+   *   telemetry: { tracer },
+   * });
    * if (executed.ok) executed.value.kind; // 'produced' | 'discarded'
    * else executed.error.faultKind;
    */
   async tryExecute(
     param: ArvoDispatcherExecuteParam<ArvoHandlersOfMembers<TMembers>>,
   ): AsyncResult<ArvoEventHandlerExecuteResponse, ArvoHandlerFault> {
+    // at the call, and passed on whole so the handler never takes a default of its own
+    const resolvedTelemetry = resolveTelemetry(param.telemetry);
     const continuedTrace = continueTraceFromEvent(
       param.event,
-      this.telemetry.tracer,
+      resolvedTelemetry.tracer,
       ARVO_DISPATCHER_SPAN_NAME,
     );
     const span =
       continuedTrace?.span ??
-      this.telemetry.tracer.startSpan(ARVO_DISPATCHER_SPAN_NAME);
+      resolvedTelemetry.tracer.startSpan(ARVO_DISPATCHER_SPAN_NAME);
     const telemetry = new ArvoExecutionContextTelemetry({
       span,
-      meter: this.telemetry.meter,
-      logger: this.telemetry.logger,
+      meter: resolvedTelemetry.meter,
+      logger: resolvedTelemetry.logger,
     });
 
     try {
@@ -246,8 +249,7 @@ export class ArvoDispatcher<
         attempt: param.attempt,
         ...(dependency === undefined ? {} : { dependencies: dependency }),
         ...(param.hooks === undefined ? {} : { hooks: param.hooks }),
-        // always given, so the handler records where the dispatcher does
-        telemetry: this.telemetry,
+        telemetry: resolvedTelemetry,
         ...(this.middlewares.length === 0
           ? {}
           : { middleware: this.middlewares }),

@@ -16,7 +16,7 @@ import type { Result } from '../types.js';
  * declaration you wrote yourself and expect to be valid, `new ArvoDispatcher()`
  * or {@link createArvoDispatcher} says the same thing by throwing.
  *
- * @param options - The handlers, the layers and the telemetry. See
+ * @param options - The handlers and the layers. See
  * {@link ArvoDispatcherOptions} for the rules a declaration is held to. Pass
  * the handler list inline or as an unannotated `const`, so each handler keeps
  * its own types.
@@ -52,7 +52,7 @@ export const tryCreateArvoDispatcher = <
  * {@link tryCreateArvoDispatcher} to handle an invalid declaration as a value
  * instead.
  *
- * @param options - The handlers, the layers and the telemetry. See
+ * @param options - The handlers and the layers. See
  * {@link ArvoDispatcherOptions} for the rules a declaration is held to. Pass
  * the handler list inline or as an unannotated `const`, so each handler keeps
  * its own types.

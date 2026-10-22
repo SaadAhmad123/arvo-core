@@ -88,7 +88,6 @@ describe('declaring a dispatcher from handlers and layers', () => {
     });
     expect(Object.isFrozen(dispatcher.handlers)).toBe(true);
     expect(Object.isFrozen(dispatcher.middlewares)).toBe(true);
-    expect(Object.isFrozen(dispatcher.telemetry)).toBe(true);
   });
 });
 

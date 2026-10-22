@@ -32,7 +32,7 @@ describe('what the compiler says entering a dispatcher is', () => {
     >();
   });
 
-  it('takes the event, state and attempt exactly as a handler takes them', () => {
+  it('takes the event, state, attempt and telemetry exactly as a handler takes them', () => {
     type Param = Parameters<typeof dispatcher.tryExecute>[0];
     type HandlerParam = ArvoEventHandlerExecuteParam<
       Record<never, never>,
@@ -41,6 +41,9 @@ describe('what the compiler says entering a dispatcher is', () => {
     expectTypeOf<Param['event']>().toEqualTypeOf<HandlerParam['event']>();
     expectTypeOf<Param['state']>().toEqualTypeOf<HandlerParam['state']>();
     expectTypeOf<Param['attempt']>().toEqualTypeOf<HandlerParam['attempt']>();
+    expectTypeOf<Param['telemetry']>().toEqualTypeOf<
+      HandlerParam['telemetry']
+    >();
   });
 
   it('keys dependencies by each handler’s type, typed to its declaration', async () => {
@@ -78,5 +81,17 @@ describe('what the compiler says entering a dispatcher is', () => {
       middleware: [],
     });
     expect(executed.ok).toBe(true);
+  });
+});
+
+describe('what the compiler says declaring a dispatcher takes', () => {
+  it('does not take telemetry, which is given with each call', () => {
+    const declare = () =>
+      new ArvoDispatcher({
+        handlers: [orderHandlerUnderTest()],
+        // @ts-expect-error telemetry is given with each call, not declared
+        telemetry: {},
+      });
+    expect(declare).toBeTypeOf('function');
   });
 });
