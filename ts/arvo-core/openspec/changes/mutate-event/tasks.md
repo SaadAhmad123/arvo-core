@@ -2,8 +2,8 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 ## 1. The span-or-context helper, shared
 
-- [ ] 1.1 Extend `tests/ArvoEvent/opentelemetry.spec.ts`: the helper returns a span's context for a span, and the context itself for a context.
-- [ ] 1.2 In `src/ArvoEvent/opentelemetry.ts`, export the existing private span-or-context test as a helper returning the `SpanContext`, and have `traceContextFromSpan` use it. Every existing test passes unedited.
+- [x] 1.1 Extend `tests/ArvoEvent/opentelemetry.spec.ts`: the helper returns a span's context for a span, and the context itself for a context.
+- [x] 1.2 In `src/ArvoEvent/opentelemetry.ts`, export the existing private span-or-context test as a helper returning the `SpanContext`, and have `traceContextFromSpan` use it. Every existing test passes unedited.
 
 ## 2. Mutating an event
 

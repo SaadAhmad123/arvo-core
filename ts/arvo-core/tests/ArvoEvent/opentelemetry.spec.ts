@@ -1,6 +1,9 @@
 import type { Span, SpanContext } from '@opentelemetry/api';
 import { describe, expect, it } from 'vitest';
-import { traceContextFromSpan } from '../../src/ArvoEvent/opentelemetry.js';
+import {
+  spanContextOf,
+  traceContextFromSpan,
+} from '../../src/ArvoEvent/opentelemetry.js';
 
 const spanContext = (overrides: Partial<SpanContext> = {}): SpanContext =>
   ({
@@ -77,5 +80,25 @@ describe('traceContextFromSpan', () => {
       } as Partial<SpanContext>);
       expect(traceContextFromSpan(spanContextWithState).tracestate).toBe('');
     });
+  });
+});
+
+describe('spanContextOf', () => {
+  it('returns a SpanContext as it is', () => {
+    const given = spanContext();
+    expect(spanContextOf(given)).toBe(given);
+  });
+
+  it("returns a Span's context by calling spanContext()", () => {
+    const given = spanContext();
+    const span = { spanContext: () => given } as unknown as Span;
+    expect(spanContextOf(span)).toBe(given);
+  });
+
+  it('is what traceContextFromSpan reads, so the two agree on either shape', () => {
+    const span = { spanContext: () => spanContext() } as unknown as Span;
+    expect(traceContextFromSpan(span)).toEqual(
+      traceContextFromSpan(spanContextOf(span)),
+    );
   });
 });
