@@ -132,7 +132,7 @@ type ArvoHandlerFaultFactoryParam = {
 );
 ```
 
-The factory checks `param.contracts === null` first. In that branch it builds no handler error event and no abandonment record — there is no self contract to address one from and no execution to abandon — sets `retry: null` without consulting any options, takes `subject` and `eventId` from the event and `executionId` as `null`, and records the fault on the given telemetry exactly as every other fault is recorded. The discriminant is `contracts: null` and the branch fixes `faultKind` to `'handler_not_found'`, so the compiler refuses a handler-less fault of any other kind, and refuses `handler_not_found` with a handler.
+The factory checks `param.contracts === null` first. In that branch it builds no handler error event and no abandonment record — there is no self contract to address one from and no execution to abandon — sets `retry: null` without consulting any options, takes `subject` and `eventId` from the event and `executionId` as `null`, and records the fault on the given telemetry exactly as every other fault is recorded. The discriminant is `contracts: null` and the branch fixes `faultKind` to `'handler_not_found'`, so the compiler refuses a handler-less fault of any other kind. The handler branch keeps `faultKind: ArvoFaultKind` as it is: the handler's own call sites hold the kind in variables typed as the whole vocabulary, and narrowing the branch would make every one of them fail to compile for a case none of them can produce.
 
 Every existing caller builds one of the first two branches and compiles unchanged.
 
@@ -175,5 +175,5 @@ Computed once in the constructor: the largest non-null `runTimeout` over every r
 - **[Recursive generics may be slow or hit depth limits for very large sets]** → The recursion is over the members as written, one level per entry, not per handler. A set of tens of handlers is well inside TypeScript's limits. Covered by a typecheck test over a deliberately large and deeply nested set.
 - **[`HooksOf` produces `never` where two handlers declare incompatible hooks]** → That is correct: no single value satisfies both, and the error belongs where hooks are supplied. A type-level test asserts it.
 - **[The fault factory's parameter union grows a third branch]** → Every existing call site is in one of the first two branches and is unchanged; the new branch is reachable only by passing `contracts: null`. The factory's existing tests stay as they are, and the new branch gets its own.
-- **[A dispatcher's own span name is new telemetry vocabulary]** → It is opened only for `handler_not_found`, so dashboards built on handler span names are unaffected.
+- **[A dispatcher's own span name is new telemetry vocabulary]** → It is one span per dispatcher call, named for the dispatcher; dashboards built on handler span names are unaffected, and the handler's span now has it as a parent, which ADR-018 fixes for every layer.
 - **[`ArvoFaultKind` widens]** → A consumer's exhaustive `switch` needs one more case, as when ADR-016 added two kinds. Stated in the proposal.

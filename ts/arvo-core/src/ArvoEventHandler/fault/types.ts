@@ -45,7 +45,9 @@ export type ArvoFaultKind =
   | 'state_not_serializable'
   // the layers around the executor
   | 'middleware_conflict'
-  | 'middleware_instantiation_failed';
+  | 'middleware_instantiation_failed'
+  // no handler was entered
+  | 'handler_not_found';
 
 /**
  * When another attempt may be made, where one is in prospect.
@@ -105,22 +107,26 @@ export type ArvoHandlerFaultParam = {
 
 /** What describing one execution's failure takes. */
 export type ArvoHandlerFaultFactoryParam = {
-  /** The version of the contract the failing execution implements. */
-  contracts: { self: VersionedArvoContract };
-  /** The options in force, which decide the retry verdict and the domain. */
-  options: ArvoEventHandlerOptions;
   /** Which attempt failed, counting from 0. */
   attempt: number;
   /** Where the fault is written as it is built. */
   telemetry: ArvoExecutionContextTelemetry;
-  /** Which fault this is, from the fixed vocabulary. */
-  faultKind: ArvoFaultKind;
   /** What failed, readable without the source at hand. */
   message: string;
   /** The underlying failure as a string. Omit where nothing underlies it. */
   cause?: string;
   /** Every check that failed. Omit where none was collected. */
   violations?: readonly string[];
+} & (ArvoHandlerFaultWithHandlerParam | ArvoHandlerFaultWithoutHandlerParam);
+
+/** A fault of an execution a handler was entered for. */
+export type ArvoHandlerFaultWithHandlerParam = {
+  /** The version of the contract the failing execution implements. */
+  contracts: { self: VersionedArvoContract };
+  /** The options in force, which decide the retry verdict and the domain. */
+  options: ArvoEventHandlerOptions;
+  /** Which fault this is, from the fixed vocabulary. */
+  faultKind: ArvoFaultKind;
   /**
    * Whether another attempt could fix this. Consulted for
    * `executor_raised` alone, where the answer is yes unless stated
@@ -158,3 +164,17 @@ export type ArvoHandlerFaultFactoryParam = {
       executionId: string | null;
     }
 );
+
+/**
+ * A fault of an event no handler was entered for. There is no contract to
+ * address a handler error event from and no execution to abandon, so the
+ * fault carries neither half of the abandonment pair and no retry.
+ */
+export type ArvoHandlerFaultWithoutHandlerParam = {
+  /** No handler was entered. */
+  contracts: null;
+  /** The one kind such a fault can be. */
+  faultKind: 'handler_not_found';
+  /** The event nothing took. */
+  event: ArvoEvent;
+};

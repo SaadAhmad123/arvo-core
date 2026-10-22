@@ -7,9 +7,9 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 ## 2. `handler_not_found` through the fault factory
 
-- [ ] 2.1 Extend `tests/ArvoEventHandler/fault/` with the handler-less branch: the fault's kind is `handler_not_found`, its `retry`, `abandonmentEvent`, `abandonmentState` and `executionId` are `null`, its `subject`, `eventId` and `attempt` come from the event and the call, and it is recorded on the span, the counter and the log as every fault is. Add a type test that the compiler refuses `contracts: null` with any other kind, and `handler_not_found` with a handler.
-- [ ] 2.2 Add `'handler_not_found'` to `ArvoFaultKind` and the third branch to `ArvoHandlerFaultFactoryParam` in `src/ArvoEventHandler/fault/types.ts`, with TSDoc stating the rule, not its origin.
-- [ ] 2.3 Build the branch in `src/ArvoEventHandler/fault/factory.ts`, checked before anything reads a contract or options. Every existing fault test passes unedited.
+- [x] 2.1 Extend `tests/ArvoEventHandler/fault/` with the handler-less branch: the fault's kind is `handler_not_found`, its `retry`, `abandonmentEvent`, `abandonmentState` and `executionId` are `null`, its `subject`, `eventId` and `attempt` come from the event and the call, and it is recorded on the span, the counter and the log as every fault is. Add a type test that the compiler refuses `contracts: null` with any other kind.
+- [x] 2.2 Add `'handler_not_found'` to `ArvoFaultKind` and the third branch to `ArvoHandlerFaultFactoryParam` in `src/ArvoEventHandler/fault/types.ts`, with TSDoc stating the rule, not its origin.
+- [x] 2.3 Build the branch in `src/ArvoEventHandler/fault/factory.ts`, checked before anything reads a contract or options. Every existing fault test passes unedited.
 
 ## 3. The dispatcher's error, options and types
 
