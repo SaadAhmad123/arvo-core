@@ -3,25 +3,21 @@ import type { ArvoLogger } from '../ArvoEventHandler/context/telemetry/types.js'
 import type { ArvoEventHandlerExecuteParam } from '../ArvoEventHandler/types/execute.js';
 import type { ArvoEventHandlerMiddlewareEntry } from '../ArvoEventHandler/types/middleware.js';
 import type { ArvoNone } from '../ArvoEventHandler/types/supplied.js';
-import type {
-  ArvoAnyEventHandler,
-  ArvoHandlerSet,
-  DependenciesOf,
-  HooksOf,
-} from './typing.js';
+import type { ArvoAnyEventHandler, DependenciesOf, HooksOf } from './typing.js';
 
-/** Something holding layers, read through its flattened list. */
-export type ArvoMiddlewareSet = {
+/** A dispatcher as another dispatcher reads it: its handlers and its layers, each already flat. */
+export type ArvoDispatcherSet = {
+  readonly handlers: readonly ArvoAnyEventHandler[];
   readonly middlewares: readonly ArvoEventHandlerMiddlewareEntry[];
 };
 
 /** An entry a dispatcher's handler list may hold: a handler, or a dispatcher whose handlers are taken. */
-export type ArvoDispatcherMember = ArvoAnyEventHandler | ArvoHandlerSet;
+export type ArvoDispatcherMember = ArvoAnyEventHandler | ArvoDispatcherSet;
 
 /** An entry a dispatcher's layer list may hold: a layer, or a dispatcher whose layers are taken. */
 export type ArvoDispatcherMiddlewareMember =
   | ArvoEventHandlerMiddlewareEntry
-  | ArvoMiddlewareSet;
+  | ArvoDispatcherSet;
 
 /**
  * How a dispatcher is declared.

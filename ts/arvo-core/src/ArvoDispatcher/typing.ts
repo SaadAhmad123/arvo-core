@@ -10,11 +10,6 @@ import type { IArvoEventHandlerDependency } from '../ArvoEventHandler/types/depe
  */
 export type ArvoAnyEventHandler = ArvoEventHandler<any, any, any, any>;
 
-/** Something holding a set of handlers, read through its flattened list. */
-export type ArvoHandlerSet = {
-  readonly handlers: readonly ArvoAnyEventHandler[];
-};
-
 /** The handlers a list of members holds, in order, a set contributing its own. */
 export type HandlersOf<TMembers> = TMembers extends readonly []
   ? []

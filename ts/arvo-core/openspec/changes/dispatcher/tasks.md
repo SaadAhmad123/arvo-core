@@ -20,9 +20,9 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 ## 4. Flattening and the declaration rules
 
-- [ ] 4.1 Write `tests/ArvoDispatcher/helpers/flatten.spec.ts`: handlers and layers flatten in order; a dispatcher among the handlers contributes handlers only, among the layers its layers only, at its position.
-- [ ] 4.2 Write one spec per rule under `tests/ArvoDispatcher/helpers/`: `check-empty`, `check-repeated-handlers`, `check-shared-types` (same `uri` and different `uri`), `check-service-versions` (an undeclared version, a different `uri`, an accepted version, a service nobody implements, two handlers calling each other, a handler calling itself). Each issue names the handlers by self contract `type` and the rule broken.
-- [ ] 4.3 Add `src/ArvoDispatcher/helpers/flatten.ts` and the four checks, `check-empty.ts`, `check-repeated-handlers.ts`, `check-shared-types.ts`, `check-service-versions.ts`, each returning its issues.
+- [x] 4.1 Write `tests/ArvoDispatcher/helpers/flatten.spec.ts`: handlers and layers flatten in order; a dispatcher among the handlers contributes handlers only, among the layers its layers only, at its position.
+- [x] 4.2 Write one spec per rule under `tests/ArvoDispatcher/helpers/`: `check-empty`, `check-repeated-handlers`, `check-shared-types` (same `uri` and different `uri`), `check-service-versions` (an undeclared version, a different `uri`, an accepted version, a service nobody implements, two handlers calling each other, a handler calling itself). Each issue names the handlers by self contract `type` and the rule broken.
+- [x] 4.3 Add `src/ArvoDispatcher/helpers/flatten.ts` and the four checks, `check-empty.ts`, `check-repeated-handlers.ts`, `check-shared-types.ts`, `check-service-versions.ts`, each returning its issues.
 
 ## 5. The class: declaration and the reads of the set
 
