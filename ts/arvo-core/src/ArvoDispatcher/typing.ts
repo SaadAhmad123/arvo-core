@@ -10,13 +10,16 @@ import type { IArvoEventHandlerDependency } from '../ArvoEventHandler/types/depe
  */
 export type ArvoAnyEventHandler = ArvoEventHandler<any, any, any, any>;
 
-/** The handlers a list of members holds, in order, a set contributing its own. */
+/**
+ * The handlers a list of members holds, in order, a dispatcher contributing
+ * the handlers of the members it was declared with.
+ */
 export type HandlersOf<TMembers> = TMembers extends readonly []
   ? []
   : TMembers extends readonly [infer THead, ...infer TRest]
     ? THead extends ArvoAnyEventHandler
       ? [THead, ...HandlersOf<TRest>]
-      : THead extends { readonly handlers: infer TInner }
+      : THead extends { readonly members: infer TInner }
         ? [...HandlersOf<TInner>, ...HandlersOf<TRest>]
         : never
     : // a list whose length is not known: its element, where that is a handler

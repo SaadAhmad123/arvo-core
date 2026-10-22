@@ -26,11 +26,12 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 ## 5. The class: declaration and the reads of the set
 
-- [ ] 5.1 Write `tests/ArvoDispatcher/declaration.spec.ts` through the constructor: each spec scenario under *A Dispatcher Is Declared From Handlers And Layers*, *What A Declaration Refuses* and *What A Declaration Does Not Refuse*; every broken rule in one error; the empty set blocking the rest.
-- [ ] 5.2 Write `tests/ArvoDispatcher/reads.spec.ts`: `handles` for a handled type, an unhandled type and `null`; `longestRunTimeoutMs` over mixed, inherited and absent run timeouts.
-- [ ] 5.3 Write `tests/ArvoDispatcher/caller-name.spec.ts` and `tests/ArvoDispatcher/helpers/check-caller-name.spec.ts`: an accepted name returned; a name breaking the grammar; a handler's own type; a service type; two rules broken together; `validateCallerName` throwing what `tryValidateCallerName` returns.
-- [ ] 5.4 Add `src/ArvoDispatcher/helpers/check-caller-name.ts`, using the predicate from group 1, and `src/ArvoDispatcher/helpers/longest-run-timeout.ts`.
-- [ ] 5.5 Add the `ArvoDispatcher` class in `src/ArvoDispatcher/index.ts`: the constructor, the type-keyed handler map, `handles`, `longestRunTimeoutMs`, `tryValidateCallerName` / `validateCallerName`, and the resolved telemetry. No `execute` yet.
+- [x] 5.1 Write `tests/ArvoDispatcher/declaration.spec.ts` through the constructor: each spec scenario under *A Dispatcher Is Declared From Handlers And Layers*, *What A Declaration Refuses* and *What A Declaration Does Not Refuse*; every broken rule in one error; the empty set blocking the rest.
+- [x] 5.2 Write `tests/ArvoDispatcher/reads.spec.ts`: `handles` for a handled type, an unhandled type and `null`; `longestRunTimeoutMs` over mixed, inherited and absent run timeouts.
+- [x] 5.3 Write `tests/ArvoDispatcher/caller-name.spec.ts` and `tests/ArvoDispatcher/helpers/check-caller-name.spec.ts`: an accepted name returned; a name breaking the grammar; a handler's own type; a service type; two rules broken together; `validateCallerName` throwing what `tryValidateCallerName` returns.
+- [x] 5.4 Add `src/ArvoDispatcher/helpers/check-caller-name.ts`, using the predicate from group 1, and `src/ArvoDispatcher/helpers/longest-run-timeout.ts`.
+- [x] 5.6 Add `src/ArvoEventHandler/context/telemetry/resolve.ts` with `ArvoTelemetryParam` and `resolveTelemetry`, defaulting to `ARVO_INSTRUMENTATION_NAME`, and move the handler and the dispatcher onto it. **Replaces** the handler's inline resolution and its per-contract tracer name.
+- [x] 5.5 Add the `ArvoDispatcher` class in `src/ArvoDispatcher/index.ts`: the constructor, the type-keyed handler map, `handles`, `longestRunTimeoutMs`, `tryValidateCallerName` / `validateCallerName`, and the resolved telemetry. No `execute` yet.
 
 ## 6. Entering a dispatcher
 

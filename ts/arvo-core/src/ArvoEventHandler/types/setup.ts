@@ -1,8 +1,7 @@
-import type { Meter, Tracer } from '@opentelemetry/api';
 import type * as z from 'zod/v4/core';
 import type { ArvoContract } from '../../ArvoContract/index.js';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
-import type { ArvoLogger } from '../context/telemetry/types.js';
+import type { ArvoTelemetryParam } from '../context/telemetry/resolve.js';
 import type { ArvoEventHandlerMiddlewareEntry } from './middleware.js';
 import type { ArvoEventHandlerOptions } from './options.js';
 import type { ArvoServiceMap } from './services.js';
@@ -75,14 +74,7 @@ export type ArvoEventHandlerSetupParam<
    * deployment with no OpenTelemetry SDK configured costs nothing and
    * changes no code.
    */
-  telemetry?: {
-    /** What each execution's span is started on. */
-    tracer?: Tracer;
-    /** What this handler's instruments are created on. */
-    meter?: Meter | null;
-    /** What log records are emitted through. */
-    logger?: ArvoLogger | null;
-  };
+  telemetry?: ArvoTelemetryParam;
 
   /**
    * The types a mechanism will supply per execution: what an executor

@@ -1,5 +1,4 @@
-import type { Meter, Tracer } from '@opentelemetry/api';
-import type { ArvoLogger } from '../ArvoEventHandler/context/telemetry/types.js';
+import type { ArvoTelemetryParam } from '../ArvoEventHandler/context/telemetry/resolve.js';
 import type { ArvoEventHandlerExecuteParam } from '../ArvoEventHandler/types/execute.js';
 import type { ArvoEventHandlerMiddlewareEntry } from '../ArvoEventHandler/types/middleware.js';
 import type { ArvoNone } from '../ArvoEventHandler/types/supplied.js';
@@ -40,11 +39,7 @@ export type ArvoDispatcherOptions<
    */
   middlewares?: readonly ArvoDispatcherMiddlewareMember[];
   /** Where the dispatcher's own span, counter and log are written. */
-  telemetry?: {
-    tracer?: Tracer;
-    meter?: Meter | null;
-    logger?: ArvoLogger | null;
-  };
+  telemetry?: ArvoTelemetryParam;
 };
 
 /**

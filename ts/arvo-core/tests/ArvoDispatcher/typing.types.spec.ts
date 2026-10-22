@@ -26,9 +26,9 @@ type Payment = ReturnType<typeof paymentHandler>;
 type Audit = ReturnType<typeof auditHandler>;
 type TicketCounting = ReturnType<typeof ticketCountingHandler>;
 
-/** A set as the type helpers read one: whatever holds a flattened handler list. */
-type SetOf<THandlers extends readonly unknown[]> = {
-  readonly handlers: THandlers;
+/** A dispatcher as the type helpers read one: the members it was declared with. */
+type SetOf<TMembers extends readonly unknown[]> = {
+  readonly members: TMembers;
 };
 
 describe('what the type helpers read off a set', () => {

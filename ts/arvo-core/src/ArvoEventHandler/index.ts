@@ -1,4 +1,3 @@
-import { type Meter, type Tracer, trace } from '@opentelemetry/api';
 import { err, ok } from 'neverthrow';
 import type * as z from 'zod/v4/core';
 import type { ArvoContract } from '../ArvoContract/index.js';
@@ -13,7 +12,10 @@ import { pathSegmentForKey } from '../utils/issue-path.js';
 import { readOwnProperty } from '../utils/own-property.js';
 import { textOfThrown } from '../utils/thrown-text.js';
 import { ArvoExecutionContextTelemetry } from './context/telemetry/index.js';
-import type { ArvoLogger } from './context/telemetry/types.js';
+import {
+  type ArvoResolvedTelemetry,
+  resolveTelemetry,
+} from './context/telemetry/resolve.js';
 import { ArvoEventHandlerValidationError } from './errors.js';
 import { createArvoHandlerFault } from './fault/factory.js';
 import { ArvoHandlerFault } from './fault/index.js';
@@ -33,7 +35,6 @@ import { checkVersions } from './helpers/check-versions.js';
 import {
   ARVO_ANY_STATE_SCHEMA,
   ARVO_DEFAULT_HANDLER_OPTIONS,
-  ARVO_RECORD_FORMAT_VERSION,
 } from './helpers/defaults.js';
 import { deriveArvoExecutionId } from './helpers/execution-id.js';
 import { resolveOptions } from './helpers/resolve-options.js';
@@ -120,11 +121,7 @@ export class ArvoEventHandler<
    * Each is a no-op where nothing was declared for it, so a deployment
    * collecting nothing costs nothing.
    */
-  readonly telemetry: {
-    readonly tracer: Tracer;
-    readonly meter: Meter | null;
-    readonly logger: ArvoLogger | null;
-  };
+  readonly telemetry: ArvoResolvedTelemetry;
 
   /**
    * The layers around every version's executor, in the order declared, or
@@ -242,13 +239,7 @@ export class ArvoEventHandler<
     });
     this.options = Object.freeze(handlerOptions);
     this.middleware = middleware;
-    this.telemetry = Object.freeze({
-      tracer:
-        setup.telemetry?.tracer ??
-        trace.getTracer(contract.type, ARVO_RECORD_FORMAT_VERSION),
-      meter: setup.telemetry?.meter ?? null,
-      logger: setup.telemetry?.logger ?? null,
-    });
+    this.telemetry = resolveTelemetry(setup.telemetry);
     this.#eventValidator = new ArvoEventValidator({
       contracts: { self: contract, services },
     });
