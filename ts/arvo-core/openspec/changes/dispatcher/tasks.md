@@ -13,10 +13,10 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 ## 3. The dispatcher's error, options and types
 
-- [ ] 3.1 Write `tests/ArvoDispatcher/errors.spec.ts`: the validation error carries every issue, freezes them, builds its message from them, and carries its `_tag` and `name`.
-- [ ] 3.2 Write `tests/ArvoDispatcher/typing.types.spec.ts`: `HandlersOf` flattens nested dispatchers in order; `DependenciesOf` keys each entry by the handler's literal self contract `type` and types it to that handler's dependencies; a handler declaring none contributes an entry whose dependency type is empty; `HooksOf` is the intersection, and `never` where two handlers' hooks cannot both be met; a large, deeply nested set still typechecks.
-- [ ] 3.3 Add `ArvoDispatcherValidationError` in `src/ArvoDispatcher/errors.ts`, following `ArvoEventHandlerValidationError`.
-- [ ] 3.4 Add `ArvoDispatcherOptions`, `ArvoDispatcherExecuteParam` and the member constraint in `src/ArvoDispatcher/types.ts`, and `HandlersOf`, `DependenciesOf`, `HooksOf` in `src/ArvoDispatcher/typing.ts`.
+- [x] 3.1 Write `tests/ArvoDispatcher/errors.spec.ts`: the validation error carries every issue, freezes them, builds its message from them, and carries its `_tag` and `name`.
+- [x] 3.2 Write `tests/ArvoDispatcher/typing.types.spec.ts`: `HandlersOf` flattens nested dispatchers in order; `DependenciesOf` keys each entry by the handler's literal self contract `type` and types it to that handler's dependencies; a handler declaring none contributes an entry whose dependency type is empty; `HooksOf` is the intersection, and `never` where two handlers' hooks cannot both be met; a large, deeply nested set still typechecks.
+- [x] 3.3 Add `ArvoDispatcherValidationError` in `src/ArvoDispatcher/errors.ts`, following `ArvoEventHandlerValidationError`.
+- [x] 3.4 Add `ArvoDispatcherOptions`, `ArvoDispatcherExecuteParam` and the member constraint in `src/ArvoDispatcher/types.ts`, and `HandlersOf`, `DependenciesOf`, `HooksOf` in `src/ArvoDispatcher/typing.ts`.
 
 ## 4. Flattening and the declaration rules
 
