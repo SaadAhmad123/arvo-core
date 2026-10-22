@@ -246,6 +246,8 @@ export class ArvoDispatcher<
         attempt: param.attempt,
         ...(dependency === undefined ? {} : { dependencies: dependency }),
         ...(param.hooks === undefined ? {} : { hooks: param.hooks }),
+        // always given, so the handler records where the dispatcher does
+        telemetry: this.telemetry,
         ...(this.middlewares.length === 0
           ? {}
           : { middleware: this.middlewares }),

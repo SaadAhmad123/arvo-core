@@ -1,7 +1,6 @@
 import type * as z from 'zod/v4/core';
 import type { ArvoContract } from '../../ArvoContract/index.js';
 import type { VersionedArvoContract } from '../../ArvoContract/versioned/index.js';
-import type { ArvoTelemetryParam } from '../context/telemetry/resolve.js';
 import type { ArvoEventHandlerMiddlewareEntry } from './middleware.js';
 import type { ArvoEventHandlerOptions } from './options.js';
 import type { ArvoServiceMap } from './services.js';
@@ -64,17 +63,6 @@ export type ArvoEventHandlerSetupParam<
    * from these.
    */
   options?: Partial<ArvoEventHandlerOptions>;
-
-  /**
-   * Where this handler's executions record: the tracer their spans are
-   * started on, the meter their instruments are created on, and what
-   * their log records are emitted through.
-   *
-   * Each is optional and each is a no-op where it is absent, so a
-   * deployment with no OpenTelemetry SDK configured costs nothing and
-   * changes no code.
-   */
-  telemetry?: ArvoTelemetryParam;
 
   /**
    * The types a mechanism will supply per execution: what an executor

@@ -39,7 +39,7 @@ describe('an execution with no layers anywhere', () => {
 
   it('marks no layer on the span', async () => {
     const spanRecorder = recordingSpan();
-    await executeOrder(orderHandler({ tracer: spanRecorder.tracer }));
+    await executeOrder(orderHandler(), { tracer: spanRecorder.tracer });
     expect(spanRecorder.marks()).toEqual([]);
   });
 });
@@ -277,7 +277,6 @@ describe('an after part, through the handler', () => {
   it('marks the failure on the span', async () => {
     const spanRecorder = recordingSpan();
     const handler = orderHandler({
-      tracer: spanRecorder.tracer,
       middleware: [
         {
           id: 'noisy',
@@ -287,7 +286,7 @@ describe('an after part, through the handler', () => {
         },
       ],
     });
-    await executeOrder(handler);
+    await executeOrder(handler, { tracer: spanRecorder.tracer });
     expect(spanRecorder.marks()).toContainEqual([
       'middleware_after_failed',
       'noisy',
@@ -481,13 +480,14 @@ describe('the run clock over the layers', () => {
     const skippedAfterPart = vi.fn();
     const handler = orderHandler({
       runTimeout: 30,
-      tracer: spanRecorder.tracer,
       middleware: [
         { id: 'later', after: skippedAfterPart },
         { id: 'slow', after: () => sleep(120) },
       ],
     });
-    const executionResult = await executeOrder(handler);
+    const executionResult = await executeOrder(handler, {
+      tracer: spanRecorder.tracer,
+    });
     expect(
       executionResult.ok &&
         executionResult.value.kind === 'produced' &&
@@ -566,9 +566,9 @@ describe('the span', () => {
       before: () => undefined,
       after: () => undefined,
     }));
-    await executeOrder(
-      orderHandler({ tracer: spanRecorder.tracer, middleware: manyLayers }),
-    );
+    await executeOrder(orderHandler({ middleware: manyLayers }), {
+      tracer: spanRecorder.tracer,
+    });
     expect(spanRecorder.spansStarted()).toBe(1);
   });
 
@@ -576,12 +576,14 @@ describe('the span', () => {
     const spanRecorder = recordingSpan();
     await executeOrder(
       orderHandler({
-        tracer: spanRecorder.tracer,
         middleware: [
           { id: 'declared', before: () => undefined, after: () => undefined },
         ],
       }),
-      { middleware: [{ id: 'supplied', before: () => undefined }] },
+      {
+        tracer: spanRecorder.tracer,
+        middleware: [{ id: 'supplied', before: () => undefined }],
+      },
     );
     expect(spanRecorder.marks()).toEqual([
       ['middleware_before_entered', 'supplied'],

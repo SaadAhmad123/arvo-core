@@ -1,4 +1,3 @@
-import type { Tracer } from '@opentelemetry/api';
 import { z } from 'zod';
 import type { IArvoEventHandlerMiddleware } from '../../src/ArvoEventHandler/types/middleware.js';
 import { createArvoEventFactory } from '../../src/factories/ArvoEventFactory/index.js';
@@ -52,7 +51,6 @@ export type Seen = { dependency: string | null; hooks: string | null };
  */
 export const orderHandlerUnderTest = (
   param: {
-    tracer?: Tracer;
     seen?: Seen[];
     middleware?: readonly IArvoEventHandlerMiddleware[];
   } = {},
@@ -63,9 +61,6 @@ export const orderHandlerUnderTest = (
       dependencies: { orders: string };
       mechanismHooks: { ticket: string };
     },
-    ...(param.tracer === undefined
-      ? {}
-      : { telemetry: { tracer: param.tracer } }),
     ...(param.middleware === undefined ? {} : { middleware: param.middleware }),
   })
     .handler('1.0.0', {
@@ -82,13 +77,10 @@ export const orderHandlerUnderTest = (
     .build();
 
 /** A payment handler, with a dependency of its own. */
-export const paymentHandlerUnderTest = (param: { tracer?: Tracer } = {}) =>
+export const paymentHandlerUnderTest = () =>
   setupArvoEventHandler({
     contracts: { self: paymentContract },
     types: {} as { dependencies: { ledger: number } },
-    ...(param.tracer === undefined
-      ? {}
-      : { telemetry: { tracer: param.tracer } }),
   })
     .handler('1.0.0', {
       state: z.object({ charged: z.boolean() }),

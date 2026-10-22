@@ -4,6 +4,7 @@ import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { JSONObject, PromiseAble } from '../../types.js';
 import type { ArvoExecutionContext } from '../context/index.js';
 import type { ArvoExecutionContextTelemetry } from '../context/telemetry/index.js';
+import type { ArvoTelemetryParam } from '../context/telemetry/resolve.js';
 import type { IArvoEventHandlerDependency } from './dependency.js';
 import type { ArvoEventHandlerMiddlewareEntry } from './middleware.js';
 import type { ArvoServiceMap } from './services.js';
@@ -140,6 +141,23 @@ export type ArvoEventHandlerExecuteParam<
    * this execution concludes breaks the atomicity the protocol rests on.
    */
   hooks?: TMechanismHooks;
+
+  /**
+   * Where this execution records: the tracer its span is started on, the
+   * meter its instruments are created on, and what its log records are
+   * emitted through. Each part is optional on its own.
+   *
+   * Resolved when this execution begins and held for it alone; nothing is
+   * kept for the next. A tracer omitted is taken from whatever
+   * OpenTelemetry provider is registered at that moment, and a meter or
+   * logger omitted records nothing.
+   *
+   * @example
+   * ```typescript
+   * await handler.execute({ event, state, attempt: 0, telemetry: { tracer, logger } });
+   * ```
+   */
+  telemetry?: ArvoTelemetryParam;
 
   /**
    * Layers around the executor for this execution only: each a layer, or

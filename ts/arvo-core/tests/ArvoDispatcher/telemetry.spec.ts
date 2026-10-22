@@ -30,7 +30,7 @@ const traced = () => {
     spanProcessors: [new SimpleSpanProcessor({ exporter })],
   });
   const tracer = provider.getTracer('dispatcher-test');
-  const order = orderHandlerUnderTest({ tracer });
+  const order = orderHandlerUnderTest();
   const dispatcher = new ArvoDispatcher({
     handlers: [order],
     telemetry: { tracer },

@@ -510,7 +510,6 @@ describe('what the handler records against', () => {
 
     const handler = setupArvoEventHandler({
       contracts: { self: orderContract },
-      telemetry: { tracer },
     })
       .handler('1.0.0', async () => {})
       .build();
@@ -519,6 +518,7 @@ describe('what the handler records against', () => {
       event: anOrder(),
       state: fakeStore().read(),
       attempt: 0,
+      telemetry: { tracer },
     });
     expect(spanNames).toEqual(['com_order_create.execute']);
   });

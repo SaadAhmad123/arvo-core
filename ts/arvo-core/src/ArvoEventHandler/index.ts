@@ -12,10 +12,7 @@ import { pathSegmentForKey } from '../utils/issue-path.js';
 import { readOwnProperty } from '../utils/own-property.js';
 import { textOfThrown } from '../utils/thrown-text.js';
 import { ArvoExecutionContextTelemetry } from './context/telemetry/index.js';
-import {
-  type ArvoResolvedTelemetry,
-  resolveTelemetry,
-} from './context/telemetry/resolve.js';
+import { resolveTelemetry } from './context/telemetry/resolve.js';
 import { ArvoEventHandlerValidationError } from './errors.js';
 import { createArvoHandlerFault } from './fault/factory.js';
 import { ArvoHandlerFault } from './fault/index.js';
@@ -114,14 +111,6 @@ export class ArvoEventHandler<
     TDependencies,
     TMechanismHooks
   >;
-
-  /**
-   * Where this handler's executions record.
-   *
-   * Each is a no-op where nothing was declared for it, so a deployment
-   * collecting nothing costs nothing.
-   */
-  readonly telemetry: ArvoResolvedTelemetry;
 
   /**
    * The layers around every version's executor, in the order declared, or
@@ -239,7 +228,6 @@ export class ArvoEventHandler<
     });
     this.options = Object.freeze(handlerOptions);
     this.middleware = middleware;
-    this.telemetry = resolveTelemetry(setup.telemetry);
     this.#eventValidator = new ArvoEventValidator({
       contracts: { self: contract, services },
     });
@@ -288,18 +276,21 @@ export class ArvoEventHandler<
   async tryExecute(
     param: ArvoEventHandlerExecuteParam<TDependencies, TMechanismHooks>,
   ): AsyncResult<ArvoEventHandlerExecuteResponse, ArvoHandlerFault> {
+    // resolved here, at the call, so a default tracer comes from whatever
+    // provider is registered now rather than when the handler was built
+    const resolved = resolveTelemetry(param.telemetry);
     const continuedTrace = continueTraceFromEvent(
       param.event,
-      this.telemetry.tracer,
+      resolved.tracer,
       `${this.contracts.self.type}.execute`,
     );
     const span =
       continuedTrace?.span ??
-      this.telemetry.tracer.startSpan(`${this.contracts.self.type}.execute`);
+      resolved.tracer.startSpan(`${this.contracts.self.type}.execute`);
     const telemetry = new ArvoExecutionContextTelemetry({
       span,
-      meter: this.telemetry.meter,
-      logger: this.telemetry.logger,
+      meter: resolved.meter,
+      logger: resolved.logger,
     });
 
     try {
