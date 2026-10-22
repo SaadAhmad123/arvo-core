@@ -1,0 +1,23 @@
+Every group starts with its tests, ends at 100% coverage with lint and typecheck clean, and is its own commit. Every change under `src/` is shown for review before its commit.
+
+## 1. The handler takes telemetry per execution
+
+- [x] 1.1 Write `tests/ArvoEventHandler/telemetry-at-execute.spec.ts`, against an in-memory span exporter: each scenario under *Where An Execution Records Is Given Per Execution*. A tracer given with the call is the one the span starts on. No telemetry means the span records through the provider registered at that moment. A provider registered after the handler was built still receives the span. Two calls with two tracers each use their own. A tracer alone means no instruments and no log records.
+- [x] 1.2 Add to `tests/ArvoEventHandler/setup.types.spec.ts`: a declaration naming `telemetry` is a compile error. Add to `tests/ArvoEventHandler/execute.spec.ts` the runtime case: a declaration naming `telemetry` from untyped code, deliberately invalid input marked as such, has no effect on where the execution records.
+- [x] 1.3 Add `telemetry?: ArvoTelemetryParam` to `ArvoEventHandlerExecuteParam` in `src/ArvoEventHandler/types/execute.ts`, with TSDoc stating the rule and an example calling `execute` with telemetry.
+- [x] 1.4 In `src/ArvoEventHandler/index.ts`, resolve telemetry at the start of `tryExecute` from `param.telemetry`. **Removes** the `telemetry` property and the constructor's call to `resolveTelemetry`.
+- [x] 1.5 **Removes** `telemetry` from `ArvoEventHandlerSetupParam` in `src/ArvoEventHandler/types/setup.ts` and from `ArvoEventHandlerSetup` in `src/ArvoEventHandler/setup.ts`, including where a version is added.
+- [x] 1.6 Move every test that passes a tracer when building a handler to pass it with the call: `tests/ArvoEventHandler/` (including the middleware and composed-middleware fixtures, `version/`, `fault/`, `dependency.spec.ts`, `execute.spec.ts`), and `tests/ArvoDispatcher/execution.ts`, whose handlers lose their `tracer` parameter. So that the dispatcher suite stays green between groups, `src/ArvoDispatcher/index.ts` enters the handler with its constructor-resolved telemetry; group 2 replaces that with telemetry resolved per call.
+
+## 2. The dispatcher takes telemetry per call and passes it on
+
+- [ ] 2.1 Extend `tests/ArvoDispatcher/telemetry.spec.ts` with each scenario under *Where A Dispatcher Records Is Given Per Call*. A tracer given with the call starts both the dispatcher's span and the handler's. No telemetry means both record through the provider registered at that moment, including one registered after the dispatcher was built. The handler is always entered with the dispatcher's resolved telemetry, spied on the handler prototype, with or without telemetry given. A given tracer, meter and logger reach the handler as the same objects. Two calls with two tracers each use their own. A miss records on the given tracer. Move the existing cases' tracer from construction to the call.
+- [ ] 2.2 Add to `tests/ArvoDispatcher/execute.types.spec.ts`: the parameter still equals the handler's parameter less `middleware`, now including `telemetry`. Add to `tests/factories/createArvoDispatcher.spec.ts` or `tests/ArvoDispatcher/declaration.spec.ts`: options naming `telemetry` are a compile error, and from untyped code have no effect.
+- [ ] 2.3 Add `telemetry?: ArvoTelemetryParam` to `ArvoDispatcherExecuteParam` in `src/ArvoDispatcher/types.ts`. **Removes** `telemetry` from `ArvoDispatcherOptions`.
+- [ ] 2.4 In `src/ArvoDispatcher/index.ts`, resolve telemetry at the start of `tryExecute` from `param.telemetry`, open the span with it, and always enter the handler with `telemetry: resolved`. **Removes** the `telemetry` property and the constructor's call to `resolveTelemetry`. Update the TSDoc and examples in `src/ArvoDispatcher/index.ts` and `src/factories/createArvoDispatcher.ts`.
+- [ ] 2.5 **Replaces** the reads of `dispatcher.telemetry` in `tests/ArvoDispatcher/reads.spec.ts` and `tests/ArvoDispatcher/declaration.spec.ts` with assertions on recorded spans, or deletes them where the scenario no longer exists.
+
+## 3. Close out
+
+- [ ] 3.1 Run the whole suite with coverage, lint, typecheck and build from `ts/arvo-core`. Confirm `src/index.ts` exports nothing that names the removed option or property.
+- [ ] 3.2 Validate the change with `node_modules/.bin/openspec validate telemetry-at-execute --strict`.
