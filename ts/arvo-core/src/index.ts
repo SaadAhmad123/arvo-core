@@ -143,6 +143,11 @@ export {
   tryCreateArvoEvent,
 } from './factories/createArvoEvent.js';
 export { createArvoEventHandlerVersion } from './factories/createArvoEventHandlerVersion.js';
+export {
+  type ArvoEventMutation,
+  mutateArvoEvent,
+  tryMutateArvoEvent,
+} from './factories/mutateArvoEvent.js';
 export { setupArvoEventHandler } from './factories/setupArvoEventHandler.js';
 export { ArvoSemanticVersionCheckError } from './semver/errors.js';
 export { ArvoSemanticVersion } from './semver/index.js';

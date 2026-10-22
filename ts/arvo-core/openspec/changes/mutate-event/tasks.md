@@ -19,8 +19,8 @@ Every group starts with its tests, ends at 100% coverage with lint and typecheck
 
 ## 4. The public surface
 
-- [ ] 4.1 Export `ArvoEventMutation`, `tryMutateArvoEvent` and `mutateArvoEvent` from `src/index.ts`, with a test that each is reachable from the package entry.
+- [x] 4.1 Export `ArvoEventMutation`, `tryMutateArvoEvent` and `mutateArvoEvent` from `src/index.ts`, with a test that each is reachable from the package entry.
 
 ## 5. Proof
 
-- [ ] 5.1 Full suite with coverage at 100% bar the guards already uncovered, lint and typecheck clean, `pnpm build` clean.
+- [x] 5.1 Full suite with coverage at 100% bar the guards already uncovered, lint and typecheck clean, `pnpm build` clean.

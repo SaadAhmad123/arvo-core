@@ -293,3 +293,11 @@ describe("a mutation's trace context", () => {
     expect(mutated.tracestate).toBeNull();
   });
 });
+
+describe('the package entry', () => {
+  it('exports the pair, so code built on arvo-core can reach it', async () => {
+    const packageEntry = await import('../../src/index.js');
+    expect(packageEntry.mutateArvoEvent).toBe(mutateArvoEvent);
+    expect(packageEntry.tryMutateArvoEvent).toBe(tryMutateArvoEvent);
+  });
+});
