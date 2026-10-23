@@ -20,37 +20,37 @@ import type { ArvoLogger } from './types.js';
  */
 export type ArvoTelemetryParam = {
   /** What each span is started on. */
-  tracer?: Tracer;
+  readonly tracer?: Tracer;
   /** What instruments are created on. */
-  meter?: Meter;
+  readonly meter?: Meter;
   /** What log records are emitted through. */
-  logger?: ArvoLogger;
+  readonly logger?: ArvoLogger;
 };
 
-/** Where a call records, every part resolved. */
-export type ArvoResolvedTelemetry = {
+/** Where a call records, its tracer settled; a meter or logger nobody gave stays absent. */
+export type ArvoResolvedTelemetry = ArvoTelemetryParam & {
   readonly tracer: Tracer;
-  readonly meter: Meter | null;
-  readonly logger: ArvoLogger | null;
 };
 
 /**
- * Each part as given, or its default: a tracer from the global provider under
- * the package's one instrumentation name, no meter and no logger.
+ * The telemetry a call records with: each part as given, and a tracer from
+ * whatever OpenTelemetry provider is registered now where none was given. A
+ * meter or logger nobody gave stays absent.
  *
- * @param given - The telemetry given with the call, where any was.
+ * @param givenTelemetry - The telemetry given with the call, where any was.
  *
  * @example
- * const telemetry = resolveTelemetry({ logger });
- * telemetry.meter; // null
+ * const resolvedTelemetry = resolveTelemetry({ logger });
+ * resolvedTelemetry.tracer; // always present
  */
 export const resolveTelemetry = (
-  given: ArvoTelemetryParam | undefined,
+  givenTelemetry: ArvoTelemetryParam | undefined,
 ): ArvoResolvedTelemetry =>
   Object.freeze({
     tracer:
-      given?.tracer ??
+      givenTelemetry?.tracer ??
       trace.getTracer(ARVO_INSTRUMENTATION_NAME, ARVO_RECORD_FORMAT_VERSION),
-    meter: given?.meter ?? null,
-    logger: given?.logger ?? null,
+    // a null from untyped code is left out like an omission, never kept as a part
+    ...(givenTelemetry?.meter ? { meter: givenTelemetry.meter } : {}),
+    ...(givenTelemetry?.logger ? { logger: givenTelemetry.logger } : {}),
   });

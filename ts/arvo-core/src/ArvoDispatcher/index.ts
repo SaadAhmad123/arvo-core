@@ -25,7 +25,6 @@ import {
   flattenMembers,
 } from './helpers/flatten.js';
 import { longestRunTimeoutMs } from './helpers/longest-run-timeout.js';
-import { telemetryForHandler } from './helpers/telemetry-for-handler.js';
 import type {
   ArvoDispatcherExecuteParam,
   ArvoDispatcherMember,
@@ -202,7 +201,7 @@ export class ArvoDispatcher<
   async tryExecute(
     param: ArvoDispatcherExecuteParam<ArvoHandlersOfMembers<TMembers>>,
   ): AsyncResult<ArvoEventHandlerExecuteResponse, ArvoHandlerFault> {
-    // at the call, and passed on whole so the handler never takes a default of its own
+    // at the call, and passed on whole: its tracer is set, so the handler takes no default
     const resolvedTelemetry = resolveTelemetry(param.telemetry);
     const continuedTrace = continueTraceFromEvent(
       param.event,
@@ -214,8 +213,8 @@ export class ArvoDispatcher<
       resolvedTelemetry.tracer.startSpan(ARVO_DISPATCHER_SPAN_NAME);
     const telemetry = new ArvoExecutionContextTelemetry({
       span,
-      meter: resolvedTelemetry.meter,
-      logger: resolvedTelemetry.logger,
+      meter: resolvedTelemetry.meter ?? null,
+      logger: resolvedTelemetry.logger ?? null,
     });
 
     try {
@@ -250,7 +249,7 @@ export class ArvoDispatcher<
         attempt: param.attempt,
         ...(dependency === undefined ? {} : { dependencies: dependency }),
         ...(param.hooks === undefined ? {} : { hooks: param.hooks }),
-        telemetry: telemetryForHandler(resolvedTelemetry),
+        telemetry: resolvedTelemetry,
         ...(this.middlewares.length === 0
           ? {}
           : { middleware: this.middlewares }),

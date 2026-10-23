@@ -288,8 +288,8 @@ export class ArvoEventHandler<
       resolvedTelemetry.tracer.startSpan(`${this.contracts.self.type}.execute`);
     const telemetry = new ArvoExecutionContextTelemetry({
       span,
-      meter: resolvedTelemetry.meter,
-      logger: resolvedTelemetry.logger,
+      meter: resolvedTelemetry.meter ?? null,
+      logger: resolvedTelemetry.logger ?? null,
     });
 
     try {
