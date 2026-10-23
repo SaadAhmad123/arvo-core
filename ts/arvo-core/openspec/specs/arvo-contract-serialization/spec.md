@@ -76,8 +76,6 @@ The system SHALL report, on every successful conversion in either direction, eac
 
 A lost constraint SHALL NOT be reported as a failure. Conversion is best-effort in both directions per ADR-005, so a constraint that could not cross is the mandated outcome rather than an error.
 
-The system SHALL distinguish a constraint **dropped** from a check **demoted** — one that survives in the form as an annotation no implementation is permitted to enforce.
-
 #### Scenario: An unrepresentable type is reported, not raised
 - **WHEN** a contract whose `input` contains a constraint JSON Schema 2020-12 cannot express is serialized
 - **THEN** serialization succeeds
@@ -92,6 +90,10 @@ The system SHALL distinguish a constraint **dropped** from a check **demoted** �
 - **WHEN** a contract whose every constraint is expressible is serialized
 - **THEN** the result reports no losses
 - **AND** the rendered form of the report is absent rather than empty
+
+### Requirement: A Demoted Check Is Distinguished From A Dropped Constraint
+
+The system SHALL distinguish a constraint **dropped** from a check **demoted** — one that survives in the form as an annotation no implementation is permitted to enforce.
 
 #### Scenario: A demotion reads differently from a drop
 - **WHEN** a check survives as an annotation nothing may enforce

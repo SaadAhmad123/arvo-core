@@ -4,11 +4,10 @@
 
 A set of handlers entered as one handler: what the set refuses when it is declared, how it picks the handler for a delivered event, the one fault it raises of its own, what it can be asked about itself, and everything it must leave to whatever runs it. Implements [ADR-017](../../../../../docs/adr/017-dispatcher.md).
 ## Requirements
+
 ### Requirement: A Dispatcher Is Declared From Handlers And Layers
 
 A dispatcher SHALL be declared from a list of handlers and, optionally, a list of layers. Either list MAY name another dispatcher in place of entries: in the handler list it SHALL contribute its handlers and nothing else; in the layer list it SHALL contribute its own layers, in their order, at that position. The result SHALL be one flat set of handlers and one flat list of layers.
-
-Declaration SHALL be offered both as an operation that reports an invalid declaration as a value and as one that throws it, the second derived from the first.
 
 #### Scenario: Handlers listed directly
 
@@ -35,6 +34,10 @@ Declaration SHALL be offered both as an operation that reports an invalid declar
 - **WHEN** a dispatcher is declared with handlers and no layer list
 - **THEN** the declaration succeeds and every handler it enters is supplied no layers
 
+### Requirement: Declaration Is Offered In Two Forms
+
+Declaration SHALL be offered both as an operation that reports an invalid declaration as a value and as one that throws it, the second derived from the first.
+
 #### Scenario: The throwing form
 
 - **WHEN** an invalid dispatcher is declared through the throwing operation
@@ -47,7 +50,6 @@ A declaration SHALL be refused, naming every rule broken rather than the first, 
 - the set of handlers is empty after flattening;
 - one handler instance appears more than once after flattening, however it was reached;
 - two handlers implement self contracts of the same `type`, whether or not their `uri`s differ;
-- a handler declares a service contract whose `type` another handler in the set implements, at a version the implementing handler's contract does not declare, or with a `uri` different from the implementing contract's.
 
 Each refusal SHALL name the handler or handlers concerned by their self contract `type`, and the rule broken.
 
@@ -81,6 +83,17 @@ Each refusal SHALL name the handler or handlers concerned by their self contract
 - **WHEN** two handlers implement self contracts of the same `type` and different `uri`s
 - **THEN** the declaration is refused, naming that `type`
 
+#### Scenario: Every broken rule reported together
+
+- **WHEN** a declaration lists one handler twice and also holds two other handlers under one `type`
+- **THEN** the refusal names both rules
+
+### Requirement: A Service Declared In The Set Matches Its Implementer
+
+A declaration SHALL be refused, naming every rule broken rather than the first, where:
+
+- a handler declares a service contract whose `type` another handler in the set implements, at a version the implementing handler's contract does not declare, or with a `uri` different from the implementing contract's.
+
 #### Scenario: A service declared at a version its implementer lacks
 
 - **WHEN** handler A declares service `com_payment_charge` at a version the handler implementing `com_payment_charge` does not declare
@@ -90,11 +103,6 @@ Each refusal SHALL name the handler or handlers concerned by their self contract
 
 - **WHEN** handler A declares service `com_payment_charge` with a `uri` different from the `uri` of the handler implementing `com_payment_charge`
 - **THEN** the declaration is refused, naming both handlers
-
-#### Scenario: Every broken rule reported together
-
-- **WHEN** a declaration lists one handler twice and also holds two other handlers under one `type`
-- **THEN** the refusal names both rules
 
 ### Requirement: What A Declaration Does Not Refuse
 
@@ -135,14 +143,49 @@ A declaration SHALL NOT be refused for any of the following:
 
 A dispatcher SHALL be entered with exactly what a handler is entered with, less layers: the event, the state function, the attempt number, and optionally dependencies, hooks and telemetry. Dependencies SHALL be given as one entry per handler, keyed by the handler's self contract `type`. Hooks SHALL be one value every handler in the set can accept. Telemetry SHALL be given as a handler takes it.
 
-Entering SHALL be offered both as an operation that reports a fault as a value and as one that throws it, the second derived from the first. It SHALL NOT accept layers.
+Entering SHALL NOT accept layers.
 
-On entry, the dispatcher SHALL pick the handler whose self contract `type` equals `event.to`, and enter that handler with the event — as *A Dispatcher's Span* says it is handed on — the state function, the attempt number, that handler's own dependency entry or none, the hooks, the telemetry *Where A Dispatcher Records Is Given Per Call* resolves, and the dispatcher's layers as the layers supplied for that execution. It SHALL return what the handler returned, unchanged: the events and the next record, a discard, or a fault.
+#### Scenario: An entry for a type nobody here handles
+
+- **WHEN** dependencies are given for a `type` no handler in the set implements
+- **THEN** that entry is never read and the call proceeds as if it were not there
+
+### Requirement: Entering Is Offered In Two Forms
+
+Entering SHALL be offered both as an operation that reports a fault as a value and as one that throws it, the second derived from the first.
+
+#### Scenario: The throwing form
+
+- **WHEN** the picked handler raises a fault and the dispatcher is entered through the throwing operation
+- **THEN** that fault is thrown
+
+### Requirement: A Dispatcher Enters The Handler `to` Names
+
+On entry, the dispatcher SHALL pick the handler whose self contract `type` equals `event.to`, and enter that handler with the event — as *A Dispatcher's Span* says it is handed on — the state function, the attempt number, that handler's own dependency entry or none, the hooks, the telemetry *Where A Dispatcher Records Is Given Per Call* resolves, and the dispatcher's layers as the layers supplied for that execution.
 
 #### Scenario: The handler `to` names is entered
 
 - **WHEN** a dispatcher holding handlers for `com_order_create` and `com_payment_charge` is entered with an event whose `to` is `com_payment_charge`
 - **THEN** the `com_payment_charge` handler is entered and the other is not
+
+#### Scenario: Only the picked handler's dependencies are passed
+
+- **WHEN** dependencies are given for both `com_order_create` and `com_payment_charge`, and the event's `to` is `com_payment_charge`
+- **THEN** the `com_payment_charge` handler receives its own entry and nothing of the other's
+
+#### Scenario: No entry for the picked handler
+
+- **WHEN** dependencies are given only for `com_order_create`, and the event's `to` is `com_payment_charge`
+- **THEN** the `com_payment_charge` handler is entered with no dependencies, and finds them absent
+
+#### Scenario: The set's layers are supplied
+
+- **WHEN** a dispatcher declared with layers is entered
+- **THEN** the picked handler runs those layers as its supplied layers, outside its own declared layers
+
+### Requirement: A Dispatcher Returns What The Handler Returned
+
+The dispatcher SHALL return what the handler returned, unchanged: the events and the next record, a discard, or a fault.
 
 #### Scenario: The handler's response is returned unchanged
 
@@ -158,31 +201,6 @@ On entry, the dispatcher SHALL pick the handler whose self contract `type` equal
 
 - **WHEN** the picked handler raises a fault
 - **THEN** the dispatcher returns that fault, identical in kind, message, retry verdict and abandonment pair
-
-#### Scenario: Only the picked handler's dependencies are passed
-
-- **WHEN** dependencies are given for both `com_order_create` and `com_payment_charge`, and the event's `to` is `com_payment_charge`
-- **THEN** the `com_payment_charge` handler receives its own entry and nothing of the other's
-
-#### Scenario: No entry for the picked handler
-
-- **WHEN** dependencies are given only for `com_order_create`, and the event's `to` is `com_payment_charge`
-- **THEN** the `com_payment_charge` handler is entered with no dependencies, and finds them absent
-
-#### Scenario: An entry for a type nobody here handles
-
-- **WHEN** dependencies are given for a `type` no handler in the set implements
-- **THEN** that entry is never read and the call proceeds as if it were not there
-
-#### Scenario: The set's layers are supplied
-
-- **WHEN** a dispatcher declared with layers is entered
-- **THEN** the picked handler runs those layers as its supplied layers, outside its own declared layers
-
-#### Scenario: The throwing form
-
-- **WHEN** the picked handler raises a fault and the dispatcher is entered through the throwing operation
-- **THEN** that fault is thrown
 
 ### Requirement: No Handler For The Event
 
@@ -210,21 +228,7 @@ Where no handler in the set implements a self contract whose `type` equals `even
 
 ### Requirement: A Dispatcher's Span
 
-On every entry the dispatcher SHALL open exactly one span continuing the event's trace: a child of the context the event's trace headers name where they name one, and the root of a new trace where they do not. The span SHALL end before the entry returns, on every path.
-
-Where that span is recording, the dispatcher SHALL enter the handler with a copy of the event whose trace headers name the span and which is identical to the event in every other field. Where the span is not recording, it SHALL enter the handler with the event as it is. The event the dispatcher was given SHALL NOT be altered.
-
-The dispatcher SHALL mark on its span that it was entered and which handler it picked. It SHALL NOT record on its span anything the handler records on its own. It SHALL mark its span successful once a handler has been entered and has returned, whatever the handler returned, and failed where no handler takes the event. Where something that is not a fault is thrown, it SHALL record it on its span, mark the span failed, and let it propagate as thrown.
-
-#### Scenario: The span continues the event's trace
-
-- **WHEN** a dispatcher is entered with an event carrying a trace context
-- **THEN** it opens one span that is a child of that context, and ends it before returning
-
-#### Scenario: An event with no trace
-
-- **WHEN** a dispatcher is entered with an event carrying no trace context
-- **THEN** it opens one span that begins a new trace
+Where the dispatcher's span is recording, the dispatcher SHALL enter the handler with a copy of the event whose trace headers name the span and which is identical to the event in every other field. Where the span is not recording, it SHALL enter the handler with the event as it is. The event the dispatcher was given SHALL NOT be altered.
 
 #### Scenario: The handler's span nests under the dispatcher's
 
@@ -246,6 +250,24 @@ The dispatcher SHALL mark on its span that it was entered and which handler it p
 
 - **WHEN** the handler returns events carrying its own trace context
 - **THEN** the dispatcher returns them with that trace context, unchanged
+
+### Requirement: A Dispatcher Opens One Span Per Entry
+
+On every entry the dispatcher SHALL open exactly one span continuing the event's trace: a child of the context the event's trace headers name where they name one, and the root of a new trace where they do not. The span SHALL end before the entry returns, on every path.
+
+#### Scenario: The span continues the event's trace
+
+- **WHEN** a dispatcher is entered with an event carrying a trace context
+- **THEN** it opens one span that is a child of that context, and ends it before returning
+
+#### Scenario: An event with no trace
+
+- **WHEN** a dispatcher is entered with an event carrying no trace context
+- **THEN** it opens one span that begins a new trace
+
+### Requirement: A Dispatcher Marks Its Own Span
+
+The dispatcher SHALL mark on its span that it was entered and which handler it picked. It SHALL NOT record on its span anything the handler records on its own. It SHALL mark its span successful once a handler has been entered and has returned, whatever the handler returned, and failed where no handler takes the event. Where something that is not a fault is thrown, it SHALL record it on its span, mark the span failed, and let it propagate as thrown.
 
 #### Scenario: The pick is marked
 
@@ -340,13 +362,6 @@ A dispatcher SHALL say whether a given name may stand outside its set, refusing 
 - it equals the self contract `type` of a handler in the set;
 - it equals the `type` of a service contract any handler in the set declares.
 
-It SHALL be offered both as an operation that reports a refusal as a value and as one that throws it, and SHALL return the name where it is accepted. A refusal SHALL be the dispatcher's validation error.
-
-#### Scenario: An accepted name
-
-- **WHEN** a dispatcher is asked about a well-formed name no handler in it implements or calls
-- **THEN** the name is returned
-
 #### Scenario: A name breaking the grammar
 
 - **WHEN** a dispatcher is asked about a name containing a character the identifier grammar forbids
@@ -367,9 +382,16 @@ It SHALL be offered both as an operation that reports a refusal as a value and a
 - **WHEN** a dispatcher is asked about a name that equals a handler's self contract `type` and is also a service another handler declares
 - **THEN** the refusal names both rules
 
-### Requirement: Where A Dispatcher Records Is Given Per Call
+### Requirement: An Accepted Name Is Returned
 
-Where a dispatcher records SHALL be given with each call, optionally, and SHALL NOT be part of its declaration. A built dispatcher SHALL hold no telemetry, and nothing given for one call SHALL reach another.
+Asking a dispatcher whether a name may stand outside its set SHALL be offered both as an operation that reports a refusal as a value and as one that throws it, and SHALL return the name where it is accepted. A refusal SHALL be the dispatcher's validation error.
+
+#### Scenario: An accepted name
+
+- **WHEN** a dispatcher is asked about a well-formed name no handler in it implements or calls
+- **THEN** the name is returned
+
+### Requirement: Where A Dispatcher Records Is Given Per Call
 
 On every call the dispatcher SHALL resolve its telemetry once, at the start of that call: as given where it was given, and otherwise the default a handler resolves where none is given. It SHALL open its own span with that telemetry, and SHALL enter the handler with that same resolved telemetry. A handler entered by a dispatcher SHALL record with the dispatcher's telemetry for that call and SHALL NOT resolve telemetry of its own.
 
@@ -399,19 +421,22 @@ On every call the dispatcher SHALL resolve its telemetry once, at the start of t
 - **WHEN** a dispatcher is entered with a tracer, a meter and a logger
 - **THEN** the picked handler is entered with that same tracer, meter and logger
 
-#### Scenario: Each call records with its own
-
-- **WHEN** one dispatcher is entered twice, each time with a different tracer
-- **THEN** each call's spans are started on the tracer given with it, and neither on the other's
-
 #### Scenario: Nothing taken for an event no handler takes
 
 - **WHEN** a dispatcher is entered with a tracer and an event no handler in the set takes
 - **THEN** its span, failed as *No Handler For The Event* has it, is started on that tracer
+
+### Requirement: A Dispatcher Holds No Telemetry
+
+Where a dispatcher records SHALL be given with each call, optionally, and SHALL NOT be part of its declaration. A built dispatcher SHALL hold no telemetry, and nothing given for one call SHALL reach another.
+
+#### Scenario: Each call records with its own
+
+- **WHEN** one dispatcher is entered twice, each time with a different tracer
+- **THEN** each call's spans are started on the tracer given with it, and neither on the other's
 
 #### Scenario: A declaration naming telemetry
 
 - **WHEN** a dispatcher's declaration is written with telemetry
 - **THEN** the declaration does not type-check
 - **AND** where it is built anyway, from code no type checker saw, that telemetry is never used: every call records as if it had not been named
-
