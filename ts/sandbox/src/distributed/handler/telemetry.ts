@@ -1,36 +1,27 @@
-import { type Meter, metrics, type Tracer, trace } from '@opentelemetry/api';
+import { type Meter, metrics, trace } from '@opentelemetry/api';
 import { logs } from '@opentelemetry/api-logs';
-import type { ArvoLogger } from 'arvo-core';
+import type { ArvoLogger, ArvoTelemetryParam } from 'arvo-core';
 import { deliveryLogAttributes } from './log-context.js';
 
 /**
- * What the handlers record against, which is nobody's in particular.
+ * What every delivery in this run records with.
  *
- * ADR-006 puts the OpenTelemetry API inside the model, so a handler must
- * be observable without whatever runs it writing any instrumentation.
- * That is only true if a handler can reach telemetry without being
- * handed it by a mechanism — so these come from the OpenTelemetry
- * globals, which whichever worker started the SDK has already
- * registered.
+ * Given to the dispatcher with each delivery, which hands the same to the
+ * handler it enters: where a handler records is decided by whatever runs
+ * it, never by the handler. Each mechanism asks for it once per delivery.
  *
- * Reached rather than given, deliberately. A handler that took its
- * tracer from a mechanism would be a handler that knew which mechanism
- * it was under.
+ * ## Why each part is taken late
  *
- * ## Why two of these are built by hand
+ * The OpenTelemetry API answers from whatever provider is registered at
+ * the moment it is asked, and a worker registers its SDK inside a function
+ * while this module is evaluated at import — always earlier. Since the API
+ * loads as two copies, one for `import` and one for `require`, even a
+ * tracer taken early through `import` can stay silent for good: the SDK
+ * registers through the other copy.
  *
- * Only the tracer resolves itself. `trace.getTracer` answers through a
- * proxy provider, so a tracer taken before an SDK is registered starts
- * working when one is. `metrics.getMeter` and `logs.getLogger` do not:
- * each answers from whatever provider is registered *at the moment it is
- * called*, and a worker's SDK is registered inside a function while this
- * module is evaluated at import — which is always earlier.
- *
- * Taken at face value, that makes every handler metric and every handler
- * log line disappear into a no-op, for the whole life of the process,
- * with nothing to see. So the meter and the logger below resolve per
- * use. It is a real difference between the three APIs rather than
- * something this file chose.
+ * So nothing is taken at import. The tracer is taken when a delivery
+ * begins, and the meter and the logger resolve on every use, so a metric
+ * or a line recorded mid-delivery reaches whatever is registered then.
  */
 
 /** What the handlers call themselves on every span, metric and log. */
@@ -86,13 +77,13 @@ const meterResolvedPerUse = (name: string): Meter =>
     },
   });
 
-/** What every handler in this run is declared with. */
-export const HANDLER_TELEMETRY: {
-  readonly tracer: Tracer;
-  readonly meter: Meter;
-  readonly logger: ArvoLogger;
-} = {
+/**
+ * Where one delivery records, taken when it begins: a tracer from whatever
+ * provider is registered now, and a meter and logger that resolve on every
+ * use.
+ */
+export const deliveryTelemetry = (): ArvoTelemetryParam => ({
   tracer: trace.getTracer(INSTRUMENTED),
   meter: meterResolvedPerUse(INSTRUMENTED),
   logger: loggerFor(INSTRUMENTED),
-};
+});

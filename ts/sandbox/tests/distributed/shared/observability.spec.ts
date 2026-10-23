@@ -20,6 +20,7 @@ import { inventoryCheckHandler } from '../../../src/distributed/handler/com_inve
 import { orderFulfilV1 } from '../../../src/distributed/handler/com_order_fulfil/contract.js';
 import { orderFulfilHandler } from '../../../src/distributed/handler/com_order_fulfil/index.js';
 import { withDeliveryIdentity } from '../../../src/distributed/handler/log-context.js';
+import { deliveryTelemetry } from '../../../src/distributed/handler/telemetry.js';
 import { PostgresCatalogue } from '../../../src/distributed/shared/catalogue.js';
 import { readConfig } from '../../../src/distributed/shared/config.js';
 import { storeFor } from '../../../src/distributed/shared/record-store.js';
@@ -95,6 +96,7 @@ describe('what one delivery records', () => {
           state: ({ executionId }) => storeFor(pool).readRecord(executionId),
           attempt: 0,
           dependencies: new PostgresCatalogue(pool),
+          telemetry: deliveryTelemetry(),
         }),
     );
 
@@ -174,6 +176,7 @@ describe('what one delivery records', () => {
       state: ({ executionId }) => store.readRecord(executionId),
       attempt: 0,
       dependencies: new PostgresCatalogue(pool),
+      telemetry: deliveryTelemetry(),
     });
     if (asking.kind !== 'produced') throw new Error('it asked for nothing');
     await store.commit({ record: asking.state, events: asking.events });
@@ -203,6 +206,7 @@ describe('what one delivery records', () => {
       state: ({ executionId }) => store.readRecord(executionId),
       attempt: 0,
       dependencies: new PostgresCatalogue(pool),
+      telemetry: deliveryTelemetry(),
     });
 
     await metricReader.forceFlush();

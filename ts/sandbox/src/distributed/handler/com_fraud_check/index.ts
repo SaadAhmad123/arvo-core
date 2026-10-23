@@ -2,7 +2,6 @@ import { setupArvoEventHandler } from 'arvo-core';
 import { z } from 'zod';
 import type { DistributedDependencies } from '../dependencies.js';
 import { HANDLER_MIDDLEWARE, tenantFor } from '../middleware/index.js';
-import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { fraudCheckContract } from './contract.js';
 
 /**
@@ -21,7 +20,6 @@ import { fraudCheckContract } from './contract.js';
 export const fraudCheckHandler = setupArvoEventHandler({
   contracts: { self: fraudCheckContract },
   types: {} as { dependencies: DistributedDependencies },
-  telemetry: HANDLER_TELEMETRY,
   middleware: HANDLER_MIDDLEWARE,
   options: { runTimeout: 5_000 },
 })

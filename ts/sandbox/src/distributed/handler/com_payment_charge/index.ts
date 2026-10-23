@@ -2,7 +2,6 @@ import { setupArvoEventHandler } from 'arvo-core';
 import { z } from 'zod';
 import type { DistributedDependencies } from '../dependencies.js';
 import { HANDLER_MIDDLEWARE, tenantFor } from '../middleware/index.js';
-import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { paymentChargeContract } from './contract.js';
 
 /**
@@ -23,7 +22,6 @@ import { paymentChargeContract } from './contract.js';
 export const paymentChargeHandler = setupArvoEventHandler({
   contracts: { self: paymentChargeContract },
   types: {} as { dependencies: DistributedDependencies },
-  telemetry: HANDLER_TELEMETRY,
   middleware: HANDLER_MIDDLEWARE,
   options: {
     runTimeout: 10_000,
