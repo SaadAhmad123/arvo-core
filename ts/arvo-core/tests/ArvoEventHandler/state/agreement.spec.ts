@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deriveArvoExecutionId } from '../../../src/ArvoEventHandler/helpers/execution-id.js';
 import { disagreementsWithInitEvent } from '../../../src/ArvoEventHandler/state/agreement.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import { chargedEvent, initEvent, orderVersion } from '../fixtures.js';
 import { buildState } from './fixtures.js';
 
@@ -107,7 +107,7 @@ describe('a record read against its own init event', () => {
   });
 
   it('reads the init event it holds, not the event that caused this execution', async () => {
-    const openingEvent = cloneArvoEvent(initEvent, {
+    const openingEvent = mutateArvoEvent(initEvent, {
       subject: 'the-real-workflow',
       executionid: 'the-real-workflow',
     });

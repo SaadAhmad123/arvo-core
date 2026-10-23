@@ -1,7 +1,7 @@
 import type { Span, SpanContext } from '@opentelemetry/api';
 import {
   type ArvoEvent,
-  cloneArvoEvent,
+  mutateArvoEvent,
   traceContextFromSpan,
 } from 'arvo-core';
 import { handlerFor } from './routing.js';
@@ -52,7 +52,7 @@ export const continuing = (
 ): ArvoEvent => {
   if (span === undefined) return event;
   const trace = traceContextFromSpan(span);
-  return cloneArvoEvent(event, {
+  return mutateArvoEvent(event, {
     traceparent: trace.traceparent,
     tracestate: trace.tracestate ?? undefined,
   });

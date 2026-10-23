@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ArvoEvent } from '../../../../src/ArvoEvent/index.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../../src/factories/mutateArvoEvent.js';
 import {
   declareVersions,
   inventoryV1,
@@ -133,7 +133,7 @@ const answerTo = (
   executionId: string,
   overrides: Record<string, unknown> = {},
 ) =>
-  cloneArvoEvent(
+  mutateArvoEvent(
     createArvoEventFactory(inventoryV1).createOutput({
       type: 'evt_inventory_reserved',
       source: inventoryV1.type,

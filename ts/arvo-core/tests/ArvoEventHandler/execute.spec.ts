@@ -6,7 +6,7 @@ import { ArvoHandlerFault } from '../../src/ArvoEventHandler/fault/index.js';
 import { deriveArvoExecutionId } from '../../src/ArvoEventHandler/helpers/execution-id.js';
 import type { ArvoEventHandlerExecuteResponse } from '../../src/ArvoEventHandler/types/execute.js';
 import { createArvoEventFactory } from '../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../src/factories/mutateArvoEvent.js';
 import { setupArvoEventHandler } from '../../src/factories/setupArvoEventHandler.js';
 import type { JSONObject } from '../../src/types.js';
 import { heldDependencies, openedPerExecution } from './dependency.js';
@@ -63,7 +63,7 @@ const anOrder = (subject = 'order-1') =>
  * participants rather than a malformed event.
  */
 const miscategorisedOrder = () =>
-  cloneArvoEvent(anOrder(), {
+  mutateArvoEvent(anOrder(), {
     category: 'io.arvo.complete',
     initid: 'a-request-somewhere-else',
   });
@@ -74,8 +74,8 @@ const caughtFault = async (
 ): Promise<ArvoHandlerFault> => {
   try {
     await execution;
-  } catch (thrown) {
-    return thrown as ArvoHandlerFault;
+  } catch (error_) {
+    return error_ as ArvoHandlerFault;
   }
   throw new Error('nothing was refused');
 };
@@ -202,7 +202,7 @@ describe('an event nothing can place', () => {
   });
 
   it('names no execution, nothing having placed it', async () => {
-    const event = cloneArvoEvent(anOrder(), { dataschema: '#/nowhere/1.0.0' });
+    const event = mutateArvoEvent(anOrder(), { dataschema: '#/nowhere/1.0.0' });
     const fault = await caughtFault(
       orderHandler().execute({ event, state: fakeStore().read(), attempt: 0 }),
     );
@@ -210,7 +210,7 @@ describe('an event nothing can place', () => {
   });
 
   it('carries nothing to abandon with, there being nobody to tell', async () => {
-    const event = cloneArvoEvent(anOrder(), { dataschema: '#/nowhere/1.0.0' });
+    const event = mutateArvoEvent(anOrder(), { dataschema: '#/nowhere/1.0.0' });
     const fault = await caughtFault(
       orderHandler().execute({ event, state: fakeStore().read(), attempt: 0 }),
     );
@@ -219,7 +219,7 @@ describe('an event nothing can place', () => {
   });
 
   it('is not worth another attempt, the event being the same every time', async () => {
-    const event = cloneArvoEvent(anOrder(), { dataschema: '#/nowhere/1.0.0' });
+    const event = mutateArvoEvent(anOrder(), { dataschema: '#/nowhere/1.0.0' });
     const fault = await caughtFault(
       orderHandler().execute({ event, state: fakeStore().read(), attempt: 0 }),
     );
@@ -227,7 +227,7 @@ describe('an event nothing can place', () => {
   });
 
   it('is refused where the contract declares no such version', async () => {
-    const event = cloneArvoEvent(anOrder(), {
+    const event = mutateArvoEvent(anOrder(), {
       dataschema: `${orderContract.uri}/9.9.9`,
     });
     const fault = await caughtFault(
@@ -272,7 +272,7 @@ describe('an event whose stated role contradicts what it was placed as', () => {
   });
 
   it('is accepted where the event states something unreserved', async () => {
-    const event = cloneArvoEvent(anOrder(), { category: 'something.else' });
+    const event = mutateArvoEvent(anOrder(), { category: 'something.else' });
     const response = await orderHandler().execute({
       event,
       state: fakeStore().read(),
@@ -437,7 +437,7 @@ describe('an execution whose version the handler no longer runs', () => {
 
 describe('an event the contract it named cannot send here', () => {
   it('refuses a payload the schema rejects', async () => {
-    const event = cloneArvoEvent(anOrder(), {
+    const event = mutateArvoEvent(anOrder(), {
       data: { items: ['book', 7] as unknown as string[] },
     });
     const fault = await caughtFault(
@@ -447,7 +447,7 @@ describe('an event the contract it named cannot send here', () => {
   });
 
   it('refuses a type the contract never takes in', async () => {
-    const event = cloneArvoEvent(anOrder(), { type: 'com_order_created' });
+    const event = mutateArvoEvent(anOrder(), { type: 'com_order_created' });
     const fault = await caughtFault(
       orderHandler().execute({ event, state: fakeStore().read(), attempt: 0 }),
     );
@@ -510,7 +510,6 @@ describe('what the handler records against', () => {
 
     const handler = setupArvoEventHandler({
       contracts: { self: orderContract },
-      telemetry: { tracer },
     })
       .handler('1.0.0', async () => {})
       .build();
@@ -519,6 +518,7 @@ describe('what the handler records against', () => {
       event: anOrder(),
       state: fakeStore().read(),
       attempt: 0,
+      telemetry: { tracer },
     });
     expect(spanNames).toEqual(['com_order_create.execute']);
   });
@@ -563,7 +563,7 @@ describe('an answering event that states it opens one', () => {
 
     const fault = await caughtFault(
       handler.execute({
-        event: cloneArvoEvent(chargedEvent, { category: 'io.arvo.init' }),
+        event: mutateArvoEvent(chargedEvent, { category: 'io.arvo.init' }),
         state: store.read(),
         attempt: 0,
       }),
@@ -636,7 +636,7 @@ describe('what the executor is given', () => {
 
 describe('the trace an execution records on', () => {
   it('continues the one the event arrived on', async () => {
-    const event = cloneArvoEvent(anOrder(), {
+    const event = mutateArvoEvent(anOrder(), {
       traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
     });
     const response = await orderHandler().execute({

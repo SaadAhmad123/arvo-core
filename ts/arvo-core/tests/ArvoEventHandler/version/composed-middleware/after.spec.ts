@@ -43,8 +43,8 @@ describe('after', () => {
         after: (_, emission) => {
           try {
             (emission as unknown[]).push('extra');
-          } catch (thrown) {
-            pushFailure = thrown;
+          } catch (error_) {
+            pushFailure = error_;
           }
         },
       },

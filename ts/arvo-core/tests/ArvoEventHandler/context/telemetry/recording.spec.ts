@@ -60,9 +60,9 @@ describe('what an execution may be told to record against', () => {
         meter: null,
         logger: null,
       });
-    } catch (thrown) {
+    } catch (error_) {
       const validationError =
-        thrown as ArvoExecutionContextTelemetryValidationError;
+        error_ as ArvoExecutionContextTelemetryValidationError;
       expect(validationError.issues[0]?.path).toBe('span');
       expect(validationError.message).toContain('addEvent');
       return;
@@ -77,9 +77,9 @@ describe('what an execution may be told to record against', () => {
         meter: {} as never,
         logger: null,
       });
-    } catch (thrown) {
+    } catch (error_) {
       const validationError =
-        thrown as ArvoExecutionContextTelemetryValidationError;
+        error_ as ArvoExecutionContextTelemetryValidationError;
       expect(validationError.issues[0]?.path).toBe('meter');
       return;
     }
@@ -93,9 +93,9 @@ describe('what an execution may be told to record against', () => {
         meter: null,
         logger: { log: () => undefined } as never,
       });
-    } catch (thrown) {
+    } catch (error_) {
       const validationError =
-        thrown as ArvoExecutionContextTelemetryValidationError;
+        error_ as ArvoExecutionContextTelemetryValidationError;
       expect(validationError.issues[0]?.path).toBe('logger');
       return;
     }
@@ -109,9 +109,9 @@ describe('what an execution may be told to record against', () => {
         meter: {} as never,
         logger: {} as never,
       });
-    } catch (thrown) {
+    } catch (error_) {
       const validationError =
-        thrown as ArvoExecutionContextTelemetryValidationError;
+        error_ as ArvoExecutionContextTelemetryValidationError;
       expect(validationError.issues.map((issue) => issue.path)).toEqual([
         'span',
         'meter',

@@ -54,6 +54,21 @@ describe('isUriReference', () => {
       expect(isUriReference('a/../b')).toBe(false);
     });
 
+    it('rejects a dot-segment that serializing leaves in place', () => {
+      // a relative reference may keep leading dot-segments when serialized,
+      // so being already canonical does not on its own rule them out
+      expect(isUriReference('../../x')).toBe(false);
+      expect(isUriReference('..')).toBe(false);
+      expect(isUriReference('.')).toBe(false);
+      expect(isUriReference('../a/b')).toBe(false);
+    });
+
+    it('accepts a segment that merely contains dots', () => {
+      expect(isUriReference('a/..b/c')).toBe(true);
+      expect(isUriReference('a/.hidden')).toBe(true);
+      expect(isUriReference('https://example.com/v1.2/schema')).toBe(true);
+    });
+
     it('rejects an authority with no path, which canonicalizes to a slash', () => {
       // `https://example.com` serializes as `https://example.com/`, so it is
       // not already canonical. Worth pinning: it is the shape most likely to

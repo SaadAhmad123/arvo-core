@@ -85,17 +85,6 @@ export class ArvoEventHandlerSetup<
   /** What the handler declared, or `null` where it declared nothing. */
   readonly options: Partial<ArvoEventHandlerOptions> | null;
 
-  /**
-   * Where this handler's executions will record, or `null` where nothing
-   * was declared and every signal is a no-op.
-   */
-  readonly telemetry: ArvoEventHandlerSetupParam<
-    ArvoContract,
-    ArvoServiceMap,
-    ArvoDependencies,
-    ArvoMechanismHooks
-  >['telemetry'];
-
   /** Every version declared so far, in the order they were declared. */
   readonly versions: ArvoAccumulatedVersions;
 
@@ -128,7 +117,6 @@ export class ArvoEventHandlerSetup<
       services: Object.freeze({ ...param.contracts.services } as TServices),
     });
     this.options = param.options ?? null;
-    this.telemetry = param.telemetry;
     // a non-list is kept for build to refuse; null from an untyped caller is none
     this.middleware = Array.isArray(param.middleware)
       ? Object.freeze([...param.middleware])
@@ -205,7 +193,6 @@ export class ArvoEventHandlerSetup<
           services: this.contracts.services as TServices,
         },
         ...(this.options === null ? {} : { options: this.options }),
-        ...(this.telemetry === undefined ? {} : { telemetry: this.telemetry }),
         ...(this.middleware === undefined
           ? {}
           : { middleware: this.middleware }),
@@ -238,13 +225,13 @@ export class ArvoEventHandlerSetup<
   > {
     try {
       return fromNeverthrow(ok(new ArvoEventHandler(this)));
-    } catch (thrown) {
-      if (thrown instanceof ArvoEventHandlerValidationError) {
-        return fromNeverthrow(err(thrown));
+    } catch (error_) {
+      if (error_ instanceof ArvoEventHandlerValidationError) {
+        return fromNeverthrow(err(error_));
       }
       // anything else is not a refused declaration, so reporting it here
       // would make the error type say something untrue
-      throw thrown;
+      throw error_;
     }
   }
 

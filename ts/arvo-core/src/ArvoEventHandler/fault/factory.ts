@@ -10,7 +10,10 @@ import { ArvoExecutionStateSerializer } from '../state/serializer/index.js';
 import { mutateState } from '../state/utils.js';
 import { ArvoHandlerFault } from './index.js';
 import { isRetrySafeFaultKind, resolveRetry } from './retry.js';
-import type { ArvoHandlerFaultFactoryParam } from './types.js';
+import type {
+  ArvoHandlerFaultFactoryParam,
+  ArvoHandlerFaultWithHandlerParam,
+} from './types.js';
 
 /**
  * What an execution's own fields are, or what stands in where it has no
@@ -26,7 +29,7 @@ type ArvoFaultOrigin = ArvoHandlerErrorAddressing & {
 
 /** Everything a fault names, read off the record or off the event instead. */
 const faultOrigin = (
-  param: ArvoHandlerFaultFactoryParam,
+  param: ArvoHandlerFaultWithHandlerParam,
   self: VersionedArvoContract,
 ): ArvoFaultOrigin =>
   param.state === null
@@ -120,6 +123,28 @@ export const createArvoHandlerFault = async (
   param: ArvoHandlerFaultFactoryParam,
 ): Promise<ArvoHandlerFault> => {
   const timestamp = Date.now();
+
+  // Nothing was entered: no contract to address an error event from, no
+  // execution to abandon, no budget to consult for a retry.
+  if (param.contracts === null) {
+    const fault = new ArvoHandlerFault({
+      faultKind: param.faultKind,
+      message: param.message,
+      violations: param.violations ?? [],
+      cause: param.cause ?? null,
+      subject: param.event.subject,
+      executionId: null,
+      eventId: param.event.id,
+      attempt: param.attempt,
+      timestamp,
+      retry: null,
+      abandonmentEvent: null,
+      abandonmentState: null,
+    });
+    param.telemetry.recordFault(fault);
+    return fault;
+  }
+
   const self = param.contracts.self;
   const origin = faultOrigin(param, self);
 

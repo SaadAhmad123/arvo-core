@@ -176,3 +176,15 @@ describe('what the chain refuses before anything runs', () => {
     expect(executorObservations).toBeDefined();
   });
 });
+
+describe('what a declaration may name', () => {
+  it('does not take telemetry, which is given with each execution', () => {
+    const declare = () =>
+      setupArvoEventHandler({
+        contracts: { self: orderContract },
+        // @ts-expect-error telemetry is given with each execution, not declared
+        telemetry: {},
+      });
+    expect(declare).toBeTypeOf('function');
+  });
+});

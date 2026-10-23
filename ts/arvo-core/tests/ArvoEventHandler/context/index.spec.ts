@@ -358,8 +358,8 @@ describe('ArvoExecutionContext', async () => {
       const ctx = onInit();
       try {
         await ctx.setState({ data: { orderId: 42 } as never });
-      } catch (thrown) {
-        return thrown as ArvoHandlerFault;
+      } catch (error_) {
+        return error_ as ArvoHandlerFault;
       }
       throw new Error('expected the write to be refused');
     };
@@ -406,9 +406,9 @@ describe('ArvoExecutionContext', async () => {
       const ctx = onInit();
       try {
         await ctx.setState({ data: 'not an object at all' as never });
-      } catch (thrown) {
-        expect((thrown as ArvoHandlerFault).violations[0]).toContain('(root)');
-        expect((thrown as ArvoHandlerFault).message).toContain('(root)');
+      } catch (error_) {
+        expect((error_ as ArvoHandlerFault).violations[0]).toContain('(root)');
+        expect((error_ as ArvoHandlerFault).message).toContain('(root)');
         return;
       }
       throw new Error('expected the write to be refused');
@@ -489,8 +489,8 @@ describe('ArvoExecutionContext', async () => {
       let fault: ArvoHandlerFault | undefined;
       try {
         await ctx.setState({ data: { orderId: 42 } as never });
-      } catch (thrown) {
-        fault = thrown as ArvoHandlerFault;
+      } catch (error_) {
+        fault = error_ as ArvoHandlerFault;
       }
       const abandonmentRecord = JSON.parse(fault?.abandonmentState as string);
       expect(abandonmentRecord.data).toEqual({ orderId: 'o-1', attempts: 1 });
@@ -504,8 +504,8 @@ describe('ArvoExecutionContext', async () => {
       let fault: ArvoHandlerFault | undefined;
       try {
         await ctx.setState({ data: { orderId: 42 } as never });
-      } catch (thrown) {
-        fault = thrown as ArvoHandlerFault;
+      } catch (error_) {
+        fault = error_ as ArvoHandlerFault;
       }
       expect(fault).toBeInstanceOf(ArvoHandlerFault);
       expect(fault?.abandonmentEvent).toBeNull();
@@ -614,7 +614,7 @@ describe('ArvoExecutionContext', async () => {
       await ctx.setMiddleware('tenant', 'first');
       const secondWriteFault = await ctx
         .setMiddleware('tenant', 'second')
-        .catch((thrown: unknown) => thrown);
+        .catch((error_: unknown) => error_);
       expect(secondWriteFault).toBeInstanceOf(ArvoHandlerFault);
       expect((secondWriteFault as ArvoHandlerFault).faultKind).toBe(
         'middleware_conflict',

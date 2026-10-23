@@ -113,7 +113,7 @@ The TSDoc rules above govern the package's **public export surface** — what `s
 - `ctx` — the execution context, as the public API and every example spell it.
 - `param` — the single object a function takes, as every function in this package spells it.
 
-**A caught value is `thrown`** — what was thrown — never `raised`, `e` or `err`.
+**A caught value is `error_`** — the name SonarQube's catch-parameter rule (`typescript:S7718`) expects — never `thrown`, `raised`, `e` or `err`.
 
 Descriptive is not the same as verbose. The test is whether the name answers *what is this* without the line below it, not whether it is long. Prefer the shortest name that still passes.
 

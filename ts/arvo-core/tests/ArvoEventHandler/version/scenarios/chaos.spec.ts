@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ArvoDomain } from '../../../../src/ArvoDomain/index.js';
 import type { ArvoEvent } from '../../../../src/ArvoEvent/index.js';
 import { createArvoEventFactory } from '../../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../../src/factories/mutateArvoEvent.js';
 import {
   declareVersions,
   type OrderContext,
@@ -45,7 +45,7 @@ const aWalk = (remaining: number, subject: string) =>
 
 /** What a person decides, injected from outside the lattice. */
 const reviewDecision = (reviewRequest: ArvoEvent) =>
-  cloneArvoEvent(
+  mutateArvoEvent(
     createArvoEventFactory(reviewV1).createOutput({
       type: 'evt_review_decided',
       source: reviewV1.type,
@@ -98,12 +98,12 @@ const runAndCheck = async (
   const { lattice, chaos } = await runShape(seed, shape);
   try {
     await checkInvariants(lattice);
-  } catch (thrown) {
+  } catch (error_) {
     throw new Error(
       `seed ${seed} broke an invariant under ${JSON.stringify(chaos)}: ${
-        (thrown as Error).message
+        (error_ as Error).message
       }`,
-      { cause: thrown },
+      { cause: error_ },
     );
   }
   return lattice;
@@ -201,12 +201,12 @@ describe('a workflow waiting on a person, however the lattice behaves', () => {
 
       try {
         await checkInvariants(lattice);
-      } catch (thrown) {
+      } catch (error_) {
         throw new Error(
           `seed ${seed} broke an invariant under ${JSON.stringify(chaos)}: ${
-            (thrown as Error).message
+            (error_ as Error).message
           }`,
-          { cause: thrown },
+          { cause: error_ },
         );
       }
 

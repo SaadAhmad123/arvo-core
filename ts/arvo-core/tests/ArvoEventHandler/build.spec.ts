@@ -70,8 +70,8 @@ describe('a declaration that is refused', () => {
     let thrownError: ArvoEventHandlerValidationError | null = null;
     try {
       incompleteDeclaration().build();
-    } catch (thrown) {
-      thrownError = thrown as ArvoEventHandlerValidationError;
+    } catch (error_) {
+      thrownError = error_ as ArvoEventHandlerValidationError;
     }
     const tryBuildResult = incompleteDeclaration().tryBuild();
     expect(

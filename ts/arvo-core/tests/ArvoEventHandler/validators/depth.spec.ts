@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ArvoEventDepthValidator } from '../../../src/ArvoEventHandler/validators/depth/index.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import { initEvent } from '../fixtures.js';
 
 /**
@@ -8,7 +8,7 @@ import { initEvent } from '../fixtures.js';
  * a root event at depth 0 and a depth validator is about nesting.
  */
 const eventAtDepth = (depth: number) =>
-  cloneArvoEvent(initEvent, { depth, parentid: 'the-event-that-caused-it' });
+  mutateArvoEvent(initEvent, { depth, parentid: 'the-event-that-caused-it' });
 
 const depthValidator = (maxDepth: number) =>
   new ArvoEventDepthValidator({

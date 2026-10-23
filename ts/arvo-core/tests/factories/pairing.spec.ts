@@ -9,13 +9,13 @@ import {
   tryCreateArvoEventFactory,
 } from '../../src/factories/ArvoEventFactory/index.js';
 import {
-  cloneArvoEvent,
-  tryCloneArvoEvent,
-} from '../../src/factories/cloneArvoEvent.js';
-import {
   createArvoEvent,
   tryCreateArvoEvent,
 } from '../../src/factories/createArvoEvent.js';
+import {
+  mutateArvoEvent,
+  tryMutateArvoEvent,
+} from '../../src/factories/mutateArvoEvent.js';
 
 const orderVersion = new ArvoContract({
   type: 'com_order_create',
@@ -74,11 +74,11 @@ const builderPairs = [
       }),
   ],
   [
-    'cloneArvoEvent',
-    () => cloneArvoEvent(event),
-    () => tryCloneArvoEvent(event),
-    () => cloneArvoEvent(event, { to: '' }),
-    () => tryCloneArvoEvent(event, { to: '' }),
+    'mutateArvoEvent',
+    () => mutateArvoEvent(event, { to: 'com.audit.log' }),
+    () => tryMutateArvoEvent(event, { to: 'com.audit.log' }),
+    () => mutateArvoEvent(event, { to: '' }),
+    () => tryMutateArvoEvent(event, { to: '' }),
   ],
   [
     'createInput',

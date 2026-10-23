@@ -107,8 +107,8 @@ parentPort?.on('message', async (message: RunRequest | ReadAnswer) => {
           serializedEvent !== null,
       ),
     });
-  } catch (thrown) {
-    const fault = thrown as {
+  } catch (error_) {
+    const fault = error_ as {
       faultKind?: string;
       retry?: unknown;
       abandonmentEvent?: string | null;

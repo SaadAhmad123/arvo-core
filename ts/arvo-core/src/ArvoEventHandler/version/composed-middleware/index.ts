@@ -173,11 +173,11 @@ export class ArvoComposedMiddleware<
           before: layer.before,
           after: layer.after,
         };
-      } catch (thrown) {
+      } catch (error_) {
         shapeIssues.push(
           new ErrorIssue({
             path: position,
-            message: `could not be read: ${textOfThrown(thrown)}`,
+            message: `could not be read: ${textOfThrown(error_)}`,
           }),
         );
         continue;
@@ -294,13 +294,13 @@ export class ArvoComposedMiddleware<
           readOnlyEmission,
         );
         this.#markPart(ctx, 'middleware_after_returned', checkedLayer);
-      } catch (thrown) {
+      } catch (error_) {
         // never rethrow: an after part cannot change the outcome
         this.#markPart(
           ctx,
           'middleware_after_failed',
           checkedLayer,
-          describeThrown(thrown),
+          describeThrown(error_),
         );
       }
     }

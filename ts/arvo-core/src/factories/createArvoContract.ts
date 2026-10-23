@@ -40,13 +40,13 @@ export const tryCreateArvoContract = <
 ): Result<ArvoContract<T, M>, ArvoContractValidationError> => {
   try {
     return fromNeverthrow(ok(new ArvoContract<T, M>(param)));
-  } catch (thrown) {
-    if (thrown instanceof ArvoContractValidationError) {
-      return fromNeverthrow(err(thrown));
+  } catch (error_) {
+    if (error_ instanceof ArvoContractValidationError) {
+      return fromNeverthrow(err(error_));
     }
     // Anything else is not an invalid declaration, so reporting it here would
     // make the error type say something untrue. It goes up as it arrived.
-    throw thrown;
+    throw error_;
   }
 };
 

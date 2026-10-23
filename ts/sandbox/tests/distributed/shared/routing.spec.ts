@@ -1,7 +1,7 @@
 import {
   type ArvoEvent,
-  cloneArvoEvent,
   createArvoEventFactory,
+  mutateArvoEvent,
 } from 'arvo-core';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -136,7 +136,7 @@ describe('where an event goes', () => {
     // The same request readdressed goes elsewhere, though its type,
     // source, dataschema and category all still say inventory.
     const readdressed = destinationFor(
-      cloneArvoEvent(request, { to: 'com_fraud_check' }),
+      mutateArvoEvent(request, { to: 'com_fraud_check' }),
     );
     expect(readdressed.kind).toBe('handled');
     if (readdressed.kind !== 'handled') return;

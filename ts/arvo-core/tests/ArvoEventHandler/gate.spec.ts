@@ -4,7 +4,7 @@ import {
   refuseMismatchedPresence,
   refuseWithdrawnVersion,
 } from '../../src/ArvoEventHandler/gate.js';
-import { cloneArvoEvent } from '../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../src/factories/mutateArvoEvent.js';
 import type { JSONObject } from '../../src/types.js';
 import {
   chargedEvent,
@@ -26,7 +26,7 @@ const answeringEntry = {
 
 describe('an event stating what it is', () => {
   it('accepts one opening an execution that states so', () => {
-    const event = cloneArvoEvent(initEvent, { category: 'io.arvo.init' });
+    const event = mutateArvoEvent(initEvent, { category: 'io.arvo.init' });
     expect(refuseMiscategorised(openingEntry, event)).toBeNull();
   });
 
@@ -35,7 +35,7 @@ describe('an event stating what it is', () => {
   });
 
   it('refuses one opening an execution that states it completes one', () => {
-    const event = cloneArvoEvent(initEvent, {
+    const event = mutateArvoEvent(initEvent, {
       category: 'io.arvo.complete',
       initid: 'a-request-somewhere-else',
     });
@@ -45,7 +45,7 @@ describe('an event stating what it is', () => {
   });
 
   it('refuses one answering an execution that states it opens one', () => {
-    const event = cloneArvoEvent(chargedEvent, { category: 'io.arvo.init' });
+    const event = mutateArvoEvent(chargedEvent, { category: 'io.arvo.init' });
     expect(refuseMiscategorised(answeringEntry, event)?.faultKind).toBe(
       'category_mismatch',
     );
@@ -59,12 +59,12 @@ describe('an event stating what it is', () => {
   });
 
   it('does not consult one stating something it has no meaning for', () => {
-    const event = cloneArvoEvent(initEvent, { category: 'something.else' });
+    const event = mutateArvoEvent(initEvent, { category: 'something.else' });
     expect(refuseMiscategorised(openingEntry, event)).toBeNull();
   });
 
   it('says which it should have been, so the disagreement is readable', () => {
-    const event = cloneArvoEvent(chargedEvent, { category: 'io.arvo.init' });
+    const event = mutateArvoEvent(chargedEvent, { category: 'io.arvo.init' });
     expect(
       refuseMiscategorised(answeringEntry, event)?.violations[0],
     ).toContain('io.arvo.complete');

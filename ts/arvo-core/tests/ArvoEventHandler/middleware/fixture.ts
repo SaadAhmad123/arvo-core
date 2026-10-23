@@ -120,7 +120,6 @@ export const orderHandler = (
     execute?: OrderExecutor;
     runTimeout?: number | null;
     executionTimeout?: number | null;
-    tracer?: Tracer;
   } = {},
 ) =>
   setupArvoEventHandler({
@@ -133,9 +132,6 @@ export const orderHandler = (
         ? {}
         : { executionTimeout: param.executionTimeout }),
     },
-    ...(param.tracer === undefined
-      ? {}
-      : { telemetry: { tracer: param.tracer } }),
     ...(param.middleware === undefined ? {} : { middleware: param.middleware }),
   })
     .handler('1.0.0', {
@@ -155,6 +151,7 @@ export const executeOrder = async (
     store?: ReturnType<typeof createInMemoryStore>;
     dependencies?: IArvoEventHandlerDependency;
     attempt?: number;
+    tracer?: Tracer;
   } = {},
 ): Promise<
   | { ok: true; value: ArvoEventHandlerExecuteResponse }
@@ -168,6 +165,9 @@ export const executeOrder = async (
     ...(param.dependencies === undefined
       ? {}
       : { dependencies: param.dependencies as never }),
+    ...(param.tracer === undefined
+      ? {}
+      : { telemetry: { tracer: param.tracer } }),
   });
   return executionResult;
 };

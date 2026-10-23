@@ -8,7 +8,7 @@ import { ArvoExecutionContext } from '../../../src/ArvoEventHandler/context/inde
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
 import { createInitArvoExecutionState } from '../../../src/ArvoEventHandler/state/factory.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import {
   initEvent,
   orderVersion,
@@ -158,8 +158,8 @@ describe('building an event to emit', async () => {
     const refusedTypeFault = async (type: string, data: unknown = {}) => {
       try {
         await openingContext().build({ type, data } as never);
-      } catch (thrown) {
-        return thrown as ArvoHandlerFault;
+      } catch (error_) {
+        return error_ as ArvoHandlerFault;
       }
       throw new Error('expected the emission to be refused');
     };
@@ -202,8 +202,8 @@ describe('building an event to emit', async () => {
           type: 'com_payment_charge',
           data: { amount: 'ten' },
         } as never);
-      } catch (thrown) {
-        return thrown as ArvoHandlerFault;
+      } catch (error_) {
+        return error_ as ArvoHandlerFault;
       }
       throw new Error('expected the emission to be refused');
     };
@@ -310,7 +310,7 @@ describe('which processing path an emitted event takes', () => {
 
   /** An execution of the domained contract, triggered by a domained event. */
   const reviewingContext = () => {
-    const triggeringEvent = cloneArvoEvent(initEvent, {
+    const triggeringEvent = mutateArvoEvent(initEvent, {
       dataschema: reviewedOrder.dataschema,
       domain: 'inherited',
     });

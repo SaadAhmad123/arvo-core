@@ -97,7 +97,7 @@ describe('a constraint the conversion drops without saying so', () => {
     }
   });
 
-  it('reports a dropped propertyNames', () => {
+  it('reports no loss for propertyNames, which the conversion carries and enforces', () => {
     const conversion = convertInput(
       objectSchema({
         a: { type: 'object', propertyNames: { pattern: '^[a-z]+$' } },
@@ -105,14 +105,14 @@ describe('a constraint the conversion drops without saying so', () => {
     );
     expect(conversion.ok).toBe(true);
     if (conversion.ok) {
-      expect(
-        conversion.value.losses.map((loss) => loss.message).join(' '),
-      ).toContain('propertyNames');
-      expect(conversion.value.losses[0]?.path).toBe('input.properties.a');
+      expect(conversion.value.losses).toEqual([]);
+      const { schema } = conversion.value;
+      expect(z.safeParse(schema, { a: { ab: 1 } }).success).toBe(true);
+      expect(z.safeParse(schema, { a: { AB: 1 } }).success).toBe(false);
     }
   });
 
-  it('reports a dropped uniqueItems', () => {
+  it('reports no loss for uniqueItems, which the conversion carries and enforces', () => {
     const conversion = convertInput(
       objectSchema({
         a: { type: 'array', items: { type: 'string' }, uniqueItems: true },
@@ -120,9 +120,10 @@ describe('a constraint the conversion drops without saying so', () => {
     );
     expect(conversion.ok).toBe(true);
     if (conversion.ok) {
-      expect(
-        conversion.value.losses.map((loss) => loss.message).join(' '),
-      ).toContain('uniqueItems');
+      expect(conversion.value.losses).toEqual([]);
+      const { schema } = conversion.value;
+      expect(z.safeParse(schema, { a: ['x', 'y'] }).success).toBe(true);
+      expect(z.safeParse(schema, { a: ['x', 'x'] }).success).toBe(false);
     }
   });
 

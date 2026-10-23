@@ -404,8 +404,8 @@ export class ArvoLattice {
         return;
       }
       this.#commit(executionId, event, response.state, response.events);
-    } catch (thrown) {
-      await this.#onFault(event, executionId, attemptKey, attempt, thrown);
+    } catch (error_) {
+      await this.#onFault(event, executionId, attemptKey, attempt, error_);
     }
   }
 
@@ -452,17 +452,17 @@ export class ArvoLattice {
       const executionId = String(response.state.executionId);
       this.transcript.delivered.push({ event, executionId, attempt });
       this.#commit(executionId, event, response.state, response.events);
-    } catch (thrown) {
+    } catch (error_) {
       const faultExecutionId =
-        thrown instanceof ArvoHandlerFault && thrown.executionId !== null
-          ? thrown.executionId
+        error_ instanceof ArvoHandlerFault && error_.executionId !== null
+          ? error_.executionId
           : 'unplaced';
       await this.#onFault(
         event,
         faultExecutionId,
         `${faultExecutionId}:${event.id}`,
         attempt,
-        thrown,
+        error_,
       );
     }
   }
@@ -522,8 +522,8 @@ export class ArvoLattice {
       [0, 1].map(async () => {
         try {
           return { response: await this.#run(route, event, attempt) };
-        } catch (thrown) {
-          return { thrown };
+        } catch (error_) {
+          return { thrown: error_ };
         }
       }),
     );

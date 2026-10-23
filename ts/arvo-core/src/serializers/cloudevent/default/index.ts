@@ -45,14 +45,14 @@ export class ArvoToCloudEventConverter implements IArvoEventTransformer {
         });
       }
       return event;
-    } catch (thrown) {
-      if (thrown instanceof ArvoEventValidationError) {
+    } catch (error_) {
+      if (error_ instanceof ArvoEventValidationError) {
         throw new CloudEventTransformationError({
           kind,
-          issues: [...decoded.issues, ...thrown.issues],
+          issues: [...decoded.issues, ...error_.issues],
         });
       }
-      throw thrown;
+      throw error_;
     }
   }
 }

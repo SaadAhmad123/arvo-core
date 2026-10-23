@@ -116,9 +116,9 @@ describe('VersionedArvoContract', () => {
     ): string[] => {
       try {
         new VersionedArvoContract(validParam(overrides));
-      } catch (thrown) {
-        if (!(thrown instanceof ArvoContractValidationError)) throw thrown;
-        return thrown.issues.map((issue) => issue.path);
+      } catch (error_) {
+        if (!(error_ instanceof ArvoContractValidationError)) throw error_;
+        return error_.issues.map((issue) => issue.path);
       }
       throw new Error('expected construction to fail');
     };

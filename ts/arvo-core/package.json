@@ -53,18 +53,19 @@
   "homepage": "https://www.arvo.land",
   "license": "MIT",
   "devDependencies": {
-    "@biomejs/biome": "2.5.5",
-    "@changesets/cli": "2.31.1",
-    "@fission-ai/openspec": "^1.7.0",
-    "@opentelemetry/api": "1.9.1",
-    "@types/node": "22.20.1",
-    "@vitest/coverage-v8": "5.0.4",
+    "@biomejs/biome": "2.6.2",
+    "@changesets/cli": "3.0.3",
+    "@fission-ai/openspec": "^1.14.3",
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/sdk-trace": "2.12.0",
+    "@types/node": "22.20.5",
+    "@vitest/coverage-v8": "5.0.5",
     "cloudevents": "10.0.0",
-    "dotenv": "16.6.1",
+    "dotenv": "18.0.8",
     "ts-node": "10.9.2",
     "typescript": "7.0.2",
-    "vitest": "5.0.4",
-    "zod": "4.4.3"
+    "vitest": "5.0.5",
+    "zod": "4.6.7"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.0",
@@ -76,7 +77,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "fast-uri": "4.1.2",
+    "fast-uri": "4.2.3",
     "neverthrow": "8.2.0"
   }
 }

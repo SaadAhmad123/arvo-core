@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { ArvoContract } from '../../../src/ArvoContract/index.js';
 import { ArvoEventValidator } from '../../../src/ArvoEventHandler/validators/event/index.js';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import {
   chargedEvent,
   initEvent,
@@ -90,14 +90,14 @@ describe('an event that could not have arrived', () => {
   };
 
   it('names no contract this handler declared', () => {
-    const strangerEvent = cloneArvoEvent(initEvent, {
+    const strangerEvent = mutateArvoEvent(initEvent, {
       dataschema: '#/com/elsewhere/1.0.0',
     });
     expect(inputRefusal(strangerEvent).faultKind).toBe('event_unclassifiable');
   });
 
   it('says what it should have named', () => {
-    const strangerEvent = cloneArvoEvent(initEvent, {
+    const strangerEvent = mutateArvoEvent(initEvent, {
       dataschema: '#/com/elsewhere/1.0.0',
     });
     expect(inputRefusal(strangerEvent).issues[0]?.path).toBe('dataschema');
@@ -105,7 +105,7 @@ describe('an event that could not have arrived', () => {
   });
 
   it('is a version of the implemented contract that does not exist', () => {
-    const futureVersionEvent = cloneArvoEvent(initEvent, {
+    const futureVersionEvent = mutateArvoEvent(initEvent, {
       dataschema: `${orderContract.uri}/9.9.9`,
     });
     expect(inputRefusal(futureVersionEvent).faultKind).toBe(
@@ -128,7 +128,7 @@ describe('an event that could not have arrived', () => {
   });
 
   it('is not a type that service ever answers with', () => {
-    const unknownTypeEvent = cloneArvoEvent(chargedEvent, {
+    const unknownTypeEvent = mutateArvoEvent(chargedEvent, {
       type: 'evt_unknown' as never,
     });
     expect(inputRefusal(unknownTypeEvent).faultKind).toBe(
@@ -140,7 +140,7 @@ describe('an event that could not have arrived', () => {
   });
 
   it('carries a payload the schema refuses', () => {
-    const badPayloadEvent = cloneArvoEvent(initEvent, {
+    const badPayloadEvent = mutateArvoEvent(initEvent, {
       data: { items: 'not a list' } as never,
     });
     expect(inputRefusal(badPayloadEvent).faultKind).toBe(
@@ -216,7 +216,7 @@ describe('an event that may not be emitted', () => {
       subject: initEvent.subject,
       data: { eta: 'tomorrow' },
     });
-    const wrongVersionEvent = cloneArvoEvent(shippedEvent, {
+    const wrongVersionEvent = mutateArvoEvent(shippedEvent, {
       dataschema: twoVersionContract.versions['1.0.0'].dataschema,
     });
     expect(twoVersionValidator.validateOutput(wrongVersionEvent).ok).toBe(
@@ -225,7 +225,7 @@ describe('an event that may not be emitted', () => {
   });
 
   it('names no contract this handler declared', () => {
-    const strangerEvent = cloneArvoEvent(chargedEvent, {
+    const strangerEvent = mutateArvoEvent(chargedEvent, {
       dataschema: '#/com/elsewhere/1.0.0',
     });
     expect(emissionRefusal(strangerEvent).faultKind).toBe(
@@ -239,7 +239,7 @@ describe('an event that may not be emitted', () => {
       subject: initEvent.subject,
       data: { amount: 10 },
     });
-    const badPayloadEvent = cloneArvoEvent(chargeEvent, {
+    const badPayloadEvent = mutateArvoEvent(chargeEvent, {
       data: { amount: 'ten' } as never,
     });
     expect(emissionRefusal(badPayloadEvent).faultKind).toBe(
@@ -275,7 +275,7 @@ describe('an event that may not be emitted', () => {
       subject: initEvent.subject,
       data: { amount: 10 },
     });
-    const zeroChargeEvent = cloneArvoEvent(chargeEvent, {
+    const zeroChargeEvent = mutateArvoEvent(chargeEvent, {
       data: { amount: 0 },
     });
 
@@ -298,7 +298,7 @@ describe('an event that may not be emitted', () => {
     const sinkValidator = new ArvoEventValidator({
       contracts: { self: sinkContract, services: { payments: paymentVersion } },
     });
-    const orderCreatedEvent = cloneArvoEvent(initEvent, {
+    const orderCreatedEvent = mutateArvoEvent(initEvent, {
       type: 'com_order_created' as never,
     });
     const validation = sinkValidator.validateOutput(orderCreatedEvent);
@@ -386,7 +386,7 @@ describe('a handler that declared its own contract as a service', () => {
   });
 
   it('refuses a type that is neither what it takes in nor what it answers with', () => {
-    const strayEvent = cloneArvoEvent(walkReply, {
+    const strayEvent = mutateArvoEvent(walkReply, {
       type: 'evt_nothing_declared',
     });
     const origin = recursiveValidator.validateInput(strayEvent);
@@ -394,7 +394,7 @@ describe('a handler that declared its own contract as a service', () => {
   });
 
   it('refuses its own answer at a version it did not open the child at', () => {
-    const skewedReply = cloneArvoEvent(walkReply, {
+    const skewedReply = mutateArvoEvent(walkReply, {
       dataschema: recursiveContract.versions['1.1.0'].dataschema,
     });
     const origin = recursiveValidator.validateInput(skewedReply);
@@ -474,7 +474,7 @@ describe('a payload refused as a whole rather than at a field', () => {
 
   it('reports the payload itself where nothing names a field', () => {
     const validation = strictValidator.validateInput(
-      cloneArvoEvent(openingEvent, {
+      mutateArvoEvent(openingEvent, {
         data: { only: 'this', extra: 'unwanted' } as unknown as {
           only: string;
         },
@@ -499,7 +499,7 @@ describe('a payload refused as a whole rather than at a field', () => {
       data: { only: 'this' },
     });
     const validation = strictValidator.validateOutput(
-      cloneArvoEvent(answeringEvent, {
+      mutateArvoEvent(answeringEvent, {
         data: { only: 'this', extra: 'unwanted' } as unknown as {
           only: string;
         },

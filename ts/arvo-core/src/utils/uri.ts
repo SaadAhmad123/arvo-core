@@ -15,5 +15,13 @@ import fastUri from 'fast-uri';
 export const isUriReference = (uriReference: string): boolean => {
   const uriComponents = fastUri.parse(uriReference);
   if ('error' in uriComponents) return false;
+  // a relative reference keeps leading dot-segments when serialized, so check them outright
+  if (hasDotSegment(uriComponents.path)) return false;
   return fastUri.serialize(uriComponents) === uriReference;
 };
+
+/** Whether a path holds a `.` or `..` segment. */
+const hasDotSegment = (path: string | undefined): boolean =>
+  (path ?? '')
+    .split('/')
+    .some((pathSegment) => pathSegment === '.' || pathSegment === '..');

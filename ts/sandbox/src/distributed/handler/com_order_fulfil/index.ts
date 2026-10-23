@@ -9,7 +9,6 @@ import { manualReviewV1 } from '../com_manual_review/contract.js';
 import { paymentChargeV1 } from '../com_payment_charge/contract.js';
 import type { DistributedDependencies } from '../dependencies.js';
 import { HANDLER_MIDDLEWARE, tenantFor } from '../middleware/index.js';
-import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { orderFulfilContract } from './contract.js';
 
 /**
@@ -160,7 +159,6 @@ export const orderFulfilHandler = setupArvoEventHandler({
       audit: auditWriteV1,
     },
   },
-  telemetry: HANDLER_TELEMETRY,
   middleware: HANDLER_MIDDLEWARE,
   options: {
     // A wide execution rebuilds its whole collection on every answer,

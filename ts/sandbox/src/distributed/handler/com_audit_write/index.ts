@@ -1,7 +1,6 @@
 import { setupArvoEventHandler } from 'arvo-core';
 import type { DistributedDependencies } from '../dependencies.js';
 import { HANDLER_MIDDLEWARE, tenantFor } from '../middleware/index.js';
-import { HANDLER_TELEMETRY } from '../telemetry.js';
 import { auditWriteContract } from './contract.js';
 
 /**
@@ -20,7 +19,6 @@ import { auditWriteContract } from './contract.js';
 export const auditWriteHandler = setupArvoEventHandler({
   contracts: { self: auditWriteContract },
   types: {} as { dependencies: DistributedDependencies },
-  telemetry: HANDLER_TELEMETRY,
   middleware: HANDLER_MIDDLEWARE,
   options: { runTimeout: 5_000 },
 })

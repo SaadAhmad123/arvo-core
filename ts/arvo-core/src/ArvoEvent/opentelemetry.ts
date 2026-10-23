@@ -18,15 +18,24 @@ const isSpanContext = (
   typeof (spanOrContext as SpanContext).traceId === 'string';
 
 /**
+ * The `SpanContext` of an OpenTelemetry `Span`, or the `SpanContext` given.
+ *
+ * A `SpanContext` is told from a `Span` by its `traceId`, which a `Span`
+ * does not carry on itself.
+ */
+export const spanContextOf = (
+  spanOrContext: Span | SpanContext,
+): SpanContext =>
+  isSpanContext(spanOrContext) ? spanOrContext : spanOrContext.spanContext();
+
+/**
  * Derives W3C `traceparent`/`tracestate` header strings from an OpenTelemetry
  * `Span` or `SpanContext`, so callers don't have to hand-format them.
  */
 export const traceContextFromSpan = (
   spanOrContext: Span | SpanContext,
 ): ArvoEventTraceContext => {
-  const spanContext = isSpanContext(spanOrContext)
-    ? spanOrContext
-    : spanOrContext.spanContext();
+  const spanContext = spanContextOf(spanOrContext);
   const traceFlags = spanContext.traceFlags.toString(16).padStart(2, '0');
   return {
     traceparent: `00-${spanContext.traceId}-${spanContext.spanId}-${traceFlags}`,

@@ -1,4 +1,3 @@
-import { type Meter, type Tracer, trace } from '@opentelemetry/api';
 import { err, ok } from 'neverthrow';
 import type * as z from 'zod/v4/core';
 import type { ArvoContract } from '../ArvoContract/index.js';
@@ -13,7 +12,7 @@ import { pathSegmentForKey } from '../utils/issue-path.js';
 import { readOwnProperty } from '../utils/own-property.js';
 import { textOfThrown } from '../utils/thrown-text.js';
 import { ArvoExecutionContextTelemetry } from './context/telemetry/index.js';
-import type { ArvoLogger } from './context/telemetry/types.js';
+import { resolveTelemetry } from './context/telemetry/resolve.js';
 import { ArvoEventHandlerValidationError } from './errors.js';
 import { createArvoHandlerFault } from './fault/factory.js';
 import { ArvoHandlerFault } from './fault/index.js';
@@ -33,7 +32,6 @@ import { checkVersions } from './helpers/check-versions.js';
 import {
   ARVO_ANY_STATE_SCHEMA,
   ARVO_DEFAULT_HANDLER_OPTIONS,
-  ARVO_RECORD_FORMAT_VERSION,
 } from './helpers/defaults.js';
 import { deriveArvoExecutionId } from './helpers/execution-id.js';
 import { resolveOptions } from './helpers/resolve-options.js';
@@ -113,18 +111,6 @@ export class ArvoEventHandler<
     TDependencies,
     TMechanismHooks
   >;
-
-  /**
-   * Where this handler's executions record.
-   *
-   * Each is a no-op where nothing was declared for it, so a deployment
-   * collecting nothing costs nothing.
-   */
-  readonly telemetry: {
-    readonly tracer: Tracer;
-    readonly meter: Meter | null;
-    readonly logger: ArvoLogger | null;
-  };
 
   /**
    * The layers around every version's executor, in the order declared, or
@@ -242,13 +228,6 @@ export class ArvoEventHandler<
     });
     this.options = Object.freeze(handlerOptions);
     this.middleware = middleware;
-    this.telemetry = Object.freeze({
-      tracer:
-        setup.telemetry?.tracer ??
-        trace.getTracer(contract.type, ARVO_RECORD_FORMAT_VERSION),
-      meter: setup.telemetry?.meter ?? null,
-      logger: setup.telemetry?.logger ?? null,
-    });
     this.#eventValidator = new ArvoEventValidator({
       contracts: { self: contract, services },
     });
@@ -297,28 +276,30 @@ export class ArvoEventHandler<
   async tryExecute(
     param: ArvoEventHandlerExecuteParam<TDependencies, TMechanismHooks>,
   ): AsyncResult<ArvoEventHandlerExecuteResponse, ArvoHandlerFault> {
+    // at the call, never at build: a tracer taken before an SDK registers stays silent
+    const resolvedTelemetry = resolveTelemetry(param.telemetry);
     const continuedTrace = continueTraceFromEvent(
       param.event,
-      this.telemetry.tracer,
+      resolvedTelemetry.tracer,
       `${this.contracts.self.type}.execute`,
     );
     const span =
       continuedTrace?.span ??
-      this.telemetry.tracer.startSpan(`${this.contracts.self.type}.execute`);
+      resolvedTelemetry.tracer.startSpan(`${this.contracts.self.type}.execute`);
     const telemetry = new ArvoExecutionContextTelemetry({
       span,
-      meter: this.telemetry.meter,
-      logger: this.telemetry.logger,
+      meter: resolvedTelemetry.meter ?? null,
+      logger: resolvedTelemetry.logger ?? null,
     });
 
     try {
       return fromNeverthrow(ok(await this.#run(param, telemetry)));
-    } catch (thrown) {
-      if (thrown instanceof ArvoHandlerFault)
-        return fromNeverthrow(err(thrown));
+    } catch (error_) {
+      if (error_ instanceof ArvoHandlerFault)
+        return fromNeverthrow(err(error_));
       // Not a fault, so reporting it here would make the error type say
       // something untrue about what went wrong.
-      throw thrown;
+      throw error_;
     } finally {
       span.end();
     }
@@ -499,12 +480,12 @@ export class ArvoEventHandler<
         telemetry,
         attempt: param.attempt,
       });
-    } catch (thrown) {
+    } catch (error_) {
       throw await this.#refuse(param, telemetry, resolvedEntry, null, {
         faultKind: 'state_resolution_failed',
         message: `the store could not be read for ${executionId}, so nothing says whether this execution exists. Another attempt may reach it`,
         violations: [],
-        cause: textOfThrown(thrown),
+        cause: textOfThrown(error_),
       });
     }
   }

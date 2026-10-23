@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createArvoEventFactory } from '../../../src/factories/ArvoEventFactory/index.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import { setupArvoEventHandler } from '../../../src/factories/setupArvoEventHandler.js';
 import type { JSONObject } from '../../../src/types.js';
 import {
@@ -317,7 +317,7 @@ describe('an answer arriving at an execution that has finished', () => {
     // the ordering this implementation had to be built carefully to keep:
     // judged for its payload first, this would carry an answer to a
     // caller that was answered once already
-    const lateMalformedAnswer = cloneArvoEvent(
+    const lateMalformedAnswer = mutateArvoEvent(
       createArvoEventFactory(paymentV1).createOutput({
         type: 'evt_payment_charged',
         source: paymentV1.type,

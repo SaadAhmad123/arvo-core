@@ -164,9 +164,9 @@ describe('lists of many thousands of entries', () => {
       id: 'same',
     }));
     const refusal = await errorOf(repeatedLayers);
-    expect(
-      refusal instanceof ArvoComposedMiddlewareValidationError &&
-        refusal.issues.length,
-    ).toBe(4_999);
+    expect(refusal).toBeInstanceOf(ArvoComposedMiddlewareValidationError);
+    if (refusal instanceof ArvoComposedMiddlewareValidationError) {
+      expect(refusal.issues).toHaveLength(4_999);
+    }
   });
 });

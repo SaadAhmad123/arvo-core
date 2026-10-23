@@ -1,9 +1,15 @@
 /**
  * Two ways to make an event with no contract in hand: build one from nothing,
- * or copy one that already exists and change what needs changing.
+ * or take one that already exists and replace what needs replacing. A plain
+ * copy, with nothing replaced, is a clone.
  */
 
-import { cloneArvoEvent, createArvoEvent, tryCloneArvoEvent } from 'arvo-core';
+import {
+  cloneArvoEvent,
+  createArvoEvent,
+  mutateArvoEvent,
+  tryMutateArvoEvent,
+} from 'arvo-core';
 import { type Chapter, heading } from '../display.js';
 import { tracer } from '../otel.js';
 
@@ -45,7 +51,7 @@ const cloning = (): void => {
     tracestate: 'vendor=original',
   });
 
-  const routed = cloneArvoEvent(original, { to: 'com.audit.log' });
+  const routed = mutateArvoEvent(original, { to: 'com.audit.log' });
   console.log('  to:      ', routed.to);
   console.log('  same id: ', routed.id === original.id);
   console.log('  data kept:', JSON.stringify(routed.data));
@@ -84,22 +90,22 @@ const traceContextPrecedence = (): void => {
   show('nothing overridden', cloneArvoEvent(original));
   show(
     'a header overridden',
-    cloneArvoEvent(original, { tracestate: 'vendor=replaced' }),
+    mutateArvoEvent(original, { tracestate: 'vendor=replaced' }),
   );
-  show('a span overridden', cloneArvoEvent(original, { span }));
+  show('a span overridden', mutateArvoEvent(original, { span }));
   span.end();
 };
 
 /**
- * The `try` twin, for a clone whose overrides might not be valid.
+ * The `try` twin, for a mutation whose replacements might not be valid.
  *
  * Note the second issue. Changing `subject` alone leaves `executionid` set to
  * the *original* subject, which breaks the rule that a root event's execution
  * is the workflow itself -- so renaming the subject of a root event means
  * supplying `executionid` too.
  */
-const whenACloneIsRejected = (): void => {
-  heading('when a clone is rejected');
+const whenAMutationIsRejected = (): void => {
+  heading('when a mutation is rejected');
 
   const original = createArvoEvent({
     type: 'com_order_created',
@@ -108,7 +114,7 @@ const whenACloneIsRejected = (): void => {
     data: {},
   });
 
-  const attempt = tryCloneArvoEvent(original, { subject: '' });
+  const attempt = tryMutateArvoEvent(original, { subject: '' });
   if (!attempt.ok) {
     for (const issue of attempt.error.issues) {
       console.log(`  ${issue.path}: ${issue.message}`);
@@ -122,6 +128,6 @@ export const chapter: Chapter = {
     standalone();
     cloning();
     traceContextPrecedence();
-    whenACloneIsRejected();
+    whenAMutationIsRejected();
   },
 };

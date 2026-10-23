@@ -15,6 +15,21 @@ export type {
 } from './ArvoContract/types.js';
 export { VersionedArvoContract } from './ArvoContract/versioned/index.js';
 export type { VersionedArvoContractParam } from './ArvoContract/versioned/types.js';
+export { ArvoDispatcherValidationError } from './ArvoDispatcher/errors.js';
+export { ArvoDispatcher } from './ArvoDispatcher/index.js';
+export type {
+  ArvoDispatcherExecuteParam,
+  ArvoDispatcherMember,
+  ArvoDispatcherMiddlewareMember,
+  ArvoDispatcherOptions,
+  ArvoDispatcherSet,
+} from './ArvoDispatcher/types.js';
+export type {
+  ArvoAnyEventHandler,
+  DependenciesOf,
+  HandlersOf,
+  HooksOf,
+} from './ArvoDispatcher/typing.js';
 export { ArvoDomain } from './ArvoDomain/index.js';
 export type {
   ArvoDomainContext,
@@ -42,6 +57,7 @@ export type {
 } from './ArvoEventHandler/context/idempotency.js';
 export { ArvoExecutionContext } from './ArvoEventHandler/context/index.js';
 export { ArvoExecutionContextTelemetry } from './ArvoEventHandler/context/telemetry/index.js';
+export type { ArvoTelemetryParam } from './ArvoEventHandler/context/telemetry/resolve.js';
 export type {
   ArvoLogger,
   ArvoLogRecord,
@@ -139,10 +155,19 @@ export {
   tryCreateArvoContract,
 } from './factories/createArvoContract.js';
 export {
+  createArvoDispatcher,
+  tryCreateArvoDispatcher,
+} from './factories/createArvoDispatcher.js';
+export {
   createArvoEvent,
   tryCreateArvoEvent,
 } from './factories/createArvoEvent.js';
 export { createArvoEventHandlerVersion } from './factories/createArvoEventHandlerVersion.js';
+export {
+  type ArvoEventMutation,
+  mutateArvoEvent,
+  tryMutateArvoEvent,
+} from './factories/mutateArvoEvent.js';
 export { setupArvoEventHandler } from './factories/setupArvoEventHandler.js';
 export { ArvoSemanticVersionCheckError } from './semver/errors.js';
 export { ArvoSemanticVersion } from './semver/index.js';

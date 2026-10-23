@@ -112,8 +112,8 @@ const faultOnResume = async (
       hooks: {},
       telemetry: executionTelemetry(),
     } as never);
-  } catch (thrown) {
-    return thrown as ArvoHandlerFault;
+  } catch (error_) {
+    return error_ as ArvoHandlerFault;
   }
   throw new Error('expected this row to be refused');
 };

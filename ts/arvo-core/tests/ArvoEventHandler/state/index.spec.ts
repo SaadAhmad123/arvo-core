@@ -158,10 +158,11 @@ describe('ArvoExecutionState', () => {
     it('reports every rule it broke, not only the first', () => {
       try {
         buildState({ depth: -1, casVersion: -1, lifecycle: 'pondering' });
-      } catch (thrown) {
-        expect(
-          (thrown as ArvoExecutionStateValidationError).issues.length,
-        ).toBe(3);
+      } catch (error_) {
+        expect(error_).toBeInstanceOf(ArvoExecutionStateValidationError);
+        if (error_ instanceof ArvoExecutionStateValidationError) {
+          expect(error_.issues).toHaveLength(3);
+        }
         return;
       }
       throw new Error('expected the record to be refused');
@@ -170,10 +171,11 @@ describe('ArvoExecutionState', () => {
     it('names where each failure is', () => {
       try {
         buildState({ depth: -1 });
-      } catch (thrown) {
-        expect(
-          (thrown as ArvoExecutionStateValidationError).issues[0]?.path,
-        ).toBe('depth');
+      } catch (error_) {
+        expect(error_).toBeInstanceOf(ArvoExecutionStateValidationError);
+        if (error_ instanceof ArvoExecutionStateValidationError) {
+          expect(error_.issues[0]?.path).toBe('depth');
+        }
         return;
       }
       throw new Error('expected the record to be refused');

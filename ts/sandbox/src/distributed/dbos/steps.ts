@@ -8,8 +8,9 @@ import {
 import type { Pool } from 'pg';
 import { HANDLERS } from '../handler/index.js';
 import { withDeliveryIdentity } from '../handler/log-context.js';
-import { PostgresCatalogue } from '../shared/catalogue.js';
-import { deliveryMiddleware } from '../shared/delivery-middleware.js';
+import { deliveryTelemetry } from '../handler/telemetry.js';
+import { withDeliveryInScope } from '../shared/delivery-middleware.js';
+import { catalogueFor, dispatcherFor } from '../shared/dispatcher.js';
 import type { RecordStore } from '../shared/record-store.js';
 import { destinationFor } from '../shared/routing.js';
 import { needsAPerson } from './needs-a-person.js';
@@ -273,24 +274,38 @@ const deliver = async (
       attempt,
     },
     () =>
-      destination.handler.tryExecute({
-        event: triggeringEvent,
-        // The handler says which execution to read; nothing here works
-        // one out. Read on every invocation, so a retry sees what is
-        // stored now rather than what an earlier attempt read.
-        state: ({ executionId }) => scope.store.readRecord(executionId),
-        attempt,
-        // Opened before the executor and closed after it, by the
-        // handler, so nothing here holds a connection to remember to
-        // give back.
-        dependencies: new PostgresCatalogue(scope.pool),
-        // Outside the handlers' own layers, as ADR-016 orders them.
-        middleware: deliveryMiddleware('dbos', triggeringEvent),
-      }),
+      // In scope for the length of the call, so the failure-injection
+      // layers this mechanism's dispatcher was declared with can see
+      // which delivery they are making.
+      withDeliveryInScope(triggeringEvent, () =>
+        // Through the dispatcher, which picks the handler by the event's
+        // `to` and hands back its response as it stands (ADR-017).
+        dispatcherFor('dbos').tryExecute({
+          event: triggeringEvent,
+          // The handler says which execution to read; nothing here works
+          // one out. Read on every invocation, so a retry sees what is
+          // stored now rather than what an earlier attempt read.
+          state: ({ executionId }) => scope.store.readRecord(executionId),
+          attempt,
+          // One catalogue for every handler type, of which the picked
+          // handler is given its own and opens and closes it around the
+          // executor, so nothing here holds a connection.
+          dependencies: catalogueFor(scope.pool),
+          // taken now, when the delivery begins, and handed on to the handler
+          telemetry: deliveryTelemetry(),
+        }),
+      ),
   );
 
   if (!executed.ok) {
     const fault = executed.error;
+
+    // The dispatcher's own miss. Routing above settled that a handler
+    // takes this event, so reaching here means the two disagree, which
+    // no attempt fixes.
+    if (fault.faultKind === 'handler_not_found') {
+      throw new Error(`nothing here implements ${triggeringEvent.to}`);
+    }
 
     // An opening event for an execution that already exists is a
     // redelivery, not a failure. Treating it as one would publish a

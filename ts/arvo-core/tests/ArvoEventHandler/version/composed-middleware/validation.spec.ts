@@ -9,9 +9,9 @@ const constructorRefusal = (
   try {
     composeEntries(entries);
     return null;
-  } catch (thrown) {
-    if (thrown instanceof ArvoComposedMiddlewareValidationError) return thrown;
-    throw thrown;
+  } catch (error_) {
+    if (error_ instanceof ArvoComposedMiddlewareValidationError) return error_;
+    throw error_;
   }
 };
 

@@ -23,11 +23,11 @@ describe('spans', () => {
       const spanRecorder = recordingSpan();
       await executeOrder(
         orderHandler({
-          tracer: spanRecorder.tracer,
           middleware: Array.from({ length: layerCount }, (_, layerIndex) =>
             layerWithBothParts(`l${layerIndex}`),
           ),
         }),
+        { tracer: spanRecorder.tracer },
       );
       expect(spanRecorder.spansStarted()).toBe(1);
     },
@@ -39,9 +39,9 @@ describe('marks', () => {
     const spanRecorder = recordingSpan();
     await executeOrder(
       orderHandler({
-        tracer: spanRecorder.tracer,
         middleware: [layerWithBothParts('a'), layerWithBothParts('b')],
       }),
+      { tracer: spanRecorder.tracer },
     );
     expect(spanRecorder.marks()).toEqual([
       ['middleware_before_entered', 'a'],
@@ -59,9 +59,9 @@ describe('marks', () => {
     const spanRecorder = recordingSpan();
     await executeOrder(
       orderHandler({
-        tracer: spanRecorder.tracer,
         middleware: [{ id: 'only_after', after: () => undefined }],
       }),
+      { tracer: spanRecorder.tracer },
     );
     expect(spanRecorder.marks()).toEqual([
       ['middleware_after_entered', 'only_after'],
@@ -73,7 +73,6 @@ describe('marks', () => {
     const spanRecorder = recordingSpan();
     await executeOrder(
       orderHandler({
-        tracer: spanRecorder.tracer,
         middleware: [
           {
             id: 'broken',
@@ -83,6 +82,7 @@ describe('marks', () => {
           },
         ],
       }),
+      { tracer: spanRecorder.tracer },
     );
     expect(spanRecorder.marks()).toEqual([
       ['middleware_before_entered', 'broken'],
@@ -93,7 +93,6 @@ describe('marks', () => {
     const spanRecorder = recordingSpan();
     await executeOrder(
       orderHandler({
-        tracer: spanRecorder.tracer,
         runTimeout: 30,
         middleware: [
           { id: 'slow', after: () => sleep(100) },
@@ -105,6 +104,7 @@ describe('marks', () => {
           },
         ],
       }),
+      { tracer: spanRecorder.tracer },
     );
     const markNames = spanRecorder.events.map((spanEvent) => spanEvent.name);
     expect(
@@ -151,7 +151,6 @@ describe('the time recorded', () => {
         self: orderContract,
         services: { payments: paymentVersion },
       },
-      telemetry: { meter: recordingMeter as never },
       middleware: [
         { id: 'slow', before: () => sleep(60), after: () => sleep(60) },
       ],
@@ -165,6 +164,7 @@ describe('the time recorded', () => {
       event: orderRequest(),
       state: createInMemoryStore().read(),
       attempt: 0,
+      telemetry: { meter: recordingMeter as never },
     });
 
     const metricNamed = (suffix: string) =>

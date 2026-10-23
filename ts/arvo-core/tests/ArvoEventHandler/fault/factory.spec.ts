@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { ArvoContract } from '../../../src/ArvoContract/index.js';
 import { ArvoDomain } from '../../../src/ArvoDomain/index.js';
 import { createArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/factory.js';
 import { ArvoHandlerFault } from '../../../src/ArvoEventHandler/fault/index.js';
 import { ARVO_DEFAULT_HANDLER_OPTIONS } from '../../../src/ArvoEventHandler/helpers/defaults.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import {
   chargedEvent,
   initEvent,
@@ -223,7 +223,7 @@ describe('what the execution would be abandoned with', () => {
   });
 
   it('sends it down the path the event that caused the execution came on', async () => {
-    const domainedChargedEvent = cloneArvoEvent(chargedEvent, {
+    const domainedChargedEvent = mutateArvoEvent(chargedEvent, {
       domain: 'human',
     });
     const fault = await buildFault(
@@ -322,5 +322,61 @@ describe('a fault raised before any record could be read', () => {
       faultKind: 'state_resolution_failed',
     });
     expect(fault.retry).not.toBeNull();
+  });
+});
+
+describe('a fault raised where no handler was entered', () => {
+  const buildHandlerlessFault = async (param: Record<string, unknown> = {}) =>
+    createArvoHandlerFault({
+      contracts: null,
+      event: initEvent,
+      attempt: 2,
+      telemetry: telemetry().telemetry,
+      faultKind: 'handler_not_found',
+      message: 'nothing here implements com_nowhere',
+      ...param,
+    });
+
+  it('is the one kind a handler-less fault can be', async () => {
+    expect((await buildHandlerlessFault()).faultKind).toBe('handler_not_found');
+  });
+
+  it('names the workflow, the event and the attempt off the event and the call', async () => {
+    const fault = await buildHandlerlessFault();
+    expect(fault.subject).toBe(initEvent.subject);
+    expect(fault.eventId).toBe(initEvent.id);
+    expect(fault.attempt).toBe(2);
+  });
+
+  it('names no execution, nothing having been entered', async () => {
+    expect((await buildHandlerlessFault()).executionId).toBeNull();
+  });
+
+  it('is not worth another attempt, the set not changing between them', async () => {
+    expect((await buildHandlerlessFault()).retry).toBeNull();
+  });
+
+  it('carries nothing to abandon with, no execution existing', async () => {
+    const fault = await buildHandlerlessFault();
+    expect(fault.abandonmentEvent).toBeNull();
+    expect(fault.abandonmentState).toBeNull();
+  });
+
+  it('carries what underlies it and the checks that failed, as any fault does', async () => {
+    const fault = await buildHandlerlessFault({
+      cause: 'to: com_nowhere',
+      violations: ['to: no handler in the set'],
+    });
+    expect(fault.cause).toBe('to: com_nowhere');
+    expect(fault.violations).toEqual(['to: no handler in the set']);
+  });
+
+  it('is recorded as every fault is', async () => {
+    const freshTelemetry = telemetry();
+    const recordException = vi.spyOn(freshTelemetry.span, 'recordException');
+    await buildHandlerlessFault({ telemetry: freshTelemetry.telemetry });
+    expect(recordException).toHaveBeenCalledTimes(1);
+    expect(freshTelemetry.emitted).toHaveLength(1);
+    expect(freshTelemetry.emitted[0].body).toContain('com_nowhere');
   });
 });

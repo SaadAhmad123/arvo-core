@@ -3,7 +3,7 @@ import {
   deriveArvoExecutionId,
   isArvoExecutionId,
 } from '../../../src/ArvoEventHandler/helpers/execution-id.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import { chargedEvent, initEvent } from '../fixtures.js';
 
 describe('the identifier an init event opens an execution under', () => {
@@ -18,7 +18,7 @@ describe('the identifier an init event opens an execution under', () => {
   });
 
   it('turns only on the id and the dataschema, nothing else about the event', async () => {
-    const otherWorkflowEvent = cloneArvoEvent(initEvent, {
+    const otherWorkflowEvent = mutateArvoEvent(initEvent, {
       subject: 'a-different-workflow',
       executionid: 'a-different-workflow',
     });
@@ -28,7 +28,7 @@ describe('the identifier an init event opens an execution under', () => {
   });
 
   it('differs where the event id differs', async () => {
-    const differentIdEvent = cloneArvoEvent(initEvent, {
+    const differentIdEvent = mutateArvoEvent(initEvent, {
       id: 'a-different-event',
     });
     expect(await deriveArvoExecutionId(differentIdEvent)).not.toBe(
@@ -37,7 +37,7 @@ describe('the identifier an init event opens an execution under', () => {
   });
 
   it('differs where the contract or version differs', async () => {
-    const differentVersionEvent = cloneArvoEvent(initEvent, {
+    const differentVersionEvent = mutateArvoEvent(initEvent, {
       dataschema: '#/com/order/create/1.1.0',
     });
     expect(await deriveArvoExecutionId(differentVersionEvent)).not.toBe(
@@ -48,7 +48,7 @@ describe('the identifier an init event opens an execution under', () => {
   it('is a known answer, pinned so no implementation drifts from it', async () => {
     // SHA-256 over utf8('#/com/order/create/1.0.0') + 0x00 + utf8('fixed-id'),
     // computed with node:crypto rather than by this code.
-    const pinnedEvent = cloneArvoEvent(initEvent, {
+    const pinnedEvent = mutateArvoEvent(initEvent, {
       id: 'fixed-id',
       dataschema: '#/com/order/create/1.0.0',
     });
@@ -59,11 +59,11 @@ describe('the identifier an init event opens an execution under', () => {
 
   it('cannot be confused by the delimiter, it being a byte neither input holds', async () => {
     // A split that would collide were the two simply concatenated.
-    const bcIdEvent = cloneArvoEvent(initEvent, {
+    const bcIdEvent = mutateArvoEvent(initEvent, {
       dataschema: '#/com/a/1.0.0',
       id: 'bc',
     });
-    const cIdEvent = cloneArvoEvent(initEvent, {
+    const cIdEvent = mutateArvoEvent(initEvent, {
       dataschema: '#/com/a/1.0.0b',
       id: 'c',
     });

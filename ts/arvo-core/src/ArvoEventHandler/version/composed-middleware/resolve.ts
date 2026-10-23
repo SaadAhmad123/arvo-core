@@ -33,11 +33,11 @@ const resolveList = async (
         if (typeof middlewareEntry !== 'function') return ok(middlewareEntry);
         try {
           return ok(await middlewareEntry());
-        } catch (thrown) {
+        } catch (error_) {
           return err(
             new ArvoComposedMiddlewareResolutionError({
               position: middlewarePosition(source, entryIndex),
-              thrown,
+              thrown: error_,
             }),
           );
         }

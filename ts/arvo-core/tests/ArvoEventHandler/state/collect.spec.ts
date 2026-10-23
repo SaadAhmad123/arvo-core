@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ArvoEvent } from '../../../src/ArvoEvent/index.js';
 import { collectResponse } from '../../../src/ArvoEventHandler/state/collect.js';
-import { cloneArvoEvent } from '../../../src/factories/cloneArvoEvent.js';
+import { mutateArvoEvent } from '../../../src/factories/mutateArvoEvent.js';
 import { chargedEvent, initEvent } from '../fixtures.js';
 import { buildState } from './fixtures.js';
 
@@ -9,7 +9,7 @@ import { buildState } from './fixtures.js';
 const REQUEST_ID = 'charge-request';
 
 /** The service's answer to that request. */
-const response = cloneArvoEvent(chargedEvent, { initid: REQUEST_ID });
+const response = mutateArvoEvent(chargedEvent, { initid: REQUEST_ID });
 
 /** A record waiting on that one request, and nothing else. */
 const waitingState = (overrides: Record<string, unknown> = {}) =>

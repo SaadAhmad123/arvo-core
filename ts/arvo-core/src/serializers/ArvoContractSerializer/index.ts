@@ -84,13 +84,13 @@ export class ArvoContractSerializer {
       return fromNeverthrow(
         ok(seal({ schema: JSON.stringify(form) }, warnings)),
       );
-    } catch (thrown) {
+    } catch (error_) {
       return fromNeverthrow(
         err(
           new ArvoContractSerializerError(
             'ArvoContract could not be serialized.',
             {
-              cause: asError(thrown),
+              cause: asError(error_),
             },
           ),
         ),
@@ -131,11 +131,11 @@ export class ArvoContractSerializer {
     let rawForm: unknown;
     try {
       rawForm = JSON.parse(json);
-    } catch (thrown) {
+    } catch (error_) {
       return fromNeverthrow(
         err(
           new ArvoContractSerializerError('ArvoContract could not be read.', {
-            cause: asError(thrown),
+            cause: asError(error_),
           }),
         ),
       );
@@ -161,7 +161,7 @@ export class ArvoContractSerializer {
           ),
         ),
       );
-    } catch (thrown) {
+    } catch (error_) {
       // The contract's own rules have already passed, so this should be
       // unreachable -- `arvo-contract` has a test asserting a declaration it
       // accepts always constructs. Guarded anyway, and worded so it does not
@@ -170,7 +170,7 @@ export class ArvoContractSerializer {
         err(
           new ArvoContractSerializerError(
             'ArvoContract was read but could not be constructed.',
-            { cause: asError(thrown) },
+            { cause: asError(error_) },
           ),
         ),
       );

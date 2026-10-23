@@ -13,9 +13,9 @@ import { executeOrder, orderHandler, recordingSpan, sleep } from './fixture.js';
 /** What an execution produced, or a failure to say why it did not. */
 const runToProduced = async (middleware: IArvoEventHandlerMiddleware[]) => {
   const spanRecorder = recordingSpan();
-  const executionResult = await executeOrder(
-    orderHandler({ tracer: spanRecorder.tracer, middleware }),
-  );
+  const executionResult = await executeOrder(orderHandler({ middleware }), {
+    tracer: spanRecorder.tracer,
+  });
   if (!executionResult.ok || executionResult.value.kind !== 'produced') {
     throw new Error(
       `expected produced, got ${JSON.stringify(executionResult)}`,
@@ -123,8 +123,8 @@ describe('an after part that tries to change what was returned', () => {
         after: (_ctx, emission) => {
           try {
             (emission as ArvoEvent[]).push(null as never);
-          } catch (thrown) {
-            mutationError = thrown;
+          } catch (error_) {
+            mutationError = error_;
           }
         },
       },
@@ -155,8 +155,8 @@ describe('an after part that tries to change what was returned', () => {
             (
               (emission as ArvoEvent[])[0] as unknown as Record<string, unknown>
             ).to = 'somewhere_else';
-          } catch (thrown) {
-            mutationError = thrown;
+          } catch (error_) {
+            mutationError = error_;
           }
         },
       },
@@ -242,12 +242,12 @@ describe('an after part that never finishes', () => {
     const executionResult = await executeOrder(
       orderHandler({
         runTimeout: 25,
-        tracer: spanRecorder.tracer,
         middleware: [
           { id: 'later', after: skippedAfterPart },
           { id: 'forever', after: () => new Promise<void>(() => undefined) },
         ],
       }),
+      { tracer: spanRecorder.tracer },
     );
     expect(
       executionResult.ok &&
@@ -267,7 +267,6 @@ describe('an after part that never finishes', () => {
     await executeOrder(
       orderHandler({
         runTimeout: 20,
-        tracer: spanRecorder.tracer,
         middleware: [
           {
             id: 'straggler',
@@ -278,6 +277,7 @@ describe('an after part that never finishes', () => {
           },
         ],
       }),
+      { tracer: spanRecorder.tracer },
     );
     await sleep(80);
     const lateFailure = spanRecorder.events.find((spanEvent) =>

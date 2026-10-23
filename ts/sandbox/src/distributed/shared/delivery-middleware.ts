@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import {
   type ArvoEvent,
   type ArvoEventHandlerMiddlewareEntry,
@@ -11,10 +12,11 @@ import { inventoryCheckV1 } from '../handler/com_inventory_check/contract.js';
 /**
  * The layers each mechanism supplies with every delivery.
  *
- * Two, always: one saying which mechanism carried the delivery, and one
- * made per execution from whatever failure a test has asked to inject —
- * a layer that does nothing where none was asked for. Supplied rather
- * than declared, so they run outside the handlers' own layers under every
+ * Fixed when each mechanism's dispatcher is declared (ADR-017): one saying
+ * which mechanism carried the delivery, and the ways to make a layer from
+ * whatever failure a test has asked to inject — a layer that does nothing
+ * where none was asked for. The dispatcher supplies them to every handler
+ * it enters, so they run outside the handlers' own layers under every
  * mechanism, which is the order ADR-016 fixes.
  *
  * The injection is process-wide on purpose: all three mechanisms run
@@ -325,44 +327,86 @@ const injectionFor = (
   }
 };
 
-/** The entry that makes the injection layer, which may itself be the failure. */
-const injectionEntryFor = (
-  failure: InjectedFailure | null,
+/**
+ * The event a mechanism is delivering right now, held for the length of one
+ * delivery so the ways to make layers, which are called with nothing, can
+ * see which workflow's failure is aimed at it.
+ */
+const deliveryInProgress = new AsyncLocalStorage<ArvoEvent>();
+
+/**
+ * Runs one delivery with its event in scope, so the injection layers can
+ * read which failure is aimed at it.
+ *
+ * @param triggeringEvent - The event being delivered.
+ * @param deliver - The delivery itself.
+ */
+export const withDeliveryInScope = <TDelivered>(
   triggeringEvent: ArvoEvent,
-): ArvoEventHandlerMiddlewareEntry => {
-  if (failure !== null && aimedAtEvent(failure, triggeringEvent)) {
+  deliver: () => Promise<TDelivered>,
+): Promise<TDelivered> => deliveryInProgress.run(triggeringEvent, deliver);
+
+/** The failure aimed at the delivery in scope, or every delivery, or none. */
+const failureInScope = (): InjectedFailure | null => {
+  const triggeringEvent = deliveryInProgress.getStore();
+  return (
+    injected ??
+    (triggeringEvent === undefined
+      ? null
+      : injectedBySubject.get(triggeringEvent.subject)) ??
+    null
+  );
+};
+
+/** Whether the failure in scope is aimed at the delivery in scope. */
+const aimedAtDeliveryInScope = (failure: InjectedFailure): boolean => {
+  const triggeringEvent = deliveryInProgress.getStore();
+  return (
+    triggeringEvent !== undefined && aimedAtEvent(failure, triggeringEvent)
+  );
+};
+
+/** The way to make the injection layer, which may itself be the failure. */
+const makeInjectionLayer = (): IArvoEventHandlerMiddleware => {
+  const failure = failureInScope();
+  if (failure !== null && aimedAtDeliveryInScope(failure)) {
     if (failure.kind === 'factory_throws') {
-      return () => {
-        throw new Error('injected: the way to make a layer threw');
-      };
+      throw new Error('injected: the way to make a layer threw');
     }
     if (failure.kind === 'factory_returns_nothing') {
       // deliberately invalid: a way to make a layer that makes none
-      return () => null as unknown as IArvoEventHandlerMiddleware;
+      return null as unknown as IArvoEventHandlerMiddleware;
     }
   }
-  return () => injectionFor(failure);
+  return injectionFor(failure);
 };
 
 /**
- * What a mechanism supplies with one delivery.
- *
- * @param mechanism - Which mechanism is carrying it.
- * @param triggeringEvent - The event being delivered, whose subject
- * says which workflow's failure, if any, is aimed at it.
+ * A second way to make a layer, which repeats the injection layer's
+ * identifier where a repeated identifier is the failure, and is a quiet
+ * layer of its own otherwise.
  */
-export const deliveryMiddleware = (
-  mechanism: Mechanism,
-  triggeringEvent: ArvoEvent,
-): readonly ArvoEventHandlerMiddlewareEntry[] => {
-  const failure =
-    injected ?? injectedBySubject.get(triggeringEvent.subject) ?? null;
-  const entries: ArvoEventHandlerMiddlewareEntry[] = [
-    deliveredBy(mechanism),
-    injectionEntryFor(failure, triggeringEvent),
-  ];
-  if (failure?.kind === 'duplicate_id') {
-    entries.push(() => injectionFor(failure));
-  }
-  return entries;
+const makeRepeatingLayer = (): IArvoEventHandlerMiddleware => {
+  const failure = failureInScope();
+  return failure?.kind === 'duplicate_id'
+    ? injectionFor(failure)
+    : { id: 'injection_spare' };
 };
+
+/**
+ * The layers one mechanism's dispatcher is declared with, fixed for every
+ * delivery it carries.
+ *
+ * Which mechanism carried a delivery is the same every time; which failure
+ * is aimed at it is read per delivery, from the event in scope, by the
+ * layers themselves or by the ways to make them.
+ *
+ * @param mechanism - Which mechanism the dispatcher belongs to.
+ */
+export const deliveryLayers = (
+  mechanism: Mechanism,
+): readonly ArvoEventHandlerMiddlewareEntry[] => [
+  deliveredBy(mechanism),
+  makeInjectionLayer,
+  makeRepeatingLayer,
+];
