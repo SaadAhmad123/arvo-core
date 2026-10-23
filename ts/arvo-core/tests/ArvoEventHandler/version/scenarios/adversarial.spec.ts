@@ -50,8 +50,8 @@ const runOrder = async (
       hooks: {},
       telemetry: executionTelemetry(),
     } as never)) as ArvoEventHandlerExecuteResponse;
-  } catch (thrown) {
-    return thrown as ArvoHandlerFault;
+  } catch (error_) {
+    return error_ as ArvoHandlerFault;
   }
 };
 
@@ -266,8 +266,8 @@ describe('an executor that raises a fault belonging to somebody else', () => {
         hooks: {},
         telemetry: executionTelemetry(),
       } as never);
-    } catch (thrown) {
-      return thrown as ArvoHandlerFault;
+    } catch (error_) {
+      return error_ as ArvoHandlerFault;
     }
     throw new Error('expected that order to fault');
   };

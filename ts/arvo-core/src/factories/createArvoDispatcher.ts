@@ -35,13 +35,13 @@ export const tryCreateArvoDispatcher = <
 ): Result<ArvoDispatcher<TMembers>, ArvoDispatcherValidationError> => {
   try {
     return fromNeverthrow(ok(new ArvoDispatcher<TMembers>(options)));
-  } catch (thrown) {
-    if (thrown instanceof ArvoDispatcherValidationError) {
-      return fromNeverthrow(err(thrown));
+  } catch (error_) {
+    if (error_ instanceof ArvoDispatcherValidationError) {
+      return fromNeverthrow(err(error_));
     }
     // Anything else is not an invalid declaration, so reporting it here would
     // make the error type say something untrue. It goes up as it arrived.
-    throw thrown;
+    throw error_;
   }
 };
 

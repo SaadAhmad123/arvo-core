@@ -17,9 +17,9 @@ const constructionIssues = (
   try {
     construct();
     throw new Error('expected construction to throw');
-  } catch (thrown) {
-    if (thrown instanceof ArvoEventValidationError) return thrown.issues;
-    throw thrown;
+  } catch (error_) {
+    if (error_ instanceof ArvoEventValidationError) return error_.issues;
+    throw error_;
   }
 };
 
@@ -942,13 +942,13 @@ describe('ArvoEvent.parse', () => {
     let constructorError: ArvoEventValidationError | undefined;
     try {
       ArvoEvent.parse(incompleteParam as never);
-    } catch (thrown) {
-      parseError = thrown as ArvoEventValidationError;
+    } catch (error_) {
+      parseError = error_ as ArvoEventValidationError;
     }
     try {
       new ArvoEvent(incompleteParam as never);
-    } catch (thrown) {
-      constructorError = thrown as ArvoEventValidationError;
+    } catch (error_) {
+      constructorError = error_ as ArvoEventValidationError;
     }
     expect(parseError).toBeInstanceOf(ArvoEventValidationError);
     expect(parseError?.message).toBe(constructorError?.message);
@@ -1024,8 +1024,8 @@ describe('ArvoEvent.tryParse', () => {
     let thrownError: ArvoEventValidationError | undefined;
     try {
       ArvoEvent.parse(incompleteParam as never);
-    } catch (thrown) {
-      thrownError = thrown as ArvoEventValidationError;
+    } catch (error_) {
+      thrownError = error_ as ArvoEventValidationError;
     }
     const failedParse = ArvoEvent.tryParse(incompleteParam);
     expect(thrownError).toBeInstanceOf(ArvoEventValidationError);

@@ -64,8 +64,8 @@ const runOrder = async (param: {
       hooks: {},
       telemetry: executionTelemetry(),
     } as never)) as ArvoEventHandlerExecuteResponse;
-  } catch (thrown) {
-    return thrown as ArvoHandlerFault;
+  } catch (error_) {
+    return error_ as ArvoHandlerFault;
   }
 };
 
@@ -283,8 +283,8 @@ describe('payloads nobody writes on purpose', () => {
         hooks: {},
         telemetry: executionTelemetry(),
       } as never)) as ArvoEventHandlerExecuteResponse;
-    } catch (thrown) {
-      return thrown as ArvoHandlerFault;
+    } catch (error_) {
+      return error_ as ArvoHandlerFault;
     }
   };
 

@@ -98,12 +98,12 @@ const runAndCheck = async (
   const { lattice, chaos } = await runShape(seed, shape);
   try {
     await checkInvariants(lattice);
-  } catch (thrown) {
+  } catch (error_) {
     throw new Error(
       `seed ${seed} broke an invariant under ${JSON.stringify(chaos)}: ${
-        (thrown as Error).message
+        (error_ as Error).message
       }`,
-      { cause: thrown },
+      { cause: error_ },
     );
   }
   return lattice;
@@ -201,12 +201,12 @@ describe('a workflow waiting on a person, however the lattice behaves', () => {
 
       try {
         await checkInvariants(lattice);
-      } catch (thrown) {
+      } catch (error_) {
         throw new Error(
           `seed ${seed} broke an invariant under ${JSON.stringify(chaos)}: ${
-            (thrown as Error).message
+            (error_ as Error).message
           }`,
-          { cause: thrown },
+          { cause: error_ },
         );
       }
 

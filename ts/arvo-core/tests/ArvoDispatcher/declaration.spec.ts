@@ -16,9 +16,9 @@ import {
 const refusal = (declare: () => unknown): ArvoDispatcherValidationError => {
   try {
     declare();
-  } catch (thrown) {
-    if (thrown instanceof ArvoDispatcherValidationError) return thrown;
-    throw thrown;
+  } catch (error_) {
+    if (error_ instanceof ArvoDispatcherValidationError) return error_;
+    throw error_;
   }
   throw new Error('the declaration was not refused');
 };

@@ -79,9 +79,9 @@ describe('two hundred seeded runs, every one placed by the handler', () => {
 
       try {
         await checkHandlerInvariants(lattice);
-      } catch (thrown) {
+      } catch (error_) {
         throw new Error(
-          `seed ${seed} broke an invariant: ${(thrown as Error).message}`,
+          `seed ${seed} broke an invariant: ${(error_ as Error).message}`,
         );
       }
     }
@@ -207,9 +207,9 @@ describe('what a mechanism supplies, under the same chance', () => {
 
       try {
         await checkHandlerInvariants(lattice);
-      } catch (thrown) {
+      } catch (error_) {
         throw new Error(
-          `seed ${seed} broke an invariant: ${(thrown as Error).message}`,
+          `seed ${seed} broke an invariant: ${(error_ as Error).message}`,
         );
       }
     }

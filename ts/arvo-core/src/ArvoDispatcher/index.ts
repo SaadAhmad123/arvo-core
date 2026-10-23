@@ -258,15 +258,15 @@ export class ArvoDispatcher<
       // handler's fault is the handler's, recorded on the handler's own span
       telemetry.setSpanOk();
       return executed;
-    } catch (thrown) {
+    } catch (error_) {
       // not a fault, so not the Result's to report; seen on the trace and rethrown as it came
       recording(() =>
         span.recordException(
-          thrown instanceof Error ? thrown : textOfThrown(thrown),
+          error_ instanceof Error ? error_ : textOfThrown(error_),
         ),
       );
-      telemetry.setSpanError(textOfThrown(thrown));
-      throw thrown;
+      telemetry.setSpanError(textOfThrown(error_));
+      throw error_;
     } finally {
       span.end();
     }

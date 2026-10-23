@@ -74,8 +74,8 @@ const caughtFault = async (
 ): Promise<ArvoHandlerFault> => {
   try {
     await execution;
-  } catch (thrown) {
-    return thrown as ArvoHandlerFault;
+  } catch (error_) {
+    return error_ as ArvoHandlerFault;
   }
   throw new Error('nothing was refused');
 };

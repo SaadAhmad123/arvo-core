@@ -18,11 +18,11 @@ import type {
  * ```typescript
  * try {
  *   await handler.execute({ event });
- * } catch (thrown) {
- *   if (thrown instanceof ArvoHandlerFault) {
- *     thrown.faultKind;        // what to do, without reading the message
- *     thrown.retry;            // when another attempt is due, or null
- *     thrown.abandonmentEvent; // what to publish on giving up
+ * } catch (error_) {
+ *   if (error_ instanceof ArvoHandlerFault) {
+ *     error_.faultKind;        // what to do, without reading the message
+ *     error_.retry;            // when another attempt is due, or null
+ *     error_.abandonmentEvent; // what to publish on giving up
  *   }
  * }
  * ```

@@ -64,11 +64,11 @@ export const tryMutateState = <TState extends ArvoExecutionState>(
         }) as TState,
       ),
     );
-  } catch (thrown) {
-    if (thrown instanceof ArvoExecutionStateValidationError) {
-      return fromNeverthrow(err(thrown));
+  } catch (error_) {
+    if (error_ instanceof ArvoExecutionStateValidationError) {
+      return fromNeverthrow(err(error_));
     }
-    throw thrown;
+    throw error_;
   }
 };
 

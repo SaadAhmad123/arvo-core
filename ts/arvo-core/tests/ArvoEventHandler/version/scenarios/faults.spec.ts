@@ -89,8 +89,8 @@ const runToFault = async (
       telemetry: telemetry(),
       ...param,
     } as never);
-  } catch (thrown) {
-    const fault = thrown as ArvoHandlerFault;
+  } catch (error_) {
+    const fault = error_ as ArvoHandlerFault;
     reachedFaultKinds.add(fault.faultKind);
     return fault;
   }
@@ -431,8 +431,8 @@ describe('what refuses an execution once its executor has run', () => {
         hooks: {},
         telemetry: telemetry(),
       } as never);
-    } catch (thrown) {
-      const fault = thrown as ArvoHandlerFault;
+    } catch (error_) {
+      const fault = error_ as ArvoHandlerFault;
       reachedFaultKinds.add(fault.faultKind);
       expect(fault.faultKind).toBe('state_not_serializable');
       expect(fault.retry).toBeNull();

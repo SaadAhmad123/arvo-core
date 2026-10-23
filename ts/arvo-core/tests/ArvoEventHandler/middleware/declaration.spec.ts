@@ -25,8 +25,8 @@ const validationRefusal = (
 ): ArvoEventHandlerValidationError => {
   try {
     buildHandler();
-  } catch (thrown) {
-    return thrown as ArvoEventHandlerValidationError;
+  } catch (error_) {
+    return error_ as ArvoEventHandlerValidationError;
   }
   throw new Error('the declaration was accepted');
 };

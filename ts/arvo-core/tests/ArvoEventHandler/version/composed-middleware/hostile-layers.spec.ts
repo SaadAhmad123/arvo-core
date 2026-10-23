@@ -296,7 +296,7 @@ describe('a before part that throws something unprintable', () => {
       ]);
       const outcome = await composite.before(markingContext).then(
         () => ({ settled: 'resolved' as const }),
-        (thrown: unknown) => ({ settled: 'rejected' as const, thrown }),
+        (error_: unknown) => ({ settled: 'rejected' as const, thrown: error_ }),
       );
       expect(outcome).toEqual({ settled: 'rejected', thrown: thrownValue });
     },

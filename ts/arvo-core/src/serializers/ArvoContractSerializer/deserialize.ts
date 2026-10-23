@@ -179,12 +179,12 @@ export const convertFromJSONSchema = (
   let zodSchema: zc.$ZodType;
   try {
     zodSchema = z.fromJSONSchema(schemaWithoutFormat as never);
-  } catch (thrown) {
+  } catch (error_) {
     return fromNeverthrow(
       err(
         new ErrorIssue({
           path: position,
-          message: `cannot be read: ${errorHeadline(thrown)}`,
+          message: `cannot be read: ${errorHeadline(error_)}`,
         }),
       ),
     );

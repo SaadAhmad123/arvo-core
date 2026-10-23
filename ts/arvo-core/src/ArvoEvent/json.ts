@@ -172,12 +172,12 @@ const walk = (
     let toJSONOutput: unknown;
     try {
       toJSONOutput = toJSON.call(node);
-    } catch (thrown) {
+    } catch (error_) {
       ancestors.delete(node);
       issues.push(
         new ErrorIssue({
           path,
-          message: `toJSON() threw: ${textOfThrown(thrown)}`,
+          message: `toJSON() threw: ${textOfThrown(error_)}`,
         }),
       );
       return null;

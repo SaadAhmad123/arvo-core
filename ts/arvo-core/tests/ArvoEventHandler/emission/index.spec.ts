@@ -158,8 +158,8 @@ describe('building an event to emit', async () => {
     const refusedTypeFault = async (type: string, data: unknown = {}) => {
       try {
         await openingContext().build({ type, data } as never);
-      } catch (thrown) {
-        return thrown as ArvoHandlerFault;
+      } catch (error_) {
+        return error_ as ArvoHandlerFault;
       }
       throw new Error('expected the emission to be refused');
     };
@@ -202,8 +202,8 @@ describe('building an event to emit', async () => {
           type: 'com_payment_charge',
           data: { amount: 'ten' },
         } as never);
-      } catch (thrown) {
-        return thrown as ArvoHandlerFault;
+      } catch (error_) {
+        return error_ as ArvoHandlerFault;
       }
       throw new Error('expected the emission to be refused');
     };

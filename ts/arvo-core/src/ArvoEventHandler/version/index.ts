@@ -727,12 +727,12 @@ export class ArvoEventHandlerVersion<
     try {
       await dependencies.open(scope);
       return dependencies.attributes;
-    } catch (thrown) {
+    } catch (error_) {
       throw await this.#entryFaultFor(param, record, {
         faultKind: 'dependency_resolution_failed',
-        message: `the dependencies for ${this.#contractAtVersion} could not be opened, so your executor was never entered: ${textOfThrown(thrown)}. Another attempt may succeed`,
+        message: `the dependencies for ${this.#contractAtVersion} could not be opened, so your executor was never entered: ${textOfThrown(error_)}. Another attempt may succeed`,
         violations: [],
-        cause: textOfThrown(thrown),
+        cause: textOfThrown(error_),
       });
     }
   }
@@ -759,8 +759,8 @@ export class ArvoEventHandlerVersion<
 
     try {
       await param.dependencies.close(scope);
-    } catch (thrown) {
-      markSwallowed(param.telemetry, 'dependencies_not_closed', thrown);
+    } catch (error_) {
+      markSwallowed(param.telemetry, 'dependencies_not_closed', error_);
     }
   }
 
@@ -890,8 +890,8 @@ export class ArvoEventHandlerVersion<
         returnedAt = Date.now();
         executorTimings.returnedAt = returnedAt;
         executorTimings.recordAtReturn = ctx.state;
-      } catch (thrown) {
-        return { kind: 'raised', thrown };
+      } catch (error_) {
+        return { kind: 'raised', thrown: error_ };
       }
       await middleware.after(ctx, executorTimings.emission);
       if (

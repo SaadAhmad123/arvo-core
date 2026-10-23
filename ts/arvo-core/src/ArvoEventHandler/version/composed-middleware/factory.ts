@@ -87,11 +87,11 @@ export const tryCreateArvoComposedMiddleware = async <
     try {
       // read once, every slot filled: a hole becomes undefined, which the constructor refuses
       listsAsRead[source] = Array.from(entries);
-    } catch (thrown) {
+    } catch (error_) {
       listIssues.push(
         new ErrorIssue({
           path: middlewarePosition(source),
-          message: `could not be read: ${textOfThrown(thrown)}`,
+          message: `could not be read: ${textOfThrown(error_)}`,
           blockingReason:
             'no middleware entry was checked, since the list itself could not be read',
         }),
@@ -132,10 +132,10 @@ export const tryCreateArvoComposedMiddleware = async <
         }),
       ),
     );
-  } catch (thrown) {
-    if (thrown instanceof ArvoComposedMiddlewareValidationError) {
-      return fromNeverthrow(err(thrown));
+  } catch (error_) {
+    if (error_ instanceof ArvoComposedMiddlewareValidationError) {
+      return fromNeverthrow(err(error_));
     }
-    throw thrown;
+    throw error_;
   }
 };

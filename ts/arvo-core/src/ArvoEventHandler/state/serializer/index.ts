@@ -83,9 +83,9 @@ export class ArvoExecutionStateSerializer<
           }),
         ),
       );
-    } catch (thrown) {
+    } catch (error_) {
       return fromNeverthrow(
-        err(new ArvoExecutionStateSerializerError(thrown as Error)),
+        err(new ArvoExecutionStateSerializerError(error_ as Error)),
       );
     }
   }
@@ -135,9 +135,9 @@ export class ArvoExecutionStateSerializer<
     let rawRecord: unknown;
     try {
       rawRecord = JSON.parse(wire);
-    } catch (thrown) {
+    } catch (error_) {
       return fromNeverthrow(
-        err(new ArvoExecutionStateSerializerError(thrown as Error)),
+        err(new ArvoExecutionStateSerializerError(error_ as Error)),
       );
     }
 

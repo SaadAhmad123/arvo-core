@@ -225,13 +225,13 @@ export class ArvoEventHandlerSetup<
   > {
     try {
       return fromNeverthrow(ok(new ArvoEventHandler(this)));
-    } catch (thrown) {
-      if (thrown instanceof ArvoEventHandlerValidationError) {
-        return fromNeverthrow(err(thrown));
+    } catch (error_) {
+      if (error_ instanceof ArvoEventHandlerValidationError) {
+        return fromNeverthrow(err(error_));
       }
       // anything else is not a refused declaration, so reporting it here
       // would make the error type say something untrue
-      throw thrown;
+      throw error_;
     }
   }
 

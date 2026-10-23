@@ -294,12 +294,12 @@ export class ArvoEventHandler<
 
     try {
       return fromNeverthrow(ok(await this.#run(param, telemetry)));
-    } catch (thrown) {
-      if (thrown instanceof ArvoHandlerFault)
-        return fromNeverthrow(err(thrown));
+    } catch (error_) {
+      if (error_ instanceof ArvoHandlerFault)
+        return fromNeverthrow(err(error_));
       // Not a fault, so reporting it here would make the error type say
       // something untrue about what went wrong.
-      throw thrown;
+      throw error_;
     } finally {
       span.end();
     }
@@ -480,12 +480,12 @@ export class ArvoEventHandler<
         telemetry,
         attempt: param.attempt,
       });
-    } catch (thrown) {
+    } catch (error_) {
       throw await this.#refuse(param, telemetry, resolvedEntry, null, {
         faultKind: 'state_resolution_failed',
         message: `the store could not be read for ${executionId}, so nothing says whether this execution exists. Another attempt may reach it`,
         violations: [],
-        cause: textOfThrown(thrown),
+        cause: textOfThrown(error_),
       });
     }
   }

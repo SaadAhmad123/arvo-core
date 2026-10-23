@@ -49,8 +49,8 @@ describe('tryCreateArvoContract', () => {
     let thrownError: ArvoContractValidationError | null = null;
     try {
       new ArvoContract(invalidParam);
-    } catch (thrown) {
-      thrownError = thrown as ArvoContractValidationError;
+    } catch (error_) {
+      thrownError = error_ as ArvoContractValidationError;
     }
     if (createResult.ok) throw new Error('expected the declaration to fail');
     expect(createResult.error.message).toBe(thrownError?.message);
