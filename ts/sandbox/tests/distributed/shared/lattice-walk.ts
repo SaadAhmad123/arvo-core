@@ -80,34 +80,40 @@ export const walkLattice = async (
   const outside: ArvoEvent[] = [];
   const waiting: ArvoEvent[] = [opening];
 
-  for (let next = waiting.shift(); next !== undefined; next = waiting.shift()) {
-    if (next.domain !== null) {
-      left.push(next);
-      continue;
-    }
-    if (handlerFor(next.to) === null) {
-      outside.push(next);
-      continue;
-    }
+  /** One delivery, its record kept and what it emitted queued. */
+  const deliver = async (event: ArvoEvent): Promise<void> => {
     if (steps.length >= MOST_STEPS) {
       throw new Error(`the walk made more than ${MOST_STEPS} deliveries`);
     }
-
     const entered = await enter(
-      next,
+      event,
       ({ executionId }) => records.get(executionId) ?? null,
     );
-    steps.push({ event: next, entered });
-    if (!entered.ok || entered.value.kind !== 'produced') continue;
+    steps.push({ event, entered });
+    if (!entered.ok || entered.value.kind !== 'produced') return;
 
     const { executionId } = entered.value.state;
     if (typeof executionId !== 'string') {
-      throw new Error('a handler wrote a record naming no execution');
+      throw new TypeError('a handler wrote a record naming no execution');
     }
     records.set(executionId, entered.value.state);
     waiting.push(...entered.value.events);
-  }
+  };
 
+  /**
+   * The next waiting event, then the one after it: one at a time, because
+   * each delivery reads the records the ones before it wrote.
+   */
+  const walkOnFrom = async (): Promise<void> => {
+    const next = waiting.shift();
+    if (next === undefined) return;
+    if (next.domain !== null) left.push(next);
+    else if (handlerFor(next.to) === null) outside.push(next);
+    else await deliver(next);
+    return walkOnFrom();
+  };
+
+  await walkOnFrom();
   return { steps, records, left, outside };
 };
 
