@@ -12,11 +12,12 @@ import type { ArvoLogger, ArvoLogRecord } from '../src/index.js';
  * A tracer provider recording into memory, and a way to register it as an
  * SDK loaded through `require` registers itself.
  *
- * The OpenTelemetry API is published as two builds, one loaded by `import`
- * and one by `require`, and Node keeps them apart. This package reaches the
- * API through `import`; most SDKs reach it through `require`. Registering
- * through the `require` build is therefore what an application does, and it
- * is the only way a test sees what this package sees in one.
+ * From API 1.10 the OpenTelemetry API is published as two builds, one
+ * loaded by `import` and one by `require`, and Node keeps them apart. This
+ * package reaches the API through `import`; most SDKs reach it through
+ * `require`. Registering through `require` is what an application does on
+ * every API version, and on those with two builds it is the only way a test
+ * sees what this package sees in one.
  */
 
 const requiredApi: { trace: TraceAPI } = createRequire(import.meta.url)(
