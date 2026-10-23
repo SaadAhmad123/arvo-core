@@ -159,9 +159,10 @@ describe('ArvoExecutionState', () => {
       try {
         buildState({ depth: -1, casVersion: -1, lifecycle: 'pondering' });
       } catch (error_) {
-        expect(
-          (error_ as ArvoExecutionStateValidationError).issues.length,
-        ).toBe(3);
+        expect(error_).toBeInstanceOf(ArvoExecutionStateValidationError);
+        if (error_ instanceof ArvoExecutionStateValidationError) {
+          expect(error_.issues).toHaveLength(3);
+        }
         return;
       }
       throw new Error('expected the record to be refused');
@@ -171,9 +172,10 @@ describe('ArvoExecutionState', () => {
       try {
         buildState({ depth: -1 });
       } catch (error_) {
-        expect(
-          (error_ as ArvoExecutionStateValidationError).issues[0]?.path,
-        ).toBe('depth');
+        expect(error_).toBeInstanceOf(ArvoExecutionStateValidationError);
+        if (error_ instanceof ArvoExecutionStateValidationError) {
+          expect(error_.issues[0]?.path).toBe('depth');
+        }
         return;
       }
       throw new Error('expected the record to be refused');
