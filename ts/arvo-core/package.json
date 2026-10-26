@@ -6,6 +6,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./outbox/conformance": {
+      "types": "./dist/outbox/conformance/index.d.ts",
+      "import": "./dist/outbox/conformance/index.js"
     }
   },
   "files": [
@@ -55,7 +59,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.2",
     "@changesets/cli": "3.0.3",
-    "@fission-ai/openspec": "^1.14.3",
+    "@fission-ai/openspec": "1.15.0",
     "@opentelemetry/api": "1.9.0",
     "@opentelemetry/sdk-trace": "2.12.0",
     "@types/node": "22.20.5",
@@ -70,7 +74,13 @@
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.0",
     "cloudevents": "^10.0.0",
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "vitest": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
   },
   "packageManager": "pnpm@11.17.0+sha512.cca3cea332ad254bb84145f966d19f4879615210346fc92c79a047f23a0d7b3cca3c3792f0076ba1f1831d277efbcf0a9119b31a9a60eca7fb3d6231f331ef72",
   "engines": {

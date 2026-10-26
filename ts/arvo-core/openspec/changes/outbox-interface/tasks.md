@@ -10,11 +10,11 @@ Built in this order: the interface, then the conformance kit, then the in-memory
 
 ## 2. The conformance kit
 
-- [ ] 2.1 Write `tests/outbox/conformance/describe.spec.ts`, against a stub outbox and a stub list of cases: `describeArvoOutboxConformance` registers one test per case under one suite, calls `createOutbox` once per case and awaits it, and hands each case the outbox it was given.
-- [ ] 2.2 Add `src/outbox/conformance/types.ts`, the case type and the suite's param, and `src/outbox/conformance/describe.ts`.
-- [ ] 2.3 Add the cases under `src/outbox/conformance/cases/`, one file per requirement of `specs/outbox/spec.md` that does not need a controlled clock, each case named for the rule it checks, using unique identifiers.
-- [ ] 2.4 Add `src/outbox/conformance/index.ts`, exporting the suite function and the list of cases, with TSDoc a developer reads to run the kit, including that each call of `createOutbox` must return a fresh, empty outbox.
-- [ ] 2.5 In `package.json`, add `./outbox/conformance` to `exports`, and vitest to `peerDependencies` with its `peerDependenciesMeta` entry marked optional.
+- [x] 2.1 Write `tests/outbox/conformance/describe.spec.ts`, against a stub outbox and a stub list of cases: `describeArvoOutboxConformance` registers one test per case under one suite, calls `createOutbox` once per case and awaits it, and hands each case the outbox it was given.
+- [x] 2.2 Add `src/outbox/conformance/types.ts`, the case type and the suite's param, and `src/outbox/conformance/describe.ts`.
+- [x] 2.3 Add the cases under `src/outbox/conformance/cases/`, one file per requirement of `specs/outbox/spec.md` that does not need a controlled clock, each case named for the rule it checks, using unique identifiers.
+- [x] 2.4 Add `src/outbox/conformance/index.ts`, exporting the suite function and the list of cases, with TSDoc a developer reads to run the kit, including that each call of `createOutbox` must return a fresh, empty outbox.
+- [x] 2.5 In `package.json`, add `./outbox/conformance` to `exports`, and vitest to `peerDependencies` with its `peerDependenciesMeta` entry marked optional.
 
 ## 3. `ArvoMemoryOutbox`, proven by the kit
 
