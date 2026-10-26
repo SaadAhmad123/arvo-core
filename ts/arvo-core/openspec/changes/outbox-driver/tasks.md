@@ -10,8 +10,8 @@
 
 ## 3. Outbound: checking answers and restoring payloads
 
-- [ ] 3.1 Write `tests/ArvoOutboxDriver/helpers/restore-event.spec.ts` first, proving whether `ArvoEventSerializer.tryDeserialize` with no fallback refuses a payload that is not JSON and a CloudEvent that is not Arvo-shaped, and restores an Arvo event to an equal one. Write `check-state.spec.ts`, `check-commit-outcome.spec.ts` and `check-committed-records.spec.ts` beside it: each shape accepted, and each wrong shape answered as its kind. Run red.
-- [ ] 3.2 Add `src/ArvoOutboxDriver/helpers/restore-event.ts`, `check-state.ts`, `check-commit-outcome.ts` and `check-committed-records.ts`, building a strict path in `restore-event.ts` only where 3.1 showed the serializer is not strict. Verify with the specs at 100% coverage.
+- [x] 3.1 Write `tests/ArvoOutboxDriver/helpers/restore-event.spec.ts` first, proving whether `ArvoEventSerializer.tryDeserialize` with no fallback refuses a payload that is not JSON and a CloudEvent that is not Arvo-shaped, and restores an Arvo event to an equal one. Write `check-state.spec.ts`, `check-commit-outcome.spec.ts` and `check-committed-records.spec.ts` beside it: each shape accepted, and each wrong shape answered as its kind. Run red.
+- [x] 3.2 Add `src/ArvoOutboxDriver/helpers/restore-event.ts`, `check-state.ts`, `check-commit-outcome.ts` and `check-committed-records.ts`, building a strict path in `restore-event.ts` only where 3.1 showed the serializer is not strict. Verify with the specs at 100% coverage.
 
 ## 4. The driver
 

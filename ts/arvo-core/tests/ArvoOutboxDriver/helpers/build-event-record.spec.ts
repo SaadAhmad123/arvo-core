@@ -3,6 +3,9 @@ import { buildEventRecord } from '../../../src/ArvoOutboxDriver/helpers/build-ev
 import { createArvoEvent } from '../../../src/factories/createArvoEvent.js';
 import { ArvoEventSerializer } from '../../../src/serializers/ArvoEventSerializer/index.js';
 
+/** Writes events as CloudEvent JSON, as the driver's own serializer does. */
+const cloudEventSerializer = new ArvoEventSerializer({ type: 'cloudevent' });
+
 /** An event with every field an event record takes from it set. */
 const event = createArvoEvent({
   id: 'event-1',
@@ -20,7 +23,7 @@ const event = createArvoEvent({
 
 describe('building the event record that stores an event', () => {
   it("takes the event's own fields, the delivery's identifier and the record's revision", async () => {
-    const eventRecord = await buildEventRecord(event, {
+    const eventRecord = await buildEventRecord(cloudEventSerializer, event, {
       triggeringEventId: 'triggering-1',
       casVersion: 4,
     });
@@ -42,7 +45,7 @@ describe('building the event record that stores an event', () => {
   });
 
   it('carries no revision where the events commit alone', async () => {
-    const eventRecord = await buildEventRecord(event, {
+    const eventRecord = await buildEventRecord(cloudEventSerializer, event, {
       triggeringEventId: 'triggering-1',
       casVersion: null,
     });
@@ -56,10 +59,14 @@ describe('building the event record that stores an event', () => {
       dataschema: '#/com/payment/charge/1.0.0',
       data: {},
     });
-    const eventRecord = await buildEventRecord(bareEvent, {
-      triggeringEventId: 'triggering-1',
-      casVersion: null,
-    });
+    const eventRecord = await buildEventRecord(
+      cloudEventSerializer,
+      bareEvent,
+      {
+        triggeringEventId: 'triggering-1',
+        casVersion: null,
+      },
+    );
     expect([eventRecord.parentId, eventRecord.to, eventRecord.domain]).toEqual([
       bareEvent.parentid,
       bareEvent.to,
@@ -68,7 +75,7 @@ describe('building the event record that stores an event', () => {
   });
 
   it('stores the event as its CloudEvent JSON, which restores to the same event', async () => {
-    const eventRecord = await buildEventRecord(event, {
+    const eventRecord = await buildEventRecord(cloudEventSerializer, event, {
       triggeringEventId: 'triggering-1',
       casVersion: 4,
     });

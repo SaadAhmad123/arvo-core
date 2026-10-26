@@ -75,6 +75,17 @@ Two mechanisms doing the same job is worse than either alone — two idioms, two
 
 When bespoke wins, `design.md` records why, so the next person does not re-litigate it.
 
+### Module-level state
+
+**The package holds no state at module level.** Nothing a file declares outside a function or class may change, or carry anything from one call to the next, because whatever does is shared by every consumer that imports it and by every call they make.
+
+So, at module level:
+
+- **Not allowed:** an instance of a class, such as a serializer built once and shared; a mutable container — a `Set`, a `Map`, an array or a plain object, typed `Readonly` or not; and any `let`.
+- **Allowed:** a primitive constant, such as a default or a name; a regular expression without the `g` or `y` flag, since with either it remembers where its last match ended; and a function.
+
+A collaborator is built by the class that needs it, in its constructor, and passed to the helper functions that use it as an argument. A lookup table is a `switch` inside a function, not an object or a `Set` held at file scope.
+
 ### Documentation in source
 
 TSDoc is written for the **package consumer**, not the contributor. Someone who installed `arvo-core` from npm and is hovering a symbol in their editor is the audience — they do not have this repository open, and they did not ask about how it is built.

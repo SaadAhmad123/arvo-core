@@ -53,18 +53,22 @@ export type ArvoOutboxDriverErrorParam = {
   readonly issues?: readonly ErrorIssue[];
 };
 
-/** What each kind means, as the message says it. */
-const meaningOfKind: Readonly<Record<ArvoOutboxDriverErrorKind, string>> = {
-  state_exists:
-    'the outbox refused it: a state already exists for the execution, and this one claimed to be its first',
-  revision_stale:
-    'the outbox refused it: the stored revision is not the one this state follows',
-  unavailable: 'the outbox threw, so it could not do its work',
-  malformed_state:
-    'the outbox answered a state that is not a JSON object or none',
-  malformed_event:
-    'the outbox answered an event record missing a field, holding one of the wrong type, or whose payload does not restore to an Arvo event',
-  malformed_response: 'the outbox answered with something of the wrong shape',
+/** What a kind means, as the message says it. */
+const meaningOfKind = (kind: ArvoOutboxDriverErrorKind): string => {
+  switch (kind) {
+    case 'state_exists':
+      return 'the outbox refused it: a state already exists for the execution, and this one claimed to be its first';
+    case 'revision_stale':
+      return 'the outbox refused it: the stored revision is not the one this state follows';
+    case 'unavailable':
+      return 'the outbox threw, so it could not do its work';
+    case 'malformed_state':
+      return 'the outbox answered a state that is not a JSON object or none';
+    case 'malformed_event':
+      return 'the outbox answered an event record missing a field, holding one of the wrong type, or whose payload does not restore to an Arvo event';
+    case 'malformed_response':
+      return 'the outbox answered with something of the wrong shape';
+  }
 };
 
 /**
@@ -96,7 +100,7 @@ export class ArvoOutboxDriverError extends Error {
 
   /** @param param - Why, where, and the cause. See {@link ArvoOutboxDriverErrorParam}. */
   constructor(param: ArvoOutboxDriverErrorParam) {
-    const heading = `ArvoOutboxDriver.${param.operationName} failed (${param.kind}): ${meaningOfKind[param.kind]}.`;
+    const heading = `ArvoOutboxDriver.${param.operationName} failed (${param.kind}): ${meaningOfKind(param.kind)}.`;
     const thrownText =
       param.kind === 'unavailable' && param.cause !== undefined
         ? ` It threw ${describeValue(param.cause)}.`

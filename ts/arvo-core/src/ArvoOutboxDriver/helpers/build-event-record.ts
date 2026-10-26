@@ -1,9 +1,6 @@
 import type { ArvoEvent } from '../../ArvoEvent/index.js';
 import type { ArvoOutboxEventRecord } from '../../ArvoOutbox/types/event-record.js';
-import { ArvoEventSerializer } from '../../serializers/ArvoEventSerializer/index.js';
-
-/** Writes every event as CloudEvent JSON, ADR-003's forward transformation. */
-const cloudEventSerializer = new ArvoEventSerializer({ type: 'cloudevent' });
+import type { ArvoEventSerializer } from '../../serializers/ArvoEventSerializer/index.js';
 
 /** What an event record takes from the delivery and the commit, not the event. */
 export type ArvoEventRecordContext = {
@@ -14,10 +11,12 @@ export type ArvoEventRecordContext = {
 /**
  * The event record that stores one live event: its own fields, the
  * delivered event's identifier, the record's revision or none, and the event
- * as CloudEvent JSON. Throws where one of Arvo's own events will not
- * serialize, a defect in the event rather than in the outbox.
+ * as CloudEvent JSON, written by `cloudEventSerializer`. Throws where one of
+ * Arvo's own events will not serialize, a defect in the event rather than in
+ * the outbox.
  */
 export const buildEventRecord = async (
+  cloudEventSerializer: ArvoEventSerializer,
   event: ArvoEvent,
   recordContext: ArvoEventRecordContext,
 ): Promise<ArvoOutboxEventRecord> => ({
