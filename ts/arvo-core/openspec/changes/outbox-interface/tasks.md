@@ -35,6 +35,6 @@ Built in this order: the interface, then the conformance kit, then the in-memory
 
 ## 5. Close out
 
-- [ ] 5.1 Write `tests/entry-points.spec.ts`: after a build, the main entry point and `outbox/inmemory` import neither vitest nor `better-sqlite3`; `outbox/sqlite` imports `better-sqlite3` and not vitest; `outbox/conformance` imports vitest and not `better-sqlite3`; every entry point exists in `dist/`.
-- [ ] 5.2 Run the whole suite with coverage, lint, typecheck and build from `ts/arvo-core`.
-- [ ] 5.3 Validate the change with `node_modules/.bin/openspec validate outbox-interface --strict`.
+- [x] 5.1 Write `tests/entry-points.spec.ts`: after a build, the main entry point and `outbox/inmemory` import neither vitest nor `better-sqlite3`; `outbox/sqlite` imports `better-sqlite3` and not vitest; `outbox/conformance` imports vitest and not `better-sqlite3`; every entry point exists in `dist/`.
+- [x] 5.2 Run the whole suite with coverage, lint, typecheck and build from `ts/arvo-core`.
+- [x] 5.3 Validate the change with `node_modules/.bin/openspec validate outbox-interface --strict`.
