@@ -1,7 +1,7 @@
 ## 1. The lifecycle helper
 
-- [ ] 1.1 Write `tests/outbox/helpers/outbox-lifecycle.spec.ts`: what is held is reached only while open; before opening, `held` throws naming the outbox and the operation and saying to open it; opening twice acquires once; a failed `acquire` leaves it unopened and may be retried; closing releases once, and closing again, or closing unopened, releases nothing; once closed, `held` throws saying to build a new one, and `open` throws the same. Run red.
-- [ ] 1.2 Add `src/outbox/helpers/outbox-lifecycle.ts`, the class generic in what is held. Verify with the spec at 100% coverage.
+- [x] 1.1 Write `tests/outbox/helpers/outbox-lifecycle.spec.ts`: what is held is reached only while open; before opening, `held` throws naming the outbox and the operation and saying to open it; opening twice acquires once; a failed `acquire` leaves it unopened and may be retried; closing releases once, and closing again, or closing unopened, releases nothing; once closed, `held` throws saying to build a new one, and `open` throws the same. Run red.
+- [x] 1.2 Add `src/outbox/helpers/outbox-lifecycle.ts`, the class generic in what is held. Verify with the spec at 100% coverage.
 
 ## 2. `ArvoMemoryOutbox` opened and closed
 
