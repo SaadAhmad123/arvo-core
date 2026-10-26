@@ -5,8 +5,8 @@
 
 ## 2. Inbound: lifting the record and building event records
 
-- [ ] 2.1 Write `tests/ArvoOutboxDriver/helpers/lift-commit-fields.spec.ts`: the six fields lifted from a record; each missing or mistyped field reported, every one at once, including a revision that is negative, fractional or not a number. Write `tests/ArvoOutboxDriver/helpers/build-event-record.spec.ts`: every field mapped from the event, the triggering event's identifier, a revision or none, and a payload that is the event's CloudEvent JSON. Run red.
-- [ ] 2.2 Add `src/ArvoOutboxDriver/helpers/lift-commit-fields.ts` and `src/ArvoOutboxDriver/helpers/build-event-record.ts`. Verify with both specs at 100% coverage.
+- [x] 2.1 Write `tests/ArvoOutboxDriver/helpers/lift-commit-fields.spec.ts`: the six fields lifted from a record; each missing or mistyped field reported, every one at once, including a revision that is negative, fractional or not a number. Write `tests/ArvoOutboxDriver/helpers/build-event-record.spec.ts`: every field mapped from the event, the triggering event's identifier, a revision or none, and a payload that is the event's CloudEvent JSON. Run red.
+- [x] 2.2 Add `src/ArvoOutboxDriver/helpers/lift-commit-fields.ts` and `src/ArvoOutboxDriver/helpers/build-event-record.ts`. Verify with both specs at 100% coverage.
 
 ## 3. Outbound: checking answers and restoring payloads
 
