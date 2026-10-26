@@ -14,6 +14,7 @@ import type {
   ArvoOutboxUnseenEventsParam,
 } from '../../ArvoOutbox/types/read.js';
 import type { JSONObject } from '../../types.js';
+import { OutboxLifecycle } from '../helpers/outbox-lifecycle.js';
 import { refusalFor } from '../helpers/refusal-for.js';
 import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
 import { configureConnection } from './helpers/configure-connection.js';
@@ -31,41 +32,31 @@ import { outboxSchema, outboxSchemaVersion } from './schema.js';
 import { type OutboxStatements, prepareStatements } from './statements.js';
 import type { ArvoSqliteOutboxOptions } from './types.js';
 
+/** What an open outbox holds: its connection to the file, and what it prepared on it. */
+type SqliteConnection = {
+  readonly database: Database.Database;
+  readonly statements: OutboxStatements;
+};
+
 /**
  * An outbox kept in a SQLite file, for one machine.
  *
- * It creates the tables and indexes it needs in the file where they are
- * missing and leaves everything else in it alone, so what it committed is
- * there after a restart. Several outboxes may share one file, in one process
- * or several, and together meet every rule of {@link IArvoOutbox} as one
- * would: each commit takes the file's write lock before it checks the
- * revision. Every landing time, and the cut-off for listing unseen events,
- * comes from SQLite's own clock.
+ * Open it before use and close it after: building it touches no file, and
+ * every operation throws before it is opened and once it is closed. Every
+ * operation answers directly, holding the thread until SQLite answers, and
+ * throws, storing nothing, where another writer holds the file for longer
+ * than `options.busyTimeoutMs`. Landing times come from SQLite's own clock.
  *
- * Every operation answers directly, never through a promise, and holds the
- * thread until SQLite answers. Where another writer holds the file for
- * longer than `options.busyTimeoutMs`, the operation throws and stores
- * nothing. Sharing a file between several sweepers sends each event more
- * than once, which receivers drop as repeats; run one sweeper per file.
- *
- * It keeps each execution's latest state only, and deletes an event once it
- * has been seen for longer than `options.retainSeenEventsForMs`, a few at a
- * time as events are marked seen, or all at once through
- * {@link ArvoSqliteOutbox.deleteExpiredEvents}. An unseen event is never
- * deleted. A file it creates gives the space of what it deletes back to the
- * disk. It honours a lease asked for when listing unseen events, across
- * every outbox on the file.
- *
- * A file it creates is readable and writable by its owner alone. It syncs
- * every commit to disk in full, overwrites what it deletes, runs nothing a
- * file defines, and refuses a file whose outbox tables another version of
- * it wrote.
- *
- * It holds the file open until {@link ArvoSqliteOutbox.close} is called.
+ * Several outboxes may share one file, in one process or several, and
+ * together meet every rule of {@link IArvoOutbox}, leases included. It keeps
+ * each execution's latest state, and deletes an event once it has been seen
+ * for longer than `options.retainSeenEventsForMs`; an unseen event is never
+ * deleted. A file it creates is readable and writable by its owner alone.
  *
  * @example
  * ```typescript
  * const outbox = new ArvoSqliteOutbox({ filename: '/var/lib/orders/outbox.sqlite' });
+ * outbox.open();
  * const outcome = outbox.commitStateAndEvents(commit);
  * const latestState = outbox.readLatestState(commit.executionId);
  * outbox.close();
@@ -73,17 +64,15 @@ import type { ArvoSqliteOutboxOptions } from './types.js';
  */
 export class ArvoSqliteOutbox implements IArvoOutbox {
   private readonly filename: string;
+  private readonly busyTimeoutMs: number;
   private readonly retainSeenEventsForMs: number;
-  private readonly database: Database.Database;
-  private readonly statements: OutboxStatements;
+  private readonly lifecycle: OutboxLifecycle<SqliteConnection>;
 
   /**
-   * Opens the file, creating it and what the outbox needs in it where
-   * missing.
+   * Checks the options. Touches no file: {@link ArvoSqliteOutbox.open} does.
    *
    * @param options - Which file, how long to wait for it, and how long to keep seen events. See {@link ArvoSqliteOutboxOptions}.
    * @throws {RangeError} Where `options.busyTimeoutMs` or `options.retainSeenEventsForMs` is out of range.
-   * @throws Whatever SQLite throws where the file cannot be opened or is not a SQLite database.
    */
   constructor(options: ArvoSqliteOutboxOptions) {
     const busyTimeoutMs = options.busyTimeoutMs ?? defaultBusyTimeoutMs;
@@ -103,43 +92,54 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
       );
     }
     this.filename = options.filename;
+    this.busyTimeoutMs = busyTimeoutMs;
     this.retainSeenEventsForMs = retainSeenEventsForMs;
-    if (options.filename !== ':memory:' && options.filename !== '') {
-      createOwnerOnlyFile(options.filename);
-    }
-    this.database = new Database(options.filename, { timeout: busyTimeoutMs });
-    try {
-      configureConnection(this.database);
-      this.refuseUnknownSchemaVersion();
-      this.database
-        .transaction(() => this.database.exec(outboxSchema))
-        .immediate();
-      this.statements = prepareStatements(this.database);
-    } catch (error_) {
-      this.database.close();
-      throw error_;
-    }
+    this.lifecycle = new OutboxLifecycle(
+      `ArvoSqliteOutbox on ${options.filename}`,
+    );
+  }
+
+  /**
+   * Opens the file, creating it, owner-only, where missing, and creating
+   * what the outbox needs in it. Opening it again does nothing. Where
+   * opening throws, the outbox stays unopened and may be opened again.
+   *
+   * @throws Where it has been closed: build a new one instead.
+   * @throws Whatever SQLite throws where the file cannot be opened, is not a SQLite database, or holds outbox tables of another version.
+   */
+  open(): void {
+    this.lifecycle.open(() => this.openConnection());
+  }
+
+  /**
+   * Releases the file. Closing it again does nothing, and every operation
+   * throws once it is closed.
+   */
+  close(): void {
+    this.lifecycle.close(({ database }) => database.close());
   }
 
   readLatestState(executionId: string): JSONObject | null {
-    this.refuseOnceClosed();
-    const stateRow = this.statements.selectLatestState.get({ executionId });
+    const { statements } = this.lifecycle.resourcesFor('readLatestState');
+    const stateRow = statements.selectLatestState.get({ executionId });
     return stateRow ? JSON.parse(stateRow.document) : null;
   }
 
   commitStateAndEvents(param: ArvoOutboxStateCommit): ArvoOutboxCommitOutcome {
-    this.refuseOnceClosed();
+    const { database, statements } = this.lifecycle.resourcesFor(
+      'commitStateAndEvents',
+    );
     const document = JSON.stringify(param.state);
-    return this.database
+    return database
       .transaction((): ArvoOutboxCommitOutcome => {
         const refusal = refusalFor({
           casVersion: param.casVersion,
-          storedCasVersion: this.statements.selectLatestState.get({
+          storedCasVersion: statements.selectLatestState.get({
             executionId: param.executionId,
           })?.casVersion,
         });
         if (refusal !== null) return { committed: false, refusal };
-        this.statements.insertState.run({
+        statements.insertState.run({
           executionId: param.executionId,
           casVersion: param.casVersion,
           subject: param.subject,
@@ -148,39 +148,40 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
           lifecycle: param.lifecycle,
           document,
         });
-        this.statements.deleteEarlierStates.run({
+        statements.deleteEarlierStates.run({
           executionId: param.executionId,
           casVersion: param.casVersion,
         });
-        this.insertEvents(param.events);
+        this.insertEvents(statements, param.events);
         return { committed: true };
       })
       .immediate();
   }
 
   commitEvents(param: ArvoOutboxEventsCommit): void {
-    this.refuseOnceClosed();
-    this.database
-      .transaction(() => this.insertEvents(param.events))
+    const { database, statements } =
+      this.lifecycle.resourcesFor('commitEvents');
+    database
+      .transaction(() => this.insertEvents(statements, param.events))
       .immediate();
   }
 
   readCommittedEvents(
     filter: ArvoOutboxEventsFilter,
   ): readonly ArvoOutboxCommittedEventRecord[] {
-    this.refuseOnceClosed();
+    const { statements } = this.lifecycle.resourcesFor('readCommittedEvents');
     if (!('triggeringEventId' in filter)) {
-      return this.statements.selectEventsByExecution
+      return statements.selectEventsByExecution
         .all({ executionId: filter.executionId })
         .map(toCommittedEventRecord);
     }
     return (
       'executionId' in filter
-        ? this.statements.selectEventsByTriggeringEventAndExecution.all({
+        ? statements.selectEventsByTriggeringEventAndExecution.all({
             triggeringEventId: filter.triggeringEventId,
             executionId: filter.executionId,
           })
-        : this.statements.selectEventsByTriggeringEvent.all({
+        : statements.selectEventsByTriggeringEvent.all({
             triggeringEventId: filter.triggeringEventId,
           })
     ).map(toCommittedEventRecord);
@@ -189,11 +190,12 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
   listUnseenEvents(
     param: ArvoOutboxUnseenEventsParam,
   ): readonly ArvoOutboxCommittedEventRecord[] {
-    this.refuseOnceClosed();
+    const { database, statements } =
+      this.lifecycle.resourcesFor('listUnseenEvents');
     refuseInvalidListing('ArvoSqliteOutbox', param);
     const listUnseen = () => {
-      const now = readSqliteNow(this.statements.selectNow);
-      const eventRows = this.statements.selectUnseenEvents.all({
+      const now = readSqliteNow(statements.selectNow);
+      const eventRows = statements.selectUnseenEvents.all({
         now,
         cutOffModifier: secondsAgo(param.olderThanMs),
         atMost: param.atMost,
@@ -201,7 +203,7 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
       if (param.leaseMs !== undefined) {
         const leaseModifier = secondsLater(param.leaseMs);
         for (const eventRow of eventRows) {
-          this.statements.leaseEvent.run({
+          statements.leaseEvent.run({
             eventId: eventRow.id,
             now,
             leaseModifier,
@@ -213,19 +215,20 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
     // a lease is claimed under the write lock, so no other process claims the same events
     return param.leaseMs === undefined
       ? listUnseen()
-      : this.database.transaction(listUnseen).immediate();
+      : database.transaction(listUnseen).immediate();
   }
 
   markEventsSeen(eventIds: readonly string[]): void {
-    this.refuseOnceClosed();
-    this.database
+    const { database, statements } =
+      this.lifecycle.resourcesFor('markEventsSeen');
+    database
       .transaction(() => {
-        const seenAt = readSqliteNow(this.statements.selectNow);
+        const seenAt = readSqliteNow(statements.selectNow);
         for (const eventId of eventIds) {
-          this.statements.markEventSeen.run({ eventId, seenAt });
+          statements.markEventSeen.run({ eventId, seenAt });
         }
-        if (this.deleteExpiredBatch() > 0) {
-          this.database.pragma(`incremental_vacuum(${pagesFreedPerMarking})`);
+        if (this.deleteExpiredBatch(statements) > 0) {
+          database.pragma(`incremental_vacuum(${pagesFreedPerMarking})`);
         }
       })
       .immediate();
@@ -239,53 +242,69 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
    * @returns How many events were deleted.
    */
   deleteExpiredEvents(): number {
-    this.refuseOnceClosed();
+    const { database, statements } = this.lifecycle.resourcesFor(
+      'deleteExpiredEvents',
+    );
     let deletedEventCount = 0;
-    let deletedInBatch = expiredEventsDeletedPerMarking;
-    while (deletedInBatch === expiredEventsDeletedPerMarking) {
-      deletedInBatch = this.database
-        .transaction(() => this.deleteExpiredBatch())
+    let deletedInBatchCount = expiredEventsDeletedPerMarking;
+    while (deletedInBatchCount === expiredEventsDeletedPerMarking) {
+      deletedInBatchCount = database
+        .transaction(() => this.deleteExpiredBatch(statements))
         .immediate();
-      deletedEventCount += deletedInBatch;
+      deletedEventCount += deletedInBatchCount;
     }
-    this.database.pragma('incremental_vacuum');
+    database.pragma('incremental_vacuum');
     return deletedEventCount;
   }
 
-  /**
-   * Releases the file. May be called again; every other operation throws
-   * once it has been.
-   */
-  close(): void {
-    if (this.database.open) this.database.close();
+  /** Inserts each event not already stored, all landing at one time by SQLite's clock. */
+  private insertEvents(
+    statements: OutboxStatements,
+    eventRecords: readonly ArvoOutboxEventRecord[],
+  ): void {
+    const committedAt = readSqliteNow(statements.selectNow);
+    for (const eventRecord of eventRecords) {
+      statements.insertEvent.run(toEventInsert(eventRecord, committedAt));
+    }
   }
 
-  /** Inserts each event not already stored, all landing at one time by SQLite's clock. */
-  private insertEvents(eventRecords: readonly ArvoOutboxEventRecord[]): void {
-    const committedAt = readSqliteNow(this.statements.selectNow);
-    for (const eventRecord of eventRecords) {
-      this.statements.insertEvent.run(toEventInsert(eventRecord, committedAt));
+  /** Opens the file and readies it, closing it again where any step throws. */
+  private openConnection(): SqliteConnection {
+    if (this.filename !== ':memory:' && this.filename !== '') {
+      createOwnerOnlyFile(this.filename);
+    }
+    const database = new Database(this.filename, {
+      timeout: this.busyTimeoutMs,
+    });
+    try {
+      configureConnection(database);
+      this.refuseUnknownSchemaVersion(database);
+      database.transaction(() => database.exec(outboxSchema)).immediate();
+      return { database, statements: prepareStatements(database) };
+    } catch (error_) {
+      database.close();
+      throw error_;
     }
   }
 
   /** Deletes up to one batch of expired events, and says how many. */
-  private deleteExpiredBatch(): number {
+  private deleteExpiredBatch(statements: OutboxStatements): number {
     if (this.retainSeenEventsForMs === Number.POSITIVE_INFINITY) return 0;
-    return this.statements.deleteExpiredEvents.run({
+    return statements.deleteExpiredEvents.run({
       cutOffModifier: secondsAgo(this.retainSeenEventsForMs),
       batchSize: expiredEventsDeletedPerMarking,
     }).changes;
   }
 
   /** Throws, before anything is created, where the file holds outbox tables of another version. */
-  private refuseUnknownSchemaVersion(): void {
-    const metaTable = this.database
+  private refuseUnknownSchemaVersion(database: Database.Database): void {
+    const metaTable = database
       .prepare<[], { name: string }>(
         "select name from sqlite_schema where type = 'table' and name = 'arvo_outbox_meta'",
       )
       .get();
     if (metaTable === undefined) return;
-    const versionRow = this.database
+    const versionRow = database
       .prepare<[], { value: string }>(
         "select value from arvo_outbox_meta where name = 'schema_version'",
       )
@@ -295,14 +314,5 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
     throw new Error(
       `ArvoSqliteOutbox cannot open ${this.filename}: its outbox tables are at version ${versionRow.value}, and this outbox knows only version ${outboxSchemaVersion}. Open it with the version of arvo-core that wrote it.`,
     );
-  }
-
-  /** Throws where the file has been released. */
-  private refuseOnceClosed(): void {
-    if (!this.database.open) {
-      throw new Error(
-        `ArvoSqliteOutbox on ${this.filename} is closed; open a new one on the file to use it again.`,
-      );
-    }
   }
 }

@@ -28,7 +28,7 @@ type CheckRun = {
   outbox: IArvoOutbox;
 };
 
-const recorded = vi.hoisted(() => {
+const caseRunLog = vi.hoisted(() => {
   const checksRun: CheckRun[] = [];
   return { checksRun };
 });
@@ -41,7 +41,7 @@ vi.mock('../../../src/outbox/conformance/cases/index.js', () => ({
     (caseName): ArvoOutboxConformanceCase => ({
       name: caseName,
       check: async (outbox) => {
-        recorded.checksRun.push({
+        caseRunLog.checksRun.push({
           caseName,
           testName: expect.getState().currentTestName,
           outbox,
@@ -61,7 +61,7 @@ const createStubOutboxInto = (outboxesCreated: StubOutbox[]) => async () => {
 
 /** The runs of the cases that were given one of these outboxes, in order. */
 const checksRunAgainst = (outboxesCreated: readonly StubOutbox[]) =>
-  recorded.checksRun.filter((checkRun) =>
+  caseRunLog.checksRun.filter((checkRun) =>
     outboxesCreated.some((outbox) => outbox === checkRun.outbox),
   );
 
@@ -78,7 +78,7 @@ describeArvoOutboxConformance({
     {
       name: 'a rule of my own',
       check: async (outbox) => {
-        recorded.checksRun.push({
+        caseRunLog.checksRun.push({
           caseName: 'a rule of my own',
           testName: expect.getState().currentTestName,
           outbox,

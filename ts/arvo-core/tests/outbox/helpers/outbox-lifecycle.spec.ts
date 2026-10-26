@@ -1,26 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 import { OutboxLifecycle } from '../../../src/outbox/helpers/outbox-lifecycle.js';
 
-/** What an outbox under test holds while open. */
-type HeldResource = { readonly name: string };
+/** The resources an outbox under test holds while open. */
+type OutboxResources = { readonly name: string };
 
 describe('the lifecycle of an outbox', () => {
   it('throws before it is opened, saying to open it first', () => {
-    const lifecycle = new OutboxLifecycle<HeldResource>('AnOutbox');
-    expect(() => lifecycle.held('readLatestState')).toThrow(
+    const lifecycle = new OutboxLifecycle<OutboxResources>('AnOutbox');
+    expect(() => lifecycle.resourcesFor('readLatestState')).toThrow(
       'AnOutbox is not open; call open() before readLatestState.',
     );
   });
 
-  it('holds what was acquired while open', () => {
-    const lifecycle = new OutboxLifecycle<HeldResource>('AnOutbox');
-    const resource = { name: 'connection' };
-    lifecycle.open(() => resource);
-    expect(lifecycle.held('readLatestState')).toBe(resource);
+  it('holds the resources it acquired while open', () => {
+    const lifecycle = new OutboxLifecycle<OutboxResources>('AnOutbox');
+    const resources = { name: 'connection' };
+    lifecycle.open(() => resources);
+    expect(lifecycle.resourcesFor('readLatestState')).toBe(resources);
   });
 
   it('acquires once, however often it is opened', () => {
-    const lifecycle = new OutboxLifecycle<HeldResource>('AnOutbox');
+    const lifecycle = new OutboxLifecycle<OutboxResources>('AnOutbox');
     const acquire = vi.fn(() => ({ name: 'connection' }));
     lifecycle.open(acquire);
     lifecycle.open(acquire);
@@ -28,43 +28,47 @@ describe('the lifecycle of an outbox', () => {
   });
 
   it('stays unopened where acquiring throws, so opening may be tried again', () => {
-    const lifecycle = new OutboxLifecycle<HeldResource>('AnOutbox');
+    const lifecycle = new OutboxLifecycle<OutboxResources>('AnOutbox');
     expect(() =>
       lifecycle.open(() => {
         throw new Error('the file is held');
       }),
     ).toThrow('the file is held');
-    expect(() => lifecycle.held('commitEvents')).toThrow(
+    expect(() => lifecycle.resourcesFor('commitEvents')).toThrow(
       'AnOutbox is not open',
     );
     lifecycle.open(() => ({ name: 'connection' }));
-    expect(lifecycle.held('commitEvents')).toEqual({ name: 'connection' });
+    expect(lifecycle.resourcesFor('commitEvents')).toEqual({
+      name: 'connection',
+    });
   });
 
-  it('releases what it holds once, however often it is closed', () => {
-    const lifecycle = new OutboxLifecycle<HeldResource>('AnOutbox');
-    const resource = { name: 'connection' };
+  it('releases its resources once, however often it is closed', () => {
+    const lifecycle = new OutboxLifecycle<OutboxResources>('AnOutbox');
+    const resources = { name: 'connection' };
     const release = vi.fn();
-    lifecycle.open(() => resource);
+    lifecycle.open(() => resources);
     lifecycle.close(release);
     lifecycle.close(release);
     expect(release).toHaveBeenCalledTimes(1);
-    expect(release).toHaveBeenCalledWith(resource);
+    expect(release).toHaveBeenCalledWith(resources);
   });
 
   it('is closed even where releasing throws', () => {
-    const lifecycle = new OutboxLifecycle<HeldResource>('AnOutbox');
+    const lifecycle = new OutboxLifecycle<OutboxResources>('AnOutbox');
     lifecycle.open(() => ({ name: 'connection' }));
     expect(() =>
       lifecycle.close(() => {
         throw new Error('the file would not close');
       }),
     ).toThrow('the file would not close');
-    expect(() => lifecycle.held('commitEvents')).toThrow('AnOutbox is closed');
+    expect(() => lifecycle.resourcesFor('commitEvents')).toThrow(
+      'AnOutbox is closed',
+    );
   });
 
   it('releases nothing where it was never opened, and is closed after', () => {
-    const lifecycle = new OutboxLifecycle<HeldResource>('AnOutbox');
+    const lifecycle = new OutboxLifecycle<OutboxResources>('AnOutbox');
     const release = vi.fn();
     lifecycle.close(release);
     expect(release).not.toHaveBeenCalled();
@@ -74,12 +78,14 @@ describe('the lifecycle of an outbox', () => {
   });
 
   it('throws once closed, on use and on opening, saying to build a new one', () => {
-    const lifecycle = new OutboxLifecycle<HeldResource>('AnOutbox');
+    const lifecycle = new OutboxLifecycle<OutboxResources>('AnOutbox');
     lifecycle.open(() => ({ name: 'connection' }));
     lifecycle.close(() => undefined);
     const closedMessage =
       'AnOutbox is closed; build a new one to use it again.';
-    expect(() => lifecycle.held('markEventsSeen')).toThrow(closedMessage);
+    expect(() => lifecycle.resourcesFor('markEventsSeen')).toThrow(
+      closedMessage,
+    );
     expect(() => lifecycle.open(() => ({ name: 'connection' }))).toThrow(
       closedMessage,
     );

@@ -35,9 +35,9 @@ The interface's own rule is the minimum any storage can keep: opening and closin
 
 A failed `open()` leaves the outbox unopened, so the caller may try again, for instance once a file another writer held is free.
 
-### One helper holds the state and what is held
+### One helper holds the state and the outbox's resources
 
-`src/outbox/helpers/outbox-lifecycle.ts` is a small class generic in what an outbox holds while open: `open(acquire)`, `close(release)`, and `held(operationName)`, which returns what is held or throws, naming the outbox and saying to open it first, or to build a new one. Its state is a union, unopened, open with what it holds, or closed, so nothing held can be reached outside the open state and no non-null assertion is needed anywhere.
+`src/outbox/helpers/outbox-lifecycle.ts` is a small class generic in what an outbox holds while open: `open(acquire)`, `close(release)`, and `resourcesFor(operationName)`, which returns the outbox's resources or throws, naming the outbox and saying to open it first, or to build a new one. Its state is a union, unopened, open with what it holds, or closed, so no resource can be reached outside the open state and no non-null assertion is needed anywhere.
 
 - `ArvoSqliteOutbox` holds its connection and its prepared statements. The constructor checks options and touches no file; `acquire` is what the constructor does today, closing the connection itself where any step throws.
 - `ArvoMemoryOutbox` holds a store of every map and the latest landing time, built by `acquire`. `release` drops it, which is how closing frees what it held.

@@ -70,21 +70,16 @@ const createMemoryStore = (): MemoryStore => ({
  * when the process ends.
  *
  * For tests, and for a single process that can afford to lose its state and
- * unsent events on a restart. It meets every rule of {@link IArvoOutbox},
- * answers every operation directly, never through a promise, and so
- * answers overlapping callers as if each ran alone. Nothing it is given or
- * hands back shares memory with what it holds, and every read goes through
- * an index, so a call does the same work however much it holds.
- *
- * Open it before use and close it after: every operation throws before it
- * is opened and once it is closed, and closing frees everything it holds.
+ * unsent events on a restart. Open it before use and close it after: every
+ * operation throws before it is opened and once it is closed, and closing
+ * frees everything it holds. Every operation answers directly, and nothing
+ * it is given or hands back shares memory with what it holds.
  *
  * It keeps each execution's latest state, and at most `options.maxEvents`
  * event records, making room by dropping the events seen longest ago and
- * never an unseen one. It honours a lease asked for when listing unseen
- * events, by its own clock. Landing times come from `options.clock`; where that
- * clock goes back, a commit is stamped with the latest time already
- * stamped, so unseen events are always listed in the order committed.
+ * never an unseen one; where only unseen events are held, a commit throws.
+ * Landing times and leases go by `options.clock`; where it goes back, a
+ * commit is stamped no earlier than the one before.
  *
  * @example
  * ```typescript
@@ -139,13 +134,13 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   // throw runs before the first write.
 
   readLatestState(executionId: string): JSONObject | null {
-    const store = this.lifecycle.held('readLatestState');
+    const store = this.lifecycle.resourcesFor('readLatestState');
     const storedState = store.latestStateByExecution.get(executionId);
     return storedState ? structuredClone(storedState.state) : null;
   }
 
   commitStateAndEvents(param: ArvoOutboxStateCommit): ArvoOutboxCommitOutcome {
-    const store = this.lifecycle.held('commitStateAndEvents');
+    const store = this.lifecycle.resourcesFor('commitStateAndEvents');
     const state = structuredClone(param.state);
     const newEventRecords = this.withoutHeldEvents(store, param.events);
     const refusal = refusalFor({
@@ -174,7 +169,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   }
 
   commitEvents(param: ArvoOutboxEventsCommit): void {
-    const store = this.lifecycle.held('commitEvents');
+    const store = this.lifecycle.resourcesFor('commitEvents');
     const newEventRecords = this.withoutHeldEvents(store, param.events);
     const droppedEventCount = this.countEventsToDrop(
       store,
@@ -188,7 +183,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   readCommittedEvents(
     filter: ArvoOutboxEventsFilter,
   ): readonly ArvoOutboxCommittedEventRecord[] {
-    const store = this.lifecycle.held('readCommittedEvents');
+    const store = this.lifecycle.resourcesFor('readCommittedEvents');
     if (!('triggeringEventId' in filter)) {
       return [
         ...(store.eventsByExecution.get(filter.executionId)?.values() ?? []),
@@ -212,7 +207,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   listUnseenEvents(
     param: ArvoOutboxUnseenEventsParam,
   ): readonly ArvoOutboxCommittedEventRecord[] {
-    const store = this.lifecycle.held('listUnseenEvents');
+    const store = this.lifecycle.resourcesFor('listUnseenEvents');
     refuseInvalidListing('ArvoMemoryOutbox', param);
     const nowMs = this.readClockMs();
     const cutOffMs = nowMs - param.olderThanMs;
@@ -231,7 +226,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   }
 
   markEventsSeen(eventIds: readonly string[]): void {
-    const store = this.lifecycle.held('markEventsSeen');
+    const store = this.lifecycle.resourcesFor('markEventsSeen');
     for (const eventId of eventIds) {
       const storedEvent = store.unseenEventsById.get(eventId);
       if (storedEvent === undefined) continue;

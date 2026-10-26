@@ -31,7 +31,15 @@ const newFilename = () =>
 const openOutbox = (filename: string, busyTimeoutMs?: number) => {
   const outbox = new ArvoSqliteOutbox({ filename, busyTimeoutMs });
   openedOutboxes.push(outbox);
+  outbox.open();
   return outbox;
+};
+
+/** Opens an outbox on a file and closes it, leaving the file as an outbox makes it. */
+const openAndClose = (filename: string) => {
+  const outbox = new ArvoSqliteOutbox({ filename });
+  outbox.open();
+  outbox.close();
 };
 
 describe('ArvoSqliteOutbox and its file', () => {
@@ -60,8 +68,12 @@ describe('ArvoSqliteOutbox and its file', () => {
       filename,
       'not a database, but long enough to have a header page',
     );
-    expect(() => new ArvoSqliteOutbox({ filename })).toThrow(/not a database/);
+    const outbox = new ArvoSqliteOutbox({ filename });
+    expect(() => outbox.open()).toThrow(/not a database/);
     expect(existsSync(filename)).toBe(true);
+    expect(() => outbox.readLatestState(crypto.randomUUID())).toThrow(
+      `ArvoSqliteOutbox on ${filename} is not open`,
+    );
   });
 
   it('leaves in place what a file it did not make already holds', () => {
@@ -85,6 +97,7 @@ describe('ArvoSqliteOutbox and its file', () => {
     const seenEvent = buildEventRecord({ executionId, casVersion: 1 });
     const unseenEvent = buildEventRecord({ executionId, casVersion: 1 });
     const firstOutbox = new ArvoSqliteOutbox({ filename });
+    firstOutbox.open();
     firstOutbox.commitStateAndEvents(
       buildStateCommit({ executionId, casVersion: 0 }),
     );
@@ -215,6 +228,7 @@ describe('ArvoSqliteOutbox beside other writers of its file', () => {
 describe('ArvoSqliteOutbox once closed', () => {
   it('closes again without throwing', () => {
     const outbox = new ArvoSqliteOutbox({ filename: newFilename() });
+    outbox.open();
     outbox.close();
     expect(() => outbox.close()).not.toThrow();
   });
@@ -222,6 +236,7 @@ describe('ArvoSqliteOutbox once closed', () => {
   it('throws on every operation once closed', () => {
     const filename = newFilename();
     const outbox = new ArvoSqliteOutbox({ filename });
+    outbox.open();
     outbox.close();
     const executionId = crypto.randomUUID();
     const operations = [
@@ -237,7 +252,7 @@ describe('ArvoSqliteOutbox once closed', () => {
     ];
     for (const operation of operations) {
       expect(operation).toThrow(
-        `ArvoSqliteOutbox on ${filename} is closed; open a new one on the file to use it again.`,
+        `ArvoSqliteOutbox on ${filename} is closed; build a new one to use it again.`,
       );
     }
   });
@@ -382,6 +397,7 @@ describe('ArvoSqliteOutbox and how much it keeps', () => {
       retainSeenEventsForMs: 0,
     });
     openedOutboxes.push(outbox);
+    outbox.open();
     const [seenEvent, unseenEvent] = commitSomeEvents(outbox, 2);
     if (!seenEvent || !unseenEvent)
       throw new Error('two events were committed');
@@ -397,6 +413,7 @@ describe('ArvoSqliteOutbox and how much it keeps', () => {
       retainSeenEventsForMs: Number.POSITIVE_INFINITY,
     });
     openedOutboxes.push(outbox);
+    outbox.open();
     const [seenEvent] = commitSomeEvents(outbox, 1);
     if (!seenEvent) throw new Error('one event was committed');
     outbox.markEventsSeen([seenEvent.id]);
@@ -450,6 +467,7 @@ describe('ArvoSqliteOutbox and how much it keeps', () => {
   it('throws on deleting expired events once closed', () => {
     const filename = newFilename();
     const outbox = new ArvoSqliteOutbox({ filename });
+    outbox.open();
     outbox.close();
     expect(() => outbox.deleteExpiredEvents()).toThrow(
       `ArvoSqliteOutbox on ${filename} is closed`,
@@ -577,7 +595,7 @@ describe('ArvoSqliteOutbox and the safety of its file', () => {
 
   it('marks a file it creates with the version of its tables, and opens it again', () => {
     const filename = newFilename();
-    new ArvoSqliteOutbox({ filename }).close();
+    openAndClose(filename);
     const inspector = new Database(filename, { readonly: true });
     expect(
       inspector
@@ -592,13 +610,14 @@ describe('ArvoSqliteOutbox and the safety of its file', () => {
 
   it('refuses a file whose tables are of a version it does not know, changing nothing', () => {
     const filename = newFilename();
-    new ArvoSqliteOutbox({ filename }).close();
+    openAndClose(filename);
     const otherWriter = new Database(filename);
     otherWriter.exec(
       "update arvo_outbox_meta set value = '2' where name = 'schema_version'",
     );
     otherWriter.close();
-    expect(() => new ArvoSqliteOutbox({ filename })).toThrow(
+    const outbox = new ArvoSqliteOutbox({ filename });
+    expect(() => outbox.open()).toThrow(
       `ArvoSqliteOutbox cannot open ${filename}: its outbox tables are at version 2, and this outbox knows only version 1. Open it with the version of arvo-core that wrote it.`,
     );
     const inspector = new Database(filename, { readonly: true });
@@ -636,5 +655,94 @@ describe('ArvoSqliteOutbox and the safety of its file', () => {
     expect(() =>
       outbox.listUnseenEvents({ atMost: -1, olderThanMs: 0 }),
     ).toThrow('ArvoSqliteOutbox cannot list -1 unseen events');
+  });
+});
+
+describe('ArvoSqliteOutbox and its life', () => {
+  /** Calls every operation, each as it would be called on a working outbox. */
+  const everyOperation = (outbox: ArvoSqliteOutbox) => {
+    const executionId = crypto.randomUUID();
+    return [
+      () => outbox.readLatestState(executionId),
+      () =>
+        outbox.commitStateAndEvents(
+          buildStateCommit({ executionId, casVersion: 0 }),
+        ),
+      () => outbox.commitEvents({ events: [] }),
+      () => outbox.readCommittedEvents({ executionId }),
+      () => outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+      () => outbox.markEventsSeen([]),
+      () => outbox.deleteExpiredEvents(),
+    ];
+  };
+
+  it('touches no file until it is opened', () => {
+    const filename = newFilename();
+    const outbox = new ArvoSqliteOutbox({ filename });
+    expect(existsSync(filename)).toBe(false);
+    outbox.open();
+    expect(existsSync(filename)).toBe(true);
+    outbox.close();
+  });
+
+  it('throws on every operation before it is opened, saying to open it', () => {
+    const filename = newFilename();
+    const outbox = new ArvoSqliteOutbox({ filename });
+    for (const operation of everyOperation(outbox)) {
+      expect(operation).toThrow(
+        `ArvoSqliteOutbox on ${filename} is not open; call open() before`,
+      );
+    }
+    expect(existsSync(filename)).toBe(false);
+  });
+
+  it('keeps its connection when opened again', () => {
+    const outbox = openOutbox(newFilename());
+    const executionId = crypto.randomUUID();
+    outbox.commitStateAndEvents(
+      buildStateCommit({ executionId, casVersion: 0, state: { kept: true } }),
+    );
+    outbox.open();
+    expect(outbox.readLatestState(executionId)).toEqual({ kept: true });
+  });
+
+  it('opens again once a failed open is put right', () => {
+    const filename = newFilename();
+    writeFileSync(
+      filename,
+      'not a database, but long enough to have a header page',
+    );
+    const outbox = new ArvoSqliteOutbox({ filename });
+    openedOutboxes.push(outbox);
+    expect(() => outbox.open()).toThrow(/not a database/);
+    rmSync(filename);
+    outbox.open();
+    expect(outbox.readLatestState(crypto.randomUUID())).toBeNull();
+  });
+
+  it('throws on opening once closed, saying to build a new one', () => {
+    const filename = newFilename();
+    const outbox = new ArvoSqliteOutbox({ filename });
+    outbox.open();
+    outbox.close();
+    expect(() => outbox.open()).toThrow(
+      `ArvoSqliteOutbox on ${filename} is closed; build a new one to use it again.`,
+    );
+  });
+
+  it('closes without throwing where it was never opened, and stays closed', () => {
+    const filename = newFilename();
+    const outbox = new ArvoSqliteOutbox({ filename });
+    expect(() => outbox.close()).not.toThrow();
+    expect(() => outbox.open()).toThrow(
+      `ArvoSqliteOutbox on ${filename} is closed`,
+    );
+    expect(existsSync(filename)).toBe(false);
+  });
+
+  it('answers opening and closing directly, not through a promise', () => {
+    const outbox = new ArvoSqliteOutbox({ filename: newFilename() });
+    expect(outbox.open()).toBeUndefined();
+    expect(outbox.close()).toBeUndefined();
   });
 });

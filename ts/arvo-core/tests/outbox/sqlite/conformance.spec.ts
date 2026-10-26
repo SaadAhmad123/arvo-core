@@ -19,6 +19,7 @@ describeArvoOutboxConformance({
       filename: join(temporaryDirectory, `${crypto.randomUUID()}.sqlite`),
     });
     openedOutboxes.push(outbox);
+    outbox.open();
     return outbox;
   },
 });

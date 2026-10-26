@@ -1,38 +1,39 @@
-/** Where an outbox is in its life, and what it holds while open. */
-type OutboxPhase<Held> =
+/** Where an outbox is in its life, and the resources it holds while open. */
+type OutboxPhase<Resources> =
   | { readonly name: 'unopened' }
-  | { readonly name: 'open'; readonly held: Held }
+  | { readonly name: 'open'; readonly resources: Resources }
   | { readonly name: 'closed' };
 
 /**
- * An outbox's life: unopened, then open holding what it acquired, then
- * closed for good. What is held can be reached only while open, so an
+ * An outbox's life: unopened, then open holding the resources it acquired,
+ * then closed for good. Its resources can be reached only while open, so an
  * outbox never touches a connection or a store it has not acquired or has
  * already released.
  */
-export class OutboxLifecycle<Held> {
-  private phase: OutboxPhase<Held> = { name: 'unopened' };
+export class OutboxLifecycle<Resources> {
+  private phase: OutboxPhase<Resources> = { name: 'unopened' };
 
   /** @param outboxName - How the outbox is named in what it throws. */
   constructor(private readonly outboxName: string) {}
 
-  /** Acquires what the outbox holds, once; a failed acquiring leaves it unopened. */
-  open(acquire: () => Held): void {
+  /** Acquires the outbox's resources, once; a failed acquiring leaves it unopened. */
+  open(acquire: () => Resources): void {
     if (this.phase.name === 'open') return;
     if (this.phase.name === 'closed') throw this.closedError();
-    this.phase = { name: 'open', held: acquire() };
+    this.phase = { name: 'open', resources: acquire() };
   }
 
-  /** Releases what the outbox holds, once, and leaves it closed whatever releasing does. */
-  close(release: (held: Held) => void): void {
+  /** Releases the outbox's resources, once, and leaves it closed whatever releasing does. */
+  close(release: (resources: Resources) => void): void {
     const phaseBeforeClosing = this.phase;
     this.phase = { name: 'closed' };
-    if (phaseBeforeClosing.name === 'open') release(phaseBeforeClosing.held);
+    if (phaseBeforeClosing.name === 'open')
+      release(phaseBeforeClosing.resources);
   }
 
-  /** What the outbox holds, for `operationName`, refusing outside the open phase. */
-  held(operationName: string): Held {
-    if (this.phase.name === 'open') return this.phase.held;
+  /** The outbox's resources, for `operationName`, refusing outside the open phase. */
+  resourcesFor(operationName: string): Resources {
+    if (this.phase.name === 'open') return this.phase.resources;
     if (this.phase.name === 'closed') throw this.closedError();
     throw new Error(
       `${this.outboxName} is not open; call open() before ${operationName}.`,

@@ -20,6 +20,7 @@ while (Atomics.load(threadsAtStartingLine, 0) < 2) {
 }
 
 const outbox = new ArvoSqliteOutbox({ filename });
+outbox.open();
 const committedByExecution = executionIds.map(
   (executionId) =>
     outbox.commitStateAndEvents({

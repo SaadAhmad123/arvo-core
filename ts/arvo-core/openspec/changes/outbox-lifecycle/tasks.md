@@ -1,7 +1,7 @@
 ## 1. The lifecycle helper
 
-- [x] 1.1 Write `tests/outbox/helpers/outbox-lifecycle.spec.ts`: what is held is reached only while open; before opening, `held` throws naming the outbox and the operation and saying to open it; opening twice acquires once; a failed `acquire` leaves it unopened and may be retried; closing releases once, and closing again, or closing unopened, releases nothing; once closed, `held` throws saying to build a new one, and `open` throws the same. Run red.
-- [x] 1.2 Add `src/outbox/helpers/outbox-lifecycle.ts`, the class generic in what is held. Verify with the spec at 100% coverage.
+- [x] 1.1 Write `tests/outbox/helpers/outbox-lifecycle.spec.ts`: the resources are reached only while open; before opening, `resourcesFor` throws naming the outbox and the operation and saying to open it; opening twice acquires once; a failed `acquire` leaves it unopened and may be retried; closing releases once, and closing again, or closing unopened, releases nothing; once closed, `resourcesFor` throws saying to build a new one, and `open` throws the same. Run red.
+- [x] 1.2 Add `src/outbox/helpers/outbox-lifecycle.ts`, the class generic in the resources an outbox holds. Verify with the spec at 100% coverage.
 
 ## 2. `ArvoMemoryOutbox` opened and closed
 
@@ -10,8 +10,8 @@
 
 ## 3. `ArvoSqliteOutbox` opened and closed
 
-- [ ] 3.1 Update `tests/outbox/sqlite/outbox.spec.ts`, `tests/outbox/sqlite/racer.mts` and `tests/outbox/sqlite/conformance.spec.ts` so every outbox is opened, and replace the tests that expected `new` to throw on a bad file with ones expecting `open()` to. Add: building touches no file; every operation throws before opening; opening twice keeps the connection; a failed open leaves it unopened and closes what it opened; opening once closed throws. Run red.
-- [ ] 3.2 **Replace** the constructor's opening in `src/outbox/sqlite/outbox.ts`: the constructor checks options only, and `open()` creates the file, configures the connection, checks the version and creates the tables, through the helper. Update its TSDoc and `@example` to open and close. Verify with the SQLite specs at 100% coverage.
+- [x] 3.1 Update `tests/outbox/sqlite/outbox.spec.ts`, `tests/outbox/sqlite/racer.mts` and `tests/outbox/sqlite/conformance.spec.ts` so every outbox is opened, and replace the tests that expected `new` to throw on a bad file with ones expecting `open()` to. Add: building touches no file; every operation throws before opening; opening twice keeps the connection; a failed open leaves it unopened and closes what it opened; opening once closed throws. Run red.
+- [x] 3.2 **Replace** the constructor's opening in `src/outbox/sqlite/outbox.ts`: the constructor checks options only, and `open()` creates the file, configures the connection, checks the version and creates the tables, through the helper. Update its TSDoc and `@example` to open and close. Verify with the SQLite specs at 100% coverage.
 
 ## 4. The interface and the kit
 
