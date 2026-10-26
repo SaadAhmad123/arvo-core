@@ -19,6 +19,7 @@ const breakOutbox =
   ) =>
   (): IArvoOutbox => {
     const workingOutbox = new ArvoMemoryOutbox();
+    workingOutbox.open();
     return {
       readLatestState: (executionId) =>
         workingOutbox.readLatestState(executionId),

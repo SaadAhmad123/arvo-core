@@ -5,8 +5,8 @@
 
 ## 2. `ArvoMemoryOutbox` opened and closed
 
-- [ ] 2.1 Update `tests/outbox/inmemory/outbox.spec.ts` so every outbox it builds is opened, and add: every operation throws before opening; opening twice keeps what it holds; closing frees what it holds, and every operation throws once closed; opening once closed throws; closing unopened throws nothing and leaves it closed. Update `tests/outbox/inmemory/broken-outboxes.ts` and `tests/outbox/inmemory/conformance.spec.ts` to open what they build. Run red.
-- [ ] 2.2 Replace the fields of `src/outbox/inmemory/outbox.ts` with a store acquired on `open()` and dropped on `close()` through the helper, with TSDoc on both. Verify with the in-memory and conformance specs at 100% coverage.
+- [x] 2.1 Update `tests/outbox/inmemory/outbox.spec.ts` so every outbox it builds is opened, and add: every operation throws before opening; opening twice keeps what it holds; closing frees what it holds, and every operation throws once closed; opening once closed throws; closing unopened throws nothing and leaves it closed. Update `tests/outbox/inmemory/broken-outboxes.ts` and `tests/outbox/inmemory/conformance.spec.ts` to open what they build. Run red.
+- [x] 2.2 Replace the fields of `src/outbox/inmemory/outbox.ts` with a store acquired on `open()` and dropped on `close()` through the helper, with TSDoc on both. Verify with the in-memory and conformance specs at 100% coverage.
 
 ## 3. `ArvoSqliteOutbox` opened and closed
 

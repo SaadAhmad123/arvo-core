@@ -13,6 +13,7 @@ import type {
   ArvoOutboxUnseenEventsParam,
 } from '../../ArvoOutbox/types/read.js';
 import type { JSONObject } from '../../types.js';
+import { OutboxLifecycle } from '../helpers/outbox-lifecycle.js';
 import { refusalFor } from '../helpers/refusal-for.js';
 import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
 import { copyEventRecord } from './helpers/copy-event-record.js';
@@ -40,6 +41,30 @@ type StoredEvent = {
 /** When one commit landed, as stamped and as compared. */
 type Landing = Pick<StoredEvent, 'committedAt' | 'committedAtMs'>;
 
+/** Everything an open outbox holds, dropped whole when it is closed. */
+type MemoryStore = {
+  readonly latestStateByExecution: Map<string, StoredState>;
+  readonly eventsById: Map<string, StoredEvent>;
+  readonly eventsByExecution: KeyedIndex<StoredEvent>;
+  readonly eventsByTriggeringEvent: KeyedIndex<StoredEvent>;
+  // insertion order is landing order, because every landing is stamped no earlier than the last
+  readonly unseenEventsById: Map<string, StoredEvent>;
+  // insertion order is the order seen, so the front is what is dropped first
+  readonly seenEventsById: Map<string, StoredEvent>;
+  latestLandedAtMs: number;
+};
+
+/** An empty store. */
+const createMemoryStore = (): MemoryStore => ({
+  latestStateByExecution: new Map(),
+  eventsById: new Map(),
+  eventsByExecution: new Map(),
+  eventsByTriggeringEvent: new Map(),
+  unseenEventsById: new Map(),
+  seenEventsById: new Map(),
+  latestLandedAtMs: Number.NEGATIVE_INFINITY,
+});
+
 /**
  * An outbox that holds everything in process memory, and loses all of it
  * when the process ends.
@@ -51,6 +76,9 @@ type Landing = Pick<StoredEvent, 'committedAt' | 'committedAtMs'>;
  * hands back shares memory with what it holds, and every read goes through
  * an index, so a call does the same work however much it holds.
  *
+ * Open it before use and close it after: every operation throws before it
+ * is opened and once it is closed, and closing frees everything it holds.
+ *
  * It keeps each execution's latest state, and at most `options.maxEvents`
  * event records, making room by dropping the events seen longest ago and
  * never an unseen one. It honours a lease asked for when listing unseen
@@ -61,22 +89,18 @@ type Landing = Pick<StoredEvent, 'committedAt' | 'committedAtMs'>;
  * @example
  * ```typescript
  * const outbox = new ArvoMemoryOutbox();
+ * outbox.open();
  * const outcome = outbox.commitStateAndEvents(commit);
  * const latestState = outbox.readLatestState(commit.executionId);
+ * outbox.close();
  * ```
  */
 export class ArvoMemoryOutbox implements IArvoOutbox {
   private readonly clock: () => Date;
   private readonly maxEvents: number;
-  private readonly latestStateByExecution = new Map<string, StoredState>();
-  private readonly eventsById = new Map<string, StoredEvent>();
-  private readonly eventsByExecution: KeyedIndex<StoredEvent> = new Map();
-  private readonly eventsByTriggeringEvent: KeyedIndex<StoredEvent> = new Map();
-  // insertion order is landing order, because every landing is stamped no earlier than the last
-  private readonly unseenEventsById = new Map<string, StoredEvent>();
-  // insertion order is the order seen, so the front is what is dropped first
-  private readonly seenEventsById = new Map<string, StoredEvent>();
-  private latestLandedAtMs = Number.NEGATIVE_INFINITY;
+  private readonly lifecycle = new OutboxLifecycle<MemoryStore>(
+    'ArvoMemoryOutbox',
+  );
 
   /**
    * @param options - How it tells the time and how much it holds. See {@link ArvoMemoryOutboxOptions}.
@@ -93,28 +117,50 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
     this.clock = options.clock ?? (() => new Date());
   }
 
+  /**
+   * Opens the outbox, empty. Opening it again does nothing.
+   *
+   * @throws Where it has been closed: build a new one instead.
+   */
+  open(): void {
+    this.lifecycle.open(createMemoryStore);
+  }
+
+  /**
+   * Closes the outbox and frees everything it holds. Closing it again does
+   * nothing, and every operation throws once it is closed.
+   */
+  close(): void {
+    this.lifecycle.close(() => undefined);
+  }
+
   // Every operation below is synchronous, so no other call can run between
   // its checks and its writes; never make one async. Every step that can
   // throw runs before the first write.
 
   readLatestState(executionId: string): JSONObject | null {
-    const storedState = this.latestStateByExecution.get(executionId);
+    const store = this.lifecycle.held('readLatestState');
+    const storedState = store.latestStateByExecution.get(executionId);
     return storedState ? structuredClone(storedState.state) : null;
   }
 
   commitStateAndEvents(param: ArvoOutboxStateCommit): ArvoOutboxCommitOutcome {
+    const store = this.lifecycle.held('commitStateAndEvents');
     const state = structuredClone(param.state);
-    const newEventRecords = this.withoutHeldEvents(param.events);
+    const newEventRecords = this.withoutHeldEvents(store, param.events);
     const refusal = refusalFor({
       casVersion: param.casVersion,
-      storedCasVersion: this.latestStateByExecution.get(param.executionId)
+      storedCasVersion: store.latestStateByExecution.get(param.executionId)
         ?.casVersion,
     });
     if (refusal !== null) return { committed: false, refusal };
-    const droppedEventCount = this.countEventsToDrop(newEventRecords.length);
-    const landing = this.stampLanding();
-    this.dropSeenEvents(droppedEventCount);
-    this.latestStateByExecution.set(param.executionId, {
+    const droppedEventCount = this.countEventsToDrop(
+      store,
+      newEventRecords.length,
+    );
+    const landing = this.stampLanding(store);
+    this.dropSeenEvents(store, droppedEventCount);
+    store.latestStateByExecution.set(param.executionId, {
       executionId: param.executionId,
       casVersion: param.casVersion,
       subject: param.subject,
@@ -123,28 +169,33 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
       lifecycle: param.lifecycle,
       state,
     });
-    this.storeEvents(newEventRecords, landing);
+    this.storeEvents(store, newEventRecords, landing);
     return { committed: true };
   }
 
   commitEvents(param: ArvoOutboxEventsCommit): void {
-    const newEventRecords = this.withoutHeldEvents(param.events);
-    const droppedEventCount = this.countEventsToDrop(newEventRecords.length);
-    const landing = this.stampLanding();
-    this.dropSeenEvents(droppedEventCount);
-    this.storeEvents(newEventRecords, landing);
+    const store = this.lifecycle.held('commitEvents');
+    const newEventRecords = this.withoutHeldEvents(store, param.events);
+    const droppedEventCount = this.countEventsToDrop(
+      store,
+      newEventRecords.length,
+    );
+    const landing = this.stampLanding(store);
+    this.dropSeenEvents(store, droppedEventCount);
+    this.storeEvents(store, newEventRecords, landing);
   }
 
   readCommittedEvents(
     filter: ArvoOutboxEventsFilter,
   ): readonly ArvoOutboxCommittedEventRecord[] {
+    const store = this.lifecycle.held('readCommittedEvents');
     if (!('triggeringEventId' in filter)) {
       return [
-        ...(this.eventsByExecution.get(filter.executionId)?.values() ?? []),
+        ...(store.eventsByExecution.get(filter.executionId)?.values() ?? []),
       ].map(toCommittedEventRecord);
     }
     const deliveryEvents = [
-      ...(this.eventsByTriggeringEvent
+      ...(store.eventsByTriggeringEvent
         .get(filter.triggeringEventId)
         ?.values() ?? []),
     ];
@@ -161,12 +212,13 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   listUnseenEvents(
     param: ArvoOutboxUnseenEventsParam,
   ): readonly ArvoOutboxCommittedEventRecord[] {
+    const store = this.lifecycle.held('listUnseenEvents');
     refuseInvalidListing('ArvoMemoryOutbox', param);
     const nowMs = this.readClockMs();
     const cutOffMs = nowMs - param.olderThanMs;
     const unseenEvents: ArvoOutboxCommittedEventRecord[] = [];
     // a leased event is skipped, not removed, so landing order survives its lapse
-    for (const storedEvent of this.unseenEventsById.values()) {
+    for (const storedEvent of store.unseenEventsById.values()) {
       if (unseenEvents.length >= param.atMost) break;
       if (storedEvent.committedAtMs > cutOffMs) break;
       if (storedEvent.leasedUntilMs > nowMs) continue;
@@ -179,22 +231,24 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   }
 
   markEventsSeen(eventIds: readonly string[]): void {
+    const store = this.lifecycle.held('markEventsSeen');
     for (const eventId of eventIds) {
-      const storedEvent = this.unseenEventsById.get(eventId);
+      const storedEvent = store.unseenEventsById.get(eventId);
       if (storedEvent === undefined) continue;
       storedEvent.seen = true;
-      this.unseenEventsById.delete(eventId);
-      this.seenEventsById.set(eventId, storedEvent);
+      store.unseenEventsById.delete(eventId);
+      store.seenEventsById.set(eventId, storedEvent);
     }
   }
 
   /** Copies of the records not already held, each identifier once. */
   private withoutHeldEvents(
+    store: MemoryStore,
     eventRecords: readonly ArvoOutboxEventRecord[],
   ): ArvoOutboxEventRecord[] {
     const newEventRecords = new Map<string, ArvoOutboxEventRecord>();
     for (const eventRecord of eventRecords) {
-      if (this.eventsById.has(eventRecord.id)) continue;
+      if (store.eventsById.has(eventRecord.id)) continue;
       if (newEventRecords.has(eventRecord.id)) continue;
       newEventRecords.set(eventRecord.id, copyEventRecord(eventRecord));
     }
@@ -202,34 +256,34 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   }
 
   /** How many seen events must go to make room, refusing where too few are seen. */
-  private countEventsToDrop(newEventCount: number): number {
+  private countEventsToDrop(store: MemoryStore, newEventCount: number): number {
     const droppedEventCount = Math.max(
       0,
-      this.eventsById.size + newEventCount - this.maxEvents,
+      store.eventsById.size + newEventCount - this.maxEvents,
     );
-    if (droppedEventCount > this.seenEventsById.size) {
+    if (droppedEventCount > store.seenEventsById.size) {
       throw new Error(
-        `ArvoMemoryOutbox cannot commit ${newEventCount} more ${newEventCount === 1 ? 'event' : 'events'}: it holds ${this.unseenEventsById.size} unseen of the ${this.maxEvents} it may hold, and only seen events are dropped to make room. Send what it holds and mark it seen, or build it with a larger maxEvents.`,
+        `ArvoMemoryOutbox cannot commit ${newEventCount} more ${newEventCount === 1 ? 'event' : 'events'}: it holds ${store.unseenEventsById.size} unseen of the ${this.maxEvents} it may hold, and only seen events are dropped to make room. Send what it holds and mark it seen, or build it with a larger maxEvents.`,
       );
     }
     return droppedEventCount;
   }
 
   /** Forgets the events seen longest ago. */
-  private dropSeenEvents(droppedEventCount: number): void {
+  private dropSeenEvents(store: MemoryStore, droppedEventCount: number): void {
     let remainingDropCount = droppedEventCount;
-    for (const [eventId, storedEvent] of this.seenEventsById) {
+    for (const [eventId, storedEvent] of store.seenEventsById) {
       if (remainingDropCount === 0) break;
       remainingDropCount -= 1;
-      this.seenEventsById.delete(eventId);
-      this.eventsById.delete(eventId);
+      store.seenEventsById.delete(eventId);
+      store.eventsById.delete(eventId);
       removeFromIndex(
-        this.eventsByExecution,
+        store.eventsByExecution,
         storedEvent.eventRecord.executionId,
         eventId,
       );
       removeFromIndex(
-        this.eventsByTriggeringEvent,
+        store.eventsByTriggeringEvent,
         storedEvent.eventRecord.triggeringEventId,
         eventId,
       );
@@ -249,9 +303,9 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   }
 
   /** One landing time for one commit, never earlier than the last. */
-  private stampLanding(): Landing {
-    const committedAtMs = Math.max(this.readClockMs(), this.latestLandedAtMs);
-    this.latestLandedAtMs = committedAtMs;
+  private stampLanding(store: MemoryStore): Landing {
+    const committedAtMs = Math.max(this.readClockMs(), store.latestLandedAtMs);
+    store.latestLandedAtMs = committedAtMs;
     return {
       committedAt: new Date(committedAtMs).toISOString(),
       committedAtMs,
@@ -260,6 +314,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
 
   /** Stores each new event, in order, as unseen. */
   private storeEvents(
+    store: MemoryStore,
     newEventRecords: readonly ArvoOutboxEventRecord[],
     landing: Landing,
   ): void {
@@ -270,20 +325,20 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
         seen: false,
         leasedUntilMs: Number.NEGATIVE_INFINITY,
       };
-      this.eventsById.set(eventRecord.id, storedEvent);
+      store.eventsById.set(eventRecord.id, storedEvent);
       addToIndex(
-        this.eventsByExecution,
+        store.eventsByExecution,
         eventRecord.executionId,
         eventRecord.id,
         storedEvent,
       );
       addToIndex(
-        this.eventsByTriggeringEvent,
+        store.eventsByTriggeringEvent,
         eventRecord.triggeringEventId,
         eventRecord.id,
         storedEvent,
       );
-      this.unseenEventsById.set(eventRecord.id, storedEvent);
+      store.unseenEventsById.set(eventRecord.id, storedEvent);
     }
   }
 }
