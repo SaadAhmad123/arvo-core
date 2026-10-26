@@ -313,7 +313,50 @@ The package SHALL provide an outbox that keeps everything in process memory and 
 #### Scenario: A clock given when it is built
 
 - **WHEN** the in-memory outbox is built with a clock
-- **THEN** every landing time it stamps comes from that clock
+- **THEN** every landing time it stamps comes from that clock, never from its caller
+
+#### Scenario: A clock that goes back
+
+- **WHEN** the in-memory outbox's clock gives an earlier time than it gave for the commit before
+- **THEN** the commit is stamped with the landing time of the commit before, so unseen events are still listed in the order committed
+
+### Requirement: An In-Memory Outbox Keeps Each Execution's Latest State
+
+The in-memory outbox SHALL keep, for each execution, only its latest state and the fields committed beside it.
+
+#### Scenario: A state committed over an earlier one
+
+- **WHEN** a state is committed at the revision following the stored one
+- **THEN** the earlier state is no longer held, and the latest state and the revision check are as for any outbox
+
+### Requirement: An In-Memory Outbox Holds A Bounded Number Of Events
+
+The in-memory outbox SHALL hold at most a number of event records set when it is built, with a default of its own. To make room it SHALL drop the records seen longest ago, no more than a commit needs, and SHALL NOT drop an unseen one; where that frees too little, the commit SHALL throw and write nothing. No other outbox is held to this bound.
+
+#### Scenario: Room made from seen events
+
+- **WHEN** a commit needs room and the outbox holds seen events
+- **THEN** the events seen longest ago are dropped, as few as the commit needs, and the commit lands
+
+#### Scenario: No room without dropping an unseen event
+
+- **WHEN** a commit needs more room than dropping every seen event would free
+- **THEN** it throws, naming how many it holds unseen and how many it may hold, and nothing is written or dropped
+
+#### Scenario: An event carried twice
+
+- **WHEN** a commit carries an event already held, or one event twice
+- **THEN** each counts once against the bound
+
+#### Scenario: An event dropped and committed again
+
+- **WHEN** an event dropped to make room is committed again
+- **THEN** it is stored anew, as not yet seen
+
+#### Scenario: A bound that is no number of events
+
+- **WHEN** the in-memory outbox is built with a bound that is not a whole number greater than zero
+- **THEN** building it throws, naming the bound and the rule
 
 ### Requirement: An Outbox Answers Concurrent Calls As If Each Were Alone
 
@@ -329,14 +372,19 @@ Arvo's outboxes SHALL answer calls that overlap in time as if each had run alone
 - **WHEN** a read of committed events overlaps a commit of those events
 - **THEN** it returns all of the commit's events or none of them
 
-### Requirement: Arvo's Outboxes Always Answer Through A Promise
+### Requirement: Arvo's Outboxes Answer Directly
 
-Arvo's outboxes SHALL return a promise from every operation, so that a caller sees one way of answering whatever the outbox.
+Arvo's outboxes SHALL return every answer directly, not through a promise, and SHALL throw directly where they cannot do their work. Neither waits on anything, and an operation that never yields cannot be interleaved with another. A caller SHALL be able to await their answers as it awaits any outbox's.
 
-#### Scenario: An answer that needed no waiting
+#### Scenario: An answer read directly
 
-- **WHEN** an operation of Arvo's own outbox completes without waiting on anything
-- **THEN** it still answers through a promise
+- **WHEN** an operation of Arvo's own outbox is called
+- **THEN** it returns its answer, not a promise of it
+
+#### Scenario: An answer awaited
+
+- **WHEN** a caller awaits an operation of Arvo's own outbox
+- **THEN** it receives the same answer
 
 ### Requirement: Nothing Stored Can Be Changed From Outside
 

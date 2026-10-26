@@ -7,6 +7,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./outbox/inmemory": {
+      "types": "./dist/outbox/inmemory/index.d.ts",
+      "import": "./dist/outbox/inmemory/index.js"
+    },
     "./outbox/conformance": {
       "types": "./dist/outbox/conformance/index.d.ts",
       "import": "./dist/outbox/conformance/index.js"

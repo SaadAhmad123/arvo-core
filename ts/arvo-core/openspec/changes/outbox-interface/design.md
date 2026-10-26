@@ -55,11 +55,13 @@ flowchart TD
 
 The interface and types stay on the main entry because every outbox, the driver, and a developer's own outbox all need them, and they bring no dependency. Each outbox, and the kit, has its own entry point under `outbox/`, so that the dependencies each brings are paid only by those who import it, so that the package reads as a choice of outboxes with their test beside them, and so that a later driver kit can sit under its own name without crowding this one. Each entry point's source folder matches its export path.
 
-### Plain methods on the interface, promises from Arvo's outboxes
+### Plain methods on the interface, direct answers from Arvo's outboxes
 
 project.md makes every fallible operation in arvo-core a `tryX` / `X` pair. That rule governs operations arvo-core implements and a consumer calls. `IArvoOutbox` is the opposite: a consumer implements it and arvo-core calls it. ADR-019 requires its operations to be plain — return values, throw what the storage throws — so that an implementer never builds an Arvo result or error. `IArvoEventHandlerDependency` and `IArvoEventHandlerMiddleware` take this shape already, and their TSDoc says `@throws Anything` and what follows.
 
-The interface's return types are `PromiseAble`, so a developer's outbox may answer directly. Arvo's own two outboxes always return a promise, so that a caller of either sees one way of answering.
+The interface's return types are `PromiseAble`, so a developer's outbox may answer directly or through a promise. Arvo's own two outboxes answer directly: neither waits on anything, and an operation that never yields cannot be interleaved with another, which is what makes them safe under overlapping callers. A caller awaits them as it awaits any outbox.
+
+Considered: returning a promise from Arvo's outboxes too, so a caller sees one way of answering. Rejected because the interface already admits both, a caller awaits either the same way, and a synchronous operation shows at its signature that nothing can run inside it.
 
 Considered: `tryX` methods on the interface. Rejected because it asks every implementer to understand `Result` and to classify their storage's failures, which ADR-019 and ADR-020 keep away from them.
 
@@ -120,7 +122,7 @@ Both of Arvo's outboxes are meant to be run, not only tested. Each must:
 
 - **Meet every rule,** proven by the kit.
 - **Do constant work per call however much it holds.** Every read goes through an index: by execution, by delivery, and over unseen events in landing order. Nothing scans everything.
-- **Answer overlapping calls as if each were alone.** JavaScript switches between tasks only at an `await`, so each operation does every check and every write in one stretch with no `await` inside it. Two commits racing for one revision leave exactly one committed. A read overlapping a commit sees all of it or none of it.
+- **Answer overlapping calls as if each were alone.** JavaScript switches between tasks only at an `await`, so each operation is synchronous and does every check and every write in one stretch. Two commits racing for one revision leave exactly one committed. A read overlapping a commit sees all of it or none of it.
 - **Never half-fail.** Everything that can throw on the way in, such as copying an input, happens before anything is written.
 - **Hold its own copies.** Nothing a caller passes in or reads out shares memory with what is stored.
 - **Say its limits in its first sentence.** The in-memory outbox loses everything with the process; the SQLite outbox is for one machine.
@@ -128,10 +130,13 @@ Both of Arvo's outboxes are meant to be run, not only tested. Each must:
 ### `ArvoMemoryOutbox`
 
 - **Built with `new`.** A long-lived object configured once and reused, the same category as the serializers, the package's existing exception to building through a factory.
-- **One option, `clock`.** A function returning the current time, defaulting to the system clock. Tests set it; nothing else needs it.
-- **Three indexes beside the data.** Every revision of every state, by execution. Every event record, by its identifier. Two lookups from execution and from delivery to their event identifiers. And the unseen events kept in landing order, so listing them reads from the front and marking one seen removes it.
+- **Two options, `clock` and `maxEvents`.** `clock` returns the current time, defaulting to the system clock; tests set it. `maxEvents` bounds how many event records it holds, defaulting to a number of its own in `helpers/defaults.ts`.
+- **A clock that goes back never reorders.** A commit is stamped no earlier than the commit before it. Listing unseen events stops at the first one too recent, so a landing time earlier than its predecessor's would hide older events behind it; a slightly late stamp costs nothing. ADR-019 asks only that the time be the outbox's own, which this still is.
+- **Each execution's latest state only.** Nothing reads an older revision, and the revision check needs only the latest, so memory grows with executions rather than commits. States are not bounded: dropping one would let its first revision be committed again, and the execution run twice.
+- **A bounded number of events, never an unseen one dropped.** Where a commit needs room, the events seen longest ago go first, no more than it needs. Where every held event is unseen, the commit throws and writes nothing: the sweeper has fallen behind, and saying so is better than losing an unsent event. ADR-019 *Retention* leaves deletion to the deployment and warns that "seen" alone is not a safe signal to delete on, since a late redelivery of a dropped delivery finds nothing to resend; dropping only under pressure, oldest seen first, keeps that window as long as the bound allows. The bound is this outbox's alone, because only process memory needs it.
+- **Indexes beside the data.** Each execution's latest state, by execution. Every event record, by its identifier. Two lookups from execution and from delivery to their events, each a map so an event is removed in constant time. The unseen events in landing order, so listing them reads from the front, and the seen events in the order seen, so dropping takes from the front.
 - **Copies in and out** with `structuredClone`, made before any write.
-- **A commit is one synchronous stretch:** copy, check the revision, stamp one time, write everything. Nothing awaits inside it.
+- **Every operation is synchronous.** A commit is one stretch: copy, check the revision, stamp one time, write everything.
 - **Ties keep commit order.** Two events landing at the same time are listed in the order they were committed, so the events of one commit keep their order.
 
 ### `ArvoSqliteOutbox`
