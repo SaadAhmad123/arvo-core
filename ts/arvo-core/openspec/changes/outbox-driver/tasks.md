@@ -1,7 +1,7 @@
 ## 1. The two errors
 
-- [ ] 1.1 Write `tests/ArvoOutboxDriver/errors.spec.ts`: `ArvoOutboxDriverError` for each of the six kinds carries the kind, the operation and the cause, with a message naming the operation and saying what the kind means; `ArvoOutboxDriverValidationError` names every issue. Both carry their tag and name. Run red.
-- [ ] 1.2 Add `src/ArvoOutboxDriver/errors.ts` with library-grade TSDoc. Verify with the spec at 100% coverage.
+- [x] 1.1 Write `tests/ArvoOutboxDriver/errors.spec.ts`: `ArvoOutboxDriverError` for each of the six kinds carries the kind, the operation and the cause, with a message naming the operation and saying what the kind means; `ArvoOutboxDriverValidationError` names every issue. Both carry their tag and name. Run red.
+- [x] 1.2 Add `src/ArvoOutboxDriver/errors.ts` with library-grade TSDoc. Verify with the spec at 100% coverage.
 
 ## 2. Inbound: lifting the record and building event records
 
