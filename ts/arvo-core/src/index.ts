@@ -136,6 +136,21 @@ export type {
   ArvoVersionMap,
 } from './ArvoEventHandler/types/version-map.js';
 export { ArvoEventHandlerVersion } from './ArvoEventHandler/version/index.js';
+export type { IArvoOutbox } from './ArvoOutbox/interface.js';
+export type {
+  ArvoOutboxCommitOutcome,
+  ArvoOutboxEventsCommit,
+  ArvoOutboxRefusal,
+  ArvoOutboxStateCommit,
+} from './ArvoOutbox/types/commit.js';
+export type {
+  ArvoOutboxCommittedEventRecord,
+  ArvoOutboxEventRecord,
+} from './ArvoOutbox/types/event-record.js';
+export type {
+  ArvoOutboxEventsFilter,
+  ArvoOutboxUnseenEventsParam,
+} from './ArvoOutbox/types/read.js';
 export {
   ArvoEventFactory,
   createArvoEventFactory,

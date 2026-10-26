@@ -2,11 +2,11 @@ Built in this order: the interface, then the conformance kit, then the in-memory
 
 ## 1. The interface and its types
 
-- [ ] 1.1 Write `tests/ArvoOutbox/types.types.spec.ts`: an empty filter is a compile error and each of the three filter shapes compiles; a committed event record is an event record with `committedAt` and `seen`; a commit outcome narrows on `committed` to a refusal of exactly `state_exists` or `revision_stale`; every field of every type is read-only.
-- [ ] 1.2 Write `tests/ArvoOutbox/interface.types.spec.ts`: a class implementing every operation satisfies `IArvoOutbox`; one missing any operation does not; an operation returning its value directly and one returning a promise both satisfy it.
-- [ ] 1.3 Add `src/ArvoOutbox/types/event-record.ts`, `src/ArvoOutbox/types/commit.ts` and `src/ArvoOutbox/types/read.ts`, with library-grade TSDoc on every type and field.
-- [ ] 1.4 Add `src/ArvoOutbox/interface.ts`, `IArvoOutbox`, with TSDoc on the interface and on each method stating the rule an implementer meets, and an `@example` implementing it.
-- [ ] 1.5 Export the interface and every type from `src/index.ts`.
+- [x] 1.1 Write `tests/ArvoOutbox/types.types.spec.ts`: an empty filter is a compile error and each of the three filter shapes compiles; a committed event record is an event record with `committedAt` and `seen`; a commit outcome narrows on `committed` to a refusal of exactly `state_exists` or `revision_stale`; every field of every type is read-only.
+- [x] 1.2 Write `tests/ArvoOutbox/interface.types.spec.ts`: a class implementing every operation satisfies `IArvoOutbox`; one missing any operation does not; an operation returning its value directly and one returning a promise both satisfy it.
+- [x] 1.3 Add `src/ArvoOutbox/types/event-record.ts`, `src/ArvoOutbox/types/commit.ts` and `src/ArvoOutbox/types/read.ts`, with library-grade TSDoc on every type and field.
+- [x] 1.4 Add `src/ArvoOutbox/interface.ts`, `IArvoOutbox`, with TSDoc on the interface and on each method stating the rule an implementer meets, and an `@example` implementing it.
+- [x] 1.5 Export the interface and every type from `src/index.ts`.
 
 ## 2. The conformance kit
 
