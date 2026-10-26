@@ -1,4 +1,4 @@
-import type { ArvoOutboxRefusal } from '../../../ArvoOutbox/types/commit.js';
+import type { ArvoOutboxRefusal } from '../../ArvoOutbox/types/commit.js';
 
 /** The revision that marks an execution's first state, per ADR-007. */
 const firstCasVersion = 0;

@@ -125,10 +125,18 @@ describe('a commit', () => {
 });
 
 describe('listing unseen events', () => {
-  it('takes how many to list and how recent is too recent', () => {
+  it('takes how many to list, how recent is too recent, and how long to claim them', () => {
     expectTypeOf<ArvoOutboxUnseenEventsParam>().toEqualTypeOf<{
       readonly atMost: number;
       readonly olderThanMs: number;
+      readonly leaseMs?: number;
     }>();
+  });
+
+  it('claims nothing where no lease is given', () => {
+    const param: ArvoOutboxUnseenEventsParam = { atMost: 10, olderThanMs: 0 };
+    // @ts-expect-error no lease is left out, never null
+    const nullLease: ArvoOutboxUnseenEventsParam = { ...param, leaseMs: null };
+    expect(nullLease.atMost).toBe(param.atMost);
   });
 });

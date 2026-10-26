@@ -116,6 +116,10 @@ flowchart LR
 - **No clock control.** An outbox stamps times by its own clock. The kit checks what any clock gives — a valid instant, one time for every event of one commit, unseen events in the order committed, a cut-off far in the past lists everything and one far in the future nothing — and leaves the exact boundary to the in-memory outbox's own tests, which set the clock.
 - **The kit is proven by breaking things.** Every case runs against `ArvoMemoryOutbox` and must pass, and against an outbox broken in exactly the way that case guards and must fail. A case that passes a broken outbox is a defect in the kit.
 
+### Leases on listing
+
+ADR-019 rule 14 has an outbox meant for several sweepers claim what it hands out, and lets an outbox that leases leave leased events out of other listings. The caller says how long: `ArvoOutboxUnseenEventsParam.leaseMs`, optional, and absent meaning no lease. A developer's outbox may ignore it, since a repeat is dropped at the receiver's gate, so the kit checks only that asking for a lease changes nothing about the listing that asks. Both of Arvo's outboxes honour it. The in-memory outbox stamps a lapse time on each event it lists and skips events under a live lease, in place, so landing order survives the lapse. The SQLite outbox lists and claims in one immediate transaction, reading SQLite's clock once, so outboxes in several processes never claim the same event.
+
 ### What "production grade" and "async safe" require of Arvo's outboxes
 
 Both of Arvo's outboxes are meant to be run, not only tested. Each must:
@@ -180,6 +184,8 @@ erDiagram
 - **Indexes** on execution, on delivery, and on unseen events in landing order then commit order.
 - **Several outboxes on one file stay correct.** SQLite's write lock serializes their commits. A writer held beyond the wait throws, which is the outbox being unable to do its work.
 
+- **Retention, so the file does not grow without bound.** Only each execution's latest state is kept; the commit that writes a revision deletes the earlier ones, and no state is ever deleted outright, since that would let its first revision be committed again. An event is deleted once it has been seen for longer than `retainSeenEventsForMs`, a window defaulting to a number of its own in `helpers/defaults.ts`, or never where it is `Infinity`; an unseen event never is. The window, not a count, because a disk has room and ADR-019 *Retention* warns that "seen" alone is no safe signal to delete on: a late redelivery needs its events to resend, and the window is how long the deployment says one can arrive. Each marking deletes a bounded batch, so its cost stays fixed; `deleteExpiredEvents()` catches up on a schedule of the deployment's own. A file the outbox creates uses incremental auto-vacuum, set before its first table since SQLite fixes it then, so deleted space goes back to the disk a bounded number of pages per marking.
+
 Considered: Node's own `node:sqlite`. Rejected for now. Node's own documentation lists it at *Stability 1.1, active development* in Node 22, which the package supports, where it warns on every process that loads it, and at *Stability 1.2, release candidate* from Node 24.15; it is stable in no Node line yet, and its API is still changing. Revisit once Node marks it stable and every Node version the package supports carries that status.
 
 Considered: taking an open database from the caller rather than a file name. Rejected because it would put the library's types on the public surface and leave the outbox unsure the database was configured as it needs.
@@ -191,7 +197,7 @@ Under project.md's *Dependencies and reuse*, a new dependency is a cost every co
 | Dependency | Why | How it is declared | Version |
 |---|---|---|---|
 | `vitest` | the kit registers its suite with it | optional peer; development dependency already | peer `^5.0.0`, development the latest stable `5.0.5` |
-| `better-sqlite3` | the SQLite outbox is built on it | optional peer; development dependency | `^13.0.3`, the latest: built on Node's stable native interface, with prebuilt binaries bundled |
+| `better-sqlite3` | the SQLite outbox is built on it | optional peer; development dependency | peer `^13.0.0`, development the latest `13.0.3`: built on Node's stable native interface, with prebuilt binaries bundled |
 | `@types/better-sqlite3` | `better-sqlite3` ships no types of its own | development dependency only, since the library's types never reach the public surface | `9.6.0`, the latest |
 
 Versions were checked against the registry when this change was written, not taken from memory, and are re-checked when the dependencies are installed.
@@ -210,23 +216,32 @@ src/ArvoOutbox/
     commit.ts                        ArvoOutboxStateCommit, ArvoOutboxEventsCommit,
                                      ArvoOutboxCommitOutcome, ArvoOutboxRefusal
     read.ts                          ArvoOutboxEventsFilter, ArvoOutboxUnseenEventsParam
+src/outbox/helpers/
+  refusal-for.ts                     which refusal, if any, a commit meets; shared by both outboxes
 src/outbox/conformance/
   index.ts                           the kit's entry point
   types.ts                           the case type and the suite's param
-  cases/                             one file per requirement's checks
   describe.ts                        describeArvoOutboxConformance
+  cases/                             one file per requirement's checks, and the list of them
+  fixtures/                          the records and commits the cases build
 src/outbox/inmemory/
   index.ts                           the entry point
   outbox.ts                          ArvoMemoryOutbox
   types.ts                           ArvoMemoryOutboxOptions
   helpers/
-    refusal-for.ts                   which refusal, if any, a commit meets
+    copy-event-record.ts             a record copied field by field
+    keyed-index.ts                   events grouped by execution or by delivery
+    defaults.ts                      how many events it holds by default
 src/outbox/sqlite/
   index.ts                           the entry point
   outbox.ts                          ArvoSqliteOutbox
   types.ts                           ArvoSqliteOutboxOptions
   schema.ts                          the tables and indexes it creates
   statements.ts                      the statements it prepares
+  helpers/
+    event-rows.ts                    records to rows and back
+    sqlite-now.ts                    SQLite's clock, read once per commit
+    defaults.ts                      how long it waits for a busy file by default
 ```
 
 Tests mirror it under `tests/`.

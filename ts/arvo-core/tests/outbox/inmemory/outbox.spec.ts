@@ -477,3 +477,82 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
     },
   );
 });
+
+describe('ArvoMemoryOutbox and leases', () => {
+  /** An outbox on a settable clock, holding two unseen events. */
+  const outboxWithTwoUnseenEvents = () => {
+    const settableClock = createSettableClock(startMs);
+    const outbox = new ArvoMemoryOutbox({ clock: settableClock.clock });
+    const events = [buildEventRecord(), buildEventRecord()];
+    outbox.commitEvents({ events });
+    const listedEventIds = (leaseMs?: number) =>
+      outbox
+        .listUnseenEvents({ atMost: 10, olderThanMs: 0, leaseMs })
+        .map((event) => event.id);
+    return {
+      ...settableClock,
+      outbox,
+      eventIds: events.map((event) => event.id),
+      listedEventIds,
+    };
+  };
+
+  it('claims nothing where no lease is asked for', () => {
+    const { eventIds, listedEventIds } = outboxWithTwoUnseenEvents();
+    expect(listedEventIds()).toEqual(eventIds);
+    expect(listedEventIds()).toEqual(eventIds);
+  });
+
+  it('leaves leased events out of every listing until the lease lapses', () => {
+    const { eventIds, listedEventIds, moveTo } = outboxWithTwoUnseenEvents();
+    expect(listedEventIds(1000)).toEqual(eventIds);
+    expect(listedEventIds()).toEqual([]);
+    expect(listedEventIds(1000)).toEqual([]);
+    moveTo(startMs + 999);
+    expect(listedEventIds()).toEqual([]);
+    moveTo(startMs + 1000);
+    expect(listedEventIds()).toEqual(eventIds);
+  });
+
+  it('leases only what it lists, so the rest is listed to the next caller', () => {
+    const { outbox, eventIds, listedEventIds } = outboxWithTwoUnseenEvents();
+    const leasedEvents = outbox.listUnseenEvents({
+      atMost: 1,
+      olderThanMs: 0,
+      leaseMs: 1000,
+    });
+    expect(leasedEvents.map((event) => event.id)).toEqual(eventIds.slice(0, 1));
+    expect(listedEventIds()).toEqual(eventIds.slice(1));
+  });
+
+  it('renews a lapsed lease for whoever lists the event next', () => {
+    const { eventIds, listedEventIds, moveTo } = outboxWithTwoUnseenEvents();
+    listedEventIds(1000);
+    moveTo(startMs + 1000);
+    expect(listedEventIds(1000)).toEqual(eventIds);
+    moveTo(startMs + 1999);
+    expect(listedEventIds()).toEqual([]);
+  });
+
+  it('ends a lease once the event is marked seen', () => {
+    const { outbox, eventIds, listedEventIds, moveTo } =
+      outboxWithTwoUnseenEvents();
+    listedEventIds(1000);
+    outbox.markEventsSeen(eventIds.slice(0, 1));
+    moveTo(startMs + 1000);
+    expect(listedEventIds()).toEqual(eventIds.slice(1));
+  });
+
+  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'refuses a lease of %s milliseconds, claiming nothing',
+    (leaseMs) => {
+      const { outbox, eventIds, listedEventIds } = outboxWithTwoUnseenEvents();
+      expect(() =>
+        outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0, leaseMs }),
+      ).toThrow(
+        `ArvoMemoryOutbox cannot lease events for ${leaseMs} milliseconds; a lease must be a whole number of milliseconds greater than zero, or left out for none.`,
+      );
+      expect(listedEventIds()).toEqual(eventIds);
+    },
+  );
+});

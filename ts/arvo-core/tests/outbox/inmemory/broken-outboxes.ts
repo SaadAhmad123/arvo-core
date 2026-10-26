@@ -426,6 +426,14 @@ export const brokenOutboxByCaseName: Record<string, () => IArvoOutbox> = {
         }),
     })),
 
+  'lists unseen events when asked to lease them, as it would unasked':
+    breakOutbox((workingOutbox) => ({
+      listUnseenEvents: (param) =>
+        param.leaseMs === undefined
+          ? workingOutbox.listUnseenEvents(param)
+          : [],
+    })),
+
   'lists no event once it is marked seen': breakOutbox(() => ({
     markEventsSeen: async () => {},
   })),

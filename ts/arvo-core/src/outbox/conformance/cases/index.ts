@@ -7,6 +7,7 @@ import { eventsCommitWithoutStateCases } from './events-commit-without-state.js'
 import { firstRevisionNeedsNothingStoredCases } from './first-revision-needs-nothing-stored.js';
 import { laterRevisionFollowsStoredCases } from './later-revision-follows-stored.js';
 import { latestStateIsReadLiveCases } from './latest-state-is-read-live.js';
+import { listingWithALeaseCases } from './listing-with-a-lease.js';
 import { markingSeenIsFinalCases } from './marking-seen-is-final.js';
 import { nothingIsReadOffTheStateCases } from './nothing-is-read-off-the-state.js';
 import { payloadIsKeptByteForByteCases } from './payload-is-kept-byte-for-byte.js';
@@ -45,5 +46,6 @@ export const arvoOutboxConformanceCases: readonly ArvoOutboxConformanceCase[] =
     ...commitIsStampedWhenLandedCases,
     ...eventsAreReadByFilterCases,
     ...unseenEventsAreListedOldestFirstCases,
+    ...listingWithALeaseCases,
     ...markingSeenIsFinalCases,
   ];

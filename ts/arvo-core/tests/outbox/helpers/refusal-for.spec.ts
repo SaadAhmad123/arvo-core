@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { refusalFor } from '../../../../src/outbox/inmemory/helpers/refusal-for.js';
+import { refusalFor } from '../../../src/outbox/helpers/refusal-for.js';
 
 describe('which refusal a commit meets', () => {
   it('meets none at the first revision with nothing stored', () => {

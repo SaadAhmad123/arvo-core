@@ -27,11 +27,11 @@ Built in this order: the interface, then the conformance kit, then the in-memory
 
 ## 4. `ArvoSqliteOutbox`, proven by the kit
 
-- [ ] 4.1 Add `better-sqlite3` and `@types/better-sqlite3` as development dependencies, and `better-sqlite3` to `peerDependencies` with its `peerDependenciesMeta` entry marked optional.
-- [ ] 4.2 Write `tests/outbox/sqlite/conformance.spec.ts`: the one call a developer writes, with `createOutbox` opening a new SQLite outbox on a fresh temporary file per case, and closing each afterwards.
-- [ ] 4.3 Write `tests/outbox/sqlite/outbox.spec.ts`: a new file is created with everything it needs; a file used before keeps what was committed; closing and opening again reads back the state, the events and which are seen; two outboxes on one file racing for one revision leave exactly one committed; a writer holding the file beyond the wait makes the operation throw with nothing stored; every event of one commit carries one time, in an event's time form; closing twice throws nothing and any operation after closing throws; every operation answers directly, not through a promise.
-- [ ] 4.4 Add `src/outbox/sqlite/schema.ts`, `src/outbox/sqlite/statements.ts`, `src/outbox/sqlite/types.ts`, `src/outbox/sqlite/outbox.ts` and `src/outbox/sqlite/index.ts`, with TSDoc whose first sentence says it is an outbox in a SQLite file for one machine, and an `@example` opening, using and closing it.
-- [ ] 4.5 In `package.json`, add `./outbox/sqlite` to `exports`.
+- [x] 4.1 Add `better-sqlite3` and `@types/better-sqlite3` as development dependencies, and `better-sqlite3` to `peerDependencies` with its `peerDependenciesMeta` entry marked optional.
+- [x] 4.2 Write `tests/outbox/sqlite/conformance.spec.ts`: the one call a developer writes, with `createOutbox` opening a new SQLite outbox on a fresh temporary file per case, and closing each afterwards.
+- [x] 4.3 Write `tests/outbox/sqlite/outbox.spec.ts`: a new file is created with everything it needs; a file used before keeps what was committed; closing and opening again reads back the state, the events and which are seen; two outboxes on one file racing for one revision leave exactly one committed; a writer holding the file beyond the wait makes the operation throw with nothing stored; every event of one commit carries one time, in an event's time form; closing twice throws nothing and any operation after closing throws; every operation answers directly, not through a promise; only each execution's latest state is kept; an event seen longer than the window is deleted on marking and a recent or unseen one kept; a window of no time deletes on sight and an unending one never; marking deletes a bounded batch and `deleteExpiredEvents` the rest, answering how many; a new file uses incremental auto-vacuum and shrinks; a window out of range is refused.
+- [x] 4.4 Add `src/outbox/sqlite/schema.ts`, `helpers/{defaults,event-rows,seconds-ago,sqlite-now}.ts`, `src/outbox/sqlite/statements.ts`, `src/outbox/sqlite/types.ts`, `src/outbox/sqlite/outbox.ts` and `src/outbox/sqlite/index.ts`, with TSDoc whose first sentence says it is an outbox in a SQLite file for one machine, and an `@example` opening, using and closing it.
+- [x] 4.5 In `package.json`, add `./outbox/sqlite` to `exports`.
 
 ## 5. Close out
 

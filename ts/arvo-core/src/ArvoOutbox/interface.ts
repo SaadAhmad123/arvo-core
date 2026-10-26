@@ -111,9 +111,10 @@ export interface IArvoOutbox {
    * committed where two landed at the same time.
    *
    * Leave out anything that landed less than `param.olderThanMs` ago by
-   * your own clock, and list no more than `param.atMost`. Where several
-   * callers share your outbox, you may leave out events you have just
-   * handed to another, until that claim lapses.
+   * your own clock, and list no more than `param.atMost`. Where
+   * `param.leaseMs` is given you may claim what you list for that long,
+   * leaving it out of every other listing until the claim lapses or the
+   * event is marked seen; you need not.
    *
    * @param param - How many, and how recent is too recent. See {@link ArvoOutboxUnseenEventsParam}.
    * @throws Anything your storage throws.

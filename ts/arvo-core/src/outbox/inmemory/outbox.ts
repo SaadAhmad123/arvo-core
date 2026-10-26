@@ -13,6 +13,8 @@ import type {
   ArvoOutboxUnseenEventsParam,
 } from '../../ArvoOutbox/types/read.js';
 import type { JSONObject } from '../../types.js';
+import { refusalFor } from '../helpers/refusal-for.js';
+import { refuseInvalidLease } from '../helpers/refuse-invalid-lease.js';
 import { copyEventRecord } from './helpers/copy-event-record.js';
 import { defaultMaxEvents } from './helpers/defaults.js';
 import {
@@ -20,7 +22,6 @@ import {
   type KeyedIndex,
   removeFromIndex,
 } from './helpers/keyed-index.js';
-import { refusalFor } from './helpers/refusal-for.js';
 import type { ArvoMemoryOutboxOptions } from './types.js';
 
 /** An execution's latest state, with the fields committed beside it. */
@@ -32,6 +33,8 @@ type StoredEvent = {
   readonly committedAt: string;
   readonly committedAtMs: number;
   seen: boolean;
+  /** When the claim on it lapses; no later than now where unclaimed. */
+  leasedUntilMs: number;
 };
 
 /** When one commit landed, as stamped and as compared. */
@@ -50,7 +53,8 @@ type Landing = Pick<StoredEvent, 'committedAt' | 'committedAtMs'>;
  *
  * It keeps each execution's latest state, and at most `options.maxEvents`
  * event records, making room by dropping the events seen longest ago and
- * never an unseen one. Landing times come from `options.clock`; where that
+ * never an unseen one. It honours a lease asked for when listing unseen
+ * events, by its own clock. Landing times come from `options.clock`; where that
  * clock goes back, a commit is stamped with the latest time already
  * stamped, so unseen events are always listed in the order committed.
  *
@@ -157,11 +161,18 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   listUnseenEvents(
     param: ArvoOutboxUnseenEventsParam,
   ): readonly ArvoOutboxCommittedEventRecord[] {
-    const cutOffMs = this.readClockMs() - param.olderThanMs;
+    refuseInvalidLease('ArvoMemoryOutbox', param.leaseMs);
+    const nowMs = this.readClockMs();
+    const cutOffMs = nowMs - param.olderThanMs;
     const unseenEvents: ArvoOutboxCommittedEventRecord[] = [];
+    // a leased event is skipped, not removed, so landing order survives its lapse
     for (const storedEvent of this.unseenEventsById.values()) {
       if (unseenEvents.length >= param.atMost) break;
       if (storedEvent.committedAtMs > cutOffMs) break;
+      if (storedEvent.leasedUntilMs > nowMs) continue;
+      if (param.leaseMs !== undefined) {
+        storedEvent.leasedUntilMs = nowMs + param.leaseMs;
+      }
       unseenEvents.push(toCommittedEventRecord(storedEvent));
     }
     return unseenEvents;
@@ -253,7 +264,12 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
     landing: Landing,
   ): void {
     for (const eventRecord of newEventRecords) {
-      const storedEvent: StoredEvent = { eventRecord, ...landing, seen: false };
+      const storedEvent: StoredEvent = {
+        eventRecord,
+        ...landing,
+        seen: false,
+        leasedUntilMs: Number.NEGATIVE_INFINITY,
+      };
       this.eventsById.set(eventRecord.id, storedEvent);
       addToIndex(
         this.eventsByExecution,

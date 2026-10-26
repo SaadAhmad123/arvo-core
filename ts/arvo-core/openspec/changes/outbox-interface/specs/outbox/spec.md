@@ -249,6 +249,15 @@ Events not yet seen SHALL be listable oldest landing time first, at most a given
 - **WHEN** an event has been marked seen
 - **THEN** it is not listed again
 
+### Requirement: A Lease May Be Asked For When Listing
+
+A caller listing unseen events MAY ask for a lease of a given length. An outbox MAY honour it, leaving the events it lists out of every other listing until the lease lapses or they are marked seen; it SHALL NOT be required to, and a listing that asks for a lease SHALL return what the same listing would without one. Asking for none SHALL be leaving the lease out.
+
+#### Scenario: Listing with a lease
+
+- **WHEN** unseen events are listed with a lease asked for
+- **THEN** they are listed as they would be with none
+
 ### Requirement: Marking Events Seen Is Final And Repeatable
 
 Marking events seen SHALL make each named event seen, and SHALL change nothing else about it. Marking an event already seen, or naming one never committed, SHALL do nothing and SHALL NOT fail.
@@ -386,6 +395,30 @@ Arvo's outboxes SHALL return every answer directly, not through a promise, and S
 - **WHEN** a caller awaits an operation of Arvo's own outbox
 - **THEN** it receives the same answer
 
+### Requirement: Arvo's Outboxes Honour A Lease
+
+Arvo's outboxes SHALL honour a lease asked for when listing: each event listed SHALL be left out of every listing, by any caller of the same store, until the lease lapses by the outbox's clock or the event is marked seen, and SHALL then be listed again. Only what is listed SHALL be leased, and a lease that is not a whole number of milliseconds greater than zero SHALL be refused, claiming nothing.
+
+#### Scenario: A leased event listed again
+
+- **WHEN** an event is listed with a lease, and listed again before the lease lapses
+- **THEN** it is left out; once the lease lapses, it is listed again
+
+#### Scenario: A leased event marked seen
+
+- **WHEN** a leased event is marked seen
+- **THEN** it is never listed again
+
+#### Scenario: Several SQLite outboxes on one file
+
+- **WHEN** one SQLite outbox leases events and another on the same file lists unseen events
+- **THEN** the other's listing leaves the leased events out
+
+#### Scenario: A lease that is no duration
+
+- **WHEN** a lease is asked for that is not a whole number of milliseconds greater than zero
+- **THEN** listing throws, naming the lease and the rule, and nothing is leased
+
 ### Requirement: Nothing Stored Can Be Changed From Outside
 
 What Arvo's outboxes are given and hand back SHALL be their own copies, so that changing an object after committing it, or after reading it, SHALL change nothing stored.
@@ -454,6 +487,44 @@ A SQLite outbox SHALL take every landing time, and the cut-off for listing unsee
 
 - **WHEN** a SQLite outbox commits several events
 - **THEN** every one carries the same landing time, in the same form as an event's own time
+
+### Requirement: A SQLite Outbox Keeps Each Execution's Latest State
+
+A SQLite outbox SHALL keep, for each execution, only its latest state, deleting earlier revisions in the commit that replaces them.
+
+#### Scenario: A state committed over an earlier one
+
+- **WHEN** a state is committed at the revision following the stored one
+- **THEN** the file holds only the new revision for that execution, and the revision check is as for any outbox
+
+### Requirement: A SQLite Outbox Deletes Events Seen Longer Than It Keeps Them
+
+A SQLite outbox SHALL keep an event once seen for a time set when it is opened, with a default of its own, and MAY then delete it. It SHALL NOT delete an unseen event. Marking events seen SHALL delete a bounded number of expired events, and the outbox SHALL offer a way to delete every expired event at once. A file it creates SHALL give the space of what it deletes back to the disk. No other outbox is held to this.
+
+#### Scenario: An event seen longer ago than it is kept
+
+- **WHEN** events are marked seen and one has been seen for longer than the outbox keeps seen events
+- **THEN** that event is deleted, and an event seen more recently is kept
+
+#### Scenario: An unseen event committed long ago
+
+- **WHEN** an unseen event was committed long ago
+- **THEN** it is never deleted
+
+#### Scenario: Seen events kept forever
+
+- **WHEN** the outbox is opened to keep seen events for an unending time
+- **THEN** no event is ever deleted
+
+#### Scenario: More expired events than one marking deletes
+
+- **WHEN** more events have expired than one marking deletes
+- **THEN** marking deletes no more than its bound, and deleting every expired event removes the rest and answers how many
+
+#### Scenario: A window that is no duration
+
+- **WHEN** the outbox is opened with a window that is not a whole number of milliseconds, zero or more, nor unending
+- **THEN** opening it throws, naming the window and the rule
 
 ### Requirement: A SQLite Outbox Is Closed By Its Caller
 

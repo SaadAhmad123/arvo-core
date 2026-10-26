@@ -11,6 +11,10 @@
       "types": "./dist/outbox/inmemory/index.d.ts",
       "import": "./dist/outbox/inmemory/index.js"
     },
+    "./outbox/sqlite": {
+      "types": "./dist/outbox/sqlite/index.d.ts",
+      "import": "./dist/outbox/sqlite/index.js"
+    },
     "./outbox/conformance": {
       "types": "./dist/outbox/conformance/index.d.ts",
       "import": "./dist/outbox/conformance/index.js"
@@ -66,8 +70,10 @@
     "@fission-ai/openspec": "1.15.0",
     "@opentelemetry/api": "1.9.0",
     "@opentelemetry/sdk-trace": "2.12.0",
+    "@types/better-sqlite3": "9.6.0",
     "@types/node": "22.20.5",
     "@vitest/coverage-v8": "5.0.5",
+    "better-sqlite3": "13.0.3",
     "cloudevents": "10.0.0",
     "dotenv": "18.0.8",
     "ts-node": "10.9.2",
@@ -77,11 +83,15 @@
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.0",
+    "better-sqlite3": "^13.0.0",
     "cloudevents": "^10.0.0",
-    "zod": "^4.0.0",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.0",
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    },
     "vitest": {
       "optional": true
     }
