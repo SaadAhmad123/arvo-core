@@ -10,6 +10,7 @@ This is the TypeScript package's own API shape. [ADR-019](../../../../../docs/ad
 - **Arvo's own outboxes hold two rules more:** every operation throws before the outbox is opened, and opening a closed outbox throws. The kit does not require these of a developer's outbox, so one built on a pool that connects lazily, or one that may be reopened, still conforms.
 - **BREAKING: `ArvoSqliteOutbox`'s constructor no longer opens its file.** It checks its options; `open()` creates the file, configures the connection, checks the version of its tables and creates them. A file that cannot be opened now throws from `open()` rather than from `new`. Unreleased, so no consumer is affected.
 - **`ArvoMemoryOutbox` enforces the same states,** so code tested against it fails where it forgets to open, as it would in production, and `close()` frees what it holds.
+- **`ArvoOutboxLifecycle` is exported** from `arvo-core`, with `ArvoOutboxLifecycleError`: the rules of opening and closing kept once, for Arvo's outboxes and any developer's. Acquiring and releasing may answer either way; opening and closing answer through a promise, so Arvo's outboxes' `open()` and `close()` are asynchronous while their operations still answer directly. Each refusable step is a `tryX`/`X` pair.
 - **The conformance kit opens and closes for the developer.** `createOutbox` returns an unopened outbox; the kit opens it before each case and closes it after, even where the case fails. It gains lifecycle cases: opening again, closing again, and every operation throwing once closed, each proven by an outbox broken in that way.
 
 Not in scope: the outbox driver (ADR-020), and anything about who opens or closes an outbox in a running mechanism. Both are later changes.
@@ -27,7 +28,8 @@ None.
 ## Impact
 
 - `src/ArvoOutbox/interface.ts`: two methods added to the interface every developer implements.
-- `src/outbox/inmemory/outbox.ts` and `src/outbox/sqlite/outbox.ts`: lifecycle states, with a shared helper under `src/outbox/helpers/`.
+- `src/ArvoOutbox/lifecycle.ts` and `src/ArvoOutbox/errors.ts`: the exported lifecycle and its error.
+- `src/outbox/inmemory/outbox.ts` and `src/outbox/sqlite/outbox.ts`: held through the lifecycle, with asynchronous `open()` and `close()`.
 - `src/outbox/conformance/`: the suite opens and closes around each case; new lifecycle cases; the param's TSDoc no longer tells a developer to close outboxes themselves.
 - Tests under `tests/ArvoOutbox/` and `tests/outbox/`, including the broken outboxes and every test that builds an outbox, which now opens it.
 - No new dependency. No ADR is touched.

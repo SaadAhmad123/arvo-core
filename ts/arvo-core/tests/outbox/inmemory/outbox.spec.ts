@@ -21,16 +21,16 @@ const createSettableClock = (startMs: number) => {
 const startMs = Date.parse('2026-01-01T00:00:00.000Z');
 
 /** An in-memory outbox, opened. */
-const openMemoryOutbox = (options?: ArvoMemoryOutboxOptions) => {
+const openMemoryOutbox = async (options?: ArvoMemoryOutboxOptions) => {
   const outbox = new ArvoMemoryOutbox(options);
-  outbox.open();
+  await outbox.open();
   return outbox;
 };
 
 describe('ArvoMemoryOutbox and its clock', () => {
-  it('reads the clock once per commit, however many events it carries', () => {
+  it('reads the clock once per commit, however many events it carries', async () => {
     const { clock } = createSettableClock(startMs);
-    const outbox = openMemoryOutbox({ clock });
+    const outbox = await openMemoryOutbox({ clock });
     const executionId = crypto.randomUUID();
     outbox.commitStateAndEvents(
       buildStateCommit({
@@ -57,8 +57,8 @@ describe('ArvoMemoryOutbox and its clock', () => {
     }
   });
 
-  it('stamps by the system clock where none is given', () => {
-    const outbox = openMemoryOutbox();
+  it('stamps by the system clock where none is given', async () => {
+    const outbox = await openMemoryOutbox();
     const event = buildEventRecord();
     const beforeMs = Date.now();
     outbox.commitEvents({ events: [event] });
@@ -71,9 +71,9 @@ describe('ArvoMemoryOutbox and its clock', () => {
     expect(committedAtMs).toBeLessThanOrEqual(afterMs);
   });
 
-  it('lists an unseen event exactly as old as the cut-off, and none younger', () => {
+  it('lists an unseen event exactly as old as the cut-off, and none younger', async () => {
     const { clock, moveTo } = createSettableClock(startMs);
-    const outbox = openMemoryOutbox({ clock });
+    const outbox = await openMemoryOutbox({ clock });
     outbox.commitEvents({ events: [buildEventRecord()] });
     moveTo(startMs + 1000);
     expect(
@@ -84,9 +84,9 @@ describe('ArvoMemoryOutbox and its clock', () => {
     ).toHaveLength(0);
   });
 
-  it('lists events landing at the same time in the order committed', () => {
+  it('lists events landing at the same time in the order committed', async () => {
     const { clock } = createSettableClock(startMs);
-    const outbox = openMemoryOutbox({ clock });
+    const outbox = await openMemoryOutbox({ clock });
     const executionId = crypto.randomUUID();
     const eventsInCommitOrder = [
       buildEventRecord({ executionId }),
@@ -110,9 +110,9 @@ describe('ArvoMemoryOutbox and its clock', () => {
     );
   });
 
-  it('stamps a commit no earlier than the one before, where the clock goes back', () => {
+  it('stamps a commit no earlier than the one before, where the clock goes back', async () => {
     const { clock, moveTo } = createSettableClock(startMs);
-    const outbox = openMemoryOutbox({ clock });
+    const outbox = await openMemoryOutbox({ clock });
     const earlierEvent = buildEventRecord();
     const laterEvent = buildEventRecord();
     outbox.commitEvents({ events: [earlierEvent] });
@@ -133,8 +133,10 @@ describe('ArvoMemoryOutbox and its clock', () => {
     ]);
   });
 
-  it('throws where the clock gives no valid time, having written nothing', () => {
-    const outbox = openMemoryOutbox({ clock: () => new Date(Number.NaN) });
+  it('throws where the clock gives no valid time, having written nothing', async () => {
+    const outbox = await openMemoryOutbox({
+      clock: () => new Date(Number.NaN),
+    });
     const executionId = crypto.randomUUID();
     const event = buildEventRecord({ executionId });
     expect(() =>
@@ -145,8 +147,11 @@ describe('ArvoMemoryOutbox and its clock', () => {
     expect(outbox.readLatestState(executionId)).toBeNull();
     expect(outbox.readCommittedEvents({ executionId })).toEqual([]);
   });
-  it('throws on listing unseen events where the clock gives no valid time', () => {
-    const outbox = openMemoryOutbox({ clock: () => new Date(Number.NaN) });
+
+  it('throws on listing unseen events where the clock gives no valid time', async () => {
+    const outbox = await openMemoryOutbox({
+      clock: () => new Date(Number.NaN),
+    });
     expect(() =>
       outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
     ).toThrow(
@@ -161,7 +166,7 @@ describe('ArvoMemoryOutbox under overlapping callers', () => {
     Promise.resolve().then(operation);
 
   it('commits exactly one of two commits racing for one revision', async () => {
-    const outbox = openMemoryOutbox();
+    const outbox = await openMemoryOutbox();
     const executionId = crypto.randomUUID();
     const firstOutcomes = await Promise.all([
       inAnotherTurn(() =>
@@ -198,7 +203,7 @@ describe('ArvoMemoryOutbox under overlapping callers', () => {
   });
 
   it('shows a read overlapping a commit all of its events or none', async () => {
-    const outbox = openMemoryOutbox();
+    const outbox = await openMemoryOutbox();
     const executionId = crypto.randomUUID();
     const [eventsReadBefore] = await Promise.all([
       inAnotherTurn(() => outbox.readCommittedEvents({ executionId })),
@@ -222,8 +227,8 @@ describe('ArvoMemoryOutbox under overlapping callers', () => {
 });
 
 describe('ArvoMemoryOutbox and what it holds', () => {
-  it('keeps what was committed from changes made after', () => {
-    const outbox = openMemoryOutbox();
+  it('keeps what was committed from changes made after', async () => {
+    const outbox = await openMemoryOutbox();
     const executionId = crypto.randomUUID();
     const nestedList: JSONObject[] = [{ step: 'committed' }];
     const state: JSONObject = { nested: { list: nestedList } };
@@ -240,8 +245,8 @@ describe('ArvoMemoryOutbox and what it holds', () => {
     expect(committedEvent?.payload).toBe('"committed"');
   });
 
-  it('keeps what is stored from changes to what was read', () => {
-    const outbox = openMemoryOutbox();
+  it('keeps what is stored from changes to what was read', async () => {
+    const outbox = await openMemoryOutbox();
     const executionId = crypto.randomUUID();
     outbox.commitStateAndEvents(
       buildStateCommit({
@@ -268,8 +273,8 @@ describe('ArvoMemoryOutbox and what it holds', () => {
     expect(committedEvent?.seen).toBe(false);
   });
 
-  it('stores only the fields of an event record', () => {
-    const outbox = openMemoryOutbox();
+  it('stores only the fields of an event record', async () => {
+    const outbox = await openMemoryOutbox();
     const event = buildEventRecord();
     // deliberately more than an event record, as a caller without types could pass
     outbox.commitEvents({
@@ -284,8 +289,8 @@ describe('ArvoMemoryOutbox and what it holds', () => {
     expect(committedEvent?.committedAt).not.toBe('forged');
   });
 
-  it('throws on a state it cannot copy, having written nothing', () => {
-    const outbox = openMemoryOutbox();
+  it('throws on a state it cannot copy, having written nothing', async () => {
+    const outbox = await openMemoryOutbox();
     const executionId = crypto.randomUUID();
     const state: JSONObject = {};
     // deliberately not JSON, as a caller without types could pass
@@ -310,8 +315,8 @@ describe('ArvoMemoryOutbox and what it holds', () => {
     ).toEqual({ committed: true });
   });
 
-  it('answers every operation directly, not through a promise', () => {
-    const outbox = openMemoryOutbox();
+  it('answers every operation directly, not through a promise', async () => {
+    const outbox = await openMemoryOutbox();
     const executionId = crypto.randomUUID();
     const answers = [
       outbox.readLatestState(executionId),
@@ -327,11 +332,13 @@ describe('ArvoMemoryOutbox and what it holds', () => {
     expect(answers.slice(0, 2)).toEqual([null, { committed: true }]);
   });
 
-  it("reads one delivery's events without looking through the others", () => {
+  it("reads one delivery's events without looking through the others", async () => {
     const triggeringEventId = crypto.randomUUID();
     /** The fastest of several batches of reads, so a busy machine adds no time. */
-    const fastestReadsOfOneDelivery = (otherEventCount: number) => {
-      const outbox = openMemoryOutbox({ maxEvents: otherEventCount + 1 });
+    const fastestReadsOfOneDelivery = async (otherEventCount: number) => {
+      const outbox = await openMemoryOutbox({
+        maxEvents: otherEventCount + 1,
+      });
       outbox.commitEvents({
         events: [
           buildEventRecord({ triggeringEventId }),
@@ -348,8 +355,8 @@ describe('ArvoMemoryOutbox and what it holds', () => {
       });
       return Math.min(...batchMs);
     };
-    const smallOutboxMs = fastestReadsOfOneDelivery(1);
-    const fullOutboxMs = fastestReadsOfOneDelivery(50_000);
+    const smallOutboxMs = await fastestReadsOfOneDelivery(1);
+    const fullOutboxMs = await fastestReadsOfOneDelivery(50_000);
     // a scan of every event per read takes seconds here, not a margin's worth
     expect(fullOutboxMs).toBeLessThan(smallOutboxMs * 20 + 250);
   });
@@ -373,8 +380,8 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
       .readCommittedEvents({ triggeringEventId: event.triggeringEventId })
       .some((committedEvent) => committedEvent.id === event.id);
 
-  it('drops the event seen longest ago to make room for a commit', () => {
-    const outbox = openMemoryOutbox({ maxEvents: 3 });
+  it('drops the event seen longest ago to make room for a commit', async () => {
+    const outbox = await openMemoryOutbox({ maxEvents: 3 });
     const [firstEvent, secondEvent, thirdEvent] = commitEventsOneByOne(
       outbox,
       3,
@@ -391,8 +398,8 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
     expect(holds(outbox, newEvent)).toBe(true);
   });
 
-  it('drops no more seen events than a commit needs room for', () => {
-    const outbox = openMemoryOutbox({ maxEvents: 3 });
+  it('drops no more seen events than a commit needs room for', async () => {
+    const outbox = await openMemoryOutbox({ maxEvents: 3 });
     const heldEvents = commitEventsOneByOne(outbox, 3);
     outbox.markEventsSeen(heldEvents.map((event) => event.id));
     outbox.commitEvents({ events: [buildEventRecord()] });
@@ -403,8 +410,8 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
     ]);
   });
 
-  it('throws on a commit with no room where every event held is unseen, having written nothing', () => {
-    const outbox = openMemoryOutbox({ maxEvents: 2 });
+  it('throws on a commit with no room where every event held is unseen, having written nothing', async () => {
+    const outbox = await openMemoryOutbox({ maxEvents: 2 });
     const heldEvents = commitEventsOneByOne(outbox, 2);
     const executionId = crypto.randomUUID();
     expect(() =>
@@ -426,8 +433,8 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
     ]);
   });
 
-  it('throws on a commit that needs more room than every seen event frees, dropping none', () => {
-    const outbox = openMemoryOutbox({ maxEvents: 3 });
+  it('throws on a commit that needs more room than every seen event frees, dropping none', async () => {
+    const outbox = await openMemoryOutbox({ maxEvents: 3 });
     const heldEvents = commitEventsOneByOne(outbox, 3);
     outbox.markEventsSeen(heldEvents.slice(0, 1).map((event) => event.id));
     expect(() =>
@@ -442,8 +449,8 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
     ]);
   });
 
-  it('counts an event already held, or repeated in one commit, once', () => {
-    const outbox = openMemoryOutbox({ maxEvents: 2 });
+  it('counts an event already held, or repeated in one commit, once', async () => {
+    const outbox = await openMemoryOutbox({ maxEvents: 2 });
     const [heldEvent] = commitEventsOneByOne(outbox, 1);
     if (!heldEvent) throw new Error('one event was committed');
     const newEvent = buildEventRecord();
@@ -453,8 +460,8 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
     expect(holds(outbox, newEvent)).toBe(true);
   });
 
-  it('stores anew an event committed again after it was dropped', () => {
-    const outbox = openMemoryOutbox({ maxEvents: 1 });
+  it('stores anew an event committed again after it was dropped', async () => {
+    const outbox = await openMemoryOutbox({ maxEvents: 1 });
     const [droppedEvent] = commitEventsOneByOne(outbox, 1);
     if (!droppedEvent) throw new Error('one event was committed');
     outbox.markEventsSeen([droppedEvent.id]);
@@ -468,8 +475,8 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
     ).toMatchObject([{ id: droppedEvent.id, seen: false }]);
   });
 
-  it('holds its own default number of events where none is given', () => {
-    const outbox = openMemoryOutbox();
+  it('holds its own default number of events where none is given', async () => {
+    const outbox = await openMemoryOutbox();
     outbox.commitEvents({
       events: Array.from({ length: 10_000 }, () => buildEventRecord()),
     });
@@ -489,10 +496,10 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
 });
 
 describe('ArvoMemoryOutbox and leases', () => {
-  /** An outbox on a settable clock, holding two unseen events. */
-  const outboxWithTwoUnseenEvents = () => {
+  /** An outbox on a settable clock, opened, holding two unseen events. */
+  const outboxWithTwoUnseenEvents = async () => {
     const settableClock = createSettableClock(startMs);
-    const outbox = openMemoryOutbox({ clock: settableClock.clock });
+    const outbox = await openMemoryOutbox({ clock: settableClock.clock });
     const events = [buildEventRecord(), buildEventRecord()];
     outbox.commitEvents({ events });
     const listedEventIds = (leaseMs?: number) =>
@@ -507,14 +514,15 @@ describe('ArvoMemoryOutbox and leases', () => {
     };
   };
 
-  it('claims nothing where no lease is asked for', () => {
-    const { eventIds, listedEventIds } = outboxWithTwoUnseenEvents();
+  it('claims nothing where no lease is asked for', async () => {
+    const { eventIds, listedEventIds } = await outboxWithTwoUnseenEvents();
     expect(listedEventIds()).toEqual(eventIds);
     expect(listedEventIds()).toEqual(eventIds);
   });
 
-  it('leaves leased events out of every listing until the lease lapses', () => {
-    const { eventIds, listedEventIds, moveTo } = outboxWithTwoUnseenEvents();
+  it('leaves leased events out of every listing until the lease lapses', async () => {
+    const { eventIds, listedEventIds, moveTo } =
+      await outboxWithTwoUnseenEvents();
     expect(listedEventIds(1000)).toEqual(eventIds);
     expect(listedEventIds()).toEqual([]);
     expect(listedEventIds(1000)).toEqual([]);
@@ -524,8 +532,9 @@ describe('ArvoMemoryOutbox and leases', () => {
     expect(listedEventIds()).toEqual(eventIds);
   });
 
-  it('leases only what it lists, so the rest is listed to the next caller', () => {
-    const { outbox, eventIds, listedEventIds } = outboxWithTwoUnseenEvents();
+  it('leases only what it lists, so the rest is listed to the next caller', async () => {
+    const { outbox, eventIds, listedEventIds } =
+      await outboxWithTwoUnseenEvents();
     const leasedEvents = outbox.listUnseenEvents({
       atMost: 1,
       olderThanMs: 0,
@@ -535,8 +544,9 @@ describe('ArvoMemoryOutbox and leases', () => {
     expect(listedEventIds()).toEqual(eventIds.slice(1));
   });
 
-  it('renews a lapsed lease for whoever lists the event next', () => {
-    const { eventIds, listedEventIds, moveTo } = outboxWithTwoUnseenEvents();
+  it('renews a lapsed lease for whoever lists the event next', async () => {
+    const { eventIds, listedEventIds, moveTo } =
+      await outboxWithTwoUnseenEvents();
     listedEventIds(1000);
     moveTo(startMs + 1000);
     expect(listedEventIds(1000)).toEqual(eventIds);
@@ -544,9 +554,9 @@ describe('ArvoMemoryOutbox and leases', () => {
     expect(listedEventIds()).toEqual([]);
   });
 
-  it('ends a lease once the event is marked seen', () => {
+  it('ends a lease once the event is marked seen', async () => {
     const { outbox, eventIds, listedEventIds, moveTo } =
-      outboxWithTwoUnseenEvents();
+      await outboxWithTwoUnseenEvents();
     listedEventIds(1000);
     outbox.markEventsSeen(eventIds.slice(0, 1));
     moveTo(startMs + 1000);
@@ -555,8 +565,9 @@ describe('ArvoMemoryOutbox and leases', () => {
 
   it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
     'refuses a lease of %s milliseconds, claiming nothing',
-    (leaseMs) => {
-      const { outbox, eventIds, listedEventIds } = outboxWithTwoUnseenEvents();
+    async (leaseMs) => {
+      const { outbox, eventIds, listedEventIds } =
+        await outboxWithTwoUnseenEvents();
       expect(() =>
         outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0, leaseMs }),
       ).toThrow(
@@ -568,8 +579,8 @@ describe('ArvoMemoryOutbox and leases', () => {
 });
 
 describe('ArvoMemoryOutbox and a listing that is no listing', () => {
-  it('refuses to list a negative number of events, rather than listing them all', () => {
-    const outbox = openMemoryOutbox();
+  it('refuses to list a negative number of events, rather than listing them all', async () => {
+    const outbox = await openMemoryOutbox();
     outbox.commitEvents({ events: [buildEventRecord()] });
     expect(() =>
       outbox.listUnseenEvents({ atMost: -1, olderThanMs: 0 }),
@@ -603,20 +614,20 @@ describe('ArvoMemoryOutbox and its life', () => {
     }
   });
 
-  it('keeps what it holds when opened again', () => {
-    const outbox = openMemoryOutbox();
+  it('keeps what it holds when opened again', async () => {
+    const outbox = await openMemoryOutbox();
     const executionId = crypto.randomUUID();
     outbox.commitStateAndEvents(
       buildStateCommit({ executionId, casVersion: 0, state: { kept: true } }),
     );
-    outbox.open();
+    await outbox.open();
     expect(outbox.readLatestState(executionId)).toEqual({ kept: true });
   });
 
-  it('throws on every operation once closed, and closes again without throwing', () => {
-    const outbox = openMemoryOutbox();
-    outbox.close();
-    expect(() => outbox.close()).not.toThrow();
+  it('throws on every operation once closed, and closes again without throwing', async () => {
+    const outbox = await openMemoryOutbox();
+    await outbox.close();
+    await expect(outbox.close()).resolves.toBeUndefined();
     for (const operation of everyOperation(outbox)) {
       expect(operation).toThrow(
         'ArvoMemoryOutbox is closed; build a new one to use it again.',
@@ -624,30 +635,34 @@ describe('ArvoMemoryOutbox and its life', () => {
     }
   });
 
-  it('frees what it holds once closed, so nothing it held is reachable', () => {
-    const outbox = openMemoryOutbox();
+  it('frees what it holds once closed, so nothing it held is reachable', async () => {
+    const outbox = await openMemoryOutbox();
     const executionId = crypto.randomUUID();
     outbox.commitStateAndEvents(
       buildStateCommit({ executionId, casVersion: 0 }),
     );
-    outbox.close();
-    expect(() => outbox.open()).toThrow('ArvoMemoryOutbox is closed');
+    await outbox.close();
+    await expect(outbox.open()).rejects.toThrow('ArvoMemoryOutbox is closed');
     expect(() => outbox.readLatestState(executionId)).toThrow(
       'ArvoMemoryOutbox is closed',
     );
   });
 
-  it('closes without throwing where it was never opened, and stays closed', () => {
+  it('closes without throwing where it was never opened, and stays closed', async () => {
     const outbox = new ArvoMemoryOutbox();
-    expect(() => outbox.close()).not.toThrow();
-    expect(() => outbox.open()).toThrow(
+    await expect(outbox.close()).resolves.toBeUndefined();
+    await expect(outbox.open()).rejects.toThrow(
       'ArvoMemoryOutbox is closed; build a new one to use it again.',
     );
   });
 
-  it('answers opening and closing directly, not through a promise', () => {
+  it('answers opening and closing through a promise', async () => {
     const outbox = new ArvoMemoryOutbox();
-    expect(outbox.open()).toBeUndefined();
-    expect(outbox.close()).toBeUndefined();
+    const opening = outbox.open();
+    expect(opening).toBeInstanceOf(Promise);
+    await opening;
+    const closing = outbox.close();
+    expect(closing).toBeInstanceOf(Promise);
+    await closing;
   });
 });

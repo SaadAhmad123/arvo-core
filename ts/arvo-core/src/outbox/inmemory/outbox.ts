@@ -1,4 +1,5 @@
 import type { IArvoOutbox } from '../../ArvoOutbox/interface.js';
+import { ArvoOutboxLifecycle } from '../../ArvoOutbox/lifecycle.js';
 import type {
   ArvoOutboxCommitOutcome,
   ArvoOutboxEventsCommit,
@@ -13,7 +14,6 @@ import type {
   ArvoOutboxUnseenEventsParam,
 } from '../../ArvoOutbox/types/read.js';
 import type { JSONObject } from '../../types.js';
-import { OutboxLifecycle } from '../helpers/outbox-lifecycle.js';
 import { refusalFor } from '../helpers/refusal-for.js';
 import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
 import { copyEventRecord } from './helpers/copy-event-record.js';
@@ -84,16 +84,16 @@ const createMemoryStore = (): MemoryStore => ({
  * @example
  * ```typescript
  * const outbox = new ArvoMemoryOutbox();
- * outbox.open();
+ * await outbox.open();
  * const outcome = outbox.commitStateAndEvents(commit);
  * const latestState = outbox.readLatestState(commit.executionId);
- * outbox.close();
+ * await outbox.close();
  * ```
  */
 export class ArvoMemoryOutbox implements IArvoOutbox {
   private readonly clock: () => Date;
   private readonly maxEvents: number;
-  private readonly lifecycle = new OutboxLifecycle<MemoryStore>(
+  private readonly lifecycle = new ArvoOutboxLifecycle<MemoryStore>(
     'ArvoMemoryOutbox',
   );
 
@@ -117,16 +117,16 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
    *
    * @throws Where it has been closed: build a new one instead.
    */
-  open(): void {
-    this.lifecycle.open(createMemoryStore);
+  async open(): Promise<void> {
+    await this.lifecycle.open(createMemoryStore);
   }
 
   /**
    * Closes the outbox and frees everything it holds. Closing it again does
    * nothing, and every operation throws once it is closed.
    */
-  close(): void {
-    this.lifecycle.close(() => undefined);
+  async close(): Promise<void> {
+    await this.lifecycle.close(() => undefined);
   }
 
   // Every operation below is synchronous, so no other call can run between

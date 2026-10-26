@@ -5,8 +5,9 @@ import type { PromiseAble } from '../../types.js';
  * One rule every outbox meets, as a check you can run against yours.
  *
  * `check` fails, through vitest's `expect`, where the outbox it is given
- * breaks the rule `name` states. Give it a fresh, empty outbox: it reasons
- * about everything the outbox holds.
+ * breaks the rule `name` states. Give it a new, empty outbox, opened, and
+ * close the outbox after: it reasons about everything the outbox holds, and
+ * may close it itself.
  *
  * @example
  * ```typescript
@@ -29,16 +30,14 @@ export type ArvoOutboxConformanceCase = {
  * How the conformance kit gets the outboxes it checks.
  *
  * Every call of `createOutbox` must return a new, empty outbox that shares
- * nothing with any other: a new instance, a new file, or a new schema. A
- * case listing unseen events counts everything the outbox holds, so one
- * left over from another case fails it.
+ * nothing with any other: a new instance, a new file, or a new schema. Return
+ * it unopened: the kit opens it before each check and closes it after, even
+ * where the check fails. A case listing unseen events counts everything the
+ * outbox holds, so one left over from another case fails it.
  *
  * Add checks of your own, such as rules your outbox holds beyond these,
  * through `additionalCases`. They run after the kit's own, in the same
  * suite, each given a new outbox in the same way.
- *
- * The kit closes nothing. Where your outbox holds a connection or a file,
- * keep each one `createOutbox` returns and close them when the suite ends.
  *
  * @example
  * ```typescript
@@ -56,7 +55,7 @@ export type ArvoOutboxConformanceCase = {
  * ```
  */
 export type ArvoOutboxConformanceParam = {
-  /** A new, empty outbox, directly or through a promise. */
+  /** A new, empty outbox, unopened, directly or through a promise. */
   readonly createOutbox: () => PromiseAble<IArvoOutbox>;
   /** Checks of your own, run after the kit's. */
   readonly additionalCases?: readonly ArvoOutboxConformanceCase[];

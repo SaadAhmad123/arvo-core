@@ -18,8 +18,8 @@ const breakOutbox =
     ) => Partial<IArvoOutbox>,
   ) =>
   (): IArvoOutbox => {
+    // unopened, as createOutbox hands it over: the kit opens it through the broken outbox
     const workingOutbox = new ArvoMemoryOutbox();
-    workingOutbox.open();
     return {
       readLatestState: (executionId) =>
         workingOutbox.readLatestState(executionId),
@@ -30,6 +30,8 @@ const breakOutbox =
         workingOutbox.readCommittedEvents(filter),
       listUnseenEvents: (param) => workingOutbox.listUnseenEvents(param),
       markEventsSeen: (eventIds) => workingOutbox.markEventsSeen(eventIds),
+      open: () => workingOutbox.open(),
+      close: () => workingOutbox.close(),
       ...replaceOperations(workingOutbox),
     };
   };
@@ -434,6 +436,31 @@ export const brokenOutboxByCaseName: Record<string, () => IArvoOutbox> = {
           ? workingOutbox.listUnseenEvents(param)
           : [],
     })),
+
+  'opens again without failing, and still works': breakOutbox(() => {
+    let openCount = 0;
+    return {
+      open: () => {
+        openCount += 1;
+        if (openCount > 1) throw new Error('the outbox is already open');
+      },
+    };
+  }),
+
+  'closes again without failing': breakOutbox((workingOutbox) => {
+    let closeCount = 0;
+    return {
+      close: () => {
+        closeCount += 1;
+        if (closeCount > 1) throw new Error('the outbox is already closed');
+        workingOutbox.close();
+      },
+    };
+  }),
+
+  'throws on every operation once closed': breakOutbox(() => ({
+    close: () => undefined,
+  })),
 
   'lists no event once it is marked seen': breakOutbox(() => ({
     markEventsSeen: async () => {},

@@ -26,6 +26,10 @@ import type {
  * Every operation may answer directly or through a promise, and may throw
  * whatever your storage throws. You never build an Arvo error or result.
  *
+ * Your outbox is opened before it is used and closed after. Opening an open
+ * outbox, or closing a closed one, does nothing, and every operation throws
+ * once it is closed. {@link ArvoOutboxLifecycle} keeps these rules for you.
+ *
  * Run `describeArvoOutboxConformance` from `arvo-core/outbox/conformance`
  * against your outbox to check it meets every rule. See
  * `docs/adr/019-outbox.md`.
@@ -48,7 +52,8 @@ import type {
  *     // insert each event that is not already stored
  *   }
  *
- *   // commitEvents, readCommittedEvents, listUnseenEvents, markEventsSeen
+ *   // commitEvents, readCommittedEvents, listUnseenEvents, markEventsSeen,
+ *   // open and close
  * }
  * ```
  */
@@ -133,4 +138,24 @@ export interface IArvoOutbox {
    * @throws Anything your storage throws.
    */
   markEventsSeen(eventIds: readonly string[]): PromiseAble<void>;
+
+  /**
+   * Opens your outbox: acquires what it needs, such as a connection, before
+   * any operation is used. Opening it again does nothing.
+   *
+   * You may also answer operations before it is opened, as a pool that
+   * connects on first use does, and may allow it to be opened again after it
+   * is closed.
+   *
+   * @throws Anything your storage throws, where it cannot be opened.
+   */
+  open(): PromiseAble<void>;
+
+  /**
+   * Closes your outbox: releases what opening acquired. Closing it again does
+   * nothing, and every operation throws once it is closed.
+   *
+   * @throws Anything your storage throws, where it cannot be released.
+   */
+  close(): PromiseAble<void>;
 }

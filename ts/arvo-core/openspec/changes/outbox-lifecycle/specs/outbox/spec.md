@@ -90,6 +90,25 @@ The package SHALL provide an outbox that keeps everything in process memory and 
 - **WHEN** the in-memory outbox's clock gives an earlier time than it gave for the commit before
 - **THEN** the commit is stamped with the landing time of the commit before, so unseen events are still listed in the order committed
 
+### Requirement: Arvo's Outboxes Answer Directly
+
+Arvo's outboxes SHALL return the answer of every operation directly, not through a promise, and SHALL throw directly where they cannot do their work. No operation waits on anything, and an operation that never yields cannot be interleaved with another. Opening and closing SHALL answer through a promise. A caller SHALL be able to await every answer as it awaits any outbox's.
+
+#### Scenario: An answer read directly
+
+- **WHEN** an operation of Arvo's own outbox is called
+- **THEN** it returns its answer, not a promise of it
+
+#### Scenario: An answer awaited
+
+- **WHEN** a caller awaits an operation of Arvo's own outbox
+- **THEN** it receives the same answer
+
+#### Scenario: Opening and closing awaited
+
+- **WHEN** one of Arvo's outboxes is opened or closed
+- **THEN** the call answers through a promise, which settles once the outbox is open or closed
+
 ## ADDED Requirements
 
 ### Requirement: An Outbox Is Opened Before Use And Closed After
@@ -134,3 +153,41 @@ Arvo's outboxes SHALL throw on every operation called before they are opened, an
 
 - **WHEN** one of Arvo's outboxes is closed without ever being opened
 - **THEN** nothing is thrown, and opening it afterwards throws
+
+### Requirement: A Lifecycle Is Provided For Any Outbox
+
+The package SHALL provide, at its main entry point, a lifecycle a developer's outbox can hold its resources through. It SHALL acquire once however often or concurrently it is opened, stay unopened where acquiring throws, close at once and for good, release once, including what an opening under way acquires, and hand the resources to an operation only while open. Acquiring and releasing MAY answer directly or through a promise; opening and closing SHALL answer through a promise.
+
+#### Scenario: Opened by several callers at once
+
+- **WHEN** a lifecycle is opened again while an opening is under way
+- **THEN** acquiring happens once, and every caller is answered when that opening ends
+
+#### Scenario: Closed while still opening
+
+- **WHEN** a lifecycle is closed while an opening is under way
+- **THEN** no opening may start after it, and what the opening acquires is released once it ends
+
+#### Scenario: Acquiring that fails
+
+- **WHEN** acquiring throws
+- **THEN** what it threw is passed on as it was, and the lifecycle stays unopened, so it may be opened again
+
+### Requirement: A Lifecycle Answers Its Refusals As Values Or Throws Them
+
+Each step of the lifecycle that can be refused SHALL be offered both as a call answering the refusal as a value and as one throwing it, the refusal naming the outbox, the operation and what to do instead. A failure of acquiring or releasing SHALL be passed on as it was thrown, never as the lifecycle's own refusal.
+
+#### Scenario: Used outside its open life
+
+- **WHEN** the resources are asked for before opening, while still opening, or once closed
+- **THEN** the refusal names the outbox, the operation and what to do instead, answered as a value or thrown
+
+#### Scenario: Opening a closed lifecycle
+
+- **WHEN** a closed lifecycle is opened
+- **THEN** the refusal is answered as a value, or thrown
+
+#### Scenario: Closing, as a value
+
+- **WHEN** a lifecycle is closed through the call answering as a value
+- **THEN** it answers success, since closing is never refused, and passes on what releasing throws

@@ -136,7 +136,13 @@ export type {
   ArvoVersionMap,
 } from './ArvoEventHandler/types/version-map.js';
 export { ArvoEventHandlerVersion } from './ArvoEventHandler/version/index.js';
+export {
+  ArvoOutboxLifecycleError,
+  type ArvoOutboxLifecycleErrorKind,
+  type ArvoOutboxLifecycleErrorParam,
+} from './ArvoOutbox/errors.js';
 export type { IArvoOutbox } from './ArvoOutbox/interface.js';
+export { ArvoOutboxLifecycle } from './ArvoOutbox/lifecycle.js';
 export type {
   ArvoOutboxCommitOutcome,
   ArvoOutboxEventsCommit,

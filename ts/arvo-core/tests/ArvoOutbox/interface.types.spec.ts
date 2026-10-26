@@ -41,6 +41,8 @@ class AsynchronousOutbox implements IArvoOutbox {
     return [];
   }
   async markEventsSeen(_eventIds: readonly string[]): Promise<void> {}
+  async open(): Promise<void> {}
+  async close(): Promise<void> {}
 }
 
 /** Every operation, answering directly. */
@@ -63,6 +65,8 @@ class SynchronousOutbox implements IArvoOutbox {
     return [];
   }
   markEventsSeen(_eventIds: readonly string[]): void {}
+  open(): void {}
+  close(): void {}
 }
 
 describe('what satisfies the outbox interface', () => {
@@ -87,8 +91,20 @@ describe('what satisfies the outbox interface', () => {
       commitEvents: () => undefined,
       readCommittedEvents: () => [],
       listUnseenEvents: () => [],
+      open: () => undefined,
+      close: () => undefined,
     };
     expect(outbox).toBeDefined();
+  });
+
+  it('is not an outbox that cannot be opened or closed', () => {
+    const { open: _droppedOpen, ...withoutOpening } = new SynchronousOutbox();
+    // @ts-expect-error an outbox can be opened
+    const unopenable: IArvoOutbox = withoutOpening;
+    const { close: _droppedClose, ...withoutClosing } = new SynchronousOutbox();
+    // @ts-expect-error an outbox can be closed
+    const unclosable: IArvoOutbox = withoutClosing;
+    expect([unopenable, unclosable]).toHaveLength(2);
   });
 
   it('is not an operation answering with the wrong thing', () => {

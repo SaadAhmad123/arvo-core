@@ -1,5 +1,6 @@
 import { describe, it } from 'vitest';
 import { arvoOutboxConformanceCases } from './cases/index.js';
+import { runConformanceCase } from './run-case.js';
 import type { ArvoOutboxConformanceParam } from './types.js';
 
 /**
@@ -7,9 +8,9 @@ import type { ArvoOutboxConformanceParam } from './types.js';
  *
  * Call it at the top level of a test file. It registers one suite, with one
  * test per rule named for that rule, then one per case in
- * `param.additionalCases`, and calls `param.createOutbox` once per
- * test as that test starts. A failing test names the rule your outbox
- * breaks.
+ * `param.additionalCases`. Each test calls `param.createOutbox`, opens what
+ * it returns, runs its check, and closes the outbox whether the check passed
+ * or failed. A failing test names the rule your outbox breaks.
  *
  * @param param - Where the outboxes come from. See {@link ArvoOutboxConformanceParam}.
  *
@@ -31,10 +32,9 @@ export const describeArvoOutboxConformance = (
       ...arvoOutboxConformanceCases,
       ...(param.additionalCases ?? []),
     ]) {
-      it(conformanceCase.name, async () => {
-        const outbox = await param.createOutbox();
-        await conformanceCase.check(outbox);
-      });
+      it(conformanceCase.name, () =>
+        runConformanceCase(param.createOutbox, conformanceCase),
+      );
     }
   });
 };

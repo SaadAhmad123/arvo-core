@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { arvoOutboxConformanceCases } from '../../../src/outbox/conformance/index.js';
+import { runConformanceCase } from '../../../src/outbox/conformance/run-case.js';
 import { brokenOutboxByCaseName } from '../inmemory/broken-outboxes.js';
 
 /**
@@ -22,7 +23,7 @@ describe('every conformance case', () => {
       ).toBeDefined();
       if (createBrokenOutbox === undefined) return;
       await expect(
-        conformanceCase.check(createBrokenOutbox()),
+        runConformanceCase(createBrokenOutbox, conformanceCase),
       ).rejects.toThrow();
     },
   );

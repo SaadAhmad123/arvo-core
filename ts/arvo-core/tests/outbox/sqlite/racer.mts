@@ -13,14 +13,15 @@ const { filename, executionIds, startingLine } = workerData as {
   startingLine: SharedArrayBuffer;
 };
 
+const outbox = new ArvoSqliteOutbox({ filename });
+await outbox.open();
+
 const threadsAtStartingLine = new Int32Array(startingLine);
 Atomics.add(threadsAtStartingLine, 0, 1);
 while (Atomics.load(threadsAtStartingLine, 0) < 2) {
   Atomics.wait(threadsAtStartingLine, 0, 1, 5);
 }
 
-const outbox = new ArvoSqliteOutbox({ filename });
-outbox.open();
 const committedByExecution = executionIds.map(
   (executionId) =>
     outbox.commitStateAndEvents({
@@ -34,5 +35,5 @@ const committedByExecution = executionIds.map(
       events: [],
     }).committed,
 );
-outbox.close();
+await outbox.close();
 parentPort?.postMessage(committedByExecution);

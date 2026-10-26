@@ -35,18 +35,23 @@ The interface's own rule is the minimum any storage can keep: opening and closin
 
 A failed `open()` leaves the outbox unopened, so the caller may try again, for instance once a file another writer held is free.
 
-### One helper holds the state and the outbox's resources
+### One lifecycle, exported, holds the state and the outbox's resources
 
-`src/outbox/helpers/outbox-lifecycle.ts` is a small class generic in what an outbox holds while open: `open(acquire)`, `close(release)`, and `resourcesFor(operationName)`, which returns the outbox's resources or throws, naming the outbox and saying to open it first, or to build a new one. Its state is a union, unopened, open with what it holds, or closed, so no resource can be reached outside the open state and no non-null assertion is needed anywhere.
+`ArvoOutboxLifecycle`, in `src/ArvoOutbox/lifecycle.ts` and exported from the main entry, is a small class generic in the resources an outbox holds while open. Arvo's two outboxes use it, and a developer's outbox may: it is the rules of opening and closing kept once, so nobody writes them again. Built with `new`, the same exception the outboxes and serializers take, since it is a long-lived object configured once.
 
-- `ArvoSqliteOutbox` holds its connection and its prepared statements. The constructor checks options and touches no file; `acquire` is what the constructor does today, closing the connection itself where any step throws.
-- `ArvoMemoryOutbox` holds a store of every map and the latest landing time, built by `acquire`. `release` drops it, which is how closing frees what it held.
+Its phase is a union, unopened, opening with the promise of what it will acquire, open with the resources, or closed, so no resource can be reached outside the open phase and no non-null assertion is needed anywhere.
+
+- **Idempotent and safe under concurrent calls.** Opening while an opening is under way joins it, so acquiring happens once. Closing takes effect at once, so nothing opens after it; where an opening is under way, closing awaits it and releases what it acquired, and the opening, finishing, leaves a closed lifecycle closed. Releasing happens once, and the lifecycle is closed even where releasing throws. A failed acquiring leaves it unopened, to be opened again.
+- **Plain `async`/`await`, no loop.** An opening is a private `acquireResources` awaiting `acquire()`; it yields once first, so the opening is recorded before an `acquire` that throws at once can settle it. Closing needs no loop because it closes first and waits after.
+- **`tryX`/`X` pairs, per project.md.** `tryOpen`, `tryClose` and `tryResourcesFor` hold the logic and answer `ArvoOutboxLifecycleError`, kinds `not_open`, `still_opening` and `closed`, as a value, built with neverthrow through `fromNeverthrow`; `open`, `close` and `resourcesFor` only unwrap. A failure of acquiring or releasing is the developer's storage failing, not a lifecycle refusal, so it is passed on as thrown. Closing is never refused, so `tryClose` answers only success; its error type is kept so the three pairs are one shape, and `close`'s unwrap is tested by answering it an error directly.
+- **Opening and closing always answer through a promise,** while acquiring and releasing may answer either way, so a caller has one way to wait. Arvo's outboxes' `open()` and `close()` are therefore asynchronous, while their six operations still answer directly.
 
 Considered: a phase field beside the existing fields. Rejected because it leaves the connection and maps reachable whatever the phase, so every method has to remember to check, and the SQLite connection's type has to admit being absent.
 
-### Both answer directly
+Considered: refusing a second opening while one is under way, which would need no stored promise. Rejected because opening must be idempotent under concurrent callers.
 
-`open()` and `close()` on Arvo's outboxes return `void`, as every other operation of theirs does. The interface allows a promise, so a developer's outbox can connect asynchronously.
+Considered: wrapping a failure of acquiring or releasing as a lifecycle error with the original as its cause, so `tryClose` had a failure of its own. Rejected in favour of passing storage failures on as thrown.
+
 
 ### The kit runs each case through one function
 

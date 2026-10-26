@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import type { IArvoOutbox } from '../../ArvoOutbox/interface.js';
+import { ArvoOutboxLifecycle } from '../../ArvoOutbox/lifecycle.js';
 import type {
   ArvoOutboxCommitOutcome,
   ArvoOutboxEventsCommit,
@@ -14,7 +15,6 @@ import type {
   ArvoOutboxUnseenEventsParam,
 } from '../../ArvoOutbox/types/read.js';
 import type { JSONObject } from '../../types.js';
-import { OutboxLifecycle } from '../helpers/outbox-lifecycle.js';
 import { refusalFor } from '../helpers/refusal-for.js';
 import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
 import { configureConnection } from './helpers/configure-connection.js';
@@ -56,17 +56,17 @@ type SqliteConnection = {
  * @example
  * ```typescript
  * const outbox = new ArvoSqliteOutbox({ filename: '/var/lib/orders/outbox.sqlite' });
- * outbox.open();
+ * await outbox.open();
  * const outcome = outbox.commitStateAndEvents(commit);
  * const latestState = outbox.readLatestState(commit.executionId);
- * outbox.close();
+ * await outbox.close();
  * ```
  */
 export class ArvoSqliteOutbox implements IArvoOutbox {
   private readonly filename: string;
   private readonly busyTimeoutMs: number;
   private readonly retainSeenEventsForMs: number;
-  private readonly lifecycle: OutboxLifecycle<SqliteConnection>;
+  private readonly lifecycle: ArvoOutboxLifecycle<SqliteConnection>;
 
   /**
    * Checks the options. Touches no file: {@link ArvoSqliteOutbox.open} does.
@@ -94,7 +94,7 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
     this.filename = options.filename;
     this.busyTimeoutMs = busyTimeoutMs;
     this.retainSeenEventsForMs = retainSeenEventsForMs;
-    this.lifecycle = new OutboxLifecycle(
+    this.lifecycle = new ArvoOutboxLifecycle(
       `ArvoSqliteOutbox on ${options.filename}`,
     );
   }
@@ -107,16 +107,18 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
    * @throws Where it has been closed: build a new one instead.
    * @throws Whatever SQLite throws where the file cannot be opened, is not a SQLite database, or holds outbox tables of another version.
    */
-  open(): void {
-    this.lifecycle.open(() => this.openConnection());
+  async open(): Promise<void> {
+    await this.lifecycle.open(() => this.openConnection());
   }
 
   /**
    * Releases the file. Closing it again does nothing, and every operation
    * throws once it is closed.
    */
-  close(): void {
-    this.lifecycle.close(({ database }) => database.close());
+  async close(): Promise<void> {
+    await this.lifecycle.close(({ database }) => {
+      database.close();
+    });
   }
 
   readLatestState(executionId: string): JSONObject | null {

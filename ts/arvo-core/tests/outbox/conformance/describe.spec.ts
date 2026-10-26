@@ -19,6 +19,8 @@ class StubOutbox implements IArvoOutbox {
     return [];
   }
   markEventsSeen() {}
+  open() {}
+  close() {}
 }
 
 /** One case's run: which case, under which test name, given which outbox. */
