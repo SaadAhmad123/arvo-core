@@ -24,8 +24,8 @@
 
 ## 5. Close out
 
-- [ ] 5.1 Run the whole suite with coverage, lint, typecheck and build from `ts/arvo-core`.
-- [ ] 5.2 Validate the change with `node_modules/.bin/openspec validate outbox-lifecycle --strict`.
+- [x] 5.1 Run the whole suite with coverage, lint, typecheck and build from `ts/arvo-core`.
+- [x] 5.2 Validate the change with `node_modules/.bin/openspec validate outbox-lifecycle --strict`.
 
 ## Workflow follow-up
 
