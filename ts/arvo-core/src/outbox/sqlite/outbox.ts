@@ -15,7 +15,9 @@ import type {
 } from '../../ArvoOutbox/types/read.js';
 import type { JSONObject } from '../../types.js';
 import { refusalFor } from '../helpers/refusal-for.js';
-import { refuseInvalidLease } from '../helpers/refuse-invalid-lease.js';
+import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
+import { configureConnection } from './helpers/configure-connection.js';
+import { createOwnerOnlyFile } from './helpers/create-owner-only-file.js';
 import {
   defaultBusyTimeoutMs,
   defaultRetainSeenEventsForMs,
@@ -25,7 +27,7 @@ import {
 import { toCommittedEventRecord, toEventInsert } from './helpers/event-rows.js';
 import { secondsAgo, secondsLater } from './helpers/seconds-modifier.js';
 import { readSqliteNow } from './helpers/sqlite-now.js';
-import { outboxSchema } from './schema.js';
+import { outboxSchema, outboxSchemaVersion } from './schema.js';
 import { type OutboxStatements, prepareStatements } from './statements.js';
 import type { ArvoSqliteOutboxOptions } from './types.js';
 
@@ -53,6 +55,11 @@ import type { ArvoSqliteOutboxOptions } from './types.js';
  * deleted. A file it creates gives the space of what it deletes back to the
  * disk. It honours a lease asked for when listing unseen events, across
  * every outbox on the file.
+ *
+ * A file it creates is readable and writable by its owner alone. It syncs
+ * every commit to disk in full, overwrites what it deletes, runs nothing a
+ * file defines, and refuses a file whose outbox tables another version of
+ * it wrote.
  *
  * It holds the file open until {@link ArvoSqliteOutbox.close} is called.
  *
@@ -97,12 +104,16 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
     }
     this.filename = options.filename;
     this.retainSeenEventsForMs = retainSeenEventsForMs;
+    if (options.filename !== ':memory:' && options.filename !== '') {
+      createOwnerOnlyFile(options.filename);
+    }
     this.database = new Database(options.filename, { timeout: busyTimeoutMs });
     try {
-      // takes effect only before the first table exists, so it must come first
-      this.database.pragma('auto_vacuum = INCREMENTAL');
-      this.database.pragma('journal_mode = WAL');
-      this.database.exec(outboxSchema);
+      configureConnection(this.database);
+      this.refuseUnknownSchemaVersion();
+      this.database
+        .transaction(() => this.database.exec(outboxSchema))
+        .immediate();
       this.statements = prepareStatements(this.database);
     } catch (error_) {
       this.database.close();
@@ -179,7 +190,7 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
     param: ArvoOutboxUnseenEventsParam,
   ): readonly ArvoOutboxCommittedEventRecord[] {
     this.refuseOnceClosed();
-    refuseInvalidLease('ArvoSqliteOutbox', param.leaseMs);
+    refuseInvalidListing('ArvoSqliteOutbox', param);
     const listUnseen = () => {
       const now = readSqliteNow(this.statements.selectNow);
       const eventRows = this.statements.selectUnseenEvents.all({
@@ -264,6 +275,26 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
       cutOffModifier: secondsAgo(this.retainSeenEventsForMs),
       batchSize: expiredEventsDeletedPerMarking,
     }).changes;
+  }
+
+  /** Throws, before anything is created, where the file holds outbox tables of another version. */
+  private refuseUnknownSchemaVersion(): void {
+    const metaTable = this.database
+      .prepare<[], { name: string }>(
+        "select name from sqlite_schema where type = 'table' and name = 'arvo_outbox_meta'",
+      )
+      .get();
+    if (metaTable === undefined) return;
+    const versionRow = this.database
+      .prepare<[], { value: string }>(
+        "select value from arvo_outbox_meta where name = 'schema_version'",
+      )
+      .get();
+    if (versionRow === undefined || versionRow.value === outboxSchemaVersion)
+      return;
+    throw new Error(
+      `ArvoSqliteOutbox cannot open ${this.filename}: its outbox tables are at version ${versionRow.value}, and this outbox knows only version ${outboxSchemaVersion}. Open it with the version of arvo-core that wrote it.`,
+    );
   }
 
   /** Throws where the file has been released. */

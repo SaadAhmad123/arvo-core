@@ -1,4 +1,10 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
@@ -548,4 +554,87 @@ describe('ArvoSqliteOutbox and leases', () => {
       expect(listedEventIds(outbox)).toEqual(eventIds);
     },
   );
+});
+
+describe('ArvoSqliteOutbox and the safety of its file', () => {
+  it('creates a new file that only its owner can read or write', () => {
+    const filename = newFilename();
+    openOutbox(filename);
+    expect(statSync(filename).mode & 0o777).toBe(0o600);
+  });
+
+  it('leaves the permissions of a file that already exists as they are', () => {
+    const filename = newFilename();
+    writeFileSync(filename, '', { mode: 0o640 });
+    openOutbox(filename);
+    expect(statSync(filename).mode & 0o777).toBe(0o640);
+  });
+
+  it('opens a file in memory, with no file to create', () => {
+    const outbox = openOutbox(':memory:');
+    expect(outbox.readLatestState(crypto.randomUUID())).toBeNull();
+  });
+
+  it('marks a file it creates with the version of its tables, and opens it again', () => {
+    const filename = newFilename();
+    new ArvoSqliteOutbox({ filename }).close();
+    const inspector = new Database(filename, { readonly: true });
+    expect(
+      inspector
+        .prepare<[], { value: string }>(
+          "select value from arvo_outbox_meta where name = 'schema_version'",
+        )
+        .get(),
+    ).toEqual({ value: '1' });
+    inspector.close();
+    expect(() => openOutbox(filename)).not.toThrow();
+  });
+
+  it('refuses a file whose tables are of a version it does not know, changing nothing', () => {
+    const filename = newFilename();
+    new ArvoSqliteOutbox({ filename }).close();
+    const otherWriter = new Database(filename);
+    otherWriter.exec(
+      "update arvo_outbox_meta set value = '2' where name = 'schema_version'",
+    );
+    otherWriter.close();
+    expect(() => new ArvoSqliteOutbox({ filename })).toThrow(
+      `ArvoSqliteOutbox cannot open ${filename}: its outbox tables are at version 2, and this outbox knows only version 1. Open it with the version of arvo-core that wrote it.`,
+    );
+    const inspector = new Database(filename, { readonly: true });
+    expect(
+      inspector
+        .prepare<[], { value: string }>('select value from arvo_outbox_meta')
+        .get(),
+    ).toEqual({ value: '2' });
+    inspector.close();
+  });
+
+  it('refuses a row no outbox could have written', () => {
+    const filename = newFilename();
+    openOutbox(filename);
+    const otherWriter = new Database(filename);
+    try {
+      expect(() =>
+        otherWriter.exec(
+          "insert into arvo_outbox_state values ('execution', -1, 's', 's', '1.0.0', 'waiting', '{}')",
+        ),
+      ).toThrow(/CHECK constraint/);
+      expect(() =>
+        otherWriter.exec(
+          "insert into arvo_outbox_state values ('execution', 0, 's', 's', '1.0.0', 'waiting', 'not json')",
+        ),
+      ).toThrow(/CHECK constraint/);
+    } finally {
+      otherWriter.close();
+    }
+  });
+
+  it('refuses to list a negative number of events, rather than listing them all', () => {
+    const outbox = openOutbox(newFilename());
+    outbox.commitEvents({ events: [buildEventRecord()] });
+    expect(() =>
+      outbox.listUnseenEvents({ atMost: -1, olderThanMs: 0 }),
+    ).toThrow('ArvoSqliteOutbox cannot list -1 unseen events');
+  });
 });

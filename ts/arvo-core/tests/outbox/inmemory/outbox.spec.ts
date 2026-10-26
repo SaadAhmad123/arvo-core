@@ -556,3 +556,13 @@ describe('ArvoMemoryOutbox and leases', () => {
     },
   );
 });
+
+describe('ArvoMemoryOutbox and a listing that is no listing', () => {
+  it('refuses to list a negative number of events, rather than listing them all', () => {
+    const outbox = new ArvoMemoryOutbox();
+    outbox.commitEvents({ events: [buildEventRecord()] });
+    expect(() =>
+      outbox.listUnseenEvents({ atMost: -1, olderThanMs: 0 }),
+    ).toThrow('ArvoMemoryOutbox cannot list -1 unseen events');
+  });
+});

@@ -14,7 +14,7 @@ import type {
 } from '../../ArvoOutbox/types/read.js';
 import type { JSONObject } from '../../types.js';
 import { refusalFor } from '../helpers/refusal-for.js';
-import { refuseInvalidLease } from '../helpers/refuse-invalid-lease.js';
+import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
 import { copyEventRecord } from './helpers/copy-event-record.js';
 import { defaultMaxEvents } from './helpers/defaults.js';
 import {
@@ -161,7 +161,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   listUnseenEvents(
     param: ArvoOutboxUnseenEventsParam,
   ): readonly ArvoOutboxCommittedEventRecord[] {
-    refuseInvalidLease('ArvoMemoryOutbox', param.leaseMs);
+    refuseInvalidListing('ArvoMemoryOutbox', param);
     const nowMs = this.readClockMs();
     const cutOffMs = nowMs - param.olderThanMs;
     const unseenEvents: ArvoOutboxCommittedEventRecord[] = [];

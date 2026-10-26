@@ -395,6 +395,15 @@ Arvo's outboxes SHALL return every answer directly, not through a promise, and S
 - **WHEN** a caller awaits an operation of Arvo's own outbox
 - **THEN** it receives the same answer
 
+### Requirement: Arvo's Outboxes Refuse A Listing That Is No Listing
+
+Arvo's outboxes SHALL refuse, before reading or claiming anything, a listing of unseen events whose number to list is not a whole number, zero or more, or whose age is not a finite number, zero or more, naming the value and the rule.
+
+#### Scenario: A negative number to list
+
+- **WHEN** unseen events are listed with a negative number to list
+- **THEN** listing throws rather than listing every event
+
 ### Requirement: Arvo's Outboxes Honour A Lease
 
 Arvo's outboxes SHALL honour a lease asked for when listing: each event listed SHALL be left out of every listing, by any caller of the same store, until the lease lapses by the outbox's clock or the event is marked seen, and SHALL then be listed again. Only what is listed SHALL be leased, and a lease that is not a whole number of milliseconds greater than zero SHALL be refused, claiming nothing.
@@ -525,6 +534,25 @@ A SQLite outbox SHALL keep an event once seen for a time set when it is opened, 
 
 - **WHEN** the outbox is opened with a window that is not a whole number of milliseconds, zero or more, nor unending
 - **THEN** opening it throws, naming the window and the rule
+
+### Requirement: A SQLite Outbox Keeps Its File Safe
+
+A SQLite outbox SHALL create a missing file readable and writable by its owner alone, and SHALL leave the permissions of an existing file as they are. It SHALL sync every commit to disk in full, overwrite what it deletes, and run nothing the file itself defines. It SHALL record the version of its tables in the file, and SHALL refuse, before creating anything, a file whose outbox tables are of a version it does not know. Its tables SHALL refuse a row no outbox could have written.
+
+#### Scenario: A new file
+
+- **WHEN** a SQLite outbox creates its file
+- **THEN** only the file's owner can read or write it, and the file records the version of its tables
+
+#### Scenario: A file of another version
+
+- **WHEN** a SQLite outbox is opened on a file whose outbox tables record a version it does not know
+- **THEN** opening throws, naming the file and both versions, and the file is left as it was
+
+#### Scenario: A row no outbox could write
+
+- **WHEN** another writer inserts a state with a negative revision, or a document that is not JSON
+- **THEN** the file refuses it
 
 ### Requirement: A SQLite Outbox Is Closed By Its Caller
 

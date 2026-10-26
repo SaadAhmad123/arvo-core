@@ -186,6 +186,10 @@ erDiagram
 
 - **Retention, so the file does not grow without bound.** Only each execution's latest state is kept; the commit that writes a revision deletes the earlier ones, and no state is ever deleted outright, since that would let its first revision be committed again. An event is deleted once it has been seen for longer than `retainSeenEventsForMs`, a window defaulting to a number of its own in `helpers/defaults.ts`, or never where it is `Infinity`; an unseen event never is. The window, not a count, because a disk has room and ADR-019 *Retention* warns that "seen" alone is no safe signal to delete on: a late redelivery needs its events to resend, and the window is how long the deployment says one can arrive. Each marking deletes a bounded batch, so its cost stays fixed; `deleteExpiredEvents()` catches up on a schedule of the deployment's own. A file the outbox creates uses incremental auto-vacuum, set before its first table since SQLite fixes it then, so deleted space goes back to the disk a bounded number of pages per marking.
 
+- **Hardened against its library's defaults, each checked rather than assumed.** better-sqlite3 opens a file already in write-ahead mode at `synchronous = NORMAL`, which a power cut can roll back after the queue was acknowledged, so the outbox sets `FULL` on every open. A new file would be created readable by every user, so the outbox creates it owner-only first, and SQLite gives the log files beside it the same permissions. `trusted_schema` is off, so a tampered file's views and triggers run no functions; `secure_delete` is on, so deleted payloads are overwritten; the write-ahead log is cut back once checkpointed. These settings live in `helpers/configure-connection.ts`, the one place a connection's settings can be tested from.
+- **Versioned tables.** `arvo_outbox_meta` records the version of the tables, scoped to the outbox so a consumer's own use of the file is untouched. A file at an unknown version is refused before anything is created, so a later version's file is never misread and a migration has a version to start from. `check` constraints refuse a negative revision and a state that is not JSON.
+- **A listing that is no listing is refused.** SQLite reads a negative `limit` as no limit at all, so `atMost` and `olderThanMs` are checked before anything is read, in both outboxes alike, by `src/outbox/helpers/refuse-invalid-listing.ts`.
+
 Considered: Node's own `node:sqlite`. Rejected for now. Node's own documentation lists it at *Stability 1.1, active development* in Node 22, which the package supports, where it warns on every process that loads it, and at *Stability 1.2, release candidate* from Node 24.15; it is stable in no Node line yet, and its API is still changing. Revisit once Node marks it stable and every Node version the package supports carries that status.
 
 Considered: taking an open database from the caller rather than a file name. Rejected because it would put the library's types on the public surface and leave the outbox unsure the database was configured as it needs.
@@ -218,6 +222,7 @@ src/ArvoOutbox/
     read.ts                          ArvoOutboxEventsFilter, ArvoOutboxUnseenEventsParam
 src/outbox/helpers/
   refusal-for.ts                     which refusal, if any, a commit meets; shared by both outboxes
+  refuse-invalid-listing.ts          a listing of unseen events that is no listing; shared by both outboxes
 src/outbox/conformance/
   index.ts                           the kit's entry point
   types.ts                           the case type and the suite's param
@@ -241,6 +246,9 @@ src/outbox/sqlite/
   helpers/
     event-rows.ts                    records to rows and back
     sqlite-now.ts                    SQLite's clock, read once per commit
+    configure-connection.ts          every setting a connection needs before it reads
+    create-owner-only-file.ts        a new file only its owner can use
+    seconds-modifier.ts              durations as SQLite date modifiers
     defaults.ts                      how long it waits for a busy file by default
 ```
 

@@ -1,3 +1,6 @@
+/** The version of the tables below, recorded in every file that holds them. */
+export const outboxSchemaVersion = '1';
+
 /**
  * The tables and indexes an outbox needs, each created only where missing,
  * so a file that already has them is left as it is.
@@ -5,17 +8,27 @@
  * `sequence` is commit order, and never reused, so ties in `committed_at`
  * keep the order committed. `committed_at` and `seen_at` are in the form
  * `toISOString` writes, which sorts as it reads. Only an execution's latest
- * state is kept.
+ * state is kept. `arvo_outbox_meta` records the version of these tables, so
+ * a file written by another version is refused rather than misread.
  */
 export const outboxSchema = `
+create table if not exists arvo_outbox_meta (
+  name text primary key,
+  value text not null
+) strict, without rowid;
+
+insert into arvo_outbox_meta (name, value)
+  values ('schema_version', '${outboxSchemaVersion}')
+  on conflict (name) do nothing;
+
 create table if not exists arvo_outbox_state (
   execution_id text not null,
-  cas_version integer not null,
+  cas_version integer not null check (cas_version >= 0),
   subject text not null,
   source text not null,
   version text not null,
   lifecycle text not null,
-  document text not null,
+  document text not null check (json_valid(document)),
   primary key (execution_id, cas_version)
 ) strict, without rowid;
 
@@ -24,7 +37,7 @@ create table if not exists arvo_outbox_event (
   id text not null unique,
   subject text not null,
   execution_id text not null,
-  cas_version integer,
+  cas_version integer check (cas_version >= 0),
   parent_id text,
   init_id text,
   triggering_event_id text not null,
