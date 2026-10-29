@@ -20,8 +20,8 @@
 
 ## 5. Close out
 
-- [ ] 5.1 Run the whole suite with coverage, lint, typecheck and build from `ts/arvo-core`, and check the built main entry exports the driver.
-- [ ] 5.2 Validate the change with `node_modules/.bin/openspec validate outbox-driver --strict`.
+- [x] 5.1 Run the whole suite with coverage, lint, typecheck and build from `ts/arvo-core`, and check the built main entry exports the driver.
+- [x] 5.2 Validate the change with `node_modules/.bin/openspec validate outbox-driver --strict`.
 
 ## Workflow follow-up
 
