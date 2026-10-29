@@ -49,7 +49,7 @@ src/ArvoOutboxDriver/
 
 ### Built with `new`, holding one outbox
 
-`new ArvoOutboxDriver({ outbox })`: a long-lived object configured once, the same exception the outboxes and serializers take. It holds the outbox and nothing else. Telemetry is not held: each operation's param takes an optional `telemetry`, resolved when called, as the handler and the dispatcher already do.
+`new ArvoOutboxDriver({ outbox })`: a long-lived object configured once, the same exception the outboxes and serializers take. It holds the outbox and nothing else. Telemetry is not held: each operation's param takes an optional `telemetry`, resolved when called, as the handler and the dispatcher already do. It may also take a `span`, which the call's span becomes a child of; left out, the tracer takes the active span. A caller with no active context, such as a sweeper, can still join the right trace.
 
 `open()` and `close()` forward to the outbox, as `tryOpen`/`open` and `tryClose`/`close`, since ADR-020 has the driver be the only caller; a throw from either is `unavailable`. The driver keeps no lifecycle of its own: whether the outbox is open is the outbox's to say, and saying it twice would be two answers to one question.
 

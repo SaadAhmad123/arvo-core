@@ -15,8 +15,8 @@
 
 ## 4. The driver
 
-- [ ] 4.1 Write `tests/ArvoOutboxDriver/driver.spec.ts` against `ArvoMemoryOutbox` and against stub outboxes answering wrong shapes or throwing: each operation's success; each kind each operation can report; the record and the events reaching the outbox as built, duplicates included; restoring on by default and off when asked; `leaseMs` passed through; each `X` throwing what its `tryX` answers; a record missing a field throwing the validation error with the outbox not called; the outbox called once per operation; open and close forwarded; one span per call, a child of the active span, ended on success and on failure. Write `tests/ArvoOutboxDriver/driver.types.spec.ts`: the driver is not an `IArvoOutbox`. Run red.
-- [ ] 4.2 Add `src/ArvoOutboxDriver/types.ts`, `src/ArvoOutboxDriver/helpers/call-outbox.ts` and `src/ArvoOutboxDriver/index.ts`, with library-grade TSDoc and an `@example` building and using the driver, and export the driver, its param and entry types and both errors from `src/index.ts`. Verify with the whole suite at 100% coverage.
+- [x] 4.1 Write `tests/ArvoOutboxDriver/driver.spec.ts` against `ArvoMemoryOutbox` and against stub outboxes answering wrong shapes or throwing: each operation's success; each kind each operation can report; the record and the events reaching the outbox as built, duplicates included; restoring on by default and off when asked; `leaseMs` passed through; each `X` throwing what its `tryX` answers; a record missing a field throwing the validation error with the outbox not called; the outbox called once per operation; open and close forwarded; one span per call, a child of the active span, ended on success and on failure. Write `tests/ArvoOutboxDriver/driver.types.spec.ts`: the driver is not an `IArvoOutbox`. Run red.
+- [x] 4.2 Add `src/ArvoOutboxDriver/types.ts`, `src/ArvoOutboxDriver/helpers/call-outbox.ts` and `src/ArvoOutboxDriver/index.ts`, with library-grade TSDoc and an `@example` building and using the driver, and export the driver, its param and entry types and both errors from `src/index.ts`. Verify with the whole suite at 100% coverage.
 
 ## 5. Close out
 

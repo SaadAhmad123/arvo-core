@@ -140,9 +140,14 @@ The driver SHALL NOT retry, re-read on a refusal, abandon, sweep, or build a fau
 
 ### Requirement: One Span Per Call
 
-The driver SHALL open one span per operation, continuing the trace active where it was called, with the telemetry given to that call, and SHALL end it however the call ends.
+The driver SHALL open one span per operation, with the telemetry given to that call, as a child of the span the call names or, where it names none, of the span active where it was called, and SHALL end it however the call ends.
 
 #### Scenario: A call under a trace
 
 - **WHEN** an operation is called inside an active span
 - **THEN** its span is a child of that span, and is ended whether the call succeeds or fails
+
+#### Scenario: A call naming its parent
+
+- **WHEN** an operation is called naming a span as its parent
+- **THEN** its span is a child of that span, whatever span is active

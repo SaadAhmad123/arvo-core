@@ -158,6 +158,25 @@ export type {
   ArvoOutboxUnseenEventsParam,
 } from './ArvoOutbox/types/read.js';
 export {
+  ArvoOutboxDriverError,
+  type ArvoOutboxDriverErrorKind,
+  type ArvoOutboxDriverErrorParam,
+  ArvoOutboxDriverValidationError,
+} from './ArvoOutboxDriver/errors.js';
+export { ArvoOutboxDriver } from './ArvoOutboxDriver/index.js';
+export type {
+  ArvoOutboxDriverCallParam,
+  ArvoOutboxDriverCommitEventsParam,
+  ArvoOutboxDriverCommitStateAndEventsParam,
+  ArvoOutboxDriverEventEntry,
+  ArvoOutboxDriverListUnseenEventsParam,
+  ArvoOutboxDriverMarkEventsSeenParam,
+  ArvoOutboxDriverParam,
+  ArvoOutboxDriverReadCommittedEventsParam,
+  ArvoOutboxDriverReadLatestStateParam,
+  ArvoOutboxDriverRestoreParam,
+} from './ArvoOutboxDriver/types.js';
+export {
   ArvoEventFactory,
   createArvoEventFactory,
   tryCreateArvoEventFactory,

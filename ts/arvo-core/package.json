@@ -69,6 +69,7 @@
     "@changesets/cli": "3.0.3",
     "@fission-ai/openspec": "1.15.0",
     "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/context-async-hooks": "3.0.0",
     "@opentelemetry/sdk-trace": "2.12.0",
     "@types/better-sqlite3": "9.6.0",
     "@types/node": "22.20.5",
