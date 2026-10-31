@@ -6,7 +6,7 @@
 - **Amends:** [ADR-006](./006-arvoeventhandler-protocol.md), **Required of infrastructure adapters** — one additive paragraph: a mechanism MAY meet obligations 2 and 5, and the preserving half of obligation 1, through an outbox as defined here; the publishing half of obligation 1 remains the mechanism's, carried out through the outbox's send operations. Additive: nothing already there is replaced
 - **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), three of whose five obligations on a mechanism this ADR gives a durable shape to; [ADR-007](./007-execution-record.md), which defines the record an outbox holds and the `cas_version` it compares; [ADR-008](./008-execution-faults-and-abandonment.md), whose abandonment pair an outbox must be able to commit in every shape the fault carries it; [ADR-010](./010-delivery-classification-and-entry-validation.md), whose gate makes a repeated delivery safe to discard, which is what lets an outbox resend without harm; [ADR-001](./001-arvoevent-structure.md), which makes an event's `id` unique everywhere; [ADR-003](./003-arvoevent-cloudevent-transformation.md), whose CloudEvent form is what an outbox stores an event as; [ADR-004](./004-multi-language-implementation-governance.md), which leaves API shape to each language; [ADR-015](./015-no-ordering-guarantee.md), which forbids any party from promising order
 - **Addresses, in part:** [ADR-000](./000-arvo-system-identity-and-architectural-principles.md) Deferred Decisions — "Infrastructure adapter interfaces and conformance", the persistence adapter; [ADR-017](./017-dispatcher.md) **Left deferred** — "how a mechanism commits the record and the events"
-- **Left deferred:** where events wait, who moves them, retry, abandonment policy, how a repeated opening event is treated, what an operator watches, retention, conformance tests, canonical wire serialization. See **Left deferred**
+- **Left deferred:** where events wait, who moves them, retry, abandonment policy, how a repeated opening event is treated, what a caller does with an outbox's capacity, what an operator watches, retention, conformance tests, canonical wire serialization. See **Left deferred**
 
 Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-architectural-principles.md).
 
@@ -20,7 +20,7 @@ Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-a
 
 ### What this ADR defines
 
-The **outbox**: the one durable piece Arvo offers so that a mechanism need not build its own. A mechanism MAY use it; one built on something that already meets ADR-006's obligations need not. What it holds — each execution's state and every event committed with it. The operations it offers, what each must do, and what each may refuse. How a crashed delivery is recovered from it. What it never does. And the one promise that makes it an outbox rather than a store: **once a state and its events are committed together, the outbox can always say which of those events have not yet left, and hands them back exactly as committed, so that a crash costs a resend and never a regeneration.**
+The **outbox**: the one durable piece Arvo offers so that a mechanism need not build its own. A mechanism MAY use it; one built on something that already meets ADR-006's obligations need not. What it holds — each execution's state and every event committed with it. The operations it offers, what each must do, and what each may refuse, including how it says how much room it has. How a crashed delivery is recovered from it. What it never does. And the one promise that makes it an outbox rather than a store: **once a state and its events are committed together, the outbox can always say which of those events have not yet left, and hands them back exactly as committed, so that a crash costs a resend and never a regeneration.**
 
 This ADR is written so that someone who has never read another Arvo record can implement an outbox against their own database and get it right.
 
@@ -131,7 +131,7 @@ Every language implementation already has ADR-003's transformation, because ADR-
 
 The record inside the state holds events in ADR-007's own shape, and the payload holds them in CloudEvent form. The two are interchangeable without loss under ADR-003, so the difference is cosmetic and is accepted.
 
-### Six operations
+### Seven operations
 
 ```
 read_latest_state(execution_id)              → record | none
@@ -140,6 +140,7 @@ commit_events(events)                        → done
 read_committed_events(filter)                → events, as committed
 list_unseen_events(at_most, older_than)      → events, oldest committed first
 mark_events_seen(event_ids)                  → done
+capacity(events, executions)                 → room for that much: per kind, and overall
 ```
 
 `commit` is one flat object carrying everything both tables need, so the outbox infers nothing:
@@ -197,6 +198,22 @@ commit = {
 
 17. **Order is the outbox's, never a promise.** `list_unseen_events` hands events out oldest committed first, so a stranded event goes before a fresh one. Nothing downstream may rely on any order ([ADR-015](./015-no-ordering-guarantee.md)).
 
+### Capacity
+
+What an outbox holds can grow without bound. `capacity` gives an outbox a way to signal, to whoever calls it, how much room it has.
+
+18. **`capacity` MUST answer how much room the outbox has for a given amount.** It is asked for a number of events and a number of executions, and nothing else. For each kind it limits, it answers one of three:
+    - `available` — that much keeps it within what it is meant to hold;
+    - `tolerating` — that much takes it past what it is meant to hold, but within the most it should ever hold;
+    - `exhausted` — that much takes it past the most it should ever hold.
+
+    Overall it answers the worst of these: `exhausted` before `tolerating`, `tolerating` before `available`.
+19. **Asking changes nothing.** `capacity` MUST NOT add, delete or alter anything held, and its answer describes the outbox as it would be with that amount added, not as it is made to be.
+20. **Everything held counts.** Events count whether seen or not. Executions count every execution the outbox keeps, running or finished, once each however many states it has kept for it.
+21. **The numbers behind an answer are optional.** An outbox MAY give, for each kind, how much it would hold, what it is meant to hold, and the most it should ever hold. It MAY leave out a kind it does not limit. **An outbox that limits nothing MUST answer `available`, and need give nothing else**, so an outbox that never fills pays nothing for this operation.
+22. **An answer MAY stay steady.** An outbox that has answered `tolerating` for a kind MAY keep answering so until it has drained well below what it is meant to hold, so that its answer does not flip with every event sent.
+23. **Whether a commit enforces it is the implementer's.** An outbox MAY refuse, at commit, an amount it would answer `exhausted` for, by throwing, since it cannot do that work (rule 6). It need not. `capacity` states the outbox's room; it does not oblige the outbox to defend it.
+
 ### Recovery, in order
 
 The rules above exist to keep this sequence working, and it is the one part of an outbox that is easy to get wrong without seeing it whole.
@@ -248,6 +265,7 @@ Step 5 only works if the event records are still there, and only if they are exa
 - An implementer who knows their database and nothing of Arvo can write a conforming outbox from this record alone: plain operations, values returned, failures thrown.
 - Abandonment in every shape ADR-008 defines has a write: with a record, or events alone.
 - Recovery is a read of committed bytes, so nothing here requires an executor to be deterministic, as ADR-006 already relies on.
+- Every outbox can signal how much room it has, in one shape whatever its storage, and an outbox that never fills signals it in one line.
 
 ### Paid for
 
@@ -257,6 +275,7 @@ Step 5 only works if the event records are still there, and only if they are exa
 - **The outbox is a second party that must be conformance-tested** beside the handler. Accepted because it replaces the same tests written per mechanism.
 - **One event appears in two spellings inside one store:** ADR-007's inside the state, CloudEvent inside the payload. Accepted because the two are interchangeable without loss, the state is the handler's and the payload is the queue's, and converting the state's events would amend ADR-007 for a cosmetic gain.
 - **Storage is tied to ADR-003.** A change to the CloudEvent transformation reaches every stored payload. Accepted because ADR-003 changes only by supersession, so the risk is governed rather than drifting.
+- **Every outbox answers `capacity`,** even one that never fills. Accepted because such an outbox answers `available` and nothing more.
 
 ## Considered Alternatives
 
@@ -288,6 +307,18 @@ Considered: losing a compare-and-swap race reported as an exception. Rejected be
 
 Considered: the caller removing already-committed events before a commit. Rejected under rule 9: it is a read and then a write, so two racing callers can both pass it, where the outbox can decide inside the commit.
 
+### Refusing a full outbox only at commit
+
+Considered: an outbox signalling that it is full only by throwing at commit. Rejected as the only signal because it is given only once an amount is already being written, and says nothing of how close the outbox is. An outbox MAY still refuse at commit (rule 23); `capacity` lets it signal its room whenever asked.
+
+### Asking with the whole commit
+
+Considered: `capacity` taking the commit itself, so the outbox works out what it would add. Rejected because the outbox would then have to tell a new execution from an existing one and an event it holds from one it does not, which is knowledge of commits an implementer should not need. Asked with two numbers, an outbox only adds and compares.
+
+### A yes or no
+
+Considered: `capacity` answering only whether there is room. Rejected because an outbox past what it is meant to hold is in a different condition from one past the most it should ever hold, and a yes or no cannot tell the two apart. Three states signal both.
+
 ### A second flag for "handled"
 
 Considered: the outbox also recording when a receiving handler finished with each event, for visibility and recovery from a lossy queue. Rejected because the flag would lag reality and so could never be trusted for correctness, because it works only within one outbox, and because rule 16 already requires a queue that keeps what it accepts.
@@ -317,6 +348,7 @@ One thing added to ADR-006 **Required of infrastructure adapters**, additively: 
 - **Where events wait, and who moves them.** The queue, the sweeper, and the loop that delivers. ADR-006 leaves them with the mechanism; a later ADR is the place.
 - **What a mechanism does with each refusal.** Re-read and run again, retry later, give up: policy, the mechanism's, for a later ADR.
 - **How a mechanism treats a repeated opening event.** Recovery step 4 has the handler refuse it as `record_unexpected`, a fault; ADR-010 permits a mechanism to treat that as a repeat rather than a failure, and the recovery sequence assumes it does. Which it does, and when, is policy, for a later ADR.
+- **What a caller does with an outbox's capacity.** The outbox only signals its room; what follows from each answer is the caller's policy, for a later ADR.
 - **What an operator watches.** The one number this ADR makes available is how many events are unseen and older than the grace period: near zero when healthy, growing when a sweeper has stalled or a queue refuses events. Publishing it is the mechanism's, for a later ADR.
 - **Retention.** Deliberately the deployment's.
 - **Conformance tests for an outbox.** The next piece of work after this ADR is accepted: a suite every outbox implementation runs, as ADR-004 asks of every protocol piece.
@@ -346,5 +378,16 @@ interface Outbox
   list_unseen_events(at_most: integer, older_than: duration): list of EventRecord + committed_at + seen
 
   mark_events_seen(event_ids: list of string): nothing
+
+  capacity(request: { events: integer, executions: integer }): {
+    status: 'available' | 'tolerating' | 'exhausted',          the worst of the kinds
+    kinds: {
+      events?:     { status, held?: integer, size?: integer, limit?: integer },
+      executions?: { status, held?: integer, size?: integer, limit?: integer }
+    }
+  }
+    held  — how much it would hold with the request added
+    size  — what it is meant to hold; past this, tolerating
+    limit — the most it should ever hold; past this, exhausted
 ```
 
