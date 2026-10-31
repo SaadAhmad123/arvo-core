@@ -34,8 +34,8 @@
 
 ## 7. Close out
 
-- [ ] 7.1 Run `pnpm lint`, and verify `pnpm typecheck` reports errors only under `src/outbox/` and `tests/outbox/`.
-- [ ] 7.2 Check every new and changed file against `openspec/project.md`: **Documentation in source**, **Naming**, **Module-level state**, and the `try`-prefix rules. Verify with `node_modules/.bin/openspec validate outbox-capacity --strict`.
+- [x] 7.1 Run `pnpm lint`, and verify `pnpm typecheck` reports errors only under `src/outbox/` and `tests/outbox/`.
+- [x] 7.2 Check every new and changed file against `openspec/project.md`: **Documentation in source**, **Naming**, **Module-level state**, and the `try`-prefix rules. Verify with `node_modules/.bin/openspec validate outbox-capacity --strict`.
 
 ## Workflow follow-up
 
