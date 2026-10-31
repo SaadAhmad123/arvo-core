@@ -14,13 +14,13 @@
 
 ## 3. The capacity helpers
 
-- [ ] 3.1 Write `tests/ArvoOutboxDriver/helpers/build-capacity-request.spec.ts`: a commit with a record gives the event count and its `casVersion`; events alone give the count only; nothing gives one event and `casVersion` 0; a record missing a lifted field throws the validation error. Write `tests/ArvoOutboxDriver/helpers/check-capacity.spec.ts`: each well-formed answer accepted as given; an unknown status, overall or per buffer, `buffers` missing or not an object, and a number that is negative, fractional or not a number each answered with an issue naming its path. Run red.
-- [ ] 3.2 Add `src/ArvoOutboxDriver/helpers/build-capacity-request.ts` and `src/ArvoOutboxDriver/helpers/check-capacity.ts`. Verify with both specs at 100% coverage.
+- [x] 3.1 Write `tests/ArvoOutboxDriver/helpers/check-against-schema.spec.ts`: a zod schema's output handed back with unknown keys dropped; each issue's path under the root, with a position in brackets and a key after a dot, and the value found there. Write `tests/ArvoOutboxDriver/helpers/build-capacity-request.spec.ts`: a commit with a record gives the event count and its `casVersion`; events alone give the count only; nothing gives one event and `casVersion` 0; a record missing a lifted field throws the validation error. Write `tests/ArvoOutboxDriver/helpers/check-capacity.spec.ts`: each well-formed answer accepted as given; an unknown status, overall or per buffer, `buffers` missing or not an object, and a number that is negative, fractional or not a number each answered with an issue naming its path. Run red.
+- [x] 3.2 Add `ArvoOutboxDriverCapacityParam` to `src/ArvoOutboxDriver/types.ts`, which the request helper takes, and add `src/ArvoOutboxDriver/helpers/check-against-schema.ts`, `src/ArvoOutboxDriver/helpers/build-capacity-request.ts`, and `src/ArvoOutboxDriver/helpers/check-capacity.ts` with a zod schema, checked through `zod/v4/core`. Verify with both specs at 100% coverage.
 
-## 4. Checking commit outcomes
+## 4. Checking commit outcomes and committed records with zod
 
-- [ ] 4.1 Extend `tests/ArvoOutboxDriver/helpers/check-commit-outcome.spec.ts`: `capacity_exhausted` accepted beside the other two refusals, and an answer of nothing refused. Run red.
-- [ ] 4.2 **Replace** the two fixed refusals in `src/ArvoOutboxDriver/helpers/check-commit-outcome.ts` with one frozen list of all three, named in its issue message. Verify with the spec at 100% coverage.
+- [ ] 4.1 Extend `tests/ArvoOutboxDriver/helpers/check-commit-outcome.spec.ts`: `capacity_exhausted` accepted beside the other two refusals, an answer of nothing refused, and each refusal answered with one issue at its path. Keep `tests/ArvoOutboxDriver/helpers/check-committed-records.spec.ts` as it stands. Run red.
+- [ ] 4.2 **Replace** the hand-written check in `src/ArvoOutboxDriver/helpers/check-commit-outcome.ts` with a zod schema run through `checkAgainstSchema`, accepting all three refusals. **Replace** the field-by-field readers in `src/ArvoOutboxDriver/helpers/check-committed-records.ts` with a zod schema the same way, keeping `malformed_response` for an answer that is no list and `malformed_event` for anything wrong inside it. Verify with both specs.
 
 ## 5. Spans that record the question
 
@@ -30,7 +30,7 @@
 ## 6. The driver
 
 - [ ] 6.1 Add a test fixture, `tests/ArvoOutboxDriver/capacity-outbox.ts`, wrapping `ArvoMemoryOutbox` with a `capacity` answer the test sets and the new `commitEvents` outcome, and move `tests/ArvoOutboxDriver/driver.spec.ts` onto it. Add to the spec: `tryCapacity` / `capacity` given each param, the request reaching the outbox, the answer handed back unchanged, `exhausted` not an error, `unavailable` and `malformed_response`, its own span; each commit asking first, with the request matching the commit; `exhausted` → `capacity_exhausted` with the answer and the commit not called; the question throwing or malformed → that kind for the commit, the commit not called; `tolerating` → committed; the outbox refusing either commit as `capacity_exhausted` → that kind with `capacity` `null`; `commitEvents` answering a malformed outcome → `malformed_response`; the question recorded on the commit's span with no span of its own. Run red.
-- [ ] 6.2 Add `ArvoOutboxDriverCapacityParam` to `src/ArvoOutboxDriver/types.ts`, and `tryCapacity`, `capacity` and `#askCapacity` to `src/ArvoOutboxDriver/index.ts`. Ask before both commits, and check `commitEvents`'s outcome. Update the class and method TSDoc for the new kinds. Export the param from `src/index.ts`. Verify with `driver.spec.ts`, and with `driver.types.spec.ts` still passing.
+- [ ] 6.2 Add `tryCapacity`, `capacity` and `#askCapacity` to `src/ArvoOutboxDriver/index.ts`. Ask before both commits, and check `commitEvents`'s outcome. Update the class and method TSDoc for the new kinds. Export the param from `src/index.ts`. Verify with `driver.spec.ts`, and with `driver.types.spec.ts` still passing.
 
 ## 7. Close out
 

@@ -73,7 +73,15 @@ The param is the commit param itself, so a caller asks with exactly what it woul
 
 The record's `casVersion` is taken with the existing `liftCommitFields`, so a record the commit would reject is rejected here the same way, by `ArvoOutboxDriverValidationError`, before the outbox is called. The event count is `events.length`: the driver removes no duplicates, so it counts none away.
 
-A new helper `build-capacity-request.ts` maps the param to the request, and `check-capacity.ts` checks the answer: a known status overall; `buffers` an object; each buffer given has a known status and, where given, `held`, `size` and `limit` whole numbers zero or more. The statuses are one frozen array checked with `includes`.
+A new helper `build-capacity-request.ts` maps the param to the request, and `check-capacity.ts` checks the answer: a known status overall; `buffers` an object; each buffer given has a known status and, where given, `held`, `size` and `limit` whole numbers zero or more.
+
+### Answers are checked with zod
+
+Every shape check in the driver goes through one helper, `check-against-schema.ts`. It runs a zod schema and turns each zod issue into an `ErrorIssue`, its path under a root such as `capacity` or `records`, with the value found there. That covers `check-capacity.ts`, and `check-commit-outcome.ts` and `check-committed-records.ts` are rewritten onto it. Zod is already a dependency, and project.md, **Dependencies and reuse**, prefers it to hand-written checks. Zod drops unknown keys, so each answer is handed on with only the fields its type names.
+
+The helper takes any `$ZodType` and parses with `safeParse` from `zod/v4/core`, as zod advises library authors. The schemas themselves are built with `zod`, as the rest of the package builds its own: core has no object builder, and its messages need zod's global locale set, which would change the consumer's own zod. Each schema is built inside a function, called once per check, and never held at module level, since a schema is an instance (project.md, **Module-level state**).
+
+*Alternative:* the hand-written field-by-field readers the driver had. Rejected: zod already does this, and two ways of checking a shape in one folder is the two-mechanisms problem.
 
 ### Asking before every commit
 
@@ -114,7 +122,7 @@ The question goes through a private `#askCapacity(request, operationName)` that 
 
 ### Checking commit outcomes
 
-`checkCommitOutcome` accepts all three refusals, checked against one frozen array, and is used for both commits. Whatever refusal the outbox answers becomes the kind.
+`checkCommitOutcome` accepts all three refusals and is used for both commits. Whatever refusal the outbox answers becomes the kind.
 
 ## Risks / Trade-offs
 

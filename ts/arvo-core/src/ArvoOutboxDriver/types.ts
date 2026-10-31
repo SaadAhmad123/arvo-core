@@ -98,6 +98,25 @@ export type ArvoOutboxDriverCommitEventsParam = ArvoOutboxDriverCallParam & {
 };
 
 /**
+ * What to ask the outbox's capacity for: what would be committed with a
+ * record, what would be committed alone, or nothing.
+ *
+ * The driver asks the outbox only with the facts of it: the number of events
+ * and the record's `casVersion`, the number of events alone, or, given
+ * nothing, one event and a state at the first revision. A record must carry
+ * what {@link ArvoOutboxDriverCommitStateAndEventsParam} says it must.
+ *
+ * @example
+ * ```typescript
+ * const param: ArvoOutboxDriverCapacityParam = { events, triggeringEvent };
+ * ```
+ */
+export type ArvoOutboxDriverCapacityParam =
+  | ArvoOutboxDriverCommitStateAndEventsParam
+  | ArvoOutboxDriverCommitEventsParam
+  | ArvoOutboxDriverCallParam;
+
+/**
  * Whether a read restores each stored payload to a live event. On where left
  * out. Turn it off where only the stored payload is needed, such as to hand
  * it to a queue as it is.
