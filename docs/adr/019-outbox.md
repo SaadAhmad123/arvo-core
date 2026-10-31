@@ -140,7 +140,7 @@ commit_events(events)                        → done
 read_committed_events(filter)                → events, as committed
 list_unseen_events(at_most, older_than)      → events, oldest committed first
 mark_events_seen(event_ids)                  → done
-capacity(events, executions)                 → room for that much: per kind, and overall
+capacity(events, state)                      → room for that much: per kind, and overall
 ```
 
 `commit` is one flat object carrying everything both tables need, so the outbox infers nothing:
@@ -202,14 +202,14 @@ commit = {
 
 What an outbox holds can grow without bound. `capacity` gives an outbox a way to signal, to whoever calls it, how much room it has.
 
-18. **`capacity` MUST answer how much room the outbox has for a given amount.** It is asked for a number of events and a number of executions, and nothing else. For each kind it limits, it answers one of three:
+18. **`capacity` MUST answer how much room the outbox has for a given amount.** It is asked for a number of events and, where a state comes with them, that state's `cas_version`, and nothing else. What that amount costs the outbox is its own to work out from how it stores what it holds: one outbox keeps only an execution's latest state, so a later revision replaces one; another keeps every revision, so each adds one. For each kind it limits, it answers one of three:
     - `available` — that much keeps it within what it is meant to hold;
     - `tolerating` — that much takes it past what it is meant to hold, but within the most it should ever hold;
     - `exhausted` — that much takes it past the most it should ever hold.
 
     Overall it answers the worst of these: `exhausted` before `tolerating`, `tolerating` before `available`.
 19. **Asking changes nothing.** `capacity` MUST NOT add, delete or alter anything held, and its answer describes the outbox as it would be with that amount added, not as it is made to be.
-20. **Everything held counts.** Events count whether seen or not. Executions count every execution the outbox keeps, running or finished, once each however many states it has kept for it.
+20. **Everything held counts.** Events count whether seen or not. States count every state the outbox keeps, of executions running or finished, as its own storage keeps them.
 21. **The numbers behind an answer are optional.** An outbox MAY give, for each kind, how much it would hold, what it is meant to hold, and the most it should ever hold. It MAY leave out a kind it does not limit. **An outbox that limits nothing MUST answer `available`, and need give nothing else**, so an outbox that never fills pays nothing for this operation.
 22. **An answer MAY stay steady.** An outbox that has answered `tolerating` for a kind MAY keep answering so until it has drained well below what it is meant to hold, so that its answer does not flip with every event sent.
 23. **Whether a commit enforces it is the implementer's.** An outbox MAY refuse, at commit, an amount it would answer `exhausted` for, by throwing, since it cannot do that work (rule 6). It need not. `capacity` states the outbox's room; it does not oblige the outbox to defend it.
@@ -313,7 +313,9 @@ Considered: an outbox signalling that it is full only by throwing at commit. Rej
 
 ### Asking with the whole commit
 
-Considered: `capacity` taking the commit itself, so the outbox works out what it would add. Rejected because the outbox would then have to tell a new execution from an existing one and an event it holds from one it does not, which is knowledge of commits an implementer should not need. Asked with two numbers, an outbox only adds and compares.
+Considered: `capacity` taking the commit itself, so the outbox works out what it would add. Rejected because the outbox would then have to read a commit's records and events, which is knowledge of commits an implementer should not need. Asked with a number of events and a state's revision, an outbox knows everything its own storage needs and nothing more.
+
+Considered: the caller working out what a commit adds, and asking with plain counts. Rejected because whether a state adds one or replaces one depends on how the outbox stores states, which only the outbox knows. The caller states what the commit carries; the outbox decides what that costs it.
 
 ### A yes or no
 
@@ -379,11 +381,11 @@ interface Outbox
 
   mark_events_seen(event_ids: list of string): nothing
 
-  capacity(request: { events: integer, executions: integer }): {
+  capacity(request: { events: integer, state?: { cas_version: integer } }): {
     status: 'available' | 'tolerating' | 'exhausted',          the worst of the kinds
     kinds: {
       events?:     { status, held?: integer, size?: integer, limit?: integer },
-      executions?: { status, held?: integer, size?: integer, limit?: integer }
+      states?:     { status, held?: integer, size?: integer, limit?: integer }
     }
   }
     held  — how much it would hold with the request added
