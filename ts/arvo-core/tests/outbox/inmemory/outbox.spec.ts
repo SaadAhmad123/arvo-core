@@ -4,6 +4,7 @@ import { buildStateCommit } from '../../../src/outbox/conformance/fixtures/state
 import {
   ArvoMemoryOutbox,
   type ArvoMemoryOutboxOptions,
+  ArvoMemoryOutboxValidationError,
 } from '../../../src/outbox/inmemory/index.js';
 import type { JSONObject } from '../../../src/types.js';
 
@@ -337,7 +338,7 @@ describe('ArvoMemoryOutbox and what it holds', () => {
     /** The fastest of several batches of reads, so a busy machine adds no time. */
     const fastestReadsOfOneDelivery = async (otherEventCount: number) => {
       const outbox = await openMemoryOutbox({
-        maxEvents: otherEventCount + 1,
+        buffers: { events: { size: otherEventCount + 1, tolerance: 0 } },
       });
       outbox.commitEvents({
         events: [
@@ -381,7 +382,9 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
       .some((committedEvent) => committedEvent.id === event.id);
 
   it('drops the event seen longest ago to make room for a commit', async () => {
-    const outbox = await openMemoryOutbox({ maxEvents: 3 });
+    const outbox = await openMemoryOutbox({
+      buffers: { events: { size: 3, tolerance: 0 } },
+    });
     const [firstEvent, secondEvent, thirdEvent] = commitEventsOneByOne(
       outbox,
       3,
@@ -399,7 +402,9 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
   });
 
   it('drops no more seen events than a commit needs room for', async () => {
-    const outbox = await openMemoryOutbox({ maxEvents: 3 });
+    const outbox = await openMemoryOutbox({
+      buffers: { events: { size: 3, tolerance: 0 } },
+    });
     const heldEvents = commitEventsOneByOne(outbox, 3);
     outbox.markEventsSeen(heldEvents.map((event) => event.id));
     outbox.commitEvents({ events: [buildEventRecord()] });
@@ -411,7 +416,9 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
   });
 
   it('throws on a commit with no room where every event held is unseen, having written nothing', async () => {
-    const outbox = await openMemoryOutbox({ maxEvents: 2 });
+    const outbox = await openMemoryOutbox({
+      buffers: { events: { size: 2, tolerance: 0 } },
+    });
     const heldEvents = commitEventsOneByOne(outbox, 2);
     const executionId = crypto.randomUUID();
     expect(() =>
@@ -423,7 +430,7 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
         }),
       ),
     ).toThrow(
-      'ArvoMemoryOutbox cannot commit 1 more event: it holds 2 unseen of the 2 it may hold, and only seen events are dropped to make room. Send what it holds and mark it seen, or build it with a larger maxEvents.',
+      'ArvoMemoryOutbox cannot commit 1 more event: it holds 2 unseen of the 2 it may hold, and only seen events are dropped to make room. Send what it holds and mark it seen, or build it with a larger buffers.events.size.',
     );
     expect(outbox.readLatestState(executionId)).toBeNull();
     expect(outbox.readCommittedEvents({ executionId })).toEqual([]);
@@ -434,7 +441,9 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
   });
 
   it('throws on a commit that needs more room than every seen event frees, dropping none', async () => {
-    const outbox = await openMemoryOutbox({ maxEvents: 3 });
+    const outbox = await openMemoryOutbox({
+      buffers: { events: { size: 3, tolerance: 0 } },
+    });
     const heldEvents = commitEventsOneByOne(outbox, 3);
     outbox.markEventsSeen(heldEvents.slice(0, 1).map((event) => event.id));
     expect(() =>
@@ -450,7 +459,9 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
   });
 
   it('counts an event already held, or repeated in one commit, once', async () => {
-    const outbox = await openMemoryOutbox({ maxEvents: 2 });
+    const outbox = await openMemoryOutbox({
+      buffers: { events: { size: 2, tolerance: 0 } },
+    });
     const [heldEvent] = commitEventsOneByOne(outbox, 1);
     if (!heldEvent) throw new Error('one event was committed');
     const newEvent = buildEventRecord();
@@ -461,7 +472,9 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
   });
 
   it('stores anew an event committed again after it was dropped', async () => {
-    const outbox = await openMemoryOutbox({ maxEvents: 1 });
+    const outbox = await openMemoryOutbox({
+      buffers: { events: { size: 1, tolerance: 0 } },
+    });
     const [droppedEvent] = commitEventsOneByOne(outbox, 1);
     if (!droppedEvent) throw new Error('one event was committed');
     outbox.markEventsSeen([droppedEvent.id]);
@@ -484,15 +497,79 @@ describe('ArvoMemoryOutbox and how many events it holds', () => {
       'it holds 10000 unseen of the 10000 it may hold',
     );
   });
+});
 
-  it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
-    'refuses to be built to hold %s events',
-    (maxEvents) => {
-      expect(() => new ArvoMemoryOutbox({ maxEvents })).toThrow(
-        `ArvoMemoryOutbox cannot be built with maxEvents ${maxEvents}; it must be a whole number greater than zero.`,
-      );
-    },
-  );
+describe('ArvoMemoryOutbox and its options', () => {
+  /** The paths of every issue the options are refused with. */
+  const issuePathsFor = (options: unknown) => {
+    try {
+      // deliberately unchecked, as a caller without types could build it
+      new ArvoMemoryOutbox(JSON.parse(JSON.stringify(options)));
+    } catch (error_) {
+      if (error_ instanceof ArvoMemoryOutboxValidationError) {
+        return error_.issues.map((issue) => issue.path);
+      }
+      throw error_;
+    }
+    throw new Error('the options were not refused');
+  };
+
+  it.each([0, -1, 1.5])('refuses a buffer size of %s', (size) => {
+    expect(
+      issuePathsFor({ buffers: { events: { size, tolerance: 0.2 } } }),
+    ).toEqual(['options.buffers.events.size']);
+  });
+
+  it.each([-0.1, 1.1])('refuses a tolerance of %s', (tolerance) => {
+    expect(
+      issuePathsFor({ buffers: { states: { size: 10, tolerance } } }),
+    ).toEqual(['options.buffers.states.tolerance']);
+  });
+
+  it.each([0, 1])('accepts a tolerance of %s', (tolerance) => {
+    expect(
+      () =>
+        new ArvoMemoryOutbox({ buffers: { events: { size: 10, tolerance } } }),
+    ).not.toThrow();
+  });
+
+  it.each([-1, 1.5])('refuses a retention of %s', (seenEvents) => {
+    expect(issuePathsFor({ retentionMs: { seenEvents } })).toEqual([
+      'options.retentionMs.seenEvents',
+    ]);
+  });
+
+  it('accepts a retention of zero', () => {
+    expect(
+      () => new ArvoMemoryOutbox({ retentionMs: { terminalStates: 0 } }),
+    ).not.toThrow();
+  });
+
+  it('refuses a clock that is not a function', () => {
+    // deliberately not a function, as a caller without types could pass
+    const clock = JSON.parse('"now"');
+    expect(() => new ArvoMemoryOutbox({ clock })).toThrow(
+      ArvoMemoryOutboxValidationError,
+    );
+  });
+
+  it('refuses an option it does not know', () => {
+    expect(issuePathsFor({ maxEvents: 10 })).toEqual(['options']);
+  });
+
+  it('names every problem at once', () => {
+    expect(
+      issuePathsFor({
+        buffers: { events: { size: 0, tolerance: 2 } },
+        retentionMs: { seenEvents: -1, terminalStates: 0.5 },
+      }),
+    ).toEqual([
+      'options.buffers.events.size',
+      'options.buffers.events.tolerance',
+      'options.retentionMs.seenEvents',
+      'options.retentionMs.terminalStates',
+    ]);
+  });
 });
 
 describe('ArvoMemoryOutbox and leases', () => {

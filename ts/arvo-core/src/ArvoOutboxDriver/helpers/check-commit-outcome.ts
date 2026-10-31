@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { ArvoOutboxCommitOutcome } from '../../ArvoOutbox/types/commit.js';
 import type { Result } from '../../types.js';
+import { checkAgainstSchema } from '../../utils/check-against-schema.js';
 import type { ErrorIssue } from '../../utils/error-issue.js';
-import { checkAgainstSchema } from './check-against-schema.js';
 
 /** The shape of a commit's answer, built per check so no schema is shared. */
 const buildCommitOutcomeSchema = () =>

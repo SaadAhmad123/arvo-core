@@ -38,15 +38,19 @@ type ArvoMemoryOutboxBuffer = {
 };
 ```
 
-Defaults live in `helpers/defaults.ts`, as `defaultMaxEvents` does today: both buffers at size 10,000 and tolerance 0.2; seen events kept 5 minutes, terminal states 1 hour. Terminal states are kept longer because deleting one too early lets a repeated delivery start its execution again, while deleting a seen event too early costs nothing: the queue already has it.
+The constructor does one thing with its options: `resolveOptions(checkOptions(options))`. `helpers/check-options.ts` checks them (below); `helpers/resolve-options.ts` takes what was checked, applies every default where one was left out, works out the sweep interval, and answers `ArvoMemoryOutboxResolvedOptions`, with nothing optional, so nothing after it asks whether an option was given. Every default lives in that one file, and `helpers/defaults.ts` is **removed**. The defaults: both buffers at size 10,000 and tolerance 0.2; seen events kept 5 minutes, terminal states 1 hour. Terminal states are kept longer because deleting one too early lets a repeated delivery start its execution again, while deleting a seen event too early costs nothing: the queue already has it.
 
 A buffer given whole replaces the default whole; there is no merging of `size` without `tolerance`.
+
+### Factories
+
+`tryCreateArvoMemoryOutbox` and `createArvoMemoryOutbox`, in `factory.ts`, follow the package's factory pattern (`tryCreateArvoDispatcher`): the constructor holds the logic, `tryCreate` catches only `ArvoMemoryOutboxValidationError` and rethrows anything else, and `create` unwraps `tryCreate`.
 
 ### The options are checked with zod
 
 The constructor checks the whole options object with one zod schema: `clock` a function where given; each buffer's `size` a whole number greater than zero and `tolerance` a number from zero to one; each retention a whole number of milliseconds, zero or more; no unknown key. Every issue is reported at once in a new `ArvoMemoryOutboxValidationError`, in `src/outbox/inmemory/errors.ts`, shaped as every validation error in the package is: a `_tag`, `issues: readonly ErrorIssue[]` frozen, and a message from `buildErrorIssueMessage`. The issues are zod's own, so no message text is written by hand. It **replaces** the `RangeError` the outbox throws today for a bad `maxEvents`, which was a one-off and not the package's standard.
 
-The schema is built inside the constructor and never held at module level (project.md, **Module-level state**). It runs through `checkAgainstSchema`, which **moves** from `src/ArvoOutboxDriver/helpers/` to `src/utils/check-against-schema.ts`, since two modules now use it; the driver's imports follow it.
+The schema is built inside the constructor and never held at module level (project.md, **Module-level state**). It runs through `checkAgainstSchema`, which **moves** from `src/ArvoOutboxDriver/helpers/` to `src/utils/check-against-schema.ts`, since two modules now use it, with `isObjectRecord`, which only it uses; the driver's imports follow both.
 
 *Alternative:* checking each value by hand. Rejected: zod is already a dependency, and the driver already checks its shapes with it.
 

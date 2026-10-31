@@ -3,8 +3,8 @@ import { z } from 'zod';
 import type { ArvoOutboxCommittedEventRecord } from '../../ArvoOutbox/types/event-record.js';
 import { fromNeverthrow } from '../../result.js';
 import type { Result } from '../../types.js';
+import { checkAgainstSchema } from '../../utils/check-against-schema.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
-import { checkAgainstSchema } from './check-against-schema.js';
 
 /** Why a read of events answered wrongly, and every place it did. */
 export type CommittedRecordsFailure = {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { checkAgainstSchema } from '../../../src/ArvoOutboxDriver/helpers/check-against-schema.js';
+import { checkAgainstSchema } from '../../src/utils/check-against-schema.js';
 
 /** A shape with a nested object and a list, to address issues inside. */
 const buildSchema = () =>

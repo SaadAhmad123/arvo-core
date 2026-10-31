@@ -16,13 +16,17 @@ import type {
 import type { JSONObject } from '../../types.js';
 import { refusalFor } from '../helpers/refusal-for.js';
 import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
+import { checkOptions } from './helpers/check-options.js';
 import { copyEventRecord } from './helpers/copy-event-record.js';
-import { defaultMaxEvents } from './helpers/defaults.js';
 import {
   addToIndex,
   type KeyedIndex,
   removeFromIndex,
 } from './helpers/keyed-index.js';
+import {
+  type ArvoMemoryOutboxResolvedOptions,
+  resolveOptions,
+} from './helpers/resolve-options.js';
 import type { ArvoMemoryOutboxOptions } from './types.js';
 
 /** An execution's latest state, with the fields committed beside it. */
@@ -75,7 +79,7 @@ const createMemoryStore = (): MemoryStore => ({
  * frees everything it holds. Every operation answers directly, and nothing
  * it is given or hands back shares memory with what it holds.
  *
- * It keeps each execution's latest state, and at most `options.maxEvents`
+ * It keeps each execution's latest state, and at most `options.buffers.events.size`
  * event records, making room by dropping the events seen longest ago and
  * never an unseen one; where only unseen events are held, a commit throws.
  * Landing times and leases go by `options.clock`; where it goes back, a
@@ -91,25 +95,17 @@ const createMemoryStore = (): MemoryStore => ({
  * ```
  */
 export class ArvoMemoryOutbox implements IArvoOutbox {
-  private readonly clock: () => Date;
-  private readonly maxEvents: number;
+  private readonly options: ArvoMemoryOutboxResolvedOptions;
   private readonly lifecycle = new ArvoOutboxLifecycle<MemoryStore>(
     'ArvoMemoryOutbox',
   );
 
   /**
-   * @param options - How it tells the time and how much it holds. See {@link ArvoMemoryOutboxOptions}.
-   * @throws {RangeError} Where `options.maxEvents` is not a whole number greater than zero.
+   * @param options - How it tells the time, how much it holds, and how long it keeps it. See {@link ArvoMemoryOutboxOptions}.
+   * @throws {ArvoMemoryOutboxValidationError} Where the options break any rule. It names every problem.
    */
   constructor(options: ArvoMemoryOutboxOptions = {}) {
-    const maxEvents = options.maxEvents ?? defaultMaxEvents;
-    if (!Number.isInteger(maxEvents) || maxEvents <= 0) {
-      throw new RangeError(
-        `ArvoMemoryOutbox cannot be built with maxEvents ${maxEvents}; it must be a whole number greater than zero.`,
-      );
-    }
-    this.maxEvents = maxEvents;
-    this.clock = options.clock ?? (() => new Date());
+    this.options = resolveOptions(checkOptions(options));
   }
 
   /**
@@ -254,11 +250,11 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   private countEventsToDrop(store: MemoryStore, newEventCount: number): number {
     const droppedEventCount = Math.max(
       0,
-      store.eventsById.size + newEventCount - this.maxEvents,
+      store.eventsById.size + newEventCount - this.options.buffers.events.size,
     );
     if (droppedEventCount > store.seenEventsById.size) {
       throw new Error(
-        `ArvoMemoryOutbox cannot commit ${newEventCount} more ${newEventCount === 1 ? 'event' : 'events'}: it holds ${store.unseenEventsById.size} unseen of the ${this.maxEvents} it may hold, and only seen events are dropped to make room. Send what it holds and mark it seen, or build it with a larger maxEvents.`,
+        `ArvoMemoryOutbox cannot commit ${newEventCount} more ${newEventCount === 1 ? 'event' : 'events'}: it holds ${store.unseenEventsById.size} unseen of the ${this.options.buffers.events.size} it may hold, and only seen events are dropped to make room. Send what it holds and mark it seen, or build it with a larger buffers.events.size.`,
       );
     }
     return droppedEventCount;
@@ -287,7 +283,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
 
   /** The clock's time, refusing one that is no time at all. */
   private readClockMs(): number {
-    const clockTime = this.clock();
+    const clockTime = this.options.clock();
     const clockMs = clockTime.getTime();
     if (Number.isNaN(clockMs)) {
       throw new RangeError(

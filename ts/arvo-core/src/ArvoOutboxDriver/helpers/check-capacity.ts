@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { ArvoOutboxCapacity } from '../../ArvoOutbox/types/capacity.js';
 import type { Result } from '../../types.js';
+import { checkAgainstSchema } from '../../utils/check-against-schema.js';
 import type { ErrorIssue } from '../../utils/error-issue.js';
-import { checkAgainstSchema } from './check-against-schema.js';
 
 /** The shape of a capacity answer, built per check so no schema is shared. */
 const buildCapacitySchema = () => {
