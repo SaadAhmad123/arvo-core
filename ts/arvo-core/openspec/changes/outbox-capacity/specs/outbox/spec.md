@@ -35,7 +35,7 @@ A refused commit SHALL be reported as an answer naming the refusal, and SHALL NO
 
 ### Requirement: Events May Be Committed With No State
 
-Events SHALL be committable with no state, as one unit, with no revision compared. Committing them SHALL answer whether they were committed, and SHALL be refused only for lack of room, as `capacity_exhausted`. Each event record so committed SHALL carry no revision.
+Events SHALL be committable with no state, as one unit, with no revision compared. Committing them SHALL answer whether they were committed, and MAY be refused only for lack of room, as `capacity_exhausted`. Each event record so committed SHALL carry no revision.
 
 #### Scenario: Events alone
 

@@ -1,5 +1,11 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type {
+  ArvoOutboxBufferCapacity,
+  ArvoOutboxCapacity,
+  ArvoOutboxCapacityRequest,
+  ArvoOutboxCapacityStatus,
+} from '../../src/ArvoOutbox/types/capacity.js';
+import type {
   ArvoOutboxCommitOutcome,
   ArvoOutboxEventsCommit,
   ArvoOutboxRefusal,
@@ -79,9 +85,9 @@ describe('an event record', () => {
 });
 
 describe('a commit', () => {
-  it('names a refusal of exactly two kinds', () => {
+  it('names a refusal of exactly three kinds', () => {
     expectTypeOf<ArvoOutboxRefusal>().toEqualTypeOf<
-      'state_exists' | 'revision_stale'
+      'state_exists' | 'revision_stale' | 'capacity_exhausted'
     >();
   });
 
@@ -121,6 +127,57 @@ describe('a commit', () => {
 
   it('of events alone carries events and nothing else', () => {
     expectTypeOf<keyof ArvoOutboxEventsCommit>().toEqualTypeOf<'events'>();
+  });
+});
+
+describe('asking how much room an outbox has', () => {
+  it('asks with a number of events, and a state where one comes with them', () => {
+    const withState: ArvoOutboxCapacityRequest = {
+      events: 2,
+      state: { casVersion: 3 },
+    };
+    const eventsAlone: ArvoOutboxCapacityRequest = { events: 1 };
+    // @ts-expect-error no state is left out, never null
+    const nullState: ArvoOutboxCapacityRequest = { events: 1, state: null };
+    expect([withState, eventsAlone, nullState]).toHaveLength(3);
+  });
+
+  it('is answered as one of three statuses', () => {
+    expectTypeOf<ArvoOutboxCapacityStatus>().toEqualTypeOf<
+      'available' | 'tolerating' | 'exhausted'
+    >();
+  });
+
+  it('is answered overall, with no buffers where the outbox limits nothing', () => {
+    const unlimited: ArvoOutboxCapacity = {
+      status: 'available',
+      buffers: {},
+    };
+    expect(unlimited.buffers).toEqual({});
+  });
+
+  it('is answered per buffer, each number optional', () => {
+    const bare: ArvoOutboxBufferCapacity = { status: 'tolerating' };
+    const full: ArvoOutboxBufferCapacity = {
+      status: 'exhausted',
+      held: 12,
+      size: 8,
+      limit: 10,
+    };
+    const answer: ArvoOutboxCapacity = {
+      status: 'exhausted',
+      buffers: { events: full, states: bare },
+    };
+    // @ts-expect-error an outbox holds events and states, and nothing else
+    const unknownBuffer: ArvoOutboxCapacity['buffers'] = { leases: bare };
+    expect([answer, unknownBuffer]).toHaveLength(2);
+  });
+
+  it('cannot be changed once answered', () => {
+    const answer: ArvoOutboxCapacity = { status: 'available', buffers: {} };
+    // @ts-expect-error every field of an answer is read-only
+    answer.status = 'exhausted';
+    expect(answer.buffers).toEqual({});
   });
 });
 

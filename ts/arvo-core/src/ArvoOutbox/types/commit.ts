@@ -49,8 +49,8 @@ export type ArvoOutboxStateCommit = {
 /**
  * Everything one commit of events with no state writes.
  *
- * Nothing is compared, so nothing is refused. Each record's `casVersion` is
- * `null`.
+ * Nothing is compared, so it is refused only for lack of room. Each record's
+ * `casVersion` is `null`.
  *
  * @example
  * ```typescript
@@ -60,24 +60,30 @@ export type ArvoOutboxStateCommit = {
 export type ArvoOutboxEventsCommit = Pick<ArvoOutboxStateCommit, 'events'>;
 
 /**
- * Why a commit was refused. Losing a race is ordinary, so a refusal is
- * returned, never thrown.
+ * Why a commit was refused. Losing a race and having no room are both
+ * ordinary, so a refusal is returned, never thrown.
  *
  * - `state_exists` — the commit claimed the first revision, and a state is
  *   already stored for the execution.
  * - `revision_stale` — the commit's revision does not follow the stored one
  *   by exactly one.
+ * - `capacity_exhausted` — the commit would take the outbox past the most it
+ *   should ever hold. Refusing it is yours to choose; an outbox whose limit
+ *   must never be passed refuses it here, inside the commit.
  *
  * @example
  * ```typescript
  * const refusal: ArvoOutboxRefusal = 'revision_stale';
  * ```
  */
-export type ArvoOutboxRefusal = 'state_exists' | 'revision_stale';
+export type ArvoOutboxRefusal =
+  | 'state_exists'
+  | 'revision_stale'
+  | 'capacity_exhausted';
 
 /**
- * What a commit of a state and its events came to: committed, or refused
- * and why. A refused commit has written nothing.
+ * What a commit came to: committed, or refused and why. A refused commit has
+ * written nothing.
  *
  * @example
  * ```typescript

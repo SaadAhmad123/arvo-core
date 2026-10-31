@@ -144,6 +144,12 @@ export {
 export type { IArvoOutbox } from './ArvoOutbox/interface.js';
 export { ArvoOutboxLifecycle } from './ArvoOutbox/lifecycle.js';
 export type {
+  ArvoOutboxBufferCapacity,
+  ArvoOutboxCapacity,
+  ArvoOutboxCapacityRequest,
+  ArvoOutboxCapacityStatus,
+} from './ArvoOutbox/types/capacity.js';
+export type {
   ArvoOutboxCommitOutcome,
   ArvoOutboxEventsCommit,
   ArvoOutboxRefusal,

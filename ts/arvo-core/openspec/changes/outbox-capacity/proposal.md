@@ -7,7 +7,7 @@ ADR-019 now gives an outbox a seventh operation, `capacity`, and lets a full out
 ## What Changes
 
 - **BREAKING** `IArvoOutbox` gains `capacity(request)`: asked with a number of events and, where a state comes with them, that state's `casVersion`; answers `available`, `tolerating` or `exhausted` overall, and per buffer (`events`, `states`) with optional `held`, `size` and `limit`.
-- **BREAKING** A commit may refuse with `capacity_exhausted`. `commitStateAndEvents` gains it as a third refusal; `commitEvents` now answers a commit outcome, committed or refused as `capacity_exhausted`, where it answered nothing before.
+- **BREAKING** A commit may refuse with `capacity_exhausted`. `commitStateAndEvents` gains it as a third refusal; `commitEvents` now answers the same commit outcome as `commitStateAndEvents`, where it answered nothing before.
 - `ArvoOutboxDriver` gains `tryCapacity` / `capacity`, given what would be committed, or nothing. It passes only the facts to the outbox, checks the answer, and hands it back unchanged.
 - Both driver commits ask the outbox's capacity first. `exhausted` stops the commit as the new kind `capacity_exhausted`, carrying the answer; a failed question fails the commit with that error. Nothing is written either way.
 - `commitEvents` on the driver checks the outbox's new outcome, so it can now report `capacity_exhausted` and `malformed_response`.

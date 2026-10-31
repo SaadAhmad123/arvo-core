@@ -16,7 +16,7 @@ The driver SHALL check every value the outbox returns before handing anything on
 
 #### Scenario: A malformed outcome of events alone
 
-- **WHEN** the outbox answers a commit of events alone with nothing, or with a refusal other than `capacity_exhausted`
+- **WHEN** the outbox answers a commit of events alone with nothing
 - **THEN** the driver reports `malformed_response`
 
 #### Scenario: A malformed capacity answer
@@ -45,7 +45,7 @@ Every failure the driver reports SHALL be one error type carrying a kind, the op
 
 ### Requirement: A Refused Commit Is An Error
 
-Where the outbox refuses a commit, the driver SHALL report its error with the refusal as the kind, and SHALL NOT report the commit as done. A commit of events alone SHALL be refused only as `capacity_exhausted`.
+Where the outbox refuses a commit, the driver SHALL report its error with the refusal as the kind, and SHALL NOT report the commit as done.
 
 #### Scenario: A commit that lost a race
 

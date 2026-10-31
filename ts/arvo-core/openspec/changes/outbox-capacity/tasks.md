@@ -1,9 +1,11 @@
 # Tasks
 
+**No test is run in this change.** Every test is written first, as each task says, but "run red" and "verify with the spec" mean `pnpm typecheck` and `pnpm lint` on the task's files. The tests run, and coverage is judged, in the next change.
+
 ## 1. The outbox interface
 
-- [ ] 1.1 Write `tests/ArvoOutbox/types.types.spec.ts` additions: `ArvoOutboxCapacityRequest` with and without a state; `ArvoOutboxCapacity` with no buffers, one, or both, each number optional; `ArvoOutboxRefusal` accepting `capacity_exhausted`; `ArvoOutboxEventsCommitOutcome` accepting only `capacity_exhausted` as its refusal. Write `tests/ArvoOutbox/interface.types.spec.ts` additions: an outbox with `capacity` is an `IArvoOutbox`, one without is not, and one whose `commitEvents` answers nothing is not. Run red with `pnpm typecheck`.
-- [ ] 1.2 Add `src/ArvoOutbox/types/capacity.ts`; in `src/ArvoOutbox/types/commit.ts` add `capacity_exhausted` to `ArvoOutboxRefusal` and add `ArvoOutboxEventsCommitOutcome`; in `src/ArvoOutbox/interface.ts` add `capacity` and **replace** `commitEvents`'s `void` answer with the outcome, updating the interface's TSDoc and `@example`. Export the new types from `src/index.ts`. Verify with the two type specs (errors elsewhere in `src/outbox/` are expected, see design).
+- [x] 1.1 Write `tests/ArvoOutbox/types.types.spec.ts` additions: `ArvoOutboxCapacityRequest` with and without a state; `ArvoOutboxCapacity` with no buffers, one, or both, each number optional; `ArvoOutboxRefusal` accepting `capacity_exhausted`. Write `tests/ArvoOutbox/interface.types.spec.ts` additions: an outbox with `capacity` is an `IArvoOutbox`, one without is not, and one whose `commitEvents` answers nothing is not. Run red with `pnpm typecheck`.
+- [x] 1.2 Add `src/ArvoOutbox/types/capacity.ts`; in `src/ArvoOutbox/types/commit.ts` add `capacity_exhausted` to `ArvoOutboxRefusal`; in `src/ArvoOutbox/interface.ts` add `capacity` and **replace** `commitEvents`'s `void` answer with `ArvoOutboxCommitOutcome`, updating the interface's TSDoc and `@example`. Export the new types from `src/index.ts`. Verify with the two type specs (errors elsewhere in `src/outbox/` are expected, see design).
 
 ## 2. The driver's error
 
@@ -15,10 +17,10 @@
 - [ ] 3.1 Write `tests/ArvoOutboxDriver/helpers/build-capacity-request.spec.ts`: a commit with a record gives the event count and its `casVersion`; events alone give the count only; nothing gives one event and `casVersion` 0; a record missing a lifted field throws the validation error. Write `tests/ArvoOutboxDriver/helpers/check-capacity.spec.ts`: each well-formed answer accepted as given; an unknown status, overall or per buffer, `buffers` missing or not an object, and a number that is negative, fractional or not a number each answered with an issue naming its path. Run red.
 - [ ] 3.2 Add `src/ArvoOutboxDriver/helpers/build-capacity-request.ts` and `src/ArvoOutboxDriver/helpers/check-capacity.ts`. Verify with both specs at 100% coverage.
 
-## 4. Checking both commit outcomes
+## 4. Checking commit outcomes
 
-- [ ] 4.1 Extend `tests/ArvoOutboxDriver/helpers/check-commit-outcome.spec.ts`: a state commit accepts all three refusals; an events commit accepts `capacity_exhausted` only, and refuses `state_exists`, `revision_stale` and an answer of nothing. Run red.
-- [ ] 4.2 **Replace** `checkCommitOutcome`'s fixed refusals in `src/ArvoOutboxDriver/helpers/check-commit-outcome.ts` with the frozen list it is given. Verify with the spec at 100% coverage.
+- [ ] 4.1 Extend `tests/ArvoOutboxDriver/helpers/check-commit-outcome.spec.ts`: `capacity_exhausted` accepted beside the other two refusals, and an answer of nothing refused. Run red.
+- [ ] 4.2 **Replace** the two fixed refusals in `src/ArvoOutboxDriver/helpers/check-commit-outcome.ts` with one frozen list of all three, named in its issue message. Verify with the spec at 100% coverage.
 
 ## 5. Spans that record the question
 
@@ -32,7 +34,7 @@
 
 ## 7. Close out
 
-- [ ] 7.1 Run `pnpm vitest run --coverage tests/ArvoOutbox tests/ArvoOutboxDriver`, and verify 100% coverage of `src/ArvoOutbox` and `src/ArvoOutboxDriver`. Then `pnpm lint`. Verify `pnpm typecheck` reports errors only under `src/outbox/` and `tests/outbox/`.
+- [ ] 7.1 Run `pnpm lint`, and verify `pnpm typecheck` reports errors only under `src/outbox/` and `tests/outbox/`.
 - [ ] 7.2 Check every new and changed file against `openspec/project.md`: **Documentation in source**, **Naming**, **Module-level state**, and the `try`-prefix rules. Verify with `node_modules/.bin/openspec validate outbox-capacity --strict`.
 
 ## Workflow follow-up

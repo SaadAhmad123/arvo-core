@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { IArvoOutbox } from '../../src/ArvoOutbox/interface.js';
 import type {
+  ArvoOutboxCapacity,
+  ArvoOutboxCapacityRequest,
+} from '../../src/ArvoOutbox/types/capacity.js';
+import type {
   ArvoOutboxCommitOutcome,
   ArvoOutboxEventsCommit,
   ArvoOutboxStateCommit,
@@ -29,7 +33,11 @@ class AsynchronousOutbox implements IArvoOutbox {
   ): Promise<ArvoOutboxCommitOutcome> {
     return { committed: true };
   }
-  async commitEvents(_param: ArvoOutboxEventsCommit): Promise<void> {}
+  async commitEvents(
+    _param: ArvoOutboxEventsCommit,
+  ): Promise<ArvoOutboxCommitOutcome> {
+    return { committed: true };
+  }
   async readCommittedEvents(
     _filter: ArvoOutboxEventsFilter,
   ): Promise<readonly ArvoOutboxCommittedEventRecord[]> {
@@ -41,6 +49,11 @@ class AsynchronousOutbox implements IArvoOutbox {
     return [];
   }
   async markEventsSeen(_eventIds: readonly string[]): Promise<void> {}
+  async capacity(
+    _request: ArvoOutboxCapacityRequest,
+  ): Promise<ArvoOutboxCapacity> {
+    return { status: 'available', buffers: {} };
+  }
   async open(): Promise<void> {}
   async close(): Promise<void> {}
 }
@@ -53,7 +66,9 @@ class SynchronousOutbox implements IArvoOutbox {
   commitStateAndEvents(_param: ArvoOutboxStateCommit): ArvoOutboxCommitOutcome {
     return { committed: false, refusal: 'state_exists' };
   }
-  commitEvents(_param: ArvoOutboxEventsCommit): void {}
+  commitEvents(_param: ArvoOutboxEventsCommit): ArvoOutboxCommitOutcome {
+    return { committed: false, refusal: 'capacity_exhausted' };
+  }
   readCommittedEvents(
     _filter: ArvoOutboxEventsFilter,
   ): readonly ArvoOutboxCommittedEventRecord[] {
@@ -65,6 +80,12 @@ class SynchronousOutbox implements IArvoOutbox {
     return [];
   }
   markEventsSeen(_eventIds: readonly string[]): void {}
+  capacity(_request: ArvoOutboxCapacityRequest): ArvoOutboxCapacity {
+    return {
+      status: 'exhausted',
+      buffers: { events: { status: 'exhausted' } },
+    };
+  }
   open(): void {}
   close(): void {}
 }
@@ -88,12 +109,20 @@ describe('what satisfies the outbox interface', () => {
       ...withoutMarking,
       readLatestState: () => null,
       commitStateAndEvents: () => ({ committed: true as const }),
-      commitEvents: () => undefined,
+      commitEvents: () => ({ committed: true as const }),
+      capacity: () => ({ status: 'available' as const, buffers: {} }),
       readCommittedEvents: () => [],
       listUnseenEvents: () => [],
       open: () => undefined,
       close: () => undefined,
     };
+    expect(outbox).toBeDefined();
+  });
+
+  it('is not an outbox that cannot say how much room it has', () => {
+    const { capacity: _dropped, ...withoutCapacity } = new SynchronousOutbox();
+    // @ts-expect-error an outbox answers how much room it has
+    const outbox: IArvoOutbox = withoutCapacity;
     expect(outbox).toBeDefined();
   });
 
@@ -115,5 +144,13 @@ describe('what satisfies the outbox interface', () => {
       }
     }
     expect(new WrongOutbox()).toBeDefined();
+  });
+
+  it('is not a commit of events alone answering nothing', () => {
+    class SilentOutbox extends SynchronousOutbox {
+      // @ts-expect-error a commit of events alone answers its outcome
+      override commitEvents(_param: ArvoOutboxEventsCommit): void {}
+    }
+    expect(new SilentOutbox()).toBeDefined();
   });
 });

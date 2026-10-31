@@ -51,13 +51,9 @@ In `types/commit.ts`:
 
 ```ts
 type ArvoOutboxRefusal = 'state_exists' | 'revision_stale' | 'capacity_exhausted';
-
-type ArvoOutboxEventsCommitOutcome =
-  | { readonly committed: true }
-  | { readonly committed: false; readonly refusal: 'capacity_exhausted' };
 ```
 
-`IArvoOutbox` gains `capacity(request): PromiseAble<ArvoOutboxCapacity>`, and `commitEvents` now answers `PromiseAble<ArvoOutboxEventsCommitOutcome>`.
+`IArvoOutbox` gains `capacity(request): PromiseAble<ArvoOutboxCapacity>`, and `commitEvents` now answers the same `PromiseAble<ArvoOutboxCommitOutcome>` as `commitStateAndEvents`. One outcome type for both commits: a separate type allowing only `capacity_exhausted` was dropped as more than it is worth.
 
 *Alternative:* `commitEvents` keeping `void` and only throwing for lack of room. Rejected: ADR-019 rule 23 now forbids throwing for it.
 
@@ -118,11 +114,11 @@ The question goes through a private `#askCapacity(request, operationName)` that 
 
 ### Checking commit outcomes
 
-`checkCommitOutcome` takes the refusals it accepts: one frozen array for the commit with a record (all three), and one for events alone (`capacity_exhausted` only). Its issue message names the refusals accepted.
+`checkCommitOutcome` accepts all three refusals, checked against one frozen array, and is used for both commits. Whatever refusal the outbox answers becomes the kind.
 
 ## Risks / Trade-offs
 
-- [The build is red between this change and the next] → Agreed with the developer. The tests for `src/ArvoOutbox` and `src/ArvoOutboxDriver` are run by path, and coverage is judged on those two folders. The next change restores the full suite.
+- [The build is red between this change and the next] → Agreed with the developer. No test is run in this change; each task is checked by `pnpm typecheck` and `pnpm lint`. The next change runs every test and judges coverage.
 - [Every commit now makes two outbox calls] → Accepted by ADR-020. How fast `capacity` answers is the outbox's choice.
 - [A question can be overtaken] → Accepted by ADR-019 rule 24. An outbox that must keep its limit refuses at commit, and the driver reports that as `capacity_exhausted` too.
 - [Breaking `IArvoOutbox` and `commitEvents`] → The package is unreleased on this branch, and every implementer in the repository is fixed by the next change.

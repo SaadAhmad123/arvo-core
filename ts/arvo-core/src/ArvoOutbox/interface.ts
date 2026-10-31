@@ -1,5 +1,9 @@
 import type { JSONObject, PromiseAble } from '../types.js';
 import type {
+  ArvoOutboxCapacity,
+  ArvoOutboxCapacityRequest,
+} from './types/capacity.js';
+import type {
   ArvoOutboxCommitOutcome,
   ArvoOutboxEventsCommit,
   ArvoOutboxStateCommit,
@@ -17,6 +21,9 @@ import type {
  * with it land together or not at all; a stale write is refused, not
  * thrown; and every event is kept exactly as committed, so that after a
  * crash it is resent rather than produced again.
+ *
+ * Your outbox says how much room it has whenever it is asked, and may refuse
+ * a commit it has no room for.
  *
  * Your outbox opens nothing it is given: neither the state nor an event's
  * payload. It stores, compares and finds by the plain fields beside them.
@@ -52,6 +59,10 @@ import type {
  *     // insert each event that is not already stored
  *   }
  *
+ *   async capacity(request: ArvoOutboxCapacityRequest): Promise<ArvoOutboxCapacity> {
+ *     return { status: 'available', buffers: {} }; // limits nothing
+ *   }
+ *
  *   // commitEvents, readCommittedEvents, listUnseenEvents, markEventsSeen,
  *   // open and close
  * }
@@ -75,8 +86,9 @@ export interface IArvoOutbox {
    *
    * Refuse with `state_exists` where `param.casVersion` claims the first
    * revision and a state is already stored, and with `revision_stale` where
-   * it does not follow the stored revision by exactly one; a refused commit
-   * writes nothing. Skip any event whose `id` is already stored, without
+   * it does not follow the stored revision by exactly one. You may refuse
+   * with `capacity_exhausted` where it would take you past the most you
+   * should ever hold. A refused commit writes nothing. Skip any event whose `id` is already stored, without
    * failing. Stamp every event with one `committedAt` from your own clock,
    * and store each as not yet seen.
    *
@@ -91,14 +103,19 @@ export interface IArvoOutbox {
   /**
    * Commits events with no state, together or not at all.
    *
-   * Nothing is compared and nothing refused. Skip any event whose `id` is
-   * already stored, without failing. Stamp every event with one
-   * `committedAt` from your own clock, and store each as not yet seen.
+   * Nothing is compared. You may refuse with `capacity_exhausted` where it
+   * would take you past the most you should ever hold, and refuse for
+   * nothing else. Skip any event whose `id` is already stored, without
+   * failing. Stamp every event with one `committedAt` from your own clock,
+   * and store each as not yet seen. A refused commit writes nothing.
    *
    * @param param - The events. See {@link ArvoOutboxEventsCommit}.
-   * @throws Anything your storage throws.
+   * @returns Whether it committed, or that it was refused for lack of room.
+   * @throws Anything your storage throws, where it could not do the work at all.
    */
-  commitEvents(param: ArvoOutboxEventsCommit): PromiseAble<void>;
+  commitEvents(
+    param: ArvoOutboxEventsCommit,
+  ): PromiseAble<ArvoOutboxCommitOutcome>;
 
   /**
    * The committed events matching every field of the filter, exactly as
@@ -138,6 +155,20 @@ export interface IArvoOutbox {
    * @throws Anything your storage throws.
    */
   markEventsSeen(eventIds: readonly string[]): PromiseAble<void>;
+
+  /**
+   * How much room you would have with `request` added, for each buffer you
+   * limit and overall.
+   *
+   * Change nothing you hold. Your answer may be an estimate, and may stay
+   * `tolerating` until you have drained well below what you are meant to
+   * hold. Answer `available` with no buffers where you limit nothing.
+   *
+   * @param request - How many events, and the revision of any state with them. See {@link ArvoOutboxCapacityRequest}.
+   * @returns How much room you would have. See {@link ArvoOutboxCapacity}.
+   * @throws Anything your storage throws.
+   */
+  capacity(request: ArvoOutboxCapacityRequest): PromiseAble<ArvoOutboxCapacity>;
 
   /**
    * Opens your outbox: acquires what it needs, such as a connection, before
