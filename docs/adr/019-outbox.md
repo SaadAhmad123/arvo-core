@@ -136,7 +136,7 @@ The record inside the state holds events in ADR-007's own shape, and the payload
 ```
 read_latest_state(execution_id)              → record | none
 commit_state_and_events(commit)              → committed | refused(reason)
-commit_events(events)                        → done
+commit_events(events)                        → done | refused(capacity_exhausted)
 read_committed_events(filter)                → events, as committed
 list_unseen_events(at_most, older_than)      → events, oldest committed first
 mark_events_seen(event_ids)                  → done
@@ -174,9 +174,9 @@ commit = {
    - Any other value MUST be exactly the stored `cas_version` plus one. The outbox MUST otherwise refuse with `revision_stale`.
 
    This is ADR-006 obligation 5 and ADR-007 **`cas_version`**, met.
-6. **A refusal is an answer, not a failure.** Losing a race is ordinary, and the outbox MUST report it as a value the caller reads. The outbox MUST throw only where it could not do its work at all.
+6. **A refusal is an answer, not a failure.** Losing a race is ordinary, and so is having no room, and the outbox MUST report either as a value the caller reads. The outbox MUST throw only where it could not do its work at all.
 7. **An outbox MUST NOT alter a record or an event record.** Not on the way in, not on the way out, not later. For the record, unaltered means the same JSON value (rule 3). For an event record's `payload`, it means the same bytes (rule 10).
-8. **Events MAY be committed with no record.** `commit_events` writes event records whose `cas_version` is null. There is nothing to compare, so it never refuses. This is what ADR-006 obligation 3 needs for a fault that carries an event and no record: "publish the event; no execution began, so there is no record to commit and none is invented".
+8. **Events MAY be committed with no record.** `commit_events` writes event records whose `cas_version` is null. There is nothing to compare, so it refuses only for lack of room (rule 23). This is what ADR-006 obligation 3 needs for a fault that carries an event and no record: "publish the event; no execution began, so there is no record to commit and none is invented".
 9. **An event `id` already committed MUST be ignored by the outbox, as part of the same commit.** Both commits treat an event record whose `id` exists as already done: keep what is stored, write nothing for it, and do not fail. Nothing above the outbox checks for duplicates; this rule is the only one.
 
    The outbox owns this because it is the only place it can be done correctly: a check made anywhere above it is a read and then a write, and two callers racing can both pass the read. Only the outbox can decide inside the commit itself.
@@ -208,11 +208,12 @@ What an outbox holds can grow without bound. `capacity` gives an outbox a way to
     - `exhausted` — that much takes it past the most it should ever hold.
 
     Overall it answers the worst of these: `exhausted` before `tolerating`, `tolerating` before `available`.
-19. **Asking changes nothing.** `capacity` MUST NOT add, delete or alter anything held, and its answer describes the outbox as it would be with that amount added, not as it is made to be.
+19. **Asking changes nothing.** `capacity` MUST NOT add, delete or alter anything held, and its answer describes the outbox as it would be with that amount added, not as it is made to be. The answer MAY be an estimate.
 20. **Everything held counts.** Events count whether seen or not. States count every state the outbox keeps, of executions running or finished, as its own storage keeps them.
 21. **The numbers behind an answer are optional.** An outbox MAY give, for each kind, how much it would hold, what it is meant to hold, and the most it should ever hold. It MAY leave out a kind it does not limit. **An outbox that limits nothing MUST answer `available`, and need give nothing else**, so an outbox that never fills pays nothing for this operation.
 22. **An answer MAY stay steady.** An outbox that has answered `tolerating` for a kind MAY keep answering so until it has drained well below what it is meant to hold, so that its answer does not flip with every event sent.
-23. **Whether a commit enforces it is the implementer's.** An outbox MAY refuse, at commit, an amount it would answer `exhausted` for, by throwing, since it cannot do that work (rule 6). It need not. `capacity` states the outbox's room; it does not oblige the outbox to defend it.
+23. **Whether a commit enforces it is the implementer's.** An outbox MAY refuse, at commit, an amount it would answer `exhausted` for, with the refusal `capacity_exhausted`. It MUST NOT throw for it: it could do its work, and had no room (rule 6). It need not refuse. `capacity` states the outbox's room; it does not oblige the outbox to defend it.
+24. **An answer can be overtaken.** Asking and committing are two steps, and other commits may land between them. Commits acting on answers given at the same time can together take an outbox past the most it should ever hold, and an answer that is an estimate can be further off. Nothing held is lost or altered by this. **An outbox whose limit must never be passed MUST refuse what would pass it inside the commit itself** (rule 23), because `capacity` alone cannot keep a limit.
 
 ### Recovery, in order
 
@@ -276,6 +277,7 @@ Step 5 only works if the event records are still there, and only if they are exa
 - **One event appears in two spellings inside one store:** ADR-007's inside the state, CloudEvent inside the payload. Accepted because the two are interchangeable without loss, the state is the handler's and the payload is the queue's, and converting the state's events would amend ADR-007 for a cosmetic gain.
 - **Storage is tied to ADR-003.** A change to the CloudEvent transformation reaches every stored payload. Accepted because ADR-003 changes only by supersession, so the risk is governed rather than drifting.
 - **Every outbox answers `capacity`,** even one that never fills. Accepted because such an outbox answers `available` and nothing more.
+- **`capacity` steers rather than guarantees.** An outbox can hold more than its limit for a while when commits overtake its answers. Accepted because nothing is lost by it, and an outbox that needs its limit kept exactly can refuse at commit.
 
 ## Considered Alternatives
 
@@ -309,7 +311,7 @@ Considered: the caller removing already-committed events before a commit. Reject
 
 ### Refusing a full outbox only at commit
 
-Considered: an outbox signalling that it is full only by throwing at commit. Rejected as the only signal because it is given only once an amount is already being written, and says nothing of how close the outbox is. An outbox MAY still refuse at commit (rule 23); `capacity` lets it signal its room whenever asked.
+Considered: an outbox signalling that it is full only by refusing at commit. Rejected as the only signal because it is given only once an amount is already being written, and says nothing of how close the outbox is. An outbox MAY still refuse at commit (rule 23); `capacity` lets it signal its room whenever asked.
 
 ### Asking with the whole commit
 
@@ -369,9 +371,9 @@ interface Outbox
     subject: string, source: string, version: string, lifecycle: string,
     state: json,
     events: list of EventRecord
-  }): Committed | Refused(reason: 'state_exists' | 'revision_stale')
+  }): Committed | Refused(reason: 'state_exists' | 'revision_stale' | 'capacity_exhausted')
 
-  commit_events(events: list of EventRecord): nothing
+  commit_events(events: list of EventRecord): Committed | Refused(reason: 'capacity_exhausted')
 
   read_committed_events(
     filter: { execution_id } | { triggering_event_id } | { execution_id, triggering_event_id }

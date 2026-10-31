@@ -14,7 +14,7 @@ Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-a
 
 ### What this ADR defines
 
-The **outbox driver**: the one party on Arvo's side that calls an outbox. What it does on the way in — turning what a handler returned into what an outbox stores. What it does on the way out — checking what an outbox returned before anything in Arvo trusts it. How it reports failure, as one error whose kind says why. Where a failure can become a fault, and where it does not. And what it must never decide.
+The **outbox driver**: the one party on Arvo's side that calls an outbox. What it does on the way in — turning what a handler returned into what an outbox stores. What it does on the way out — checking what an outbox returned before anything in Arvo trusts it. How it asks an outbox about its capacity, and asks before every commit. How it reports failure, as one error whose kind says why. Where a failure can become a fault, and where it does not. And what it must never decide.
 
 ### What this ADR deliberately does not define
 
@@ -101,6 +101,22 @@ flowchart LR
     P -- "5. send the string as it is" --> Q
 ```
 
+### Capacity: asking, and asking before every commit
+
+**The driver MUST offer `capacity`, and MUST ask the outbox's `capacity` ([ADR-019](./019-outbox.md), rules 18 to 24) before every commit.**
+
+`capacity` takes what the caller would commit, or nothing, and the driver states to the outbox only the facts of it. It never decides what they cost the outbox, which only the outbox knows:
+
+- **A commit with a record:** the number of its events, and the record's `cas_version`.
+- **A commit of events alone:** the number of its events, and no state.
+- **Nothing:** one event, and one state at the first revision: one new execution with one event.
+
+The driver checks the outbox's answer like every other (**On the way out**), and hands it back unchanged.
+
+**Before each commit, the driver asks the same question of the outbox for that commit.** Where the answer is `exhausted`, the driver does not commit: it reports `capacity_exhausted` and nothing is written. Where it is `available` or `tolerating`, the commit goes ahead. Where the question itself fails, the commit fails with that same error, `unavailable` or `malformed_response`, and nothing is written.
+
+**The check steers; it does not guarantee.** Other commits can land between the driver's question and its commit ([ADR-019](./019-outbox.md), rule 24), so a commit the driver lets through can still take an outbox past its limit, and an outbox can still refuse it at commit with `capacity_exhausted` ([ADR-019](./019-outbox.md), rule 23). The driver reports that refusal as the kind of the same name.
+
 ### One error, whose kind says why
 
 **Every failure the driver reports is one error type, carrying a kind, the operation that failed, and the cause.** The kind is one of:
@@ -109,14 +125,15 @@ flowchart LR
 |---|---|---|
 | `state_exists` | the outbox refused: a record exists and this one claimed to be the first | commit with a record |
 | `revision_stale` | the outbox refused: the stored revision is not the one this record follows | commit with a record |
+| `capacity_exhausted` | the outbox has no room for this commit: its capacity, asked first, answered `exhausted`, or the commit itself refused for lack of room; nothing was written | commit with a record, commit events alone |
 | `unavailable` | the outbox threw: it could not do its work | every operation |
 | `malformed_state` | a state read returned something that is not a JSON object | read latest state |
 | `malformed_event` | an event record's payload will not deserialize into a valid event, or the record lacks a field ADR-019 lists | read committed events, list unseen events |
-| `malformed_response` | any other return of the wrong shape, such as a commit outcome missing its fields | every operation that returns a value |
+| `malformed_response` | any other return of the wrong shape, such as a commit outcome or a capacity answer missing its fields | every operation that returns a value |
 
-**The kinds are deliberately specific.** The driver is Arvo's own, so its error need not be minimal: a kind per thing that can be wrong lets the mechanism, and a person reading a log, see exactly where the outbox went wrong without opening the cause. The three `malformed_*` kinds are kept apart from `unavailable` because they call for different responses: `unavailable` is usually transient and worth trying again later; a malformed return is a defect in the outbox or in what was stored, and trying again will not change it. A later ADR MAY add kinds; none here may be removed or merged.
+**The kinds are deliberately specific.** The driver is Arvo's own, so its error need not be minimal: a kind per thing that can be wrong lets the mechanism, and a person reading a log, see exactly where the outbox went wrong without opening the cause. The three `malformed_*` kinds are kept apart from `unavailable` because they call for different responses: `unavailable` is usually transient and worth trying again later; a malformed return is a defect in the outbox or in what was stored, and trying again will not change it. `capacity_exhausted` is kept apart from both: the outbox did its work and answered, and what it answered is that it has no room. **Where the question before the commit gave it, it carries the outbox's capacity answer**, so whoever reads it can see which kind was exhausted. A later ADR MAY add kinds; none here may be removed or merged.
 
-**A refused commit is a failure on Arvo's side.** ADR-019 has the outbox return a refusal as a value, because for an implementer losing a race is ordinary. On Arvo's side the commit did not commit, and the caller must act, so the driver reports it as the error with the refusal as its kind. The mechanism reads one field to decide what to do. Only the commit with a record can produce the first two kinds.
+**A refused commit is a failure on Arvo's side.** ADR-019 has the outbox return a refusal as a value, because for an implementer losing a race, or having no room, is ordinary. On Arvo's side the commit did not commit, and the caller must act, so the driver reports it as the error with the refusal as its kind. The mechanism reads one field to decide what to do. Only the commit with a record can produce the first two kinds.
 
 ### Failure in the implementation's own idiom
 
@@ -129,8 +146,9 @@ flowchart LR
 | Operation | Runs | When it fails |
 |---|---|---|
 | read latest state | inside the handler, as its state function | the driver's throwing form throws the error, `unavailable` or `malformed_state`; the handler catches it and raises `state_resolution_failed`, retryable, as ADR-006 already has it |
-| commit with a record | after the handler returned | the error, kind `state_exists`, `revision_stale`, `unavailable` or `malformed_response` |
-| commit events alone | when abandoning at the gate | the error, kind `unavailable` |
+| capacity | wherever a caller asks | the error, kind `unavailable` or `malformed_response`; `exhausted` is an answer, not an error |
+| commit with a record | after the handler returned | the error, kind `capacity_exhausted`, `state_exists`, `revision_stale`, `unavailable` or `malformed_response` |
+| commit events alone | when abandoning at the gate | the error, kind `capacity_exhausted`, `unavailable` or `malformed_response` |
 | read committed events | on a repeated delivery | the error, kind `unavailable`, `malformed_response`, or `malformed_event` where restoring is on |
 | list unseen events | the sweeper, outside any delivery | the error, kind `unavailable`, `malformed_response`, or `malformed_event` where restoring is on |
 | mark events seen | the sweeper, outside any delivery | the error, kind `unavailable` |
@@ -152,7 +170,7 @@ flowchart TD
 
 ### Telemetry
 
-**The driver MUST open one span per call, continuing whatever trace it was called under,** so that a slow commit appears beside the handler's span that produced it. The driver is not a layer under ADR-018: it carries no event to a handler, hands on no copy, and so has nothing of that ADR's to do. What its span is called and what it records is API shape.
+**The driver MUST open one span per call, continuing whatever trace it was called under,** so that a slow commit appears beside the handler's span that produced it. `capacity` is a call and opens its own span. The question a commit asks before it writes is part of that commit, and opens none: what was asked and answered is recorded on the commit's span. The driver is not a layer under ADR-018: it carries no event to a handler, hands on no copy, and so has nothing of that ADR's to do. What its span is called and what it records is API shape.
 
 ### What the driver is not
 
@@ -168,6 +186,7 @@ flowchart TD
 - The conversion from an event to what is stored, and back, is written once per implementation, so two mechanisms in one implementation cannot store events differently, and nothing above the driver ever meets a CloudEvent string.
 - A mechanism handles one error type for every outbox operation and reads one field to decide, and that field tells a lost race from an outage from a defect.
 - The fault boundary is exactly where ADR-006 already put it, and nothing new is added to ADR-008's vocabulary.
+- A commit an outbox has no room for is stopped before anything is written, and a caller can ask the same question before it takes on work, of any outbox, in one shape.
 
 ### Paid for
 
@@ -175,6 +194,8 @@ flowchart TD
 - **Every return is checked on every call,** including the payload fields of every event record. Accepted because the cost is small beside a call to the outbox, and the alternative is trusting what was stored.
 - **A refusal reaches Arvo as an error** even though it is ordinary. Accepted because on Arvo's side a commit that did not happen is a failure of the call, and one field tells the mechanism it was a race and not an outage.
 - **A read has two shapes,** with and without the live event. Accepted because the sweeper and recovery genuinely need different things, and one flag is cheaper than two operations.
+- **Every commit asks the outbox a question first.** Accepted because it is what stops a commit an outbox has no room for, and how quickly the outbox answers is its own to decide.
+- **The question can be overtaken** by other commits landing before the driver's own. Accepted because nothing is lost by it, and an outbox that must keep its limit exactly refuses at commit.
 
 ## Considered Alternatives
 
@@ -189,6 +210,14 @@ Considered: the driver building a fault for a failed commit, so that every failu
 ### A refusal as a successful result
 
 Considered: the driver returning a refused commit as a value on its success side, as the outbox does. Rejected because on Arvo's side a value-returning operation's success means the operation did what was asked, and a refused commit did not.
+
+### The driver working out what a commit costs
+
+Considered: the driver counting what a commit adds, a new execution or a later revision, and asking the outbox with plain counts. Rejected because whether a state adds one or replaces one depends on how the outbox stores states, which only the outbox knows. The driver states what the commit carries; the outbox decides what that costs it.
+
+### Reporting an exhausted outbox as `unavailable`
+
+Considered: no new kind, `exhausted` reported as `unavailable` with the answer as its cause. Rejected because the two call for different responses, an outbox that answered it has no room against one that could not answer at all, and one field should tell them apart.
 
 ### Deduplicating in the driver
 
@@ -243,13 +272,16 @@ driver, holding one Outbox
                                                  (event present where restoring is on; a payload
                                                   that will not restore is malformed_event)
   mark_events_seen(event_ids)                 → nothing,     or raises OutboxError
+  capacity(commit?)                           → the outbox's capacity answer, or raises OutboxError
+                                                 (commit: what would be passed to a commit, or nothing)
 
   each offered in the implementation's own failure idiom, both forms where it has two
 
 error OutboxError
-  kind:   'state_exists' | 'revision_stale' | 'unavailable'
+  kind:   'state_exists' | 'revision_stale' | 'capacity_exhausted' | 'unavailable'
         | 'malformed_state' | 'malformed_event' | 'malformed_response'
   method: which operation failed
   cause:  what the outbox threw, or what was wrong with what it returned
+  capacity: the outbox's capacity answer, where kind is 'capacity_exhausted' and the question before the commit gave it
 ```
 
