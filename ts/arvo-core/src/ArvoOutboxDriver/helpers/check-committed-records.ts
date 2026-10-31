@@ -1,9 +1,10 @@
 import { err, ok } from 'neverthrow';
+import { z } from 'zod';
 import type { ArvoOutboxCommittedEventRecord } from '../../ArvoOutbox/types/event-record.js';
 import { fromNeverthrow } from '../../result.js';
 import type { Result } from '../../types.js';
 import { ErrorIssue } from '../../utils/error-issue.js';
-import { isObjectRecord } from './is-object-record.js';
+import { checkAgainstSchema } from './check-against-schema.js';
 
 /** Why a read of events answered wrongly, and every place it did. */
 export type CommittedRecordsFailure = {
@@ -11,73 +12,27 @@ export type CommittedRecordsFailure = {
   readonly issues: readonly ErrorIssue[];
 };
 
-/**
- * One committed event record, every field read with its type, or issues
- * and stand-ins never returned.
- */
-const readCommittedRecord = (
-  candidate: Readonly<Record<string, unknown>>,
-  path: string,
-  issues: ErrorIssue[],
-): ArvoOutboxCommittedEventRecord => {
-  const report = (fieldName: string, rule: string) =>
-    issues.push(
-      new ErrorIssue({
-        path: `${path}.${fieldName}`,
-        message: rule,
-        received: candidate[fieldName],
-      }),
-    );
-  const readText = (fieldName: string): string => {
-    const fieldValue = candidate[fieldName];
-    if (typeof fieldValue === 'string') return fieldValue;
-    report(fieldName, 'must be a string');
-    return '';
-  };
-  const readTextOrNone = (fieldName: string): string | null => {
-    const fieldValue = candidate[fieldName];
-    if (typeof fieldValue === 'string' || fieldValue === null)
-      return fieldValue;
-    report(fieldName, 'must be a string or null');
-    return null;
-  };
-  const readCasVersion = (): number | null => {
-    const fieldValue = candidate.casVersion;
-    if (
-      fieldValue === null ||
-      (typeof fieldValue === 'number' &&
-        Number.isInteger(fieldValue) &&
-        fieldValue >= 0)
-    ) {
-      return fieldValue;
-    }
-    report('casVersion', 'must be a whole number zero or more, or null');
-    return null;
-  };
-  const readSeen = (): boolean => {
-    const fieldValue = candidate.seen;
-    if (typeof fieldValue === 'boolean') return fieldValue;
-    report('seen', 'must be a boolean');
-    return false;
-  };
-  return {
-    id: readText('id'),
-    subject: readText('subject'),
-    executionId: readText('executionId'),
-    casVersion: readCasVersion(),
-    parentId: readTextOrNone('parentId'),
-    initId: readTextOrNone('initId'),
-    triggeringEventId: readText('triggeringEventId'),
-    source: readText('source'),
-    type: readText('type'),
-    to: readTextOrNone('to'),
-    domain: readTextOrNone('domain'),
-    time: readText('time'),
-    payload: readText('payload'),
-    committedAt: readText('committedAt'),
-    seen: readSeen(),
-  };
-};
+/** The shape of every committed event record, built per check so no schema is shared. */
+const buildCommittedRecordsSchema = () =>
+  z.array(
+    z.object({
+      id: z.string(),
+      subject: z.string(),
+      executionId: z.string(),
+      casVersion: z.number().int().nonnegative().nullable(),
+      parentId: z.string().nullable(),
+      initId: z.string().nullable(),
+      triggeringEventId: z.string(),
+      source: z.string(),
+      type: z.string(),
+      to: z.string().nullable(),
+      domain: z.string().nullable(),
+      time: z.string(),
+      payload: z.string(),
+      committedAt: z.string(),
+      seen: z.boolean(),
+    }),
+  );
 
 /**
  * A read of events' answer as committed event records, every field of every
@@ -104,26 +59,15 @@ export const checkCommittedRecords = (
       }),
     );
   }
-  const issues: ErrorIssue[] = [];
-  const committedRecords = answer.map((candidate: unknown, recordPosition) => {
-    const path = `records[${recordPosition}]`;
-    if (isObjectRecord(candidate)) {
-      return readCommittedRecord(candidate, path, issues);
-    }
-    issues.push(
-      new ErrorIssue({
-        path,
-        message: 'must be a committed event record',
-        received: candidate,
-      }),
-    );
-    return null;
-  });
-  // the stand-ins read above are never returned: any issue answers the failure here
-  if (issues.length > 0) {
-    return fromNeverthrow(err({ kind: 'malformed_event', issues }));
-  }
-  return fromNeverthrow(
-    ok(committedRecords.filter((committedRecord) => committedRecord !== null)),
+  const recordsResult = checkAgainstSchema(
+    buildCommittedRecordsSchema(),
+    answer,
+    'records',
   );
+  if (!recordsResult.ok) {
+    return fromNeverthrow(
+      err({ kind: 'malformed_event', issues: recordsResult.error }),
+    );
+  }
+  return fromNeverthrow(ok(recordsResult.value));
 };

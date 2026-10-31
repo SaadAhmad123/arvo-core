@@ -19,8 +19,8 @@
 
 ## 4. Checking commit outcomes and committed records with zod
 
-- [ ] 4.1 Extend `tests/ArvoOutboxDriver/helpers/check-commit-outcome.spec.ts`: `capacity_exhausted` accepted beside the other two refusals, an answer of nothing refused, and each refusal answered with one issue at its path. Keep `tests/ArvoOutboxDriver/helpers/check-committed-records.spec.ts` as it stands. Run red.
-- [ ] 4.2 **Replace** the hand-written check in `src/ArvoOutboxDriver/helpers/check-commit-outcome.ts` with a zod schema run through `checkAgainstSchema`, accepting all three refusals. **Replace** the field-by-field readers in `src/ArvoOutboxDriver/helpers/check-committed-records.ts` with a zod schema the same way, keeping `malformed_response` for an answer that is no list and `malformed_event` for anything wrong inside it. Verify with both specs.
+- [x] 4.1 Extend `tests/ArvoOutboxDriver/helpers/check-commit-outcome.spec.ts`: `capacity_exhausted` accepted beside the other two refusals, an answer of nothing refused, and each refusal answered with one issue at its path. Keep `tests/ArvoOutboxDriver/helpers/check-committed-records.spec.ts` as it stands. Run red.
+- [x] 4.2 **Replace** the hand-written check in `src/ArvoOutboxDriver/helpers/check-commit-outcome.ts` with a zod schema run through `checkAgainstSchema`, accepting all three refusals. **Replace** the field-by-field readers in `src/ArvoOutboxDriver/helpers/check-committed-records.ts` with a zod schema the same way, keeping `malformed_response` for an answer that is no list and `malformed_event` for anything wrong inside it. Verify with both specs.
 
 ## 5. Spans that record the question
 
