@@ -172,6 +172,7 @@ export {
 export { ArvoOutboxDriver } from './ArvoOutboxDriver/index.js';
 export type {
   ArvoOutboxDriverCallParam,
+  ArvoOutboxDriverCapacityParam,
   ArvoOutboxDriverCommitEventsParam,
   ArvoOutboxDriverCommitStateAndEventsParam,
   ArvoOutboxDriverEventEntry,

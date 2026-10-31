@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { IArvoOutbox } from '../../src/ArvoOutbox/interface.js';
+import type { ArvoOutboxCapacity } from '../../src/ArvoOutbox/types/capacity.js';
 import {
   ArvoOutboxDriverError,
   ArvoOutboxDriverValidationError,
@@ -25,9 +26,17 @@ type OutboxCall = {
   readonly argument: unknown;
 };
 
+/** What an outbox that limits nothing answers its capacity with. */
+const unlimitedCapacity: ArvoOutboxCapacity = Object.freeze({
+  status: 'available',
+  buffers: Object.freeze({}),
+});
+
 /**
  * A working in-memory outbox that writes down every call made on it, with
  * some operations replaced where a test needs the outbox to answer wrongly.
+ * Its capacity answers as one that limits nothing, and a commit of events
+ * alone answers committed, until the in-memory outbox does both itself.
  */
 const createRecordingOutbox = (
   replaceOperations: (
@@ -72,7 +81,10 @@ const createRecordingOutbox = (
       recordCall('commitEvents', param, () =>
         (
           replacedOperations.commitEvents ??
-          ((commit) => workingOutbox.commitEvents(commit))
+          ((commit) => {
+            workingOutbox.commitEvents(commit);
+            return { committed: true };
+          })
         )(param),
       ),
     readCommittedEvents: (filter) =>
@@ -95,6 +107,10 @@ const createRecordingOutbox = (
           replacedOperations.markEventsSeen ??
           ((given) => workingOutbox.markEventsSeen(given))
         )(eventIds),
+      ),
+    capacity: (request) =>
+      recordCall('capacity', request, () =>
+        (replacedOperations.capacity ?? (() => unlimitedCapacity))(request),
       ),
   };
   return { outbox, outboxCalls, workingOutbox };
@@ -136,6 +152,22 @@ const buildRecord = (executionId: string, casVersion: number): JSONObject => ({
 /** The delivered event the commit's events answer. */
 const triggeringEvent = buildEvent('execution-0');
 
+/** The argument of the one call the driver made on its outbox for an operation. */
+const argumentOfCall = (
+  outboxCalls: readonly OutboxCall[],
+  operationName: string,
+): unknown =>
+  outboxCalls.find((outboxCall) => outboxCall.operationName === operationName)
+    ?.argument;
+
+/** What an outbox past the most it should ever hold answers. */
+const exhaustedCapacity: ArvoOutboxCapacity = Object.freeze({
+  status: 'exhausted',
+  buffers: Object.freeze({
+    events: Object.freeze({ status: 'exhausted', held: 11, limit: 10 }),
+  }),
+});
+
 const serializer = new ArvoEventSerializer({ type: 'cloudevent' });
 
 describe('ArvoOutboxDriver on the way in', () => {
@@ -149,6 +181,10 @@ describe('ArvoOutboxDriver on the way in', () => {
       triggeringEvent,
     });
     expect(outboxCalls).toEqual([
+      {
+        operationName: 'capacity',
+        argument: { events: 0, state: { casVersion: 0 } },
+      },
       {
         operationName: 'commitStateAndEvents',
         argument: {
@@ -174,8 +210,7 @@ describe('ArvoOutboxDriver on the way in', () => {
       events: [event],
       triggeringEvent,
     });
-    const [commitCall] = outboxCalls;
-    expect(commitCall?.argument).toMatchObject({
+    expect(argumentOfCall(outboxCalls, 'commitStateAndEvents')).toMatchObject({
       events: [
         {
           id: event.id,
@@ -194,7 +229,7 @@ describe('ArvoOutboxDriver on the way in', () => {
       events: [buildEvent('execution-1')],
       triggeringEvent,
     });
-    expect(outboxCalls[0]?.argument).toMatchObject({
+    expect(argumentOfCall(outboxCalls, 'commitEvents')).toMatchObject({
       events: [{ casVersion: null }],
     });
   });
@@ -203,7 +238,7 @@ describe('ArvoOutboxDriver on the way in', () => {
     const { driver, outboxCalls } = await openDriver();
     const event = buildEvent('execution-1');
     await driver.commitEvents({ events: [event, event], triggeringEvent });
-    expect(outboxCalls[0]?.argument).toMatchObject({
+    expect(argumentOfCall(outboxCalls, 'commitEvents')).toMatchObject({
       events: [{ id: event.id }, { id: event.id }],
     });
   });
@@ -313,6 +348,7 @@ describe('ArvoOutboxDriver and what it reports', () => {
     listUnseenEvents: () =>
       driver.tryListUnseenEvents({ atMost: 10, olderThanMs: 0 }),
     markEventsSeen: () => driver.tryMarkEventsSeen({ eventIds: [] }),
+    capacity: () => driver.tryCapacity(),
   });
 
   const operationNames = [
@@ -324,6 +360,7 @@ describe('ArvoOutboxDriver and what it reports', () => {
     'readCommittedEvents',
     'listUnseenEvents',
     'markEventsSeen',
+    'capacity',
   ] as const;
 
   it.each(operationNames)(
@@ -374,7 +411,7 @@ describe('ArvoOutboxDriver and what it reports', () => {
     expect(!stateResult.ok && stateResult.error.kind).toBe('malformed_state');
   });
 
-  it.each(['state_exists', 'revision_stale'] as const)(
+  it.each(['state_exists', 'revision_stale', 'capacity_exhausted'] as const)(
     'reports a commit refused as %s',
     async (refusal) => {
       const { driver } = await openDriver(() => ({
@@ -401,6 +438,28 @@ describe('ArvoOutboxDriver and what it reports', () => {
     expect(
       !repeatedFirstCommitResult.ok && repeatedFirstCommitResult.error.kind,
     ).toBe('state_exists');
+  });
+
+  it('reports a commit of events alone refused for lack of room, with no capacity answer', async () => {
+    const { driver } = await openDriver(() => ({
+      commitEvents: () => ({ committed: false, refusal: 'capacity_exhausted' }),
+    }));
+    const commitResult = await everyOperation(driver).commitEvents();
+    expect(!commitResult.ok && commitResult.error.kind).toBe(
+      'capacity_exhausted',
+    );
+    expect(!commitResult.ok && commitResult.error.capacity).toBeNull();
+  });
+
+  it('reports a commit of events alone answered with nothing as malformed_response', async () => {
+    const { driver } = await openDriver(() => ({
+      // deliberately no outcome, as an outbox written before it had one answers
+      commitEvents: () => JSON.parse('null'),
+    }));
+    const commitResult = await everyOperation(driver).commitEvents();
+    expect(!commitResult.ok && commitResult.error.kind).toBe(
+      'malformed_response',
+    );
   });
 
   it('reports a commit answered with no outcome as malformed_response', async () => {
@@ -517,6 +576,7 @@ describe('ArvoOutboxDriver and what it reports', () => {
         listUnseenEvents: () =>
           driver.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
         markEventsSeen: () => driver.markEventsSeen({ eventIds: [] }),
+        capacity: () => driver.capacity(),
       }[operationName];
       const rejection = await throwingCall().then(
         () => undefined,
@@ -531,7 +591,7 @@ describe('ArvoOutboxDriver and what it reports', () => {
 });
 
 describe('ArvoOutboxDriver and the decisions it leaves alone', () => {
-  it('calls the outbox once per operation, even for a refusal', async () => {
+  it('asks its capacity once and commits once, even for a refusal', async () => {
     const { driver, outboxCalls } = await openDriver(() => ({
       commitStateAndEvents: () => ({
         committed: false,
@@ -544,6 +604,7 @@ describe('ArvoOutboxDriver and the decisions it leaves alone', () => {
       triggeringEvent,
     });
     expect(outboxCalls.map((outboxCall) => outboxCall.operationName)).toEqual([
+      'capacity',
       'commitStateAndEvents',
     ]);
   });
@@ -562,6 +623,190 @@ describe('ArvoOutboxDriver and the decisions it leaves alone', () => {
       'close',
     ]);
   });
+});
+
+describe('ArvoOutboxDriver and capacity', () => {
+  it('asks for a commit with a record with its event count and revision', async () => {
+    const { driver, outboxCalls } = await openDriver();
+    await driver.capacity({
+      state: buildRecord('execution-1', 4),
+      events: [buildEvent('execution-1'), buildEvent('execution-1')],
+      triggeringEvent,
+    });
+    expect(outboxCalls).toEqual([
+      {
+        operationName: 'capacity',
+        argument: { events: 2, state: { casVersion: 4 } },
+      },
+    ]);
+  });
+
+  it('asks for events alone with their count and no state', async () => {
+    const { driver, outboxCalls } = await openDriver();
+    await driver.capacity({
+      events: [buildEvent('execution-1')],
+      triggeringEvent,
+    });
+    expect(argumentOfCall(outboxCalls, 'capacity')).toEqual({ events: 1 });
+  });
+
+  it('asks, given nothing, for one event and a state at the first revision', async () => {
+    const { driver, outboxCalls } = await openDriver();
+    await driver.capacity();
+    expect(argumentOfCall(outboxCalls, 'capacity')).toEqual({
+      events: 1,
+      state: { casVersion: 0 },
+    });
+  });
+
+  it('hands back the answer as given, exhausted included, which is no error', async () => {
+    const { driver } = await openDriver(() => ({
+      capacity: () => exhaustedCapacity,
+    }));
+    expect(await driver.tryCapacity()).toEqual({
+      ok: true,
+      value: exhaustedCapacity,
+    });
+  });
+
+  it('reports an answer of the wrong shape as malformed_response', async () => {
+    const { driver } = await openDriver(() => ({
+      // deliberately a status of no known kind, as an outbox written without types could answer
+      capacity: () => JSON.parse('{ "status": "full", "buffers": {} }'),
+    }));
+    const capacityResult = await driver.tryCapacity();
+    expect(!capacityResult.ok && capacityResult.error.kind).toBe(
+      'malformed_response',
+    );
+    expect(
+      !capacityResult.ok &&
+        capacityResult.error.issues.map((issue) => issue.path),
+    ).toEqual(['capacity.status']);
+  });
+
+  it('throws a validation error for a record missing a field, calling no outbox', async () => {
+    const { driver, outboxCalls } = await openDriver();
+    const { casVersion: _casVersion, ...withoutRevision } = buildRecord(
+      'execution-1',
+      0,
+    );
+    await expect(
+      driver.tryCapacity({
+        state: withoutRevision,
+        events: [],
+        triggeringEvent,
+      }),
+    ).rejects.toThrow(ArvoOutboxDriverValidationError);
+    expect(outboxCalls).toEqual([]);
+  });
+});
+
+describe('ArvoOutboxDriver asking its capacity before each commit', () => {
+  /** Both commits, each of one event, made the way a caller would. */
+  const everyCommit = (driver: ArvoOutboxDriver) => ({
+    commitStateAndEvents: () =>
+      driver.tryCommitStateAndEvents({
+        state: buildRecord('execution-1', 2),
+        events: [buildEvent('execution-1')],
+        triggeringEvent,
+      }),
+    commitEvents: () =>
+      driver.tryCommitEvents({
+        events: [buildEvent('execution-1')],
+        triggeringEvent,
+      }),
+  });
+
+  it.each([
+    ['commitStateAndEvents', { events: 1, state: { casVersion: 2 } }],
+    ['commitEvents', { events: 1 }],
+  ] as const)(
+    'asks before %s for exactly what it commits',
+    async (operationName, capacityRequest) => {
+      const { driver, outboxCalls } = await openDriver(() => ({
+        commitStateAndEvents: () => ({ committed: true }),
+      }));
+      await everyCommit(driver)[operationName]();
+      expect(outboxCalls.map((outboxCall) => outboxCall.operationName)).toEqual(
+        ['capacity', operationName],
+      );
+      expect(argumentOfCall(outboxCalls, 'capacity')).toEqual(capacityRequest);
+    },
+  );
+
+  it.each(['commitStateAndEvents', 'commitEvents'] as const)(
+    'reports %s capacity_exhausted with the answer, and does not commit, where the outbox is exhausted',
+    async (operationName) => {
+      const { driver, outboxCalls } = await openDriver(() => ({
+        capacity: () => exhaustedCapacity,
+      }));
+      const commitResult = await everyCommit(driver)[operationName]();
+      expect(!commitResult.ok && commitResult.error.kind).toBe(
+        'capacity_exhausted',
+      );
+      expect(!commitResult.ok && commitResult.error.operationName).toBe(
+        operationName,
+      );
+      expect(!commitResult.ok && commitResult.error.capacity).toEqual(
+        exhaustedCapacity,
+      );
+      expect(outboxCalls.map((outboxCall) => outboxCall.operationName)).toEqual(
+        ['capacity'],
+      );
+    },
+  );
+
+  it.each(['commitStateAndEvents', 'commitEvents'] as const)(
+    'commits %s where the outbox is tolerating',
+    async (operationName) => {
+      const { driver } = await openDriver(() => ({
+        capacity: () => ({ status: 'tolerating', buffers: {} }),
+        commitStateAndEvents: () => ({ committed: true }),
+      }));
+      expect(await everyCommit(driver)[operationName]()).toEqual({
+        ok: true,
+        value: undefined,
+      });
+    },
+  );
+
+  it.each(['commitStateAndEvents', 'commitEvents'] as const)(
+    'reports %s unavailable, and does not commit, where the question throws',
+    async (operationName) => {
+      const storageFailure = new Error('the database is down');
+      const { driver, outboxCalls } = await openDriver(() => ({
+        capacity: () => {
+          throw storageFailure;
+        },
+      }));
+      const commitResult = await everyCommit(driver)[operationName]();
+      expect(!commitResult.ok && commitResult.error.kind).toBe('unavailable');
+      expect(!commitResult.ok && commitResult.error.operationName).toBe(
+        operationName,
+      );
+      expect(!commitResult.ok && commitResult.error.cause).toBe(storageFailure);
+      expect(outboxCalls.map((outboxCall) => outboxCall.operationName)).toEqual(
+        ['capacity'],
+      );
+    },
+  );
+
+  it.each(['commitStateAndEvents', 'commitEvents'] as const)(
+    'reports %s malformed_response, and does not commit, where the answer is of the wrong shape',
+    async (operationName) => {
+      const { driver, outboxCalls } = await openDriver(() => ({
+        // deliberately no answer, as an outbox written without types could give
+        capacity: () => JSON.parse('null'),
+      }));
+      const commitResult = await everyCommit(driver)[operationName]();
+      expect(!commitResult.ok && commitResult.error.kind).toBe(
+        'malformed_response',
+      );
+      expect(outboxCalls.map((outboxCall) => outboxCall.operationName)).toEqual(
+        ['capacity'],
+      );
+    },
+  );
 });
 
 describe('ArvoOutboxDriver and its spans', () => {
@@ -655,5 +900,61 @@ describe('ArvoOutboxDriver and its spans', () => {
     const { driver } = await openDriver();
     await driver.markEventsSeen({ eventIds: [], telemetry: { tracer } });
     expect(finishedSpans()[0]?.status.code).toBe(1);
+  });
+
+  it('opens a span of its own where capacity is asked on its own', async () => {
+    const { tracer, finishedSpans } = recordingProvider();
+    const { driver } = await openDriver();
+    await driver.capacity({ telemetry: { tracer } });
+    expect(finishedSpans().map((span) => span.name)).toEqual([
+      'arvo.outbox_driver.capacity',
+    ]);
+  });
+
+  it("records the question a commit asks on the commit's span, opening none of its own", async () => {
+    const { tracer, finishedSpans } = recordingProvider();
+    const { driver } = await openDriver();
+    await driver.commitStateAndEvents({
+      state: buildRecord(crypto.randomUUID(), 0),
+      events: [buildEvent('execution-1')],
+      triggeringEvent,
+      telemetry: { tracer },
+    });
+    const [commitSpan, ...otherSpans] = finishedSpans();
+    expect(commitSpan?.name).toBe('arvo.outbox_driver.commitStateAndEvents');
+    expect(otherSpans).toEqual([]);
+    expect(
+      commitSpan?.events.map((spanEvent) => [
+        spanEvent.name,
+        spanEvent.attributes,
+      ]),
+    ).toEqual([
+      [
+        'outbox_driver.capacity',
+        {
+          'capacity.request.events': 1,
+          'capacity.request.cas_version': 0,
+          'capacity.status': 'available',
+        },
+      ],
+    ]);
+  });
+
+  it("records a question that failed on the commit's span, naming the kind", async () => {
+    const { tracer, finishedSpans } = recordingProvider();
+    const { driver } = await openDriver(() => ({
+      capacity: () => {
+        throw new Error('the database is down');
+      },
+    }));
+    await driver.tryCommitEvents({
+      events: [],
+      triggeringEvent,
+      telemetry: { tracer },
+    });
+    expect(finishedSpans()[0]?.events[0]?.attributes).toEqual({
+      'capacity.request.events': 0,
+      'capacity.failure': 'unavailable',
+    });
   });
 });

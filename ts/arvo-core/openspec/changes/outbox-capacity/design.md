@@ -107,7 +107,7 @@ sequenceDiagram
 
 Order inside each commit: lift the fields, ask, then build the event records and commit. Asking before building spends no serialization on a commit that will be stopped.
 
-The question goes through a private `#askCapacity(request, operationName)` that calls `callOutbox` and `checkCapacity` with the commit's operation name, so a failed question is reported as the commit's failure. The standalone `tryCapacity` runs the same method inside its own `runInSpan`.
+The question goes through a private `#tryCapacity(request, operationName)` that calls `callOutbox` and `checkCapacity` with the commit's operation name and opens no span, so a failed question is reported as the commit's failure. The public `tryCapacity` is that method inside its own `runInSpan`, and nothing more. Both commits ask through `#admitCommit`, which records the question on the commit's span with `record-capacity-question.ts`, and commit through `#commit`, which checks the outcome and reports a refusal as its kind.
 
 ### Recording the question on the commit's span
 
