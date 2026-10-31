@@ -9,7 +9,7 @@
 
 ### Requirement: An In-Memory Outbox Holds Two Buffers
 
-The in-memory outbox SHALL hold events, seen or not, and states, each in a buffer with a size and a tolerance set when it is built, and defaults of its own. A buffer's limit SHALL be its size times one plus its tolerance. A size SHALL be a whole number greater than zero, and a tolerance a number from zero to one; building it with any other SHALL throw, naming the value and the rule.
+The in-memory outbox SHALL hold events, seen or not, and states, each in a buffer with a size and a tolerance set when it is built, and defaults of its own. A buffer's limit SHALL be its size times one plus its tolerance. A size SHALL be a whole number greater than zero, and a tolerance a number from zero to one; building it with any other SHALL throw its validation error, carrying every problem in its options at once.
 
 #### Scenario: Built with nothing given
 
@@ -19,12 +19,12 @@ The in-memory outbox SHALL hold events, seen or not, and states, each in a buffe
 #### Scenario: A size that is no size
 
 - **WHEN** the in-memory outbox is built with a buffer size that is zero, negative or fractional
-- **THEN** building it throws, naming the buffer, the size and the rule
+- **THEN** building it throws its validation error, with an issue at that buffer's size
 
 #### Scenario: A tolerance out of range
 
 - **WHEN** the in-memory outbox is built with a tolerance below zero or above one
-- **THEN** building it throws, naming the buffer, the tolerance and the rule
+- **THEN** building it throws its validation error, with an issue at that buffer's tolerance
 
 #### Scenario: No tolerance
 
@@ -138,7 +138,7 @@ The in-memory outbox SHALL delete each state whose lifecycle is `success`, `erro
 
 ### Requirement: An In-Memory Outbox Sweeps On A Timer
 
-The in-memory outbox SHALL sweep on a timer from when it is opened until it is closed, at an interval of the shorter retention divided by ten, and no shorter than one second. The timer SHALL NOT keep the process running. A sweep SHALL do work in proportion to what it deletes. A retention SHALL be a whole number of milliseconds, zero or more; building it with any other SHALL throw, naming the value and the rule.
+The in-memory outbox SHALL sweep on a timer from when it is opened until it is closed, at an interval of the shorter retention divided by ten, and no shorter than one second. The timer SHALL NOT keep the process running. A sweep SHALL do work in proportion to what it deletes. A retention SHALL be a whole number of milliseconds, zero or more; building it with any other SHALL throw its validation error.
 
 #### Scenario: Opened
 
