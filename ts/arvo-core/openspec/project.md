@@ -57,6 +57,8 @@ Rules that follow:
 
 Biome-enforced. Run `pnpm lint` before finishing any change.
 
+**No nested ternary.** A conditional expression never holds another in either branch. Where a value has more than two outcomes, give it a small function with an early `return` per outcome, so each case reads on its own line. Biome's `noNestedTernary` enforces it.
+
 ### Dependencies and reuse
 
 Before writing non-trivial logic, check whether something already in the dependency tree does it — see `package.json` for what is currently there. An existing dependency costs consumers nothing they are not already paying; a new one does.
