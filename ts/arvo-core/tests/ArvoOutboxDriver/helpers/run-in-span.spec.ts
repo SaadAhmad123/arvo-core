@@ -25,6 +25,22 @@ describe('running one driver operation in its span', () => {
     ).toEqual([['arvo.outbox_driver.markEventsSeen', 1]]);
   });
 
+  it('hands the operation the span it opened for it', async () => {
+    const { tracer, finishedSpans } = recordingProvider();
+    await runInSpan({
+      operationName: 'commitEvents',
+      telemetry: { tracer },
+      parentSpan: undefined,
+      run: async (operationSpan) => {
+        operationSpan.addEvent('capacity');
+        return fromNeverthrow(ok(undefined));
+      },
+    });
+    expect(
+      finishedSpans()[0]?.events.map((spanEvent) => spanEvent.name),
+    ).toEqual(['capacity']);
+  });
+
   it('ends the span as an error carrying the message of a failure answered', async () => {
     const { tracer, finishedSpans } = recordingProvider();
     const failure = new ArvoOutboxDriverError({

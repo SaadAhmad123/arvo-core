@@ -20,14 +20,16 @@ const parentContextForSpan = (parentSpan: Span | undefined) =>
 
 /**
  * Runs one driver operation in its own span, a child of the span given, or
- * of whatever span is active where none is: ok where it answers success, an error naming the message where it
- * answers a failure or throws, and ended however it finishes.
+ * of whatever span is active where none is, and handed to the operation so
+ * it can record on it: ok where it answers success, an error naming the
+ * message where it answers a failure or throws, and ended however it
+ * finishes.
  */
 export const runInSpan = async <Answer>(param: {
   readonly operationName: string;
   readonly telemetry: ArvoTelemetryParam | undefined;
   readonly parentSpan: Span | undefined;
-  readonly run: () => AsyncResult<Answer, ArvoOutboxDriverError>;
+  readonly run: (span: Span) => AsyncResult<Answer, ArvoOutboxDriverError>;
 }): AsyncResult<Answer, ArvoOutboxDriverError> => {
   const resolvedTelemetry = resolveTelemetry(param.telemetry);
   const span = resolvedTelemetry.tracer.startSpan(
@@ -41,7 +43,7 @@ export const runInSpan = async <Answer>(param: {
     logger: resolvedTelemetry.logger ?? null,
   });
   try {
-    const operationResult = await param.run();
+    const operationResult = await param.run(span);
     if (operationResult.ok) telemetry.setSpanOk();
     else telemetry.setSpanError(operationResult.error.message);
     return operationResult;

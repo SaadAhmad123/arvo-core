@@ -24,8 +24,8 @@
 
 ## 5. Spans that record the question
 
-- [ ] 5.1 Extend `tests/ArvoOutboxDriver/helpers/run-in-span.spec.ts`: `run` is given the span opened for it. Run red.
-- [ ] 5.2 Change `src/ArvoOutboxDriver/helpers/run-in-span.ts` to pass the span to `run`. Verify with the spec at 100% coverage.
+- [x] 5.1 Extend `tests/ArvoOutboxDriver/helpers/run-in-span.spec.ts`: `run` is given the span opened for it. Run red.
+- [x] 5.2 Change `src/ArvoOutboxDriver/helpers/run-in-span.ts` to pass the span to `run`. Verify with the spec at 100% coverage.
 
 ## 6. The driver
 
