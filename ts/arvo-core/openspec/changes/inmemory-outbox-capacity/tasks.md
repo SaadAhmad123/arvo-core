@@ -9,8 +9,8 @@
 
 ## 2. Capacity
 
-- [ ] 2.1 Write `tests/outbox/inmemory/helpers/buffer-capacity.spec.ts`: `available` at or below the size, `tolerating` past it, `exhausted` past the limit, `tolerating` while the steady flag is set, a tolerance of zero never `tolerating`, and `held`, `size` and `limit` in each answer. Add to `outbox.spec.ts`: capacity for a first revision and a later one; the overall status the worst; asking changes nothing; the answer staying `tolerating` until drained to `size × (1 − tolerance)`. Run red.
-- [ ] 2.2 Add `src/outbox/inmemory/helpers/buffer-capacity.ts`, the steady flags to the store, their update after every write, and `capacity` to `src/outbox/inmemory/outbox.ts`. Verify with `pnpm typecheck` and `pnpm lint`.
+- [x] 2.1 Write `tests/outbox/inmemory/helpers/buffer-capacity.spec.ts`: `available` at or below the size, `tolerating` past it, `exhausted` past the limit, `tolerating` while the steady flag is set, a tolerance of zero never `tolerating`, and `held`, `size` and `limit` in each answer. Add to `outbox.spec.ts`: capacity for a first revision and a later one; the overall status the worst; asking changes nothing; `tolerating` once past the size; a closed outbox throwing. Run red.
+- [x] 2.2 Add `src/outbox/inmemory/helpers/buffer-capacity.ts`, the steady flags to the store, their update after every write, and `capacity` to `src/outbox/inmemory/outbox.ts`. Verify with `pnpm typecheck` and `pnpm lint`.
 
 ## 3. Refusing at commit
 
@@ -19,7 +19,7 @@
 
 ## 4. Retention and the sweep
 
-- [ ] 4.1 Add to `outbox.spec.ts`, with time from `options.clock` and ticks fired by Vitest's fake timers: a seen event deleted once past its retention, a more recent one kept, an unseen one never; a deleted event committed again stored as unseen; a terminal state deleted once past its retention, its events kept; a `waiting` state never; retention counted from the last commit; the interval from the shorter retention with a floor of one second; no sweep once closed; the timer unref'd; a clock failing during a tick deleting nothing, warning once, and the next tick running. Run red.
+- [ ] 4.1 Add to `outbox.spec.ts`, with time from `options.clock` and ticks fired by Vitest's fake timers: a seen event deleted once past its retention, a more recent one kept, an unseen one never; a deleted event committed again stored as unseen; a terminal state deleted once past its retention, its events kept; a `waiting` state never; a buffer that was past its size answering `tolerating` until the sweep drains it to `size × (1 − tolerance)`, then `available`; retention counted from the last commit; the interval from the shorter retention with a floor of one second; no sweep once closed; the timer unref'd; a clock failing during a tick deleting nothing, warning once, and the next tick running. Run red.
 - [ ] 4.2 Add `seenAtMs` to `StoredEvent`, `terminalStatesByExecution` to the store, the frozen list of terminal lifecycles, the sweep, and the timer started in `open` and cleared in `close`, in `src/outbox/inmemory/outbox.ts`. Verify with `pnpm typecheck` and `pnpm lint`.
 
 ## 5. Close out

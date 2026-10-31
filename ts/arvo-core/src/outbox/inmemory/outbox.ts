@@ -1,6 +1,11 @@
 import type { IArvoOutbox } from '../../ArvoOutbox/interface.js';
 import { ArvoOutboxLifecycle } from '../../ArvoOutbox/lifecycle.js';
 import type {
+  ArvoOutboxCapacity,
+  ArvoOutboxCapacityRequest,
+  ArvoOutboxCapacityStatus,
+} from '../../ArvoOutbox/types/capacity.js';
+import type {
   ArvoOutboxCommitOutcome,
   ArvoOutboxEventsCommit,
   ArvoOutboxStateCommit,
@@ -16,6 +21,7 @@ import type {
 import type { JSONObject } from '../../types.js';
 import { refusalFor } from '../helpers/refusal-for.js';
 import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
+import { bufferCapacity, isDrained } from './helpers/buffer-capacity.js';
 import { checkOptions } from './helpers/check-options.js';
 import { copyEventRecord } from './helpers/copy-event-record.js';
 import {
@@ -56,6 +62,8 @@ type MemoryStore = {
   // insertion order is the order seen, so the front is what is dropped first
   readonly seenEventsById: Map<string, StoredEvent>;
   latestLandedAtMs: number;
+  /** Whether each buffer has held more than its size and not yet drained. */
+  readonly tolerating: { events: boolean; states: boolean };
 };
 
 /** An empty store. */
@@ -67,7 +75,22 @@ const createMemoryStore = (): MemoryStore => ({
   unseenEventsById: new Map(),
   seenEventsById: new Map(),
   latestLandedAtMs: Number.NEGATIVE_INFINITY,
+  tolerating: { events: false, states: false },
 });
+
+/** Every capacity status, worst last. */
+const CAPACITY_STATUSES_BY_SEVERITY: readonly ArvoOutboxCapacityStatus[] =
+  Object.freeze(['available', 'tolerating', 'exhausted']);
+
+/** The worse of two statuses. */
+const worseStatus = (
+  firstStatus: ArvoOutboxCapacityStatus,
+  secondStatus: ArvoOutboxCapacityStatus,
+): ArvoOutboxCapacityStatus =>
+  CAPACITY_STATUSES_BY_SEVERITY.indexOf(firstStatus) >=
+  CAPACITY_STATUSES_BY_SEVERITY.indexOf(secondStatus)
+    ? firstStatus
+    : secondStatus;
 
 /**
  * An outbox that holds everything in process memory, and loses all of it
@@ -161,6 +184,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
       state,
     });
     this.storeEvents(store, newEventRecords, landing);
+    this.updateTolerating(store);
     return { committed: true };
   }
 
@@ -174,6 +198,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
     const landing = this.stampLanding(store);
     this.dropSeenEvents(store, droppedEventCount);
     this.storeEvents(store, newEventRecords, landing);
+    this.updateTolerating(store);
   }
 
   readCommittedEvents(
@@ -230,6 +255,40 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
       store.unseenEventsById.delete(eventId);
       store.seenEventsById.set(eventId, storedEvent);
     }
+  }
+
+  capacity(request: ArvoOutboxCapacityRequest): ArvoOutboxCapacity {
+    const store = this.lifecycle.resourcesFor('capacity');
+    const events = bufferCapacity({
+      held: store.eventsById.size + request.events,
+      buffer: this.options.buffers.events,
+      tolerating: store.tolerating.events,
+    });
+    const states = bufferCapacity({
+      held:
+        store.latestStateByExecution.size +
+        (request.state?.casVersion === 0 ? 1 : 0),
+      buffer: this.options.buffers.states,
+      tolerating: store.tolerating.states,
+    });
+    return {
+      status: worseStatus(events.status, states.status),
+      buffers: { events, states },
+    };
+  }
+
+  /**
+   * Sets each buffer's steady flag where it holds more than its size, and
+   * clears it once drained. Called after everything that changes what is held.
+   */
+  private updateTolerating(store: MemoryStore): void {
+    const eventsHeld = store.eventsById.size;
+    const statesHeld = store.latestStateByExecution.size;
+    const { events, states } = this.options.buffers;
+    if (eventsHeld > events.size) store.tolerating.events = true;
+    else if (isDrained(eventsHeld, events)) store.tolerating.events = false;
+    if (statesHeld > states.size) store.tolerating.states = true;
+    else if (isDrained(statesHeld, states)) store.tolerating.states = false;
   }
 
   /** Copies of the records not already held, each identifier once. */

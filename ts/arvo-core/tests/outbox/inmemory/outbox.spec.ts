@@ -572,6 +572,94 @@ describe('ArvoMemoryOutbox and its options', () => {
   });
 });
 
+describe('ArvoMemoryOutbox and its capacity', () => {
+  /** An outbox meant to hold ten events and ten states, and at most twelve of each. */
+  const openSmallOutbox = () =>
+    openMemoryOutbox({
+      buffers: {
+        events: { size: 10, tolerance: 0.2 },
+        states: { size: 10, tolerance: 0.2 },
+      },
+    });
+
+  /** Commits a first revision of a new execution, with some events. */
+  const commitNewExecution = (outbox: ArvoMemoryOutbox, eventCount: number) => {
+    const executionId = crypto.randomUUID();
+    outbox.commitStateAndEvents(
+      buildStateCommit({
+        executionId,
+        casVersion: 0,
+        events: Array.from({ length: eventCount }, () =>
+          buildEventRecord({ executionId }),
+        ),
+      }),
+    );
+    return executionId;
+  };
+
+  it('answers what each buffer would hold with a new execution added', async () => {
+    const outbox = await openSmallOutbox();
+    commitNewExecution(outbox, 3);
+    expect(outbox.capacity({ events: 2, state: { casVersion: 0 } })).toEqual({
+      status: 'available',
+      buffers: {
+        events: { status: 'available', held: 5, size: 10, limit: 12 },
+        states: { status: 'available', held: 2, size: 10, limit: 12 },
+      },
+    });
+  });
+
+  it('counts no more states for a later revision, which replaces the one stored', async () => {
+    const outbox = await openSmallOutbox();
+    commitNewExecution(outbox, 0);
+    expect(
+      outbox.capacity({ events: 0, state: { casVersion: 1 } }).buffers.states
+        ?.held,
+    ).toBe(1);
+  });
+
+  it('counts no state for events alone', async () => {
+    const outbox = await openSmallOutbox();
+    expect(outbox.capacity({ events: 1 }).buffers.states?.held).toBe(0);
+  });
+
+  it('answers the worst of its buffers overall', async () => {
+    const outbox = await openSmallOutbox();
+    commitNewExecution(outbox, 11);
+    expect(outbox.capacity({ events: 2 })).toMatchObject({
+      status: 'exhausted',
+      buffers: {
+        events: { status: 'exhausted' },
+        states: { status: 'available' },
+      },
+    });
+  });
+
+  it('changes nothing it holds when asked', async () => {
+    const outbox = await openSmallOutbox();
+    const executionId = commitNewExecution(outbox, 1);
+    outbox.capacity({ events: 100, state: { casVersion: 0 } });
+    expect(outbox.capacity({ events: 0 }).buffers.events?.held).toBe(1);
+    expect(outbox.readLatestState(executionId)).not.toBeNull();
+  });
+
+  it('answers tolerating once it holds more than its size', async () => {
+    const outbox = await openSmallOutbox();
+    outbox.commitEvents({
+      events: Array.from({ length: 11 }, () => buildEventRecord()),
+    });
+    expect(outbox.capacity({ events: 0 }).buffers.events?.status).toBe(
+      'tolerating',
+    );
+  });
+
+  it('throws once closed', async () => {
+    const outbox = await openSmallOutbox();
+    await outbox.close();
+    expect(() => outbox.capacity({ events: 0 })).toThrow('closed');
+  });
+});
+
 describe('ArvoMemoryOutbox and leases', () => {
   /** An outbox on a settable clock, opened, holding two unseen events. */
   const outboxWithTwoUnseenEvents = async () => {
