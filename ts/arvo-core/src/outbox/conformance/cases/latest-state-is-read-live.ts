@@ -1,10 +1,11 @@
 import { expect } from 'vitest';
 import { buildStateCommit } from '../fixtures/state-commit.js';
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 
 /** The latest state is read from what is stored, on every call. */
 export const latestStateIsReadLiveCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     {
       name: 'returns no state for an execution never committed',
       check: async (outbox) => {
@@ -56,4 +57,4 @@ export const latestStateIsReadLiveCases: readonly ArvoOutboxConformanceCase[] =
         });
       },
     },
-  ];
+  ]);

@@ -23,13 +23,14 @@ export type ArvoResolvedEntry = {
 };
 
 /** What an event of each kind states itself to be. */
-const CATEGORY_BY_ENTRY: Record<ArvoEntryKind, string> = {
-  init: ARVO_CATEGORY_INIT,
-  followup: ARVO_CATEGORY_COMPLETE,
-};
+const CATEGORY_BY_ENTRY: Readonly<Record<ArvoEntryKind, string>> =
+  Object.freeze({
+    init: ARVO_CATEGORY_INIT,
+    followup: ARVO_CATEGORY_COMPLETE,
+  });
 
 /** Every category that carries a meaning, so an unknown one is ignorable. */
-const RESERVED_CATEGORIES: ReadonlySet<string> = new Set([
+const RESERVED_CATEGORIES: readonly string[] = Object.freeze([
   ARVO_CATEGORY_INIT,
   ARVO_CATEGORY_COMPLETE,
 ]);
@@ -55,7 +56,7 @@ export const refuseMiscategorised = (
   event: ArvoEvent,
 ): ArvoGateRefusal | null => {
   const statedCategory = event.category;
-  if (statedCategory === null || !RESERVED_CATEGORIES.has(statedCategory))
+  if (statedCategory === null || !RESERVED_CATEGORIES.includes(statedCategory))
     return null;
 
   const expectedCategory = CATEGORY_BY_ENTRY[resolvedEntry.entry];

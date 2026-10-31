@@ -1,10 +1,11 @@
 import { expect } from 'vitest';
 import { buildStateCommit } from '../fixtures/state-commit.js';
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 
 /** The first revision is committed only where nothing is stored. */
 export const firstRevisionNeedsNothingStoredCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     {
       name: 'commits the first state of an execution',
       check: async (outbox) => {
@@ -32,4 +33,4 @@ export const firstRevisionNeedsNothingStoredCases: readonly ArvoOutboxConformanc
         ).toEqual({ committed: false, refusal: 'state_exists' });
       },
     },
-  ];
+  ]);

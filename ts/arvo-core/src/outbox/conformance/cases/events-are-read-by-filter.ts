@@ -2,11 +2,12 @@ import { expect } from 'vitest';
 import { sortedEventIds } from '../fixtures/event-ids.js';
 import { buildEventRecord } from '../fixtures/event-record.js';
 import { withoutOutboxFields } from '../fixtures/without-outbox-fields.js';
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 
 /** Committed events are read by execution, by delivery, or by both. */
 export const eventsAreReadByFilterCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     {
       name: "reads exactly one delivery's events, as committed",
       check: async (outbox) => {
@@ -109,4 +110,4 @@ export const eventsAreReadByFilterCases: readonly ArvoOutboxConformanceCase[] =
         ).toEqual([]);
       },
     },
-  ];
+  ]);

@@ -2,6 +2,7 @@ import { expect } from 'vitest';
 import type { IArvoOutbox } from '../../../ArvoOutbox/interface.js';
 import { buildEventRecord } from '../fixtures/event-record.js';
 import { buildStateCommit } from '../fixtures/state-commit.js';
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 
 /** Commits one state with events, and the same number of events alone. */
@@ -41,7 +42,7 @@ const commitBothWays = async (outbox: IArvoOutbox, executionId: string) => {
 
 /** Each commit is stamped once, by the outbox's clock, and stored unseen. */
 export const commitIsStampedWhenLandedCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     {
       name: 'stamps every committed event with an instant and stores it unseen',
       check: async (outbox) => {
@@ -72,4 +73,4 @@ export const commitIsStampedWhenLandedCases: readonly ArvoOutboxConformanceCase[
         }
       },
     },
-  ];
+  ]);

@@ -1,10 +1,11 @@
 import { expect } from 'vitest';
 import { buildStateCommit } from '../fixtures/state-commit.js';
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 
 /** A state comes back as the same JSON value it was committed as. */
 export const stateIsReturnedUnchangedCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     {
       name: 'returns a state with nested values exactly as committed',
       check: async (outbox) => {
@@ -33,4 +34,4 @@ export const stateIsReturnedUnchangedCases: readonly ArvoOutboxConformanceCase[]
         expect(await outbox.readLatestState(executionId)).toStrictEqual(state);
       },
     },
-  ];
+  ]);

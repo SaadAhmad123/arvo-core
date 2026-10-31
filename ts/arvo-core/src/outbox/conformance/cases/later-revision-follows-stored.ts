@@ -1,10 +1,11 @@
 import { expect } from 'vitest';
 import { buildStateCommit } from '../fixtures/state-commit.js';
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 
 /** Every later revision follows the stored one by exactly one. */
 export const laterRevisionFollowsStoredCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     {
       name: 'commits the revision that follows the stored one',
       check: async (outbox) => {
@@ -63,4 +64,4 @@ export const laterRevisionFollowsStoredCases: readonly ArvoOutboxConformanceCase
         ).toEqual({ committed: false, refusal: 'revision_stale' });
       },
     },
-  ];
+  ]);

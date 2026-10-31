@@ -1,3 +1,4 @@
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 import { commitIsStampedWhenLandedCases } from './commit-is-stamped-when-landed.js';
 import { commitLandsWholeCases } from './commit-lands-whole.js';
@@ -40,7 +41,7 @@ import { unseenEventsAreListedOldestFirstCases } from './unseen-events-are-liste
  * ```
  */
 export const arvoOutboxConformanceCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     ...latestStateIsReadLiveCases,
     ...stateIsReturnedUnchangedCases,
     ...nothingIsReadOffTheStateCases,
@@ -57,4 +58,4 @@ export const arvoOutboxConformanceCases: readonly ArvoOutboxConformanceCase[] =
     ...listingWithALeaseCases,
     ...markingSeenIsFinalCases,
     ...outboxIsOpenedAndClosedCases,
-  ];
+  ]);

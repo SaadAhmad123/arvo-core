@@ -26,12 +26,12 @@ const JSON_SCHEMA_TARGET = 'draft-2020-12' as const;
  * dialect's "unknown". A caller may set `'throw'` to refuse the conversion
  * instead; neither choice affects whether losses are reported.
  */
-const CHOSEN_OPTIONS = {
+const CHOSEN_OPTIONS = Object.freeze({
   io: 'input',
   cycles: 'ref',
   reused: 'inline',
   unrepresentable: 'any',
-} as const satisfies ArvoContractSerializeOptions;
+} as const satisfies ArvoContractSerializeOptions);
 
 /**
  * Zod types that carry no constraint by intent rather than by loss.
@@ -40,7 +40,10 @@ const CHOSEN_OPTIONS = {
  * inexpressible construct does, but nothing was lost: the author asked for
  * no constraint and got none.
  */
-const DELIBERATELY_UNCONSTRAINED = new Set(['unknown', 'any']);
+const DELIBERATELY_UNCONSTRAINED: readonly string[] = Object.freeze([
+  'unknown',
+  'any',
+]);
 
 /**
  * Records a construct that did not survive the conversion.
@@ -62,7 +65,7 @@ const recordLoss = (
 ): void => {
   if (Object.keys(ctx.jsonSchema).length > 0) return;
   const type = ctx.zodSchema._zod.def.type;
-  if (DELIBERATELY_UNCONSTRAINED.has(type)) return;
+  if (DELIBERATELY_UNCONSTRAINED.includes(type)) return;
   const path = [position, ...ctx.path].join('.');
   if (warnings.some((issue) => issue.path === path)) return;
   warnings.push(

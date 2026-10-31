@@ -1,11 +1,12 @@
 import { expect } from 'vitest';
 import { buildEventRecord } from '../fixtures/event-record.js';
 import { buildStateCommit } from '../fixtures/state-commit.js';
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 
 /** An event whose identifier is already committed is skipped, never failed. */
 export const committedEventIsIgnoredCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     {
       name: 'skips an event already committed when committing a state',
       check: async (outbox) => {
@@ -89,4 +90,4 @@ export const committedEventIsIgnoredCases: readonly ArvoOutboxConformanceCase[] 
         ).toEqual([event.id]);
       },
     },
-  ];
+  ]);

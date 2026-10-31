@@ -25,7 +25,7 @@ import { demotedCheck, droppedConstraint } from './warnings.js';
  * costs a warning that should have been raised; it never changes what a
  * contract declares as its input.
  */
-const CONSTRAINT_KEYWORDS = new Set([
+const CONSTRAINT_KEYWORDS: readonly string[] = Object.freeze([
   'type',
   'enum',
   'const',
@@ -68,7 +68,7 @@ const collectConstraints = (
     return constraints;
   }
   for (const [key, child] of Object.entries(node)) {
-    if (CONSTRAINT_KEYWORDS.has(key)) {
+    if (CONSTRAINT_KEYWORDS.includes(key)) {
       constraints.set(`${path}.${key}`, JSON.stringify(child));
     } else {
       collectConstraints(child, `${path}.${key}`, constraints);

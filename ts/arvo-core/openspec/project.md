@@ -81,10 +81,10 @@ When bespoke wins, `design.md` records why, so the next person does not re-litig
 
 So, at module level:
 
-- **Not allowed:** an instance of a class, such as a serializer built once and shared; a mutable container — a `Set`, a `Map`, an array or a plain object, typed `Readonly` or not; and any `let`.
-- **Allowed:** a primitive constant, such as a default or a name; a regular expression without the `g` or `y` flag, since with either it remembers where its last match ended; and a function.
+- **Not allowed:** an instance of a class, such as a serializer built once and shared; a `Set` or a `Map`, which freezing does not stop growing; any `let`; and an array or plain object that is not deeply frozen, whatever its type says.
+- **Allowed:** a primitive constant, such as a default or a name; a regular expression without the `g` or `y` flag, since with either it remembers where its last match ended; a function; and an array or object frozen with `Object.freeze`, holding only primitives, functions or other frozen values.
 
-A collaborator is built by the class that needs it, in its constructor, and passed to the helper functions that use it as an argument. A lookup table is a `switch` inside a function, not an object or a `Set` held at file scope.
+A collaborator is built by the class that needs it, in its constructor, and passed to the helper functions that use it as an argument. A fixed list to look a name up in is a frozen array, checked with `includes`.
 
 ### Documentation in source
 

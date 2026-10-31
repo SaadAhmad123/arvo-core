@@ -2,11 +2,12 @@ import { expect } from 'vitest';
 import { sortedEventIds } from '../fixtures/event-ids.js';
 import { buildEventRecord } from '../fixtures/event-record.js';
 import { buildStateCommit } from '../fixtures/state-commit.js';
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 
 /** Events commit with no state, with nothing compared and nothing refused. */
 export const eventsCommitWithoutStateCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     {
       name: 'stores events committed with no state, each with no revision',
       check: async (outbox) => {
@@ -51,4 +52,4 @@ export const eventsCommitWithoutStateCases: readonly ArvoOutboxConformanceCase[]
         ).toEqual({ committed: true });
       },
     },
-  ];
+  ]);

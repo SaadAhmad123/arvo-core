@@ -11,8 +11,7 @@ import type { ArvoOutboxEventRecord } from './event-record.js';
  * `casVersion` is the revision the state claims to be. Compare it, never
  * set it: the revision that marks an execution's first state is committed
  * only where nothing is stored for the execution, and every other revision
- * only where it follows the stored one by exactly one. See
- * `docs/adr/007-execution-record.md` and `docs/adr/019-outbox.md`.
+ * only where it follows the stored one by exactly one.
  *
  * @example
  * ```typescript

@@ -5,6 +5,7 @@ import {
   listEveryUnseenEvent,
   listNothingRecent,
 } from '../fixtures/unseen-param.js';
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 
 /** Commits one event per commit, one commit after another, and returns them. */
@@ -18,7 +19,7 @@ const commitOneAfterAnother = async (outbox: IArvoOutbox) => {
 
 /** Unseen events are listed oldest first, at most so many, old enough. */
 export const unseenEventsAreListedOldestFirstCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     {
       name: 'lists unseen events in the order their commits landed',
       check: async (outbox) => {
@@ -73,4 +74,4 @@ export const unseenEventsAreListedOldestFirstCases: readonly ArvoOutboxConforman
         expect(unseenEvents.map((event) => event.id)).toEqual(unseenEventIds);
       },
     },
-  ];
+  ]);

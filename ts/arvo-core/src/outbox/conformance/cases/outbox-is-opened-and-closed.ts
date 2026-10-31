@@ -2,6 +2,7 @@ import { expect } from 'vitest';
 import type { IArvoOutbox } from '../../../ArvoOutbox/interface.js';
 import { buildEventRecord } from '../fixtures/event-record.js';
 import { buildStateCommit } from '../fixtures/state-commit.js';
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 
 /** Every operation, each called as on a working outbox, answering through a promise. */
@@ -22,7 +23,7 @@ const everyOperation = (outbox: IArvoOutbox) => {
 
 /** An outbox may be opened and closed again, and nothing works once it is closed. */
 export const outboxIsOpenedAndClosedCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     {
       name: 'opens again without failing, and still works',
       check: async (outbox) => {
@@ -55,4 +56,4 @@ export const outboxIsOpenedAndClosedCases: readonly ArvoOutboxConformanceCase[] 
         }
       },
     },
-  ];
+  ]);

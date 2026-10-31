@@ -1,10 +1,11 @@
 import { expect } from 'vitest';
 import { buildEventRecord } from '../fixtures/event-record.js';
+import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
 
 /** An event's payload is kept and returned as the same string, never opened. */
 export const payloadIsKeptByteForByteCases: readonly ArvoOutboxConformanceCase[] =
-  [
+  freezeCases([
     {
       name: 'returns a payload as exactly the string committed',
       check: async (outbox) => {
@@ -29,4 +30,4 @@ export const payloadIsKeptByteForByteCases: readonly ArvoOutboxConformanceCase[]
         expect(committedEvent?.payload).toBe(payload);
       },
     },
-  ];
+  ]);
