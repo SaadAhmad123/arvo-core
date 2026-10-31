@@ -9,8 +9,8 @@
 
 ## 2. The driver's error
 
-- [ ] 2.1 Extend `tests/ArvoOutboxDriver/errors.spec.ts`: kind `capacity_exhausted` with its meaning in the message; `capacity` carried where given and `null` where not. Run red.
-- [ ] 2.2 In `src/ArvoOutboxDriver/errors.ts` add the kind, its meaning, the `capacity` param and field, with TSDoc. Verify with the spec at 100% coverage.
+- [x] 2.1 Extend `tests/ArvoOutboxDriver/errors.spec.ts`: kind `capacity_exhausted` with its meaning in the message; `capacity` carried where given and `null` where not. Run red.
+- [x] 2.2 In `src/ArvoOutboxDriver/errors.ts` add the kind, its meaning, the `capacity` param and field, with TSDoc. Verify with the spec at 100% coverage.
 
 ## 3. The capacity helpers
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ArvoOutboxCapacity } from '../../src/ArvoOutbox/types/capacity.js';
 import {
   ArvoOutboxDriverError,
   type ArvoOutboxDriverErrorKind,
@@ -15,6 +16,10 @@ describe('an outbox driver error', () => {
     [
       'revision_stale',
       'the outbox refused it: the stored revision is not the one this state follows',
+    ],
+    [
+      'capacity_exhausted',
+      'the outbox has no room for it, so nothing was written',
     ],
     ['unavailable', 'the outbox threw, so it could not do its work'],
     [
@@ -40,6 +45,20 @@ describe('an outbox driver error', () => {
     expect(error.kind).toBe(kind);
     expect(error.operationName).toBe('commitStateAndEvents');
     expect(error.issues).toEqual([]);
+    expect(error.capacity).toBeNull();
+  });
+
+  it('carries the capacity answer that stopped a commit', () => {
+    const capacity: ArvoOutboxCapacity = {
+      status: 'exhausted',
+      buffers: { events: { status: 'exhausted', held: 11, limit: 10 } },
+    };
+    const error = new ArvoOutboxDriverError({
+      kind: 'capacity_exhausted',
+      operationName: 'commitEvents',
+      capacity,
+    });
+    expect(error.capacity).toBe(capacity);
   });
 
   it('carries what the outbox threw as its cause, and describes it', () => {
