@@ -19,8 +19,8 @@ Until group 5, "run red" and "verify" mean `pnpm typecheck` and `pnpm lint` on t
 
 ## 4. The conformance kit
 
-- [ ] 4.1 Add to `tests/outbox/inmemory/broken-outboxes.ts` an outbox breaking each capacity check, and bring its existing outboxes up to the interface. Run red.
-- [ ] 4.2 Add `src/outbox/conformance/cases/capacity-is-answered.ts`, register it in `cases/index.ts`, and update any case relying on `commitEvents` answering nothing. Verify with `pnpm typecheck` clean across the package.
+- [x] 4.1 Add to `tests/outbox/inmemory/broken-outboxes.ts` an outbox breaking each capacity check, and bring its existing outboxes up to the interface. Run red.
+- [x] 4.2 Add `src/outbox/conformance/cases/capacity-is-answered.ts`, register it in `cases/index.ts`, and update any case relying on `commitEvents` answering nothing. Verify with `pnpm typecheck` clean across the package.
 
 ## 5. The whole suite
 

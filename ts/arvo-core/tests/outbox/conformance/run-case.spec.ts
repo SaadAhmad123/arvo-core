@@ -17,10 +17,11 @@ const createLoggingOutbox = (failingStep?: 'open' | 'close') => {
     },
     readLatestState: () => null,
     commitStateAndEvents: () => ({ committed: true }),
-    commitEvents: () => undefined,
+    commitEvents: () => ({ committed: true }),
     readCommittedEvents: () => [],
     listUnseenEvents: () => [],
     markEventsSeen: () => undefined,
+    capacity: () => ({ status: 'available', buffers: {} }),
   };
   return { outbox, steps };
 };

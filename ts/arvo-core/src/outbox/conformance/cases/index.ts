@@ -1,5 +1,6 @@
 import { freezeCases } from '../helpers/freeze-cases.js';
 import type { ArvoOutboxConformanceCase } from '../types.js';
+import { capacityIsAnsweredCases } from './capacity-is-answered.js';
 import { commitIsStampedWhenLandedCases } from './commit-is-stamped-when-landed.js';
 import { commitLandsWholeCases } from './commit-lands-whole.js';
 import { committedEventIsIgnoredCases } from './committed-event-is-ignored.js';
@@ -58,4 +59,5 @@ export const arvoOutboxConformanceCases: readonly ArvoOutboxConformanceCase[] =
     ...listingWithALeaseCases,
     ...markingSeenIsFinalCases,
     ...outboxIsOpenedAndClosedCases,
+    ...capacityIsAnsweredCases,
   ]);

@@ -11,7 +11,9 @@ class StubOutbox implements IArvoOutbox {
   commitStateAndEvents() {
     return { committed: true as const };
   }
-  commitEvents() {}
+  commitEvents() {
+    return { committed: true as const };
+  }
   readCommittedEvents() {
     return [];
   }
@@ -19,6 +21,9 @@ class StubOutbox implements IArvoOutbox {
     return [];
   }
   markEventsSeen() {}
+  capacity() {
+    return { status: 'available' as const, buffers: {} };
+  }
   open() {}
   close() {}
 }

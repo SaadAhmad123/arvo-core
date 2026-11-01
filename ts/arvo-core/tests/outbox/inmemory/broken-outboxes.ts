@@ -30,6 +30,7 @@ const breakOutbox =
         workingOutbox.readCommittedEvents(filter),
       listUnseenEvents: (param) => workingOutbox.listUnseenEvents(param),
       markEventsSeen: (eventIds) => workingOutbox.markEventsSeen(eventIds),
+      capacity: (request) => workingOutbox.capacity(request),
       open: () => workingOutbox.open(),
       close: () => workingOutbox.close(),
       ...replaceOperations(workingOutbox),
@@ -294,6 +295,7 @@ export const brokenOutboxByCaseName: Record<string, () => IArvoOutbox> = {
             events: [],
           });
         }
+        return { committed: true };
       },
     }),
   ),
@@ -515,6 +517,45 @@ export const brokenOutboxByCaseName: Record<string, () => IArvoOutbox> = {
           }
         }
         await workingOutbox.markEventsSeen(eventIds);
+      },
+    }),
+  ),
+
+  'answers its capacity with a known status, overall and for each buffer it gives':
+    breakOutbox(() => ({
+      // deliberately a status of no known kind, as an outbox written without types could answer
+      capacity: () => JSON.parse('{ "status": "full", "buffers": {} }'),
+    })),
+
+  'answers its capacity overall as the worst of its buffers, or available where it gives none':
+    breakOutbox(() => ({
+      capacity: () => ({
+        status: 'available',
+        buffers: { events: { status: 'exhausted' } },
+      }),
+    })),
+
+  'changes nothing it holds when asked its capacity': breakOutbox(
+    (workingOutbox) => ({
+      capacity: async (request) => {
+        const unseenEvents = await workingOutbox.listUnseenEvents({
+          atMost: 100,
+          olderThanMs: 0,
+        });
+        await workingOutbox.markEventsSeen(
+          unseenEvents.map((unseenEvent) => unseenEvent.id),
+        );
+        return workingOutbox.capacity(request);
+      },
+    }),
+  ),
+
+  'answers a commit of events alone with whether it committed': breakOutbox(
+    (workingOutbox) => ({
+      commitEvents: async (param) => {
+        await workingOutbox.commitEvents(param);
+        // deliberately no outcome, as an outbox written before it had one answers
+        return JSON.parse('null');
       },
     }),
   ),
