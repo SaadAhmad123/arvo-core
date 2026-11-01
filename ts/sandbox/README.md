@@ -73,6 +73,28 @@ Grafana comes up already provisioned — the datasources and the dashboard are f
 
 Every setting has a default that matches the stack above, so nothing needs configuring to run locally. Each one can be overridden from the environment, and a process that cannot be configured refuses to start rather than running half-configured.
 
+## The load suite
+
+Load, odd use and forced failures for the in-memory and SQLite outboxes, driving the handlers in `src/distributed/handler` through a real dispatcher and `ArvoOutboxDriver`. **Everything runs inside Docker**: your machine only builds the image, starts and stops containers, and writes the report. Docker must be running; nothing else is needed.
+
+```bash
+pnpm run load:inmemory                 # every in-memory check
+pnpm run load:sqlite                   # every SQLite check
+pnpm run load:sqlite --soak            # adds about an hour of steady traffic
+LOAD_SOAK_MINUTES=10 pnpm run load:inmemory --soak
+pnpm run load:sqlite --only tests/load/sqlite/full-disk.load.ts   # one file, in the container it belongs to
+```
+
+A quick run takes about a minute for the in-memory outbox and two to three for SQLite, after an image build of a minute or two the first time and seconds after; most of it is the size limits. The soak adds what `LOAD_SOAK_MINUTES` says, sixty by default.
+
+**What it checks.** Speed through the handlers at 1, 4, 16 and 64 workers, and straight at the driver over batch, payload and state sizes; filling up and recovering; cleaning up at volume, and while the clock jumps; races, leases and several processes on one SQLite file; forced failures — broken outboxes at volume, a killed process, a full disk, read-only, deleted, corrupted and newer files; size limits of a million events and a hundred thousand executions; and, with `--soak`, memory and file size over time. Every committing check ends by proving nothing committed was lost, no revision landed twice, payloads came back as committed and listings came oldest first. The suite's own first checks prove its container is what it should be.
+
+**Where it runs.** Each container is capped in CPU, memory, swap and processes, runs as `node` with every capability dropped, has no network, sees no host folder but its own results folder, and is removed when it stops, even when you press Ctrl-C. SQLite files, child processes, the faked clock (`libfaketime`) and the 20 MB full disk all live inside their containers.
+
+**Reading a report.** Each run writes `load-results/<run>/report.md` and `report.json`, ignored by git, and prints the report. It lists every check passed, failed or skipped — a check that cannot run where it is says why, and never counts as passed — then every measurement beside the same one from the last run on a matching machine, marking a change of more than a fifth as worth a look. Numbers are Docker-on-this-machine numbers: compare them with each other, not with a server.
+
+**Disk.** The image is labelled `arvo.load`, and each run removes the image it replaced and no other. Docker's own disk is shared with whatever else you build; if a run fails with `ENOSPC`, Docker's disk is full.
+
 ## Conventions
 
 The tour is what a reader copies from, so it is written the way a consumer of the package should write it.

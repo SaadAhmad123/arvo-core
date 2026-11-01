@@ -25,7 +25,7 @@ All work is in `ts/sandbox`; no file under `ts/arvo-core/src` changes. Each grou
 
 ## 6. Close out
 
-- [ ] 6.1 Describe the load suite in `ts/sandbox/README.md`: what it checks, how to run it, how long it takes, and how to read a report.
+- [x] 6.1 Describe the load suite in `ts/sandbox/README.md`: what it checks, how to run it, how long it takes, and how to read a report.
 - [ ] 6.2 Run `pnpm load:inmemory` and `pnpm load:sqlite` once more from a clean build, and the soak for each at its full length where time allows. Record in this change's `design.md`, under a new **Findings** section, every check that failed in a way that points at `arvo-core`, and every measurement worth a later change, each for its own change to `arvo-core`; fix none of them here. Verify with `node_modules/.bin/openspec validate outbox-load-tests --strict` from `ts/arvo-core`.
 
 ## Workflow follow-up
