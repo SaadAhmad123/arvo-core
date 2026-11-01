@@ -45,7 +45,13 @@ export type ArvoMemoryOutboxOptions = {
    * sweep. The system clock where left out.
    */
   readonly clock?: () => Date;
-  /** How many events, seen or not, and how many states it holds. */
+  /**
+   * How many events, seen or not, and how many states it holds.
+   *
+   * Old ones are only thrown away once their retention has passed, so make
+   * each buffer at least as big as how many arrive per second times how many
+   * seconds they are kept. Smaller, and it fills up and refuses new work.
+   */
   readonly buffers?: {
     /** Every event held, seen or not. */
     readonly events?: ArvoMemoryOutboxBuffer;
