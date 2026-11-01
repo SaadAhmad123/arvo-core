@@ -22,6 +22,8 @@
     "distributed:up": "docker compose -f infra/docker-compose.yml up -d --wait",
     "distributed:worker:build": "docker build -f infra/worker.Dockerfile -t arvo-sandbox-worker:dev ..",
     "lint": "biome check",
+    "load:inmemory": "tsx src/load/run.ts inmemory",
+    "load:sqlite": "tsx src/load/run.ts sqlite",
     "lint:fix": "biome check --fix",
     "play": "tsx src/playground.ts",
     "test": "vitest run",

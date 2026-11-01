@@ -4,8 +4,8 @@ All work is in `ts/sandbox`; no file under `ts/arvo-core/src` changes. Each grou
 
 ## 1. The image, the runner and the report
 
-- [ ] 1.1 Add `ts/sandbox/infra/load.Dockerfile`, building `arvo-core` and the sandbox from `ts/` on `node:22-bookworm-slim`, with `libfaketime`, running as `node`. Verify it builds.
-- [ ] 1.2 Add `src/load/run.ts`, `src/load/containers.ts` and `src/load/report.ts`, the `load:inmemory` and `load:sqlite` scripts in `ts/sandbox/package.json`, `--soak` and `LOAD_SOAK_MINUTES`, and `load-results/` to the sandbox's `.gitignore`. Start every container as **Nothing runs on the host** in the design says. Verify with one trivial check per outbox: the run fails fast without Docker, and with it writes a report naming the check and the machine; `docker inspect` of a running container shows the caps, no network, no privilege and the one mount; a check that allocates past its memory cap stops only its container; interrupting a run leaves no container behind; and nothing is written on the host outside `load-results/`.
+- [x] 1.1 Add `ts/sandbox/infra/load.Dockerfile`, building `arvo-core` and the sandbox from `ts/` on `node:22-bookworm-slim`, with `libfaketime`, running as `node`. Verify it builds.
+- [x] 1.2 Add `src/load/run.ts`, `src/load/containers.ts` and `src/load/report.ts`, the `load:inmemory` and `load:sqlite` scripts in `ts/sandbox/package.json`, `--soak` and `LOAD_SOAK_MINUTES`, and `load-results/` to the sandbox's `.gitignore`. Start every container as **Nothing runs on the host** in the design says. Verify with one trivial check per outbox: the run fails fast without Docker, and with it writes a report naming the check and the machine; `docker inspect` of a running container shows the caps, no network, no privilege and the one mount; a check that allocates past its memory cap stops only its container; interrupting a run leaves no container behind; and nothing is written on the host outside `load-results/`.
 
 ## 2. The harness
 

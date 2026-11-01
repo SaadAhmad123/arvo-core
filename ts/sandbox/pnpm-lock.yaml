@@ -19,7 +19,7 @@ importers:
         version: 2.10.0(@opentelemetry/api@1.10.0)
       arvo-core:
         specifier: file:../arvo-core
-        version: file:../arvo-core(@opentelemetry/api@1.10.0)(cloudevents@10.0.0)(zod@4.4.3)
+        version: file:../arvo-core(@opentelemetry/api@1.10.0)(cloudevents@10.0.0)(vitest@5.0.4(@opentelemetry/api@1.10.0)(@types/node@26.6.4)(vite@7.3.6(@types/node@26.6.4)(terser@5.51.2)(tsx@4.23.5)(yaml@2.9.1)))(zod@4.4.3)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -1323,9 +1323,16 @@ packages:
     resolution: {directory: ../arvo-core, type: directory}
     engines: {node: '>=22.0.0'}
     peerDependencies:
-      '@opentelemetry/api': ^1.10.0
+      '@opentelemetry/api': ^1.9.0
+      better-sqlite3: ^13.0.0
       cloudevents: ^10.0.0
+      vitest: ^5.0.0
       zod: ^4.0.0
+    peerDependenciesMeta:
+      better-sqlite3:
+        optional: true
+      vitest:
+        optional: true
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -1512,8 +1519,8 @@ packages:
   fast-uri@3.1.5:
     resolution: {integrity: sha512-gHwA1O9LDIcKunMKhObS/HimwtehO1nPUECKAu5TpKgaO19fcWEl4bliWe1jWxVFvIXztJjjQ4L8XQ1EU9f7Jw==}
 
-  fast-uri@4.1.2:
-    resolution: {integrity: sha512-TyGmBcbDTZXcb2cj5MV89DrF42DKvb3y5DDUNh95iO+IMeAzMkVSxK1PZRrRIpc9yg8U2GhGdbofNa0LS/a4Bw==}
+  fast-uri@4.2.3:
+    resolution: {integrity: sha512-I1PXwP5eAhlNlcdpjt9CgB59op2ZvZfxw+BkqGFVIUOgNpCVTcTqp3HhTX7brxj5vsip+nSY4nTvff+eIA76hg==}
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -3370,13 +3377,15 @@ snapshots:
     dependencies:
       color-convert: 2.0.1
 
-  arvo-core@file:../arvo-core(@opentelemetry/api@1.10.0)(cloudevents@10.0.0)(zod@4.4.3):
+  arvo-core@file:../arvo-core(@opentelemetry/api@1.10.0)(cloudevents@10.0.0)(vitest@5.0.4(@opentelemetry/api@1.10.0)(@types/node@26.6.4)(vite@7.3.6(@types/node@26.6.4)(terser@5.51.2)(tsx@4.23.5)(yaml@2.9.1)))(zod@4.4.3):
     dependencies:
       '@opentelemetry/api': 1.10.0
       cloudevents: 10.0.0
-      fast-uri: 4.1.2
+      fast-uri: 4.2.3
       neverthrow: 8.2.0
       zod: 4.4.3
+    optionalDependencies:
+      vitest: 5.0.4(@opentelemetry/api@1.10.0)(@types/node@26.6.4)(vite@7.3.6(@types/node@26.6.4)(terser@5.51.2)(tsx@4.23.5)(yaml@2.9.1))
 
   assertion-error@2.0.1: {}
 
@@ -3567,7 +3576,7 @@ snapshots:
 
   fast-uri@3.1.5: {}
 
-  fast-uri@4.1.2: {}
+  fast-uri@4.2.3: {}
 
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:

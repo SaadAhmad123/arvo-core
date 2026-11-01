@@ -10,3 +10,6 @@
 **/dist
 **/coverage
 **/.git
+
+# What a load run wrote: results belong to the host, never to an image.
+**/load-results
