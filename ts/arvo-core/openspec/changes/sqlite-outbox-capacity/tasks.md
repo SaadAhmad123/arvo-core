@@ -28,8 +28,8 @@ Until group 5, "run red" and "verify" mean `pnpm typecheck` and `pnpm lint` on t
 
 ## 6. Close out
 
-- [ ] 6.1 Run `pnpm lint`, `pnpm typecheck` and `pnpm build`, all clean.
-- [ ] 6.2 Check every new and changed file against `openspec/project.md`: **Documentation in source**, **Naming**, **Module-level state** and **Code style**. Verify with `node_modules/.bin/openspec validate sqlite-outbox-capacity --strict`.
+- [x] 6.1 Run `pnpm lint`, `pnpm typecheck` and `pnpm build`, all clean.
+- [x] 6.2 Check every new and changed file against `openspec/project.md`: **Documentation in source**, **Naming**, **Module-level state** and **Code style**. Verify with `node_modules/.bin/openspec validate sqlite-outbox-capacity --strict`.
 
 ## Workflow follow-up
 
