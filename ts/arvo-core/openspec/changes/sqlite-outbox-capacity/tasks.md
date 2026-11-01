@@ -9,8 +9,8 @@ Until group 5, "run red" and "verify" mean `pnpm typecheck` and `pnpm lint` on t
 
 ## 2. Capacity and the events outcome
 
-- [ ] 2.1 Add to `tests/outbox/sqlite/outbox.spec.ts`: capacity answering `available` with no buffers for any request, throwing once closed; `commitEvents` answering committed. Run red.
-- [ ] 2.2 Add `capacity` and the `commitEvents` outcome to `src/outbox/sqlite/outbox.ts`, and say in its TSDoc that it limits nothing. Verify.
+- [x] 2.1 Add to `tests/outbox/sqlite/outbox.spec.ts`: capacity answering `available` with no buffers for any request, throwing once closed; `commitEvents` answering committed. Run red.
+- [x] 2.2 Add `capacity` and the `commitEvents` outcome to `src/outbox/sqlite/outbox.ts`, and say in its TSDoc that it limits nothing. Verify.
 
 ## 3. Version 2 and terminal states
 

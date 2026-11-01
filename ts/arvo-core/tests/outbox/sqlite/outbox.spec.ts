@@ -340,6 +340,33 @@ describe('ArvoSqliteOutbox and its options', () => {
   });
 });
 
+describe('ArvoSqliteOutbox and its capacity', () => {
+  it.each([
+    { events: 0 },
+    { events: 1_000_000, state: { casVersion: 0 } },
+    { events: 3, state: { casVersion: 7 } },
+  ])('answers available with no buffers, asked about %o', async (request) => {
+    const outbox = await openOutbox({ filename: newFilename() });
+    expect(outbox.capacity(request)).toEqual({
+      status: 'available',
+      buffers: {},
+    });
+  });
+
+  it('throws once closed', async () => {
+    const outbox = await openOutbox({ filename: newFilename() });
+    await outbox.close();
+    expect(() => outbox.capacity({ events: 0 })).toThrow('closed');
+  });
+
+  it('answers that events committed alone committed', async () => {
+    const outbox = await openOutbox({ filename: newFilename() });
+    expect(outbox.commitEvents({ events: [buildEventRecord()] })).toEqual({
+      committed: true,
+    });
+  });
+});
+
 describe('ArvoSqliteOutbox and how much it keeps', () => {
   /** Moves a column of some events' rows far into the past, as another connection would. */
   const backdate = (

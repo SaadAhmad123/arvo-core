@@ -2,6 +2,10 @@ import Database from 'better-sqlite3';
 import type { IArvoOutbox } from '../../ArvoOutbox/interface.js';
 import { ArvoOutboxLifecycle } from '../../ArvoOutbox/lifecycle.js';
 import type {
+  ArvoOutboxCapacity,
+  ArvoOutboxCapacityRequest,
+} from '../../ArvoOutbox/types/capacity.js';
+import type {
   ArvoOutboxCommitOutcome,
   ArvoOutboxEventsCommit,
   ArvoOutboxStateCommit,
@@ -55,6 +59,9 @@ type SqliteConnection = {
  * each execution's latest state, and deletes an event once it has been seen
  * for longer than `options.retentionMs.seenEvents`; an unseen event is never
  * deleted. A file it creates is readable and writable by its owner alone.
+ *
+ * It limits nothing: its capacity is always `available`, and it refuses no
+ * commit for lack of room. Watch the disk it is on.
  *
  * @example
  * ```typescript
@@ -143,12 +150,18 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
       .immediate();
   }
 
-  commitEvents(param: ArvoOutboxEventsCommit): void {
+  commitEvents(param: ArvoOutboxEventsCommit): ArvoOutboxCommitOutcome {
     const { database, statements } =
       this.lifecycle.resourcesFor('commitEvents');
     database
       .transaction(() => this.insertEvents(statements, param.events))
       .immediate();
+    return { committed: true };
+  }
+
+  capacity(_request: ArvoOutboxCapacityRequest): ArvoOutboxCapacity {
+    this.lifecycle.resourcesFor('capacity');
+    return { status: 'available', buffers: {} };
   }
 
   readCommittedEvents(
