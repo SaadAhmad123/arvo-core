@@ -17,15 +17,18 @@ import type {
 import type { JSONObject } from '../../types.js';
 import { refusalFor } from '../helpers/refusal-for.js';
 import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
+import { checkOptions } from './helpers/check-options.js';
 import { configureConnection } from './helpers/configure-connection.js';
 import { createOwnerOnlyFile } from './helpers/create-owner-only-file.js';
 import {
-  defaultBusyTimeoutMs,
-  defaultRetainSeenEventsForMs,
   expiredEventsDeletedPerMarking,
   pagesFreedPerMarking,
 } from './helpers/defaults.js';
 import { toCommittedEventRecord, toEventInsert } from './helpers/event-rows.js';
+import {
+  type ArvoSqliteOutboxResolvedOptions,
+  resolveOptions,
+} from './helpers/resolve-options.js';
 import { secondsAgo, secondsLater } from './helpers/seconds-modifier.js';
 import { readSqliteNow } from './helpers/sqlite-now.js';
 import { outboxSchema, outboxSchemaVersion } from './schema.js';
@@ -50,7 +53,7 @@ type SqliteConnection = {
  * Several outboxes may share one file, in one process or several, and
  * together meet every rule of {@link IArvoOutbox}, leases included. It keeps
  * each execution's latest state, and deletes an event once it has been seen
- * for longer than `options.retainSeenEventsForMs`; an unseen event is never
+ * for longer than `options.retentionMs.seenEvents`; an unseen event is never
  * deleted. A file it creates is readable and writable by its owner alone.
  *
  * @example
@@ -63,39 +66,19 @@ type SqliteConnection = {
  * ```
  */
 export class ArvoSqliteOutbox implements IArvoOutbox {
-  private readonly filename: string;
-  private readonly busyTimeoutMs: number;
-  private readonly retainSeenEventsForMs: number;
+  private readonly options: ArvoSqliteOutboxResolvedOptions;
   private readonly lifecycle: ArvoOutboxLifecycle<SqliteConnection>;
 
   /**
    * Checks the options. Touches no file: {@link ArvoSqliteOutbox.open} does.
    *
-   * @param options - Which file, how long to wait for it, and how long to keep seen events. See {@link ArvoSqliteOutboxOptions}.
-   * @throws {RangeError} Where `options.busyTimeoutMs` or `options.retainSeenEventsForMs` is out of range.
+   * @param options - Which file, how long to wait for it, and how long to keep what it no longer needs. See {@link ArvoSqliteOutboxOptions}.
+   * @throws {ArvoSqliteOutboxValidationError} Where the options break any rule. It names every problem.
    */
   constructor(options: ArvoSqliteOutboxOptions) {
-    const busyTimeoutMs = options.busyTimeoutMs ?? defaultBusyTimeoutMs;
-    if (!Number.isInteger(busyTimeoutMs) || busyTimeoutMs < 0) {
-      throw new RangeError(
-        `ArvoSqliteOutbox cannot be opened with busyTimeoutMs ${busyTimeoutMs}; it must be a whole number of milliseconds, zero or more.`,
-      );
-    }
-    const retainSeenEventsForMs =
-      options.retainSeenEventsForMs ?? defaultRetainSeenEventsForMs;
-    if (
-      retainSeenEventsForMs !== Number.POSITIVE_INFINITY &&
-      (!Number.isInteger(retainSeenEventsForMs) || retainSeenEventsForMs < 0)
-    ) {
-      throw new RangeError(
-        `ArvoSqliteOutbox cannot be opened with retainSeenEventsForMs ${retainSeenEventsForMs}; it must be a whole number of milliseconds, zero or more, or Infinity to keep seen events forever.`,
-      );
-    }
-    this.filename = options.filename;
-    this.busyTimeoutMs = busyTimeoutMs;
-    this.retainSeenEventsForMs = retainSeenEventsForMs;
+    this.options = resolveOptions(checkOptions(options));
     this.lifecycle = new ArvoOutboxLifecycle(
-      `ArvoSqliteOutbox on ${options.filename}`,
+      `ArvoSqliteOutbox on ${this.options.filename}`,
     );
   }
 
@@ -272,11 +255,11 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
 
   /** Opens the file and readies it, closing it again where any step throws. */
   private openConnection(): SqliteConnection {
-    if (this.filename !== ':memory:' && this.filename !== '') {
-      createOwnerOnlyFile(this.filename);
+    if (this.options.filename !== ':memory:' && this.options.filename !== '') {
+      createOwnerOnlyFile(this.options.filename);
     }
-    const database = new Database(this.filename, {
-      timeout: this.busyTimeoutMs,
+    const database = new Database(this.options.filename, {
+      timeout: this.options.busyTimeoutMs,
     });
     try {
       configureConnection(database);
@@ -291,9 +274,10 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
 
   /** Deletes up to one batch of expired events, and says how many. */
   private deleteExpiredBatch(statements: OutboxStatements): number {
-    if (this.retainSeenEventsForMs === Number.POSITIVE_INFINITY) return 0;
+    if (this.options.retentionMs.seenEvents === Number.POSITIVE_INFINITY)
+      return 0;
     return statements.deleteExpiredEvents.run({
-      cutOffModifier: secondsAgo(this.retainSeenEventsForMs),
+      cutOffModifier: secondsAgo(this.options.retentionMs.seenEvents),
       batchSize: expiredEventsDeletedPerMarking,
     }).changes;
   }
@@ -314,7 +298,7 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
     if (versionRow === undefined || versionRow.value === outboxSchemaVersion)
       return;
     throw new Error(
-      `ArvoSqliteOutbox cannot open ${this.filename}: its outbox tables are at version ${versionRow.value}, and this outbox knows only version ${outboxSchemaVersion}. Open it with the version of arvo-core that wrote it.`,
+      `ArvoSqliteOutbox cannot open ${this.options.filename}: its outbox tables are at version ${versionRow.value}, and this outbox knows only version ${outboxSchemaVersion}. Open it with the version of arvo-core that wrote it.`,
     );
   }
 }

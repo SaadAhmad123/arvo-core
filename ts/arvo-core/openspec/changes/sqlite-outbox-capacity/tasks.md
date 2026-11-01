@@ -4,8 +4,8 @@ Until group 5, "run red" and "verify" mean `pnpm typecheck` and `pnpm lint` on t
 
 ## 1. SQLite options, error and factories
 
-- [ ] 1.1 Write `tests/outbox/sqlite/errors.spec.ts`, `tests/outbox/sqlite/helpers/resolve-options.spec.ts` and `tests/outbox/sqlite/factory.spec.ts`, as for the in-memory outbox, and **replace** the `RangeError` checks in `tests/outbox/sqlite/outbox.spec.ts` with validation error checks: a wait or retention negative or fractional, `Infinity` accepted for a retention, an unknown key, every problem at once, no file touched. Run red.
-- [ ] 1.2 Add `src/outbox/sqlite/errors.ts`, `helpers/check-options.ts`, `helpers/resolve-options.ts` and `factory.ts`; **replace** `retainSeenEventsForMs` with `retentionMs` in `src/outbox/sqlite/types.ts`; remove the option defaults from `helpers/defaults.ts`; make the constructor `resolveOptions(checkOptions(options))`. Export the error and factories from `src/outbox/sqlite/index.ts`. Verify.
+- [x] 1.1 Write `tests/outbox/sqlite/errors.spec.ts`, `tests/outbox/sqlite/helpers/resolve-options.spec.ts` and `tests/outbox/sqlite/factory.spec.ts`, as for the in-memory outbox, and **replace** the `RangeError` checks in `tests/outbox/sqlite/outbox.spec.ts` with validation error checks: a wait or retention negative or fractional, `Infinity` accepted for a retention, an unknown key, every problem at once, no file touched. Run red.
+- [x] 1.2 Add `src/outbox/sqlite/errors.ts`, `helpers/check-options.ts`, `helpers/resolve-options.ts` and `factory.ts`; **replace** `retainSeenEventsForMs` with `retentionMs` in `src/outbox/sqlite/types.ts`; remove the option defaults from `helpers/defaults.ts`; make the constructor `resolveOptions(checkOptions(options))`. Export the error and factories from `src/outbox/sqlite/index.ts`. Verify.
 
 ## 2. Capacity and the events outcome
 

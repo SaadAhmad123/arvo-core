@@ -16,6 +16,7 @@ import { expiredEventsDeletedPerMarking } from '../../../src/outbox/sqlite/helpe
 import {
   ArvoSqliteOutbox,
   type ArvoSqliteOutboxOptions,
+  ArvoSqliteOutboxValidationError,
 } from '../../../src/outbox/sqlite/index.js';
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), 'arvo-sqlite-outbox-'));
@@ -279,17 +280,64 @@ describe('ArvoSqliteOutbox and how it answers', () => {
     for (const answer of answers) expect(answer).not.toBeInstanceOf(Promise);
     expect(answers.slice(0, 2)).toEqual([null, { committed: true }]);
   });
+});
 
-  it.each([-1, 1.5, Number.NaN])(
+describe('ArvoSqliteOutbox and its options', () => {
+  /** The paths of every issue the options are refused with, the file untouched. */
+  const issuePathsFor = (options: Record<string, unknown>) => {
+    const filename = newFilename();
+    try {
+      // deliberately unchecked, as a caller without types could build it
+      new ArvoSqliteOutbox(
+        JSON.parse(JSON.stringify({ filename, ...options })),
+      );
+    } catch (error_) {
+      if (error_ instanceof ArvoSqliteOutboxValidationError) {
+        expect(existsSync(filename)).toBe(false);
+        return error_.issues.map((issue) => issue.path);
+      }
+      throw error_;
+    }
+    throw new Error('the options were not refused');
+  };
+
+  it.each([-1, 1.5])(
     'refuses to wait %s milliseconds for the file',
     (busyTimeoutMs) => {
-      expect(
-        () => new ArvoSqliteOutbox({ filename: newFilename(), busyTimeoutMs }),
-      ).toThrow(
-        `ArvoSqliteOutbox cannot be opened with busyTimeoutMs ${busyTimeoutMs}; it must be a whole number of milliseconds, zero or more.`,
-      );
+      expect(issuePathsFor({ busyTimeoutMs })).toEqual([
+        'options.busyTimeoutMs',
+      ]);
     },
   );
+
+  it.each([-1, 1.5])('refuses a retention of %s', (terminalStates) => {
+    expect(issuePathsFor({ retentionMs: { terminalStates } })).toEqual([
+      'options.retentionMs.terminalStates',
+    ]);
+  });
+
+  it('accepts a retention of zero, or of an unending time', () => {
+    expect(
+      () =>
+        new ArvoSqliteOutbox({
+          filename: newFilename(),
+          retentionMs: {
+            seenEvents: 0,
+            terminalStates: Number.POSITIVE_INFINITY,
+          },
+        }),
+    ).not.toThrow();
+  });
+
+  it('refuses an option it does not know', () => {
+    expect(issuePathsFor({ retainSeenEventsForMs: 10 })).toEqual(['options']);
+  });
+
+  it('names every problem at once', () => {
+    expect(
+      issuePathsFor({ busyTimeoutMs: -1, retentionMs: { seenEvents: 0.5 } }),
+    ).toEqual(['options.busyTimeoutMs', 'options.retentionMs.seenEvents']);
+  });
 });
 
 describe('ArvoSqliteOutbox and how much it keeps', () => {
@@ -384,7 +432,7 @@ describe('ArvoSqliteOutbox and how much it keeps', () => {
   it('deletes events as they are seen where it keeps seen events for no time', async () => {
     const outbox = await openOutbox({
       filename: newFilename(),
-      retainSeenEventsForMs: 0,
+      retentionMs: { seenEvents: 0 },
     });
     const [seenEvent, unseenEvent] = commitSomeEvents(outbox, 2);
     if (!seenEvent || !unseenEvent)
@@ -398,7 +446,7 @@ describe('ArvoSqliteOutbox and how much it keeps', () => {
     const filename = newFilename();
     const outbox = await openOutbox({
       filename,
-      retainSeenEventsForMs: Number.POSITIVE_INFINITY,
+      retentionMs: { seenEvents: Number.POSITIVE_INFINITY },
     });
     const [seenEvent] = commitSomeEvents(outbox, 1);
     if (!seenEvent) throw new Error('one event was committed');
@@ -449,21 +497,6 @@ describe('ArvoSqliteOutbox and how much it keeps', () => {
       Number(pagesBeforeDeleting) / 2,
     );
   });
-
-  it.each([-1, 1.5, Number.NaN])(
-    'refuses to keep seen events for %s milliseconds',
-    (retainSeenEventsForMs) => {
-      expect(
-        () =>
-          new ArvoSqliteOutbox({
-            filename: newFilename(),
-            retainSeenEventsForMs,
-          }),
-      ).toThrow(
-        `ArvoSqliteOutbox cannot be opened with retainSeenEventsForMs ${retainSeenEventsForMs}; it must be a whole number of milliseconds, zero or more, or Infinity to keep seen events forever.`,
-      );
-    },
-  );
 });
 
 describe('ArvoSqliteOutbox and leases', () => {

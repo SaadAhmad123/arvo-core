@@ -6,7 +6,7 @@
  * const options: ArvoSqliteOutboxOptions = {
  *   filename: '/var/lib/orders/outbox.sqlite',
  *   busyTimeoutMs,
- *   retainSeenEventsForMs,
+ *   retentionMs: { terminalStates: longestRedeliveryMs },
  * };
  * ```
  */
@@ -23,13 +23,21 @@ export type ArvoSqliteOutboxOptions = {
    */
   readonly busyTimeoutMs?: number;
   /**
-   * How long, in whole milliseconds, an event is kept once it has been
-   * seen, before it may be deleted; `Infinity` keeps seen events forever.
-   * A default of the outbox's own where left out. An unseen event is never
-   * deleted.
-   *
-   * A delivery redelivered after its events are deleted finds nothing to
-   * resend, so keep them for longer than a redelivery can arrive late.
+   * How long it keeps what it no longer needs, in whole milliseconds, zero
+   * or more, or `Infinity` to keep it forever. Each a default of the
+   * outbox's own where left out. Make each longer than your queue may take
+   * to deliver an event again: a state deleted before then lets a repeated
+   * delivery start its execution again, and a delivery redelivered after
+   * its events are deleted finds nothing to resend.
    */
-  readonly retainSeenEventsForMs?: number;
+  readonly retentionMs?: {
+    /** How long after an event is marked seen it may be deleted. An unseen event never is. */
+    readonly seenEvents?: number;
+    /**
+     * How long after its last commit a state at `success`, `error`,
+     * `cancelled` or `failure` may be deleted. A state at any other
+     * lifecycle never is.
+     */
+    readonly terminalStates?: number;
+  };
 };
