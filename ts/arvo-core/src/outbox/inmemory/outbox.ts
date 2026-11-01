@@ -24,7 +24,11 @@ import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
 import { bufferCapacity, isDrained } from './helpers/buffer-capacity.js';
 import { checkOptions } from './helpers/check-options.js';
 import { copyEventRecord } from './helpers/copy-event-record.js';
-import { addToIndex, type KeyedIndex } from './helpers/keyed-index.js';
+import {
+  addToIndex,
+  type KeyedIndex,
+  removeFromIndex,
+} from './helpers/keyed-index.js';
 import {
   type ArvoMemoryOutboxResolvedOptions,
   resolveOptions,
@@ -43,6 +47,8 @@ type StoredEvent = {
   readonly committedAt: string;
   readonly committedAtMs: number;
   seen: boolean;
+  /** When it was marked seen; never, while unseen. */
+  seenAtMs: number;
   /** When the claim on it lapses; no later than now where unclaimed. */
   leasedUntilMs: number;
 };
@@ -58,8 +64,10 @@ type MemoryStore = {
   readonly eventsByTriggeringEvent: KeyedIndex<StoredEvent>;
   // insertion order is landing order, because every landing is stamped no earlier than the last
   readonly unseenEventsById: Map<string, StoredEvent>;
-  // insertion order is the order seen, so the front is what is dropped first
+  // insertion order is the order seen, so the front is what is swept first
   readonly seenEventsById: Map<string, StoredEvent>;
+  // each terminal state's last commit time; insertion order is last-commit order
+  readonly lastCommitMsByTerminalExecution: Map<string, number>;
   latestLandedAtMs: number;
   /** Whether each buffer has held more than its size and not yet drained. */
   readonly tolerating: { events: boolean; states: boolean };
@@ -73,9 +81,18 @@ const createMemoryStore = (): MemoryStore => ({
   eventsByTriggeringEvent: new Map(),
   unseenEventsById: new Map(),
   seenEventsById: new Map(),
+  lastCommitMsByTerminalExecution: new Map(),
   latestLandedAtMs: Number.NEGATIVE_INFINITY,
   tolerating: { events: false, states: false },
 });
+
+/** The lifecycles an execution rests at once it is finished. */
+const TERMINAL_LIFECYCLES: readonly string[] = Object.freeze([
+  'success',
+  'error',
+  'cancelled',
+  'failure',
+]);
 
 /** Every capacity status, worst last. */
 const CAPACITY_STATUSES_BY_SEVERITY: readonly ArvoOutboxCapacityStatus[] =
@@ -105,6 +122,12 @@ const worstStatus = (
  * past its limit is refused as `capacity_exhausted`, writing nothing. The
  * buffers count events and states, not the memory they take.
  *
+ * While open, it sweeps on a timer that does not keep the process running:
+ * events seen longer ago than `options.retentionMs.seenEvents`, and states
+ * at `success`, `error`, `cancelled` or `failure` last committed longer ago
+ * than `options.retentionMs.terminalStates`, are deleted. Make each
+ * retention longer than your queue may take to deliver an event again.
+ *
  * Landing times and leases go by `options.clock`; where it goes back, a
  * commit is stamped no earlier than the one before.
  *
@@ -122,6 +145,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   private readonly lifecycle = new ArvoOutboxLifecycle<MemoryStore>(
     'ArvoMemoryOutbox',
   );
+  private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
   /**
    * @param options - How it tells the time, how much it holds, and how long it keeps it. See {@link ArvoMemoryOutboxOptions}.
@@ -138,6 +162,18 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
    */
   async open(): Promise<void> {
     await this.lifecycle.open(createMemoryStore);
+    // a close that overtook this opening leaves nothing to sweep
+    if (
+      this.sweepTimer !== null ||
+      !this.lifecycle.tryResourcesFor('open').ok
+    ) {
+      return;
+    }
+    this.sweepTimer = setInterval(
+      () => this.sweep(),
+      this.options.sweepIntervalMs,
+    );
+    this.sweepTimer.unref();
   }
 
   /**
@@ -145,6 +181,8 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
    * nothing, and every operation throws once it is closed.
    */
   async close(): Promise<void> {
+    if (this.sweepTimer !== null) clearInterval(this.sweepTimer);
+    this.sweepTimer = null;
     await this.lifecycle.close(() => undefined);
   }
 
@@ -168,6 +206,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
         ?.casVersion,
     });
     if (refusal !== null) return { committed: false, refusal };
+    const isTerminal = TERMINAL_LIFECYCLES.includes(param.lifecycle);
     const addedStateCount = store.latestStateByExecution.has(param.executionId)
       ? 0
       : 1;
@@ -190,6 +229,13 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
       lifecycle: param.lifecycle,
       state,
     });
+    store.lastCommitMsByTerminalExecution.delete(param.executionId);
+    if (isTerminal) {
+      store.lastCommitMsByTerminalExecution.set(
+        param.executionId,
+        landing.committedAtMs,
+      );
+    }
     this.storeEvents(store, newEventRecords, landing);
     this.updateTolerating(store);
     return { committed: true };
@@ -260,10 +306,12 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
 
   markEventsSeen(eventIds: readonly string[]): void {
     const store = this.lifecycle.resourcesFor('markEventsSeen');
+    const seenAtMs = this.readClockMs();
     for (const eventId of eventIds) {
       const storedEvent = store.unseenEventsById.get(eventId);
       if (storedEvent === undefined) continue;
       storedEvent.seen = true;
+      storedEvent.seenAtMs = seenAtMs;
       store.unseenEventsById.delete(eventId);
       store.seenEventsById.set(eventId, storedEvent);
     }
@@ -287,6 +335,66 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
       status: worstStatus(eventsCapacity.status, statesCapacity.status),
       buffers: { events: eventsCapacity, states: statesCapacity },
     };
+  }
+
+  /**
+   * Deletes every seen event and terminal state past its retention, oldest
+   * first, stopping at the first that is not, so it does work in proportion
+   * to what it deletes. Run by the timer alone.
+   */
+  private sweep(): void {
+    const storeResult = this.lifecycle.tryResourcesFor('sweep');
+    if (!storeResult.ok) return;
+    const store = storeResult.value;
+    // a throw from a timer would end the process, so a failed sweep only warns
+    try {
+      const nowMs = this.readClockMs();
+      this.sweepSeenEvents(store, nowMs - this.options.retentionMs.seenEvents);
+      this.sweepTerminalStates(
+        store,
+        nowMs - this.options.retentionMs.terminalStates,
+      );
+      this.updateTolerating(store);
+    } catch (error_) {
+      console.warn(
+        'ArvoMemoryOutbox could not sweep, and will try again at its next sweep',
+        error_,
+      );
+    }
+  }
+
+  /** Deletes every event seen at or before `seenBeforeMs`. */
+  private sweepSeenEvents(store: MemoryStore, seenBeforeMs: number): void {
+    for (const [eventId, storedEvent] of store.seenEventsById) {
+      if (storedEvent.seenAtMs > seenBeforeMs) return;
+      store.seenEventsById.delete(eventId);
+      store.eventsById.delete(eventId);
+      removeFromIndex(
+        store.eventsByExecution,
+        storedEvent.eventRecord.executionId,
+        eventId,
+      );
+      removeFromIndex(
+        store.eventsByTriggeringEvent,
+        storedEvent.eventRecord.triggeringEventId,
+        eventId,
+      );
+    }
+  }
+
+  /** Deletes every terminal state last committed at or before `committedBeforeMs`, leaving its events. */
+  private sweepTerminalStates(
+    store: MemoryStore,
+    committedBeforeMs: number,
+  ): void {
+    for (const [
+      executionId,
+      lastCommitMs,
+    ] of store.lastCommitMsByTerminalExecution) {
+      if (lastCommitMs > committedBeforeMs) return;
+      store.lastCommitMsByTerminalExecution.delete(executionId);
+      store.latestStateByExecution.delete(executionId);
+    }
   }
 
   /**
@@ -376,6 +484,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
         eventRecord,
         ...landing,
         seen: false,
+        seenAtMs: Number.POSITIVE_INFINITY,
         leasedUntilMs: Number.NEGATIVE_INFINITY,
       };
       store.eventsById.set(eventRecord.id, storedEvent);

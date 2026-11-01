@@ -19,8 +19,8 @@
 
 ## 4. Retention and the sweep
 
-- [ ] 4.1 Add to `outbox.spec.ts`, with time from `options.clock` and ticks fired by Vitest's fake timers: a seen event deleted once past its retention, a more recent one kept, an unseen one never; a deleted event committed again stored as unseen; a terminal state deleted once past its retention, its events kept; a `waiting` state never; a buffer that was past its size answering `tolerating` until the sweep drains it to `size × (1 − tolerance)`, then `available`; retention counted from the last commit; the interval from the shorter retention with a floor of one second; no sweep once closed; the timer unref'd; a clock failing during a tick deleting nothing, warning once, and the next tick running. Run red.
-- [ ] 4.2 Add `seenAtMs` to `StoredEvent`, `terminalStatesByExecution` to the store, the frozen list of terminal lifecycles, the sweep, and the timer started in `open` and cleared in `close`, in `src/outbox/inmemory/outbox.ts`. Verify with `pnpm typecheck` and `pnpm lint`.
+- [x] 4.1 Add to `outbox.spec.ts`, with time from `options.clock` and ticks fired by Vitest's fake timers: a seen event deleted once past its retention, a more recent one kept, an unseen one never; a deleted event committed again stored as unseen; a terminal state deleted once past its retention, its events kept; a `waiting` state never; a buffer that was past its size answering `tolerating` until the sweep drains it to `size × (1 − tolerance)`, then `available`; retention counted from the last commit; the interval from the shorter retention with a floor of one second; no sweep once closed; the timer unref'd; a clock failing during a tick deleting nothing, warning once, and the next tick running. Run red.
+- [x] 4.2 Add `seenAtMs` to `StoredEvent`, `lastCommitMsByTerminalExecution` to the store, the frozen list of terminal lifecycles, the sweep, and the timer started in `open` and cleared in `close`, in `src/outbox/inmemory/outbox.ts`. Verify with `pnpm typecheck` and `pnpm lint`.
 
 ## 5. Close out
 

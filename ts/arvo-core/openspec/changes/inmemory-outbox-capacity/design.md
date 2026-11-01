@@ -78,7 +78,7 @@ Each buffer has a flag in the store, `tolerating`. After every write and every s
 Two orders let a sweep stop at the first item not yet expired, so it does work in proportion to what it deletes:
 
 - **Seen events:** `seenEventsById` already holds them in seen order. `StoredEvent` gains `seenAtMs`, set by `markEventsSeen` from the clock.
-- **Terminal states:** a new `terminalStatesByExecution: Map<string, number>`, the last commit time of each state at a terminal lifecycle. On every state commit the execution is deleted from it and, where the lifecycle is terminal, set again, so insertion order is last-commit order. Deleting a state deletes it from both maps and leaves its events.
+- **Terminal states:** a new `lastCommitMsByTerminalExecution: Map<string, number>`, the last commit time of each state at a terminal lifecycle. On every state commit the execution is deleted from it and, where the lifecycle is terminal, set again, so insertion order is last-commit order. Deleting a state deletes it from both maps and leaves its events.
 
 The terminal lifecycles are one frozen array, checked with `includes`. Reading `lifecycle` is matching a field ADR-019 hands the outbox beside the record, against ADR-007's fixed terminal values. It decides nothing the protocol depends on, so ADR-019's **Not a judge** rule is not engaged, and no ADR changes.
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildEventRecord } from '../../../src/outbox/conformance/fixtures/event-record.js';
 import { buildStateCommit } from '../../../src/outbox/conformance/fixtures/state-commit.js';
 import {
@@ -728,6 +728,221 @@ describe('ArvoMemoryOutbox and a listing that is no listing', () => {
     expect(() =>
       outbox.listUnseenEvents({ atMost: -1, olderThanMs: 0 }),
     ).toThrow('ArvoMemoryOutbox cannot list -1 unseen events');
+  });
+});
+
+describe('ArvoMemoryOutbox and its sweep', () => {
+  // only the timer is faked: time itself comes from each outbox's own clock
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  /** One sweep interval, as the retentions below work it out. */
+  const sweepIntervalMs = 1000;
+
+  /** An outbox keeping seen events for five seconds and terminal states for ten, on a clock the test moves. */
+  const openSweptOutbox = async (
+    buffers?: ArvoMemoryOutboxOptions['buffers'],
+  ) => {
+    const settableClock = createSettableClock(startMs);
+    const outbox = await openMemoryOutbox({
+      clock: settableClock.clock,
+      retentionMs: { seenEvents: 5000, terminalStates: 10_000 },
+      ...(buffers === undefined ? {} : { buffers }),
+    });
+    /** Moves the clock on, and lets one sweep run. */
+    const sweepAt = (sweptAtMs: number) => {
+      settableClock.moveTo(sweptAtMs);
+      vi.advanceTimersByTime(sweepIntervalMs);
+    };
+    return { outbox, settableClock, sweepAt };
+  };
+
+  /** Whether the outbox still holds an event. */
+  const holds = (
+    outbox: ArvoMemoryOutbox,
+    event: { readonly id: string; readonly triggeringEventId: string },
+  ) =>
+    outbox
+      .readCommittedEvents({ triggeringEventId: event.triggeringEventId })
+      .some((committedEvent) => committedEvent.id === event.id);
+
+  /** A commit of one execution at a revision and lifecycle. */
+  const buildLifecycleCommit = (
+    executionId: string,
+    casVersion: number,
+    lifecycle: string,
+  ) => ({ ...buildStateCommit({ executionId, casVersion }), lifecycle });
+
+  it('deletes an event seen longer ago than its retention, and keeps one seen since', async () => {
+    const { outbox, settableClock, sweepAt } = await openSweptOutbox();
+    const longSeenEvent = buildEventRecord();
+    const recentlySeenEvent = buildEventRecord();
+    outbox.commitEvents({ events: [longSeenEvent, recentlySeenEvent] });
+    outbox.markEventsSeen([longSeenEvent.id]);
+    settableClock.moveTo(startMs + 3000);
+    outbox.markEventsSeen([recentlySeenEvent.id]);
+    sweepAt(startMs + 6000);
+    expect(holds(outbox, longSeenEvent)).toBe(false);
+    expect(holds(outbox, recentlySeenEvent)).toBe(true);
+  });
+
+  it('never deletes an unseen event, however long ago it was committed', async () => {
+    const { outbox, sweepAt } = await openSweptOutbox();
+    const unseenEvent = buildEventRecord();
+    outbox.commitEvents({ events: [unseenEvent] });
+    sweepAt(startMs + 60_000);
+    expect(holds(outbox, unseenEvent)).toBe(true);
+  });
+
+  it('stores anew, as unseen, an event committed again once deleted', async () => {
+    const { outbox, sweepAt } = await openSweptOutbox();
+    const event = buildEventRecord();
+    outbox.commitEvents({ events: [event] });
+    outbox.markEventsSeen([event.id]);
+    sweepAt(startMs + 6000);
+    outbox.commitEvents({ events: [event] });
+    expect(
+      outbox.readCommittedEvents({
+        triggeringEventId: event.triggeringEventId,
+      }),
+    ).toMatchObject([{ id: event.id, seen: false }]);
+  });
+
+  it.each(['success', 'error', 'cancelled', 'failure'])(
+    'deletes a state at %s once its last commit is older than its retention, keeping its events',
+    async (lifecycle) => {
+      const { outbox, sweepAt } = await openSweptOutbox();
+      const executionId = crypto.randomUUID();
+      const event = buildEventRecord({ executionId });
+      outbox.commitStateAndEvents({
+        ...buildLifecycleCommit(executionId, 0, lifecycle),
+        events: [event],
+      });
+      sweepAt(startMs + 11_000);
+      expect(outbox.readLatestState(executionId)).toBeNull();
+      expect(holds(outbox, event)).toBe(true);
+    },
+  );
+
+  it.each(['idle', 'waiting'])(
+    'never deletes a state at %s',
+    async (lifecycle) => {
+      const { outbox, sweepAt } = await openSweptOutbox();
+      const executionId = crypto.randomUUID();
+      outbox.commitStateAndEvents(
+        buildLifecycleCommit(executionId, 0, lifecycle),
+      );
+      sweepAt(startMs + 60_000);
+      expect(outbox.readLatestState(executionId)).not.toBeNull();
+    },
+  );
+
+  it("counts a state's retention from its last commit", async () => {
+    const { outbox, settableClock, sweepAt } = await openSweptOutbox();
+    const executionId = crypto.randomUUID();
+    outbox.commitStateAndEvents(
+      buildLifecycleCommit(executionId, 0, 'waiting'),
+    );
+    settableClock.moveTo(startMs + 8000);
+    outbox.commitStateAndEvents(
+      buildLifecycleCommit(executionId, 1, 'success'),
+    );
+    sweepAt(startMs + 12_000);
+    expect(outbox.readLatestState(executionId)).not.toBeNull();
+    sweepAt(startMs + 19_000);
+    expect(outbox.readLatestState(executionId)).toBeNull();
+  });
+
+  it('stays tolerating until the sweep drains it well below its size, then is available', async () => {
+    const { outbox, sweepAt } = await openSweptOutbox({
+      events: { size: 10, tolerance: 0.2 },
+    });
+    const heldEvents = Array.from({ length: 11 }, () => buildEventRecord());
+    outbox.commitEvents({ events: heldEvents });
+    outbox.markEventsSeen(heldEvents.slice(0, 2).map((event) => event.id));
+    sweepAt(startMs + 6000);
+    expect(outbox.capacity({ events: 0 }).buffers.events).toMatchObject({
+      status: 'tolerating',
+      held: 9,
+    });
+    outbox.markEventsSeen(heldEvents.slice(2, 3).map((event) => event.id));
+    sweepAt(startMs + 12_000);
+    expect(outbox.capacity({ events: 0 }).buffers.events).toMatchObject({
+      status: 'available',
+      held: 8,
+    });
+  });
+
+  it('sweeps at the interval its retentions give', async () => {
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval');
+    const outbox = await openMemoryOutbox({
+      retentionMs: { seenEvents: 60_000, terminalStates: 120_000 },
+    });
+    expect(intervalSpy.mock.calls[0]?.[1]).toBe(6000);
+    await outbox.close();
+  });
+
+  it('starts one timer however often it is opened', async () => {
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval');
+    const outbox = new ArvoMemoryOutbox();
+    await Promise.all([outbox.open(), outbox.open()]);
+    await outbox.open();
+    expect(intervalSpy).toHaveBeenCalledTimes(1);
+    await outbox.close();
+  });
+
+  it('sweeps no more once closed', async () => {
+    const clearSpy = vi.spyOn(globalThis, 'clearInterval');
+    const { outbox } = await openSweptOutbox();
+    await outbox.close();
+    expect(clearSpy).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('starts no timer where it is closed while opening', async () => {
+    const outbox = new ArvoMemoryOutbox();
+    const opening = outbox.open();
+    await outbox.close();
+    await opening.catch(() => undefined);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('lets the process end with nothing else to do', async () => {
+    vi.useRealTimers();
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval');
+    const outbox = await openMemoryOutbox();
+    const sweepTimer = intervalSpy.mock.results[0]?.value;
+    expect(sweepTimer?.hasRef()).toBe(false);
+    await outbox.close();
+  });
+
+  it('deletes nothing, and warns, where the clock fails during a sweep, then sweeps as usual', async () => {
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    let isClockBroken = false;
+    const settableClock = createSettableClock(startMs);
+    const outbox = await openMemoryOutbox({
+      clock: () =>
+        isClockBroken ? new Date(Number.NaN) : settableClock.clock(),
+      retentionMs: { seenEvents: 5000, terminalStates: 10_000 },
+    });
+    const event = buildEventRecord();
+    outbox.commitEvents({ events: [event] });
+    outbox.markEventsSeen([event.id]);
+    settableClock.moveTo(startMs + 6000);
+    isClockBroken = true;
+    vi.advanceTimersByTime(sweepIntervalMs);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(holds(outbox, event)).toBe(true);
+    isClockBroken = false;
+    vi.advanceTimersByTime(sweepIntervalMs);
+    expect(holds(outbox, event)).toBe(false);
   });
 });
 
