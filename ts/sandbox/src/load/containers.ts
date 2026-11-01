@@ -60,7 +60,11 @@ export const containersFor = (param: {
   const containers: LoadContainer[] = [
     {
       name: 'main',
-      testFiles: [directory],
+      // the harness's own checks run once, with the in-memory suite
+      testFiles:
+        param.outbox === 'inmemory'
+          ? ['tests/load/harness', directory]
+          : [directory],
       excludedFiles: separateFiles,
       cpus: 2,
       memoryMb: 2048,

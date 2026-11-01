@@ -9,7 +9,7 @@ All work is in `ts/sandbox`; no file under `ts/arvo-core/src` changes. Each grou
 
 ## 2. The harness
 
-- [ ] 2.1 Add `src/load/harness/`: the fake queue, the workers and sweeper driving the handlers in `src/distributed/handler` with an in-memory catalogue, the invariant ledger, measuring, results and forked processes. Verify each with a small test under `tests/load/harness/`, run in the `main` container: the ledger fails on a lost event and a doubled revision, and the workers drive a real dispatcher and driver to committed, published and seen.
+- [x] 2.1 Add `src/load/harness/`: the fake queue, the workers and sweeper driving the handlers in `src/distributed/handler` with an in-memory catalogue, the invariant ledger, measuring, results and forked processes. Verify each with a small test under `tests/load/harness/`, run in the `main` container: the ledger fails on a lost event and a doubled revision, and the workers drive a real dispatcher and driver to committed, published and seen.
 
 ## 3. The in-memory checks
 
