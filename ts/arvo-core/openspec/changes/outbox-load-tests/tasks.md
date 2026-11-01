@@ -13,7 +13,7 @@ All work is in `ts/sandbox`; no file under `ts/arvo-core/src` changes. Each grou
 
 ## 3. The in-memory checks
 
-- [ ] 3.1 Add `tests/load/inmemory/`, one file per spec group: speed; filling up and recovering; cleaning up, with the clock moved through the outbox's option; things at once; failures forced through broken outboxes and the driver; size limits. Every committing check ends on the invariants. Verify `pnpm load:inmemory` passes, and the report gives every measurement.
+- [x] 3.1 Add `tests/load/inmemory/`, one file per spec group: speed; filling up and recovering; cleaning up, with the clock moved through the outbox's option; things at once; failures forced through broken outboxes and the driver; size limits. Every committing check ends on the invariants. Verify `pnpm load:inmemory` passes, and the report gives every measurement.
 
 ## 4. The SQLite checks
 

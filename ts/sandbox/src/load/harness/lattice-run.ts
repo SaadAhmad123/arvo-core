@@ -148,20 +148,32 @@ export const runLattice = async (
     });
   };
 
-  /** Sends again whatever a delivery already committed, as a repeated delivery must. */
+  /**
+   * Sends again whatever a delivery committed and never sent, as a repeated
+   * delivery must. What was already sent is not sent again: each would be a
+   * repeat downstream, recovering in turn, without end.
+   */
   const recover = async (triggeringEvent: ArvoEvent): Promise<void> => {
     outcome.recoveries += 1;
-    await routeEntries(
-      await param.driver.readCommittedEvents({
-        filter: { triggeringEventId: triggeringEvent.id },
-      }),
-    );
+    const entries = await param.driver.readCommittedEvents({
+      filter: { triggeringEventId: triggeringEvent.id },
+    });
+    for (const entry of entries) {
+      if (entry.record.seen) param.ledger.recordHandedOut([entry.record.id]);
+    }
+    await routeEntries(entries.filter((entry) => !entry.record.seen));
   };
 
-  /** Counts a refusal by its kind, and puts the delivery back to run again. */
-  const refuse = (kind: string, delivery: QueuedDelivery): void => {
+  /** Counts a refusal by its kind, and puts the delivery back to run again, after backing off where there was no room. */
+  const refuse = async (
+    kind: string,
+    delivery: QueuedDelivery,
+  ): Promise<void> => {
     outcome.refusalsByKind[kind] = (outcome.refusalsByKind[kind] ?? 0) + 1;
     param.queue.redeliver(delivery);
+    if (kind === 'capacity_exhausted' || kind === 'unavailable') {
+      await new Promise((settle) => setTimeout(settle, 5));
+    }
   };
 
   /** Publishes and marks seen what a commit carried, or leaves it for the sweeper. */
@@ -214,7 +226,7 @@ export const runLattice = async (
       committed.error.kind === 'capacity_exhausted' ||
       committed.error.kind === 'unavailable'
     ) {
-      refuse(committed.error.kind, delivery);
+      await refuse(committed.error.kind, delivery);
     } else {
       await recover(delivery.event);
     }
@@ -228,6 +240,8 @@ export const runLattice = async (
       if (capacityResult.ok && capacityResult.value.status === 'exhausted') {
         outcome.pausedForRoom += 1;
         param.queue.redeliver(delivery);
+        // back off: a worker that only ever retries starves the timers that free room
+        await new Promise((settle) => setTimeout(settle, 5));
         return;
       }
     }
@@ -268,7 +282,7 @@ export const runLattice = async (
       triggeringEvent: delivery.event,
     });
     if (!committed.ok) {
-      refuse(committed.error.kind, delivery);
+      await refuse(committed.error.kind, delivery);
       return;
     }
     param.ledger.recordCommit({

@@ -67,7 +67,8 @@ export const containersFor = (param: {
           : [directory],
       excludedFiles: separateFiles,
       cpus: 2,
-      memoryMb: 2048,
+      // room for a million events held at once
+      memoryMb: 3072,
       extraArguments: [],
       environment: {},
     },
@@ -99,6 +100,8 @@ export const containersFor = (param: {
           FAKETIME_TIMESTAMP_FILE: FAKED_CLOCK_FILE,
           // timers keep running at real speed; only the time of day moves
           FAKETIME_DONT_FAKE_MONOTONIC: '1',
+          // read the faked time afresh on every call, so a check moves it at once
+          FAKETIME_NO_CACHE: '1',
           LOAD_FAKED_CLOCK_FILE: FAKED_CLOCK_FILE,
         },
       },
@@ -151,12 +154,15 @@ export const dockerRunArguments = (param: {
   `LOAD_CONTAINER=${param.container.name}`,
   '--env',
   `LOAD_MEMORY_MB=${param.container.memoryMb}`,
+  // Node's own heap limit sits well below the container's: give it most of it
+  '--env',
+  `NODE_OPTIONS=--max-old-space-size=${Math.floor(param.container.memoryMb * 0.8)}`,
   LOAD_IMAGE,
   'node_modules/.bin/vitest',
   'run',
   '--config',
   'vitest.load.config.ts',
-  '--reporter=default',
+  '--reporter=verbose',
   '--reporter=json',
   '--outputFile.json=/results/vitest.json',
   ...param.container.excludedFiles.flatMap((excludedFile) => [

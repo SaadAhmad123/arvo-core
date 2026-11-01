@@ -19,7 +19,7 @@ importers:
         version: 2.10.0(@opentelemetry/api@1.10.0)
       arvo-core:
         specifier: file:../arvo-core
-        version: file:../arvo-core(@opentelemetry/api@1.10.0)(cloudevents@10.0.0)(vitest@5.0.4(@opentelemetry/api@1.10.0)(@types/node@26.6.4)(vite@7.3.6(@types/node@26.6.4)(terser@5.51.2)(tsx@4.23.5)(yaml@2.9.1)))(zod@4.4.3)
+        version: file:../arvo-core(@opentelemetry/api@1.10.0)(better-sqlite3@13.0.3)(cloudevents@10.0.0)(vitest@5.0.4(@opentelemetry/api@1.10.0)(@types/node@26.6.4)(vite@7.3.6(@types/node@26.6.4)(terser@5.51.2)(tsx@4.23.5)(yaml@2.9.1)))(zod@4.4.3)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -84,9 +84,15 @@ importers:
       '@temporalio/workflow':
         specifier: 1.24.0
         version: 1.24.0
+      '@types/better-sqlite3':
+        specifier: 9.6.0
+        version: 9.6.0
       '@types/pg':
         specifier: 8.15.6
         version: 8.15.6
+      better-sqlite3:
+        specifier: 13.0.3
+        version: 13.0.3
       node-pg-migrate:
         specifier: 8.0.3
         version: 8.0.3(@types/pg@8.15.6)(pg@8.16.3)
@@ -1069,6 +1075,9 @@ packages:
     resolution: {integrity: sha512-pIA9nxkDCCbBnNuMSffQ44HWHYe3zXFfrDpDLwzh/FUSx8uLbsBM8jwf5oUMf+5eV/qVW9PknZhOu9IFO4XnPA==}
     engines: {node: '>= 20.3.0'}
 
+  '@types/better-sqlite3@9.6.0':
+    resolution: {integrity: sha512-ZEEwBSgMu7GYJOynoagg5X9JbxfL6dTJDsgViJIqh67jV44kyOr9RXfmFjLK5rzC4MWssP06t9hu/JwGDnUbCg==}
+
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -1353,6 +1362,10 @@ packages:
     resolution: {integrity: sha512-ElY12DaROGuan+lMmZ8Cvo/ZUbXPe7Enc/9VU/b1T3Kp4dwytRcNdR8DoSJN5SNJT/CuvcCA0DHDVmMOCePdRQ==}
     engines: {node: '>=6.0.0'}
     hasBin: true
+
+  better-sqlite3@13.0.3:
+    resolution: {integrity: sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==}
+    engines: {node: '>=22'}
 
   bignumber.js@9.3.1:
     resolution: {integrity: sha512-Ko0uX15oIUS7wJ3Rb30Fs6SkVbLmPBAKdlm7q9+ak9bbIeFf0MwuBsQV6z7+X768/cHsfg+WlysDWJcmthjsjQ==}
@@ -1797,6 +1810,10 @@ packages:
   nexus-rpc@0.0.3:
     resolution: {integrity: sha512-ksIBeYHDv6FHAR1h3Vwk0kQ6REhdo1STqDHXMzu/yn/VN/XzgOor2IUjewG6paoA7IgxlIPZoOU/PD78PC6HTg==}
     engines: {node: '>= 20.0.0'}
+
+  node-addon-api@8.9.2:
+    resolution: {integrity: sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg==}
+    engines: {node: ^18 || ^20 || >= 21}
 
   node-pg-migrate@8.0.3:
     resolution: {integrity: sha512-oKzZyzTULTryO1jehX19VnyPCGf3G/3oWZg3gODphvID56T0WjPOShTVPVnxGdlcueaIW3uAVrr7M8xLZq5TcA==}
@@ -3167,6 +3184,10 @@ snapshots:
       '@temporalio/proto': 1.24.0
       nexus-rpc: 0.0.3
 
+  '@types/better-sqlite3@9.6.0':
+    dependencies:
+      '@types/node': 26.6.4
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -3377,7 +3398,7 @@ snapshots:
     dependencies:
       color-convert: 2.0.1
 
-  arvo-core@file:../arvo-core(@opentelemetry/api@1.10.0)(cloudevents@10.0.0)(vitest@5.0.4(@opentelemetry/api@1.10.0)(@types/node@26.6.4)(vite@7.3.6(@types/node@26.6.4)(terser@5.51.2)(tsx@4.23.5)(yaml@2.9.1)))(zod@4.4.3):
+  arvo-core@file:../arvo-core(@opentelemetry/api@1.10.0)(better-sqlite3@13.0.3)(cloudevents@10.0.0)(vitest@5.0.4(@opentelemetry/api@1.10.0)(@types/node@26.6.4)(vite@7.3.6(@types/node@26.6.4)(terser@5.51.2)(tsx@4.23.5)(yaml@2.9.1)))(zod@4.4.3):
     dependencies:
       '@opentelemetry/api': 1.10.0
       cloudevents: 10.0.0
@@ -3385,6 +3406,7 @@ snapshots:
       neverthrow: 8.2.0
       zod: 4.4.3
     optionalDependencies:
+      better-sqlite3: 13.0.3
       vitest: 5.0.4(@opentelemetry/api@1.10.0)(@types/node@26.6.4)(vite@7.3.6(@types/node@26.6.4)(terser@5.51.2)(tsx@4.23.5)(yaml@2.9.1))
 
   assertion-error@2.0.1: {}
@@ -3398,6 +3420,10 @@ snapshots:
   balanced-match@4.0.4: {}
 
   baseline-browser-mapping@2.11.27: {}
+
+  better-sqlite3@13.0.3:
+    dependencies:
+      node-addon-api: 8.9.2
 
   bignumber.js@9.3.1: {}
 
@@ -3798,6 +3824,8 @@ snapshots:
       '@rollup/rollup-linux-x64-gnu': 4.62.4
 
   nexus-rpc@0.0.3: {}
+
+  node-addon-api@8.9.2: {}
 
   node-pg-migrate@8.0.3(@types/pg@8.15.6)(pg@8.16.3):
     dependencies:

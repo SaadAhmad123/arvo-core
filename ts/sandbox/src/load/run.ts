@@ -8,6 +8,7 @@ import {
   dockerRunArguments,
   LOAD_CONTAINER_PREFIX,
   LOAD_IMAGE,
+  type LoadContainer,
   type LoadOutbox,
 } from './containers.js';
 import {
@@ -90,6 +91,27 @@ const runContainer = (dockerArguments: readonly string[]): Promise<number> =>
     containerProcess.once('error', () => settle(1));
   });
 
+/**
+ * The containers a run starts: every one, or, asked `--only` for one test
+ * file, the container that file belongs to, running that file alone.
+ */
+const containersToRun = (requested: {
+  readonly outbox: LoadOutbox;
+  readonly soak: boolean;
+  readonly soakMinutes: number;
+  readonly onlyFile: string | null;
+}): readonly LoadContainer[] => {
+  const containers = containersFor({ ...requested, soak: true });
+  if (requested.onlyFile === null) return containersFor(requested);
+  const onlyFile = requested.onlyFile;
+  const owner =
+    containers.find((container) => container.testFiles.includes(onlyFile)) ??
+    containers.find((container) => container.name === 'main');
+  return owner === undefined
+    ? []
+    : [{ ...owner, testFiles: [onlyFile], excludedFiles: [] }];
+};
+
 /** The outbox and flags this run was asked for. */
 const readArguments = () => {
   const [outboxArgument, ...flags] = process.argv.slice(2);
@@ -105,7 +127,10 @@ const readArguments = () => {
       `LOAD_SOAK_MINUTES must be a number of minutes above zero, not ${process.env.LOAD_SOAK_MINUTES}`,
     );
   }
-  return { outbox, soak: flags.includes('--soak'), soakMinutes };
+  const onlyPosition = flags.indexOf('--only');
+  const onlyFile =
+    onlyPosition === -1 ? null : (flags[onlyPosition + 1] ?? null);
+  return { outbox, soak: flags.includes('--soak'), soakMinutes, onlyFile };
 };
 
 const main = async (): Promise<number> => {
@@ -137,11 +162,14 @@ const main = async (): Promise<number> => {
     join(SANDBOX, '..'),
   ]);
 
+  // the image this build replaced, and only this suite's
+  docker(['image', 'prune', '--force', '--filter', 'label=arvo.load=true']);
+
   const runId = new Date().toISOString().replace(/[:.]/g, '-');
   const machine = describeMachine();
   const outcomes: LoadContainerOutcome[] = [];
   try {
-    for (const container of containersFor(requested)) {
+    for (const container of containersToRun(requested)) {
       const resultsFolder = join(RESULTS_ROOT, runId, container.name);
       mkdirSync(resultsFolder, { recursive: true });
       console.log(`\n=== ${requested.outbox}: ${container.name} ===`);
