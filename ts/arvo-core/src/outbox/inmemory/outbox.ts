@@ -24,16 +24,15 @@ import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
 import { bufferCapacity, isDrained } from './helpers/buffer-capacity.js';
 import { checkOptions } from './helpers/check-options.js';
 import { copyEventRecord } from './helpers/copy-event-record.js';
-import {
-  addToIndex,
-  type KeyedIndex,
-  removeFromIndex,
-} from './helpers/keyed-index.js';
+import { addToIndex, type KeyedIndex } from './helpers/keyed-index.js';
 import {
   type ArvoMemoryOutboxResolvedOptions,
   resolveOptions,
 } from './helpers/resolve-options.js';
-import type { ArvoMemoryOutboxOptions } from './types.js';
+import type {
+  ArvoMemoryOutboxBuffer,
+  ArvoMemoryOutboxOptions,
+} from './types.js';
 
 /** An execution's latest state, with the fields committed beside it. */
 type StoredState = Omit<ArvoOutboxStateCommit, 'events'>;
@@ -82,15 +81,13 @@ const createMemoryStore = (): MemoryStore => ({
 const CAPACITY_STATUSES_BY_SEVERITY: readonly ArvoOutboxCapacityStatus[] =
   Object.freeze(['available', 'tolerating', 'exhausted']);
 
-/** The worse of two statuses. */
-const worseStatus = (
-  firstStatus: ArvoOutboxCapacityStatus,
-  secondStatus: ArvoOutboxCapacityStatus,
+/** The worst of the statuses given. */
+const worstStatus = (
+  ...capacityStatuses: readonly ArvoOutboxCapacityStatus[]
 ): ArvoOutboxCapacityStatus =>
-  CAPACITY_STATUSES_BY_SEVERITY.indexOf(firstStatus) >=
-  CAPACITY_STATUSES_BY_SEVERITY.indexOf(secondStatus)
-    ? firstStatus
-    : secondStatus;
+  CAPACITY_STATUSES_BY_SEVERITY.filter((severityStatus) =>
+    capacityStatuses.includes(severityStatus),
+  ).at(-1) ?? 'available';
 
 /**
  * An outbox that holds everything in process memory, and loses all of it
@@ -102,9 +99,12 @@ const worseStatus = (
  * frees everything it holds. Every operation answers directly, and nothing
  * it is given or hands back shares memory with what it holds.
  *
- * It keeps each execution's latest state, and at most `options.buffers.events.size`
- * event records, making room by dropping the events seen longest ago and
- * never an unseen one; where only unseen events are held, a commit throws.
+ * It keeps each execution's latest state, and holds events, seen or not, and
+ * states each in a buffer of `options.buffers`. Past a buffer's size it
+ * answers its capacity as `tolerating`; a commit that would take a buffer
+ * past its limit is refused as `capacity_exhausted`, writing nothing. The
+ * buffers count events and states, not the memory they take.
+ *
  * Landing times and leases go by `options.clock`; where it goes back, a
  * commit is stamped no earlier than the one before.
  *
@@ -168,12 +168,19 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
         ?.casVersion,
     });
     if (refusal !== null) return { committed: false, refusal };
-    const droppedEventCount = this.countEventsToDrop(
-      store,
-      newEventRecords.length,
-    );
+    const addedStateCount = store.latestStateByExecution.has(param.executionId)
+      ? 0
+      : 1;
+    if (
+      this.wouldExhaust({
+        store,
+        addedEventCount: newEventRecords.length,
+        addedStateCount,
+      })
+    ) {
+      return { committed: false, refusal: 'capacity_exhausted' };
+    }
     const landing = this.stampLanding(store);
-    this.dropSeenEvents(store, droppedEventCount);
     store.latestStateByExecution.set(param.executionId, {
       executionId: param.executionId,
       casVersion: param.casVersion,
@@ -188,17 +195,22 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
     return { committed: true };
   }
 
-  commitEvents(param: ArvoOutboxEventsCommit): void {
+  commitEvents(param: ArvoOutboxEventsCommit): ArvoOutboxCommitOutcome {
     const store = this.lifecycle.resourcesFor('commitEvents');
     const newEventRecords = this.withoutHeldEvents(store, param.events);
-    const droppedEventCount = this.countEventsToDrop(
-      store,
-      newEventRecords.length,
-    );
+    if (
+      this.wouldExhaust({
+        store,
+        addedEventCount: newEventRecords.length,
+        addedStateCount: 0,
+      })
+    ) {
+      return { committed: false, refusal: 'capacity_exhausted' };
+    }
     const landing = this.stampLanding(store);
-    this.dropSeenEvents(store, droppedEventCount);
     this.storeEvents(store, newEventRecords, landing);
     this.updateTolerating(store);
+    return { committed: true };
   }
 
   readCommittedEvents(
@@ -259,12 +271,12 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
 
   capacity(request: ArvoOutboxCapacityRequest): ArvoOutboxCapacity {
     const store = this.lifecycle.resourcesFor('capacity');
-    const events = bufferCapacity({
+    const eventsCapacity = bufferCapacity({
       held: store.eventsById.size + request.events,
       buffer: this.options.buffers.events,
       tolerating: store.tolerating.events,
     });
-    const states = bufferCapacity({
+    const statesCapacity = bufferCapacity({
       held:
         store.latestStateByExecution.size +
         (request.state?.casVersion === 0 ? 1 : 0),
@@ -272,8 +284,8 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
       tolerating: store.tolerating.states,
     });
     return {
-      status: worseStatus(events.status, states.status),
-      buffers: { events, states },
+      status: worstStatus(eventsCapacity.status, statesCapacity.status),
+      buffers: { events: eventsCapacity, states: statesCapacity },
     };
   }
 
@@ -284,11 +296,15 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   private updateTolerating(store: MemoryStore): void {
     const eventsHeld = store.eventsById.size;
     const statesHeld = store.latestStateByExecution.size;
-    const { events, states } = this.options.buffers;
-    if (eventsHeld > events.size) store.tolerating.events = true;
-    else if (isDrained(eventsHeld, events)) store.tolerating.events = false;
-    if (statesHeld > states.size) store.tolerating.states = true;
-    else if (isDrained(statesHeld, states)) store.tolerating.states = false;
+    const { events: eventsBuffer, states: statesBuffer } = this.options.buffers;
+    if (eventsHeld > eventsBuffer.size) store.tolerating.events = true;
+    else if (isDrained(eventsHeld, eventsBuffer)) {
+      store.tolerating.events = false;
+    }
+    if (statesHeld > statesBuffer.size) store.tolerating.states = true;
+    else if (isDrained(statesHeld, statesBuffer)) {
+      store.tolerating.states = false;
+    }
   }
 
   /** Copies of the records not already held, each identifier once. */
@@ -305,39 +321,26 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
     return [...newEventRecords.values()];
   }
 
-  /** How many seen events must go to make room, refusing where too few are seen. */
-  private countEventsToDrop(store: MemoryStore, newEventCount: number): number {
-    const droppedEventCount = Math.max(
-      0,
-      store.eventsById.size + newEventCount - this.options.buffers.events.size,
+  /** Whether adding this much would take either buffer past its limit. */
+  private wouldExhaust(param: {
+    readonly store: MemoryStore;
+    readonly addedEventCount: number;
+    readonly addedStateCount: number;
+  }): boolean {
+    const { events: eventsBuffer, states: statesBuffer } = this.options.buffers;
+    const isExhausted = (held: number, buffer: ArvoMemoryOutboxBuffer) =>
+      bufferCapacity({ held, buffer, tolerating: false }).status ===
+      'exhausted';
+    return (
+      isExhausted(
+        param.store.eventsById.size + param.addedEventCount,
+        eventsBuffer,
+      ) ||
+      isExhausted(
+        param.store.latestStateByExecution.size + param.addedStateCount,
+        statesBuffer,
+      )
     );
-    if (droppedEventCount > store.seenEventsById.size) {
-      throw new Error(
-        `ArvoMemoryOutbox cannot commit ${newEventCount} more ${newEventCount === 1 ? 'event' : 'events'}: it holds ${store.unseenEventsById.size} unseen of the ${this.options.buffers.events.size} it may hold, and only seen events are dropped to make room. Send what it holds and mark it seen, or build it with a larger buffers.events.size.`,
-      );
-    }
-    return droppedEventCount;
-  }
-
-  /** Forgets the events seen longest ago. */
-  private dropSeenEvents(store: MemoryStore, droppedEventCount: number): void {
-    let remainingDropCount = droppedEventCount;
-    for (const [eventId, storedEvent] of store.seenEventsById) {
-      if (remainingDropCount === 0) break;
-      remainingDropCount -= 1;
-      store.seenEventsById.delete(eventId);
-      store.eventsById.delete(eventId);
-      removeFromIndex(
-        store.eventsByExecution,
-        storedEvent.eventRecord.executionId,
-        eventId,
-      );
-      removeFromIndex(
-        store.eventsByTriggeringEvent,
-        storedEvent.eventRecord.triggeringEventId,
-        eventId,
-      );
-    }
   }
 
   /** The clock's time, refusing one that is no time at all. */

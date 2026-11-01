@@ -26,9 +26,9 @@ describe('an in-memory outbox validation error', () => {
   });
 
   it('carries a frozen copy of every issue', () => {
-    const given = [...issues];
-    const error = new ArvoMemoryOutboxValidationError(given);
-    given.pop();
+    const issuesToMutate = [...issues];
+    const error = new ArvoMemoryOutboxValidationError(issuesToMutate);
+    issuesToMutate.pop();
     expect(error.issues).toEqual(issues);
     expect(Object.isFrozen(error.issues)).toBe(true);
   });

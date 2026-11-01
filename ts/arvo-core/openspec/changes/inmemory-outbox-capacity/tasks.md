@@ -14,8 +14,8 @@
 
 ## 3. Refusing at commit
 
-- [ ] 3.1 Add to `outbox.spec.ts`: each commit refused as `capacity_exhausted` past a limit, writing nothing; a later revision not refused by a full states buffer; past the size but within the limit committed; an event held or carried twice counted once; `commitEvents` answering `{ committed: true }`. Run red.
-- [ ] 3.2 In `src/outbox/inmemory/outbox.ts` check both buffers before the first write, **remove** `countEventsToDrop` and `dropSeenEvents`, and make `commitEvents` answer its outcome. Update the class TSDoc. Verify with `pnpm typecheck` and `pnpm lint`.
+- [x] 3.1 Add to `outbox.spec.ts`: each commit refused as `capacity_exhausted` past a limit, writing nothing; a later revision not refused by a full states buffer; past the size but within the limit committed; an event held or carried twice counted once; `commitEvents` answering `{ committed: true }`. Run red.
+- [x] 3.2 In `src/outbox/inmemory/outbox.ts` check both buffers before the first write, **remove** `countEventsToDrop` and `dropSeenEvents`, and make `commitEvents` answer its outcome. Update the class TSDoc. Verify with `pnpm typecheck` and `pnpm lint`.
 
 ## 4. Retention and the sweep
 

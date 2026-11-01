@@ -60,7 +60,7 @@ describe("one in-memory buffer's capacity", () => {
     [9, false],
     [8, true],
     [0, true],
-  ])('holding %i is drained: %s', (held, drained) => {
-    expect(isDrained(held, buffer)).toBe(drained);
+  ])('holding %i is drained: %s', (held, expectedDrained) => {
+    expect(isDrained(held, buffer)).toBe(expectedDrained);
   });
 });

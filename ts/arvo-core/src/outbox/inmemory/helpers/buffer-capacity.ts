@@ -5,11 +5,11 @@ import type {
 import type { ArvoMemoryOutboxBuffer } from '../types.js';
 
 /** The most a buffer holds before it is exhausted, as a whole number. */
-const limitOf = (buffer: ArvoMemoryOutboxBuffer): number =>
+const limitOfBuffer = (buffer: ArvoMemoryOutboxBuffer): number =>
   Math.floor(buffer.size * (1 + buffer.tolerance));
 
 /** The status of a buffer holding `held` with the limit given. */
-const statusOf = (param: {
+const statusOfBuffer = (param: {
   readonly held: number;
   readonly limit: number;
   readonly buffer: ArvoMemoryOutboxBuffer;
@@ -29,9 +29,9 @@ export const bufferCapacity = (param: {
   readonly buffer: ArvoMemoryOutboxBuffer;
   readonly tolerating: boolean;
 }): ArvoOutboxBufferCapacity => {
-  const limit = limitOf(param.buffer);
+  const limit = limitOfBuffer(param.buffer);
   return {
-    status: statusOf({ ...param, limit }),
+    status: statusOfBuffer({ ...param, limit }),
     held: param.held,
     size: param.buffer.size,
     limit,

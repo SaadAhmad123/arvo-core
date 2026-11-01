@@ -363,139 +363,117 @@ describe('ArvoMemoryOutbox and what it holds', () => {
   });
 });
 
-describe('ArvoMemoryOutbox and how many events it holds', () => {
-  /** Commits one event per commit and returns their identifiers in commit order. */
-  const commitEventsOneByOne = (outbox: ArvoMemoryOutbox, eventCount: number) =>
-    Array.from({ length: eventCount }, () => {
-      const event = buildEventRecord();
-      outbox.commitEvents({ events: [event] });
-      return event;
+describe('ArvoMemoryOutbox and a commit it has no room for', () => {
+  /** An outbox meant to hold two events and two states, and at most three of each. */
+  const openSmallOutbox = () =>
+    openMemoryOutbox({
+      buffers: {
+        events: { size: 2, tolerance: 0.5 },
+        states: { size: 2, tolerance: 0.5 },
+      },
     });
 
-  /** Whether the outbox still holds an event. */
-  const holds = (
-    outbox: ArvoMemoryOutbox,
-    event: { readonly id: string; readonly triggeringEventId: string },
-  ) =>
-    outbox
-      .readCommittedEvents({ triggeringEventId: event.triggeringEventId })
-      .some((committedEvent) => committedEvent.id === event.id);
-
-  it('drops the event seen longest ago to make room for a commit', async () => {
-    const outbox = await openMemoryOutbox({
-      buffers: { events: { size: 3, tolerance: 0 } },
-    });
-    const [firstEvent, secondEvent, thirdEvent] = commitEventsOneByOne(
-      outbox,
-      3,
-    );
-    if (!firstEvent || !secondEvent || !thirdEvent)
-      throw new Error('three events were committed');
-    outbox.markEventsSeen([secondEvent.id]);
-    outbox.markEventsSeen([firstEvent.id]);
-    const newEvent = buildEventRecord();
-    outbox.commitEvents({ events: [newEvent] });
-    expect(holds(outbox, secondEvent)).toBe(false);
-    expect(holds(outbox, firstEvent)).toBe(true);
-    expect(holds(outbox, thirdEvent)).toBe(true);
-    expect(holds(outbox, newEvent)).toBe(true);
-  });
-
-  it('drops no more seen events than a commit needs room for', async () => {
-    const outbox = await openMemoryOutbox({
-      buffers: { events: { size: 3, tolerance: 0 } },
-    });
-    const heldEvents = commitEventsOneByOne(outbox, 3);
-    outbox.markEventsSeen(heldEvents.map((event) => event.id));
-    outbox.commitEvents({ events: [buildEventRecord()] });
-    expect(heldEvents.map((event) => holds(outbox, event))).toEqual([
-      false,
-      true,
-      true,
-    ]);
-  });
-
-  it('throws on a commit with no room where every event held is unseen, having written nothing', async () => {
-    const outbox = await openMemoryOutbox({
-      buffers: { events: { size: 2, tolerance: 0 } },
-    });
-    const heldEvents = commitEventsOneByOne(outbox, 2);
+  /** A commit of a first revision of a new execution, with some events. */
+  const buildNewExecutionCommit = (eventCount: number) => {
     const executionId = crypto.randomUUID();
-    expect(() =>
-      outbox.commitStateAndEvents(
-        buildStateCommit({
-          executionId,
-          casVersion: 0,
-          events: [buildEventRecord({ executionId })],
-        }),
+    return buildStateCommit({
+      executionId,
+      casVersion: 0,
+      events: Array.from({ length: eventCount }, () =>
+        buildEventRecord({ executionId }),
       ),
-    ).toThrow(
-      'ArvoMemoryOutbox cannot commit 1 more event: it holds 2 unseen of the 2 it may hold, and only seen events are dropped to make room. Send what it holds and mark it seen, or build it with a larger buffers.events.size.',
-    );
-    expect(outbox.readLatestState(executionId)).toBeNull();
-    expect(outbox.readCommittedEvents({ executionId })).toEqual([]);
-    expect(heldEvents.map((event) => holds(outbox, event))).toEqual([
-      true,
-      true,
-    ]);
-  });
-
-  it('throws on a commit that needs more room than every seen event frees, dropping none', async () => {
-    const outbox = await openMemoryOutbox({
-      buffers: { events: { size: 3, tolerance: 0 } },
     });
-    const heldEvents = commitEventsOneByOne(outbox, 3);
-    outbox.markEventsSeen(heldEvents.slice(0, 1).map((event) => event.id));
-    expect(() =>
-      outbox.commitEvents({ events: [buildEventRecord(), buildEventRecord()] }),
-    ).toThrow(
-      'cannot commit 2 more events: it holds 2 unseen of the 3 it may hold',
-    );
-    expect(heldEvents.map((event) => holds(outbox, event))).toEqual([
-      true,
-      true,
-      true,
-    ]);
-  });
+  };
 
-  it('counts an event already held, or repeated in one commit, once', async () => {
-    const outbox = await openMemoryOutbox({
-      buffers: { events: { size: 2, tolerance: 0 } },
+  it('refuses events alone past the events limit, writing nothing', async () => {
+    const outbox = await openSmallOutbox();
+    outbox.commitEvents({ events: [buildEventRecord(), buildEventRecord()] });
+    const refusedEvents = [buildEventRecord(), buildEventRecord()];
+    expect(outbox.commitEvents({ events: refusedEvents })).toEqual({
+      committed: false,
+      refusal: 'capacity_exhausted',
     });
-    const [heldEvent] = commitEventsOneByOne(outbox, 1);
-    if (!heldEvent) throw new Error('one event was committed');
-    const newEvent = buildEventRecord();
-    expect(() =>
-      outbox.commitEvents({ events: [heldEvent, newEvent, { ...newEvent }] }),
-    ).not.toThrow();
-    expect(holds(outbox, newEvent)).toBe(true);
-  });
-
-  it('stores anew an event committed again after it was dropped', async () => {
-    const outbox = await openMemoryOutbox({
-      buffers: { events: { size: 1, tolerance: 0 } },
-    });
-    const [droppedEvent] = commitEventsOneByOne(outbox, 1);
-    if (!droppedEvent) throw new Error('one event was committed');
-    outbox.markEventsSeen([droppedEvent.id]);
-    const eventsTakingItsRoom = commitEventsOneByOne(outbox, 1);
-    outbox.markEventsSeen(eventsTakingItsRoom.map((event) => event.id));
-    outbox.commitEvents({ events: [droppedEvent] });
     expect(
       outbox.readCommittedEvents({
-        triggeringEventId: droppedEvent.triggeringEventId,
+        triggeringEventId: refusedEvents[0]?.triggeringEventId ?? '',
       }),
-    ).toMatchObject([{ id: droppedEvent.id, seen: false }]);
+    ).toEqual([]);
   });
 
-  it('holds its own default number of events where none is given', async () => {
-    const outbox = await openMemoryOutbox();
-    outbox.commitEvents({
-      events: Array.from({ length: 10_000 }, () => buildEventRecord()),
+  it('refuses a state and its events past the events limit, writing neither', async () => {
+    const outbox = await openSmallOutbox();
+    const commit = buildNewExecutionCommit(4);
+    expect(outbox.commitStateAndEvents(commit)).toEqual({
+      committed: false,
+      refusal: 'capacity_exhausted',
     });
-    expect(() => outbox.commitEvents({ events: [buildEventRecord()] })).toThrow(
-      'it holds 10000 unseen of the 10000 it may hold',
+    expect(outbox.readLatestState(commit.executionId)).toBeNull();
+  });
+
+  it('refuses a new execution past the states limit', async () => {
+    const outbox = await openSmallOutbox();
+    for (let executionCount = 0; executionCount < 3; executionCount += 1) {
+      outbox.commitStateAndEvents(buildNewExecutionCommit(0));
+    }
+    expect(outbox.commitStateAndEvents(buildNewExecutionCommit(0))).toEqual({
+      committed: false,
+      refusal: 'capacity_exhausted',
+    });
+  });
+
+  it('commits a later revision with the states buffer at its limit', async () => {
+    const outbox = await openSmallOutbox();
+    const firstRevisionCommits = Array.from({ length: 3 }, () =>
+      buildNewExecutionCommit(0),
     );
+    for (const firstRevisionCommit of firstRevisionCommits) {
+      outbox.commitStateAndEvents(firstRevisionCommit);
+    }
+    const [firstRevisionCommit] = firstRevisionCommits;
+    if (!firstRevisionCommit)
+      throw new Error('three executions were committed');
+    expect(
+      outbox.commitStateAndEvents({ ...firstRevisionCommit, casVersion: 1 }),
+    ).toEqual({ committed: true });
+  });
+
+  it('answers a stale revision as stale, not as having no room', async () => {
+    const outbox = await openSmallOutbox();
+    const commit = buildNewExecutionCommit(0);
+    outbox.commitStateAndEvents(commit);
+    expect(outbox.commitStateAndEvents({ ...commit, casVersion: 5 })).toEqual({
+      committed: false,
+      refusal: 'revision_stale',
+    });
+  });
+
+  it('commits past the size but within the limit', async () => {
+    const outbox = await openSmallOutbox();
+    expect(
+      outbox.commitEvents({
+        events: [buildEventRecord(), buildEventRecord(), buildEventRecord()],
+      }),
+    ).toEqual({ committed: true });
+  });
+
+  it('counts an event already held, or carried twice, once', async () => {
+    const outbox = await openSmallOutbox();
+    const heldEvent = buildEventRecord();
+    outbox.commitEvents({ events: [heldEvent, buildEventRecord()] });
+    const newEvent = buildEventRecord();
+    expect(
+      outbox.commitEvents({ events: [heldEvent, newEvent, { ...newEvent }] }),
+    ).toEqual({ committed: true });
+  });
+
+  it('refuses rather than throws, whatever it holds unseen', async () => {
+    const outbox = await openSmallOutbox();
+    outbox.commitEvents({
+      events: [buildEventRecord(), buildEventRecord(), buildEventRecord()],
+    });
+    expect(() =>
+      outbox.commitEvents({ events: [buildEventRecord()] }),
+    ).not.toThrow();
   });
 });
 

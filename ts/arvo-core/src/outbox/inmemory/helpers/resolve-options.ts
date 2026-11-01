@@ -43,9 +43,9 @@ export type ArvoMemoryOutboxResolvedOptions = {
 export const resolveOptions = (
   options: ArvoMemoryOutboxOptions,
 ): ArvoMemoryOutboxResolvedOptions => {
-  const seenEvents =
+  const seenEventsRetentionMs =
     options.retentionMs?.seenEvents ?? DEFAULT_SEEN_EVENTS_RETENTION_MS;
-  const terminalStates =
+  const terminalStatesRetentionMs =
     options.retentionMs?.terminalStates ?? DEFAULT_TERMINAL_STATES_RETENTION_MS;
   return {
     clock: options.clock ?? (() => new Date()),
@@ -53,10 +53,14 @@ export const resolveOptions = (
       events: options.buffers?.events ?? DEFAULT_BUFFER,
       states: options.buffers?.states ?? DEFAULT_BUFFER,
     },
-    retentionMs: { seenEvents, terminalStates },
+    retentionMs: {
+      seenEvents: seenEventsRetentionMs,
+      terminalStates: terminalStatesRetentionMs,
+    },
     sweepIntervalMs: Math.max(
       SHORTEST_SWEEP_INTERVAL_MS,
-      Math.min(seenEvents, terminalStates) / SWEEPS_PER_RETENTION,
+      Math.min(seenEventsRetentionMs, terminalStatesRetentionMs) /
+        SWEEPS_PER_RETENTION,
     ),
   };
 };
