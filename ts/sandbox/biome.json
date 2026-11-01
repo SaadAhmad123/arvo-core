@@ -13,6 +13,7 @@
       "!**/node_modules",
       "!**/.turbo",
       "!**/coverage",
+      "!**/load-results",
       "!**/.github",
       "!**/docs",
       "!**/src-v3",
