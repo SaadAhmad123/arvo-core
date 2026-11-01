@@ -17,7 +17,7 @@ All work is in `ts/sandbox`; no file under `ts/arvo-core/src` changes. Each grou
 
 ## 4. The SQLite checks
 
-- [ ] 4.1 Add `tests/load/sqlite/`, one file per spec group, using forked processes for several on one file, a killed child and a writer holding the lock; and the full disk and faked clock checks in their own containers. Verify `pnpm load:sqlite` passes, and the report gives every measurement and names any check skipped, with why.
+- [x] 4.1 Add `tests/load/sqlite/`, one file per spec group, using forked processes for several on one file, a killed child and a writer holding the lock; and the full disk and faked clock checks in their own containers. Verify `pnpm load:sqlite` passes, and the report gives every measurement and names any check skipped, with why.
 
 ## 5. The soak
 
