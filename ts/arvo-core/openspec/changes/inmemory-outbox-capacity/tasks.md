@@ -24,8 +24,8 @@
 
 ## 5. Close out
 
-- [ ] 5.1 Run `pnpm lint`, and verify `pnpm typecheck` reports errors only under `src/outbox/sqlite/`, `src/outbox/conformance/` and `tests/outbox/`, outside `tests/outbox/inmemory/`.
-- [ ] 5.2 Check every new and changed file against `openspec/project.md`: **Documentation in source**, **Naming** and **Module-level state**. Verify with `node_modules/.bin/openspec validate inmemory-outbox-capacity --strict`.
+- [x] 5.1 Run `pnpm lint`, and verify `pnpm typecheck` reports errors only under `src/outbox/sqlite/` and `tests/outbox/`, the one under `tests/outbox/inmemory/` being `broken-outboxes.ts`, the conformance kit's fixtures.
+- [x] 5.2 Check every new and changed file against `openspec/project.md`: **Documentation in source**, **Naming** and **Module-level state**. Verify with `node_modules/.bin/openspec validate inmemory-outbox-capacity --strict`.
 
 ## Workflow follow-up
 
