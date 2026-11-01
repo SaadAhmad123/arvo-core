@@ -10,7 +10,7 @@
 - `commitEvents` answers `{ committed: true }`.
 - **BREAKING** `retainSeenEventsForMs` is replaced by `retentionMs: { seenEvents?, terminalStates? }`, matching the in-memory outbox. A state at `success`, `error`, `cancelled` or `failure` is deleted once its last commit is older than `terminalStates`, deleted as seen events already are: a bounded batch on each marking, and every expired one on a call.
 - **BREAKING** `deleteExpiredEvents()` becomes `deleteExpired()`, deleting expired states as well as events, and answering how many of each.
-- **BREAKING** The file's tables move to version 2: each state row records when it was last committed. A version 1 file is refused, as any unknown version is.
+- The file's tables move to version 2: each state row records when it was last committed. A file at an older version is upgraded when it is opened, by steps shipped in the package, one per version, all in one locked write; a file at a newer version is still refused. `migrate: false` refuses an older file instead of upgrading it.
 - **BREAKING** Bad options throw `ArvoSqliteOutboxValidationError`, carrying every issue, checked with zod, in place of `RangeError`. `tryCreateArvoSqliteOutbox` and `createArvoSqliteOutbox` are added.
 - The conformance kit checks capacity on every outbox: a valid answer, asking changes nothing, the overall status the worst of the buffers. It checks that `commitEvents` answers its outcome. Its broken outboxes are brought up to the interface.
 - The whole suite runs again, at 100% coverage, including what changes `outbox-capacity` and `inmemory-outbox-capacity` wrote without running.
@@ -34,4 +34,3 @@ None.
 
 - **Limits for SQLite.** It refuses nothing for room. Buffers would need counts kept by triggers that every process on the file maintains; that is a later change if a deployment needs it.
 - **A timer for SQLite.** Deleting stays on marking seen and on `deleteExpired()`, so several processes on one file never each run one.
-- **Migrating a version 1 file.** The package is unreleased; a version 1 file is refused.

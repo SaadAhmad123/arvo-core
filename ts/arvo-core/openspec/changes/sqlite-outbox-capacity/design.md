@@ -53,7 +53,19 @@ create index if not exists arvo_outbox_state_terminal_by_commit
   where lifecycle in ('success', 'error', 'cancelled', 'failure');
 ```
 
-A version 1 file is refused by the existing check, whose message already names both versions. Reading `lifecycle` is matching a field the commit hands the outbox, as in the in-memory outbox's design.
+A file at version 1 is upgraded on opening (**Upgrading an older file**); a newer one is refused by the existing check. Reading `lifecycle` is matching a field the commit hands the outbox, as in the in-memory outbox's design.
+
+### Upgrading an older file
+
+`src/outbox/sqlite/migrations.ts` holds `outboxMigrations`, a frozen, ordered list of steps, each `{ fromVersion, toVersion, sql }`. A step is never edited once released, and only adds. The first, `1 → 2`, adds `committed_at` to `arvo_outbox_state`, with a constant default as SQLite requires of an added `not null` column, then sets every row's to SQLite's clock.
+
+`openConnection` reads the version, runs the steps and creates the tables in **one** immediate transaction, where today it reads the version outside one. The write lock is what makes it safe across processes: a second outbox waits, then reads the new version, and runs nothing. In that transaction: no version recorded, a new file, so the tables are created; the outbox's own version, nothing to run; an older version with a step for each version between, each is run and the version recorded; anything else, newer or unknown, refused as today. An error rolls everything back.
+
+Options gain `migrate?: boolean`, on where left out. Off, an older file is refused, its message saying to open it with `migrate` on or upgrade it first.
+
+Each past version has a test file built from that version's tables, kept in `tests/outbox/sqlite/fixtures/`, so every step is tested from the file it upgrades.
+
+*Alternative:* refusing an older file, as before. Rejected: after the first release, users' files would stop opening on any change to the tables.
 
 ### Deleting
 

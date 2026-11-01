@@ -31,6 +31,11 @@ Until group 5, "run red" and "verify" mean `pnpm typecheck` and `pnpm lint` on t
 - [x] 6.1 Run `pnpm lint`, `pnpm typecheck` and `pnpm build`, all clean.
 - [x] 6.2 Check every new and changed file against `openspec/project.md`: **Documentation in source**, **Naming**, **Module-level state** and **Code style**. Verify with `node_modules/.bin/openspec validate sqlite-outbox-capacity --strict`.
 
+## 7. Upgrading an older file
+
+- [ ] 7.1 Add `tests/outbox/sqlite/fixtures/schema-version-1.ts`, the tables as they were at version 1. Add to `tests/outbox/sqlite/outbox.spec.ts`: a version 1 file holding states and events upgraded on opening, the version recorded and everything reading back, and a terminal state then deletable; two outboxes opening one version 1 file, both opening; `migrate: false` refusing a version 1 file, leaving it as it was; a newer version still refused. Add `migrate` to the option checks. Run red.
+- [ ] 7.2 Add `src/outbox/sqlite/migrations.ts` with the `1 → 2` step; read the version, run the steps and create the tables in one immediate transaction in `src/outbox/sqlite/outbox.ts`; add `migrate` to `types.ts`, `helpers/check-options.ts` and `helpers/resolve-options.ts`. Verify with the whole suite at 100% coverage of the files it touches, `pnpm lint`, `pnpm typecheck` and `pnpm build`.
+
 ## Workflow follow-up
 
 - Each group is shown for review and committed once approved.

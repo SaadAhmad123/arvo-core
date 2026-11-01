@@ -46,7 +46,7 @@ A SQLite outbox SHALL keep an event once seen, and a state at `success`, `error`
 
 ### Requirement: A SQLite Outbox Keeps Its File Safe
 
-A SQLite outbox SHALL create a missing file readable and writable by its owner alone, and SHALL leave the permissions of an existing file as they are. It SHALL sync every commit to disk in full, overwrite what it deletes, and run nothing the file itself defines. It SHALL record the version of its tables in the file, and SHALL refuse, before creating anything, a file whose outbox tables are of a version it does not know, an earlier version included. Its tables SHALL refuse a row no outbox could have written.
+A SQLite outbox SHALL create a missing file readable and writable by its owner alone, and SHALL leave the permissions of an existing file as they are. It SHALL sync every commit to disk in full, overwrite what it deletes, and run nothing the file itself defines. It SHALL record the version of its tables in the file, and SHALL refuse, before creating anything, a file whose outbox tables are of a version newer than its own, or of no version it knows. Its tables SHALL refuse a row no outbox could have written.
 
 #### Scenario: A new file
 
@@ -55,13 +55,8 @@ A SQLite outbox SHALL create a missing file readable and writable by its owner a
 
 #### Scenario: A file of another version
 
-- **WHEN** a SQLite outbox is opened on a file whose outbox tables record a version it does not know
+- **WHEN** a SQLite outbox is opened on a file whose outbox tables record a version newer than its own, or one it does not know
 - **THEN** opening throws, naming the file and both versions, and the file is left as it was
-
-#### Scenario: A file of an earlier version
-
-- **WHEN** a SQLite outbox is opened on a file written at the version before its own
-- **THEN** opening throws as for any version it does not know
 
 #### Scenario: A row no outbox could write
 
@@ -69,6 +64,29 @@ A SQLite outbox SHALL create a missing file readable and writable by its owner a
 - **THEN** the file refuses it
 
 ## ADDED Requirements
+
+### Requirement: A SQLite Outbox Upgrades An Older File
+
+A SQLite outbox SHALL upgrade, when it is opened, a file whose outbox tables are at an older version than its own, running in order one step per version between, each shipped in the package, and then recording its own version. It SHALL do all of it in one locked write, so that a failure leaves the file as it was and several outboxes opening one file upgrade it once. A step SHALL only add to the tables.
+
+#### Scenario: A file at the version before
+
+- **WHEN** a SQLite outbox is opened on a file at the version before its own, holding states and events
+- **THEN** the file is at its own version, and every state and event reads back as it was
+
+#### Scenario: Two outboxes opening one older file
+
+- **WHEN** two SQLite outboxes are opened on the same file at an older version
+- **THEN** the file is upgraded once, and both open
+
+### Requirement: A SQLite Outbox's Upgrading Can Be Turned Off
+
+A SQLite outbox built with upgrading turned off SHALL refuse a file at an older version instead of upgrading it, leaving it as it was, and naming how to upgrade it.
+
+#### Scenario: Upgrading turned off
+
+- **WHEN** a SQLite outbox built with upgrading turned off is opened on a file at an older version
+- **THEN** opening throws, naming the file and both versions and saying how to upgrade it, and the file is left as it was
 
 ### Requirement: A SQLite Outbox Limits Nothing
 
