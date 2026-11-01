@@ -102,9 +102,9 @@ const CAPACITY_STATUSES_BY_SEVERITY: readonly ArvoOutboxCapacityStatus[] =
 const worstStatus = (
   ...capacityStatuses: readonly ArvoOutboxCapacityStatus[]
 ): ArvoOutboxCapacityStatus =>
-  CAPACITY_STATUSES_BY_SEVERITY.filter((severityStatus) =>
+  CAPACITY_STATUSES_BY_SEVERITY.findLast((severityStatus) =>
     capacityStatuses.includes(severityStatus),
-  ).at(-1) ?? 'available';
+  ) ?? 'available';
 
 /**
  * An outbox that holds everything in process memory, and loses all of it
