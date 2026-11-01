@@ -54,4 +54,24 @@ describe('checking an answer against a schema', () => {
         checkResult.error.map((issue) => [issue.path, issue.received]),
     ).toEqual([['answer.inner.size', undefined]]);
   });
+
+  it('receives nothing where the issue is beneath a value that is no object', () => {
+    const checkResult = checkAgainstSchema(
+      z.object({
+        inner: z.unknown().superRefine((_innerValue, refinement) => {
+          refinement.addIssue({
+            code: 'custom',
+            message: 'must hold a size',
+            path: ['size'],
+          });
+        }),
+      }),
+      { inner: 5 },
+      'answer',
+    );
+    expect(
+      !checkResult.ok &&
+        checkResult.error.map((issue) => [issue.path, issue.received]),
+    ).toEqual([['answer.inner.size', undefined]]);
+  });
 });

@@ -28,3 +28,19 @@ describe('building an in-memory outbox through its factories', () => {
     );
   });
 });
+
+describe('building an in-memory outbox through its factory, where something else throws', () => {
+  it('lets anything but a validation error go up as it arrived', () => {
+    const optionReadFailure = new Error('the options could not be read');
+    // deliberately an option that throws when read, as a proxy could
+    const unreadableOptions = Object.defineProperty({}, 'clock', {
+      enumerable: true,
+      get: () => {
+        throw optionReadFailure;
+      },
+    });
+    expect(() => tryCreateArvoMemoryOutbox(unreadableOptions)).toThrow(
+      optionReadFailure,
+    );
+  });
+});

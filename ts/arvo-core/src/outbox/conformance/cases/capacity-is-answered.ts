@@ -30,6 +30,14 @@ const givenBuffers = (buffers: {
       bufferEntry[1] !== undefined,
   );
 
+/** The outbox's answer to every capacity request a case asks. */
+const askEveryCapacityRequest = (outbox: IArvoOutbox) =>
+  Promise.all(
+    CAPACITY_REQUESTS.map((capacityRequest) =>
+      outbox.capacity(capacityRequest),
+    ),
+  );
+
 /** Everything an outbox holds that a capacity question must leave alone. */
 const readEverythingHeld = async (
   outbox: IArvoOutbox,
@@ -50,8 +58,7 @@ export const capacityIsAnsweredCases: readonly ArvoOutboxConformanceCase[] =
     {
       name: 'answers its capacity with a known status, overall and for each buffer it gives',
       check: async (outbox) => {
-        for (const capacityRequest of CAPACITY_REQUESTS) {
-          const capacity = await outbox.capacity(capacityRequest);
+        for (const capacity of await askEveryCapacityRequest(outbox)) {
           expect(CAPACITY_STATUSES_BY_SEVERITY).toContain(capacity.status);
           for (const [bufferName, buffer] of givenBuffers(capacity.buffers)) {
             expect(CAPACITY_STATUSES_BY_SEVERITY, bufferName).toContain(
@@ -73,8 +80,7 @@ export const capacityIsAnsweredCases: readonly ArvoOutboxConformanceCase[] =
     {
       name: 'answers its capacity overall as the worst of its buffers, or available where it gives none',
       check: async (outbox) => {
-        for (const capacityRequest of CAPACITY_REQUESTS) {
-          const capacity = await outbox.capacity(capacityRequest);
+        for (const capacity of await askEveryCapacityRequest(outbox)) {
           const worstSeverity = Math.max(
             0,
             ...givenBuffers(capacity.buffers).map(([, buffer]) =>
@@ -102,9 +108,7 @@ export const capacityIsAnsweredCases: readonly ArvoOutboxConformanceCase[] =
           }),
         );
         const heldBeforeAsking = await readEverythingHeld(outbox, executionId);
-        for (const capacityRequest of CAPACITY_REQUESTS) {
-          await outbox.capacity(capacityRequest);
-        }
+        await askEveryCapacityRequest(outbox);
         expect(await readEverythingHeld(outbox, executionId)).toEqual(
           heldBeforeAsking,
         );

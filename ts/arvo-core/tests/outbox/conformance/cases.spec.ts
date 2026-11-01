@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { arvoOutboxConformanceCases } from '../../../src/outbox/conformance/index.js';
 import { runConformanceCase } from '../../../src/outbox/conformance/run-case.js';
+import { ArvoMemoryOutbox } from '../../../src/outbox/inmemory/index.js';
 import { brokenOutboxByCaseName } from '../inmemory/broken-outboxes.js';
 
 /**
@@ -41,5 +42,28 @@ describe('every conformance case', () => {
         .map((conformanceCase) => conformanceCase.name)
         .sort(),
     );
+  });
+});
+
+describe('the capacity cases', () => {
+  it('pass an outbox giving a buffer without its numbers', async () => {
+    const statusCase = arvoOutboxConformanceCases.find(
+      (conformanceCase) =>
+        conformanceCase.name ===
+        'answers its capacity with a known status, overall and for each buffer it gives',
+    );
+    if (statusCase === undefined) throw new Error('the case is in the kit');
+    const createOutbox = () => {
+      const workingOutbox = new ArvoMemoryOutbox();
+      return Object.assign(workingOutbox, {
+        capacity: () => ({
+          status: 'tolerating' as const,
+          buffers: { events: { status: 'tolerating' as const } },
+        }),
+      });
+    };
+    await expect(
+      runConformanceCase(createOutbox, statusCase),
+    ).resolves.toBeUndefined();
   });
 });

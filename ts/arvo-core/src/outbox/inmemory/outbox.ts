@@ -98,13 +98,18 @@ const TERMINAL_LIFECYCLES: readonly string[] = Object.freeze([
 const CAPACITY_STATUSES_BY_SEVERITY: readonly ArvoOutboxCapacityStatus[] =
   Object.freeze(['available', 'tolerating', 'exhausted']);
 
-/** The worst of the statuses given. */
+/** The worst of the statuses given, `available` where none is worse. */
 const worstStatus = (
   ...capacityStatuses: readonly ArvoOutboxCapacityStatus[]
 ): ArvoOutboxCapacityStatus =>
-  CAPACITY_STATUSES_BY_SEVERITY.findLast((severityStatus) =>
-    capacityStatuses.includes(severityStatus),
-  ) ?? 'available';
+  capacityStatuses.reduce<ArvoOutboxCapacityStatus>(
+    (worstSoFar, capacityStatus) =>
+      CAPACITY_STATUSES_BY_SEVERITY.indexOf(capacityStatus) >
+      CAPACITY_STATUSES_BY_SEVERITY.indexOf(worstSoFar)
+        ? capacityStatus
+        : worstSoFar,
+    'available',
+  );
 
 /**
  * An outbox that holds everything in process memory, and loses all of it
@@ -343,11 +348,9 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
    * to what it deletes. Run by the timer alone.
    */
   private sweep(): void {
-    const storeResult = this.lifecycle.tryResourcesFor('sweep');
-    if (!storeResult.ok) return;
-    const store = storeResult.value;
     // a throw from a timer would end the process, so a failed sweep only warns
     try {
+      const store = this.lifecycle.resourcesFor('sweep');
       const nowMs = this.readClockMs();
       this.sweepSeenEvents(store, nowMs - this.options.retentionMs.seenEvents);
       this.sweepTerminalStates(

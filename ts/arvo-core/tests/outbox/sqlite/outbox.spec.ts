@@ -765,12 +765,12 @@ describe('ArvoSqliteOutbox and the safety of its file', () => {
     writeAsAnotherConnection(filename, (otherWriter) => {
       expect(() =>
         otherWriter.exec(
-          "insert into arvo_outbox_state values ('execution', -1, 's', 's', '1.0.0', 'waiting', '{}')",
+          "insert into arvo_outbox_state values ('execution', -1, 's', 's', '1.0.0', 'waiting', '{}', '2026-01-01T00:00:00.000Z')",
         ),
       ).toThrow(/CHECK constraint/);
       expect(() =>
         otherWriter.exec(
-          "insert into arvo_outbox_state values ('execution', 0, 's', 's', '1.0.0', 'waiting', 'not json')",
+          "insert into arvo_outbox_state values ('execution', 0, 's', 's', '1.0.0', 'waiting', 'not json', '2026-01-01T00:00:00.000Z')",
         ),
       ).toThrow(/CHECK constraint/);
     });

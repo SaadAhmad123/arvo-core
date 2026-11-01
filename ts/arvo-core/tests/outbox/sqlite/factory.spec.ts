@@ -37,3 +37,23 @@ describe('building a SQLite outbox through its factories', () => {
     );
   });
 });
+
+describe('building a SQLite outbox through its factory, where something else throws', () => {
+  it('lets anything but a validation error go up as it arrived', () => {
+    const optionReadFailure = new Error('the options could not be read');
+    // deliberately an option that throws when read, as a proxy could
+    const unreadableOptions = Object.defineProperty(
+      { filename: unusedFilename() },
+      'busyTimeoutMs',
+      {
+        enumerable: true,
+        get: () => {
+          throw optionReadFailure;
+        },
+      },
+    );
+    expect(() => tryCreateArvoSqliteOutbox(unreadableOptions)).toThrow(
+      optionReadFailure,
+    );
+  });
+});

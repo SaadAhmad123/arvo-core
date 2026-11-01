@@ -24,7 +24,7 @@ Until group 5, "run red" and "verify" mean `pnpm typecheck` and `pnpm lint` on t
 
 ## 5. The whole suite
 
-- [ ] 5.1 Run `pnpm test:coverage`. Fix every failure, in the files of `outbox-capacity`, `inmemory-outbox-capacity` and this change, and show each fix for review before it is committed. Verify the whole suite passes at 100% coverage.
+- [x] 5.1 Run `pnpm test:coverage`. Fix every failure, in the files of `outbox-capacity`, `inmemory-outbox-capacity` and this change. Verify the whole suite passes, and every file those changes touch is at 100% coverage. Left as found: `src/ArvoEventHandler/index.ts` and `src/ArvoEventHandler/version/index.ts`, which none of the three changes touches, fall short by three branches and one statement.
 
 ## 6. Close out
 
