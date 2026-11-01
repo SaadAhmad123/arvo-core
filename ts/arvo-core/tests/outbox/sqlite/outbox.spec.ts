@@ -12,7 +12,7 @@ import Database from 'better-sqlite3';
 import { afterAll, describe, expect, it } from 'vitest';
 import { buildEventRecord } from '../../../src/outbox/conformance/fixtures/event-record.js';
 import { buildStateCommit } from '../../../src/outbox/conformance/fixtures/state-commit.js';
-import { expiredEventsDeletedPerMarking } from '../../../src/outbox/sqlite/helpers/defaults.js';
+import { expiredRowsDeletedPerMarking } from '../../../src/outbox/sqlite/helpers/defaults.js';
 import {
   ArvoSqliteOutbox,
   type ArvoSqliteOutboxOptions,
@@ -275,7 +275,7 @@ describe('ArvoSqliteOutbox and how it answers', () => {
       outbox.readCommittedEvents({ executionId }),
       outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
       outbox.markEventsSeen([]),
-      outbox.deleteExpiredEvents(),
+      outbox.deleteExpired(),
     ];
     for (const answer of answers) expect(answer).not.toBeInstanceOf(Promise);
     expect(answers.slice(0, 2)).toEqual([null, { committed: true }]);
@@ -369,6 +369,28 @@ describe('ArvoSqliteOutbox and its capacity', () => {
 
 describe('ArvoSqliteOutbox and how much it keeps', () => {
   /** Moves a column of some events' rows far into the past, as another connection would. */
+  /** Moves states' last commit back to long ago, through a connection of the test's own. */
+  const backdateStates = (filename: string, executionIds: readonly string[]) =>
+    writeAsAnotherConnection(filename, (otherConnection) => {
+      const backdateState = otherConnection.prepare<{ executionId: string }>(
+        `update arvo_outbox_state set committed_at = '2000-01-01T00:00:00.000Z' where execution_id = @executionId`,
+      );
+      for (const executionId of executionIds)
+        backdateState.run({ executionId });
+    });
+
+  /** Commits a first revision of a new execution at a lifecycle, with one event, and returns both. */
+  const commitExecutionAt = (outbox: ArvoSqliteOutbox, lifecycle: string) => {
+    const executionId = crypto.randomUUID();
+    const event = buildEventRecord({ executionId });
+    outbox.commitStateAndEvents({
+      ...buildStateCommit({ executionId, casVersion: 0 }),
+      lifecycle,
+      events: [event],
+    });
+    return { executionId, event };
+  };
+
   const backdate = (
     filename: string,
     column: 'seen_at' | 'committed_at',
@@ -452,7 +474,7 @@ describe('ArvoSqliteOutbox and how much it keeps', () => {
     if (!staleUnseenEvent) throw new Error('one event was committed');
     backdate(filename, 'committed_at', [staleUnseenEvent.id]);
     outbox.markEventsSeen([]);
-    expect(outbox.deleteExpiredEvents()).toBe(0);
+    expect(outbox.deleteExpired()).toEqual({ events: 0, states: 0 });
     expect(keeps(outbox, staleUnseenEvent)).toBe(true);
   });
 
@@ -480,21 +502,82 @@ describe('ArvoSqliteOutbox and how much it keeps', () => {
     outbox.markEventsSeen([seenEvent.id]);
     backdate(filename, 'seen_at', [seenEvent.id]);
     outbox.markEventsSeen([]);
-    expect(outbox.deleteExpiredEvents()).toBe(0);
+    expect(outbox.deleteExpired()).toEqual({ events: 0, states: 0 });
     expect(keeps(outbox, seenEvent)).toBe(true);
   });
 
   it('deletes a bounded batch per marking, and the rest on being asked', async () => {
     const filename = newFilename();
     const outbox = await openOutbox({ filename });
-    const events = commitSomeEvents(outbox, expiredEventsDeletedPerMarking + 7);
+    const events = commitSomeEvents(outbox, expiredRowsDeletedPerMarking + 7);
     const eventIds = events.map((event) => event.id);
     outbox.markEventsSeen(eventIds);
     backdate(filename, 'seen_at', eventIds);
     outbox.markEventsSeen([]);
     expect(events.filter((event) => keeps(outbox, event))).toHaveLength(7);
-    expect(outbox.deleteExpiredEvents()).toBe(7);
+    expect(outbox.deleteExpired()).toEqual({ events: 7, states: 0 });
     expect(events.filter((event) => keeps(outbox, event))).toHaveLength(0);
+  });
+
+  it.each(['success', 'error', 'cancelled', 'failure'])(
+    'deletes a state at %s last committed longer ago than it keeps terminal states, keeping its events',
+    async (lifecycle) => {
+      const filename = newFilename();
+      const outbox = await openOutbox({ filename });
+      const { executionId, event } = commitExecutionAt(outbox, lifecycle);
+      backdateStates(filename, [executionId]);
+      outbox.markEventsSeen([]);
+      expect(outbox.readLatestState(executionId)).toBeNull();
+      expect(keeps(outbox, event)).toBe(true);
+    },
+  );
+
+  it.each(['idle', 'waiting'])(
+    'never deletes a state at %s, however long ago it was committed',
+    async (lifecycle) => {
+      const filename = newFilename();
+      const outbox = await openOutbox({ filename });
+      const { executionId } = commitExecutionAt(outbox, lifecycle);
+      backdateStates(filename, [executionId]);
+      expect(outbox.deleteExpired()).toEqual({ events: 0, states: 0 });
+      expect(outbox.readLatestState(executionId)).not.toBeNull();
+    },
+  );
+
+  it('keeps a terminal state committed recently', async () => {
+    const outbox = await openOutbox({ filename: newFilename() });
+    const { executionId } = commitExecutionAt(outbox, 'success');
+    expect(outbox.deleteExpired()).toEqual({ events: 0, states: 0 });
+    expect(outbox.readLatestState(executionId)).not.toBeNull();
+  });
+
+  it('keeps terminal states forever where told to keep them for an unending time', async () => {
+    const filename = newFilename();
+    const outbox = await openOutbox({
+      filename,
+      retentionMs: { terminalStates: Number.POSITIVE_INFINITY },
+    });
+    const { executionId } = commitExecutionAt(outbox, 'success');
+    backdateStates(filename, [executionId]);
+    expect(outbox.deleteExpired()).toEqual({ events: 0, states: 0 });
+    expect(outbox.readLatestState(executionId)).not.toBeNull();
+  });
+
+  it('deletes a bounded batch of terminal states per marking, and the rest on being asked', async () => {
+    const filename = newFilename();
+    const outbox = await openOutbox({ filename });
+    const executionIds = Array.from(
+      { length: expiredRowsDeletedPerMarking + 3 },
+      () => commitExecutionAt(outbox, 'success').executionId,
+    );
+    backdateStates(filename, executionIds);
+    outbox.markEventsSeen([]);
+    expect(
+      executionIds.filter(
+        (executionId) => outbox.readLatestState(executionId) !== null,
+      ),
+    ).toHaveLength(3);
+    expect(outbox.deleteExpired()).toEqual({ events: 0, states: 3 });
   });
 
   it('gives the space of deleted events back, so the file shrinks', async () => {
@@ -516,7 +599,7 @@ describe('ArvoSqliteOutbox and how much it keeps', () => {
       inspector.pragma('page_count', { simple: true }),
     );
     backdate(filename, 'seen_at', eventIds);
-    outbox.deleteExpiredEvents();
+    outbox.deleteExpired();
     const pagesAfterDeleting = inspect(filename, (inspector) =>
       inspector.pragma('page_count', { simple: true }),
     );
@@ -642,32 +725,39 @@ describe('ArvoSqliteOutbox and the safety of its file', () => {
           )
           .get(),
       ),
-    ).toEqual({ value: '1' });
+    ).toEqual({ value: '2' });
     await expect(openOutbox({ filename })).resolves.toBeInstanceOf(
       ArvoSqliteOutbox,
     );
   });
 
-  it('refuses a file whose tables are of a version it does not know, changing nothing', async () => {
-    const filename = newFilename();
-    await openAndClose(filename);
-    writeAsAnotherConnection(filename, (otherWriter) =>
-      otherWriter.exec(
-        "update arvo_outbox_meta set value = '2' where name = 'schema_version'",
-      ),
-    );
-    const outbox = new ArvoSqliteOutbox({ filename });
-    await expect(outbox.open()).rejects.toThrow(
-      `ArvoSqliteOutbox cannot open ${filename}: its outbox tables are at version 2, and this outbox knows only version 1. Open it with the version of arvo-core that wrote it.`,
-    );
-    expect(
-      inspect(filename, (inspector) =>
-        inspector
-          .prepare<[], { value: string }>('select value from arvo_outbox_meta')
-          .get(),
-      ),
-    ).toEqual({ value: '2' });
-  });
+  it.each(['3', '1'])(
+    'refuses a file whose tables are at version %s, which it does not know, changing nothing',
+    async (fileVersion) => {
+      const filename = newFilename();
+      await openAndClose(filename);
+      writeAsAnotherConnection(filename, (otherWriter) =>
+        otherWriter
+          .prepare<{ fileVersion: string }>(
+            "update arvo_outbox_meta set value = @fileVersion where name = 'schema_version'",
+          )
+          .run({ fileVersion }),
+      );
+      const outbox = new ArvoSqliteOutbox({ filename });
+      await expect(outbox.open()).rejects.toThrow(
+        `ArvoSqliteOutbox cannot open ${filename}: its outbox tables are at version ${fileVersion}, and this outbox knows only version 2. Open it with the version of arvo-core that wrote it.`,
+      );
+      expect(
+        inspect(filename, (inspector) =>
+          inspector
+            .prepare<[], { value: string }>(
+              'select value from arvo_outbox_meta',
+            )
+            .get(),
+        ),
+      ).toEqual({ value: fileVersion });
+    },
+  );
 
   it('refuses a row no outbox could have written', async () => {
     const filename = newFilename();
@@ -709,7 +799,7 @@ describe('ArvoSqliteOutbox and its life', () => {
       () => outbox.readCommittedEvents({ executionId }),
       () => outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
       () => outbox.markEventsSeen([]),
-      () => outbox.deleteExpiredEvents(),
+      () => outbox.deleteExpired(),
     ];
   };
 

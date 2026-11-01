@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { ArvoOutboxCommittedEventRecord } from '../../ArvoOutbox/types/event-record.js';
+import { terminalLifecyclesSql } from './schema.js';
 
 /** SQLite's own clock, in the form `toISOString` writes. */
 const sqliteNow = `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
@@ -29,6 +30,7 @@ type StateInsert = {
   version: string;
   lifecycle: string;
   document: string;
+  committedAt: string;
 };
 
 /** The statements an outbox runs. */
@@ -73,6 +75,10 @@ export type OutboxStatements = {
     cutOffModifier: string;
     batchSize: number;
   }>;
+  readonly deleteExpiredStates: Database.Statement<{
+    cutOffModifier: string;
+    batchSize: number;
+  }>;
 };
 
 /** The statements an outbox runs, prepared once against its file. */
@@ -91,9 +97,9 @@ export const prepareStatements = (
   ),
   insertState: database.prepare<StateInsert>(
     `insert into arvo_outbox_state
-       (execution_id, cas_version, subject, source, version, lifecycle, document)
+       (execution_id, cas_version, subject, source, version, lifecycle, document, committed_at)
      values
-       (@executionId, @casVersion, @subject, @source, @version, @lifecycle, @document)`,
+       (@executionId, @casVersion, @subject, @source, @version, @lifecycle, @document, @committedAt)`,
   ),
   insertEvent: database.prepare<EventInsert>(
     `insert into arvo_outbox_event
@@ -164,6 +170,17 @@ export const prepareStatements = (
        where seen = 1
          and seen_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', @cutOffModifier)
        order by seen_at, sequence limit @batchSize
+     )`,
+  ),
+  deleteExpiredStates: database.prepare<{
+    cutOffModifier: string;
+    batchSize: number;
+  }>(
+    `delete from arvo_outbox_state where (execution_id, cas_version) in (
+       select execution_id, cas_version from arvo_outbox_state
+       where lifecycle in ${terminalLifecyclesSql}
+         and committed_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', @cutOffModifier)
+       order by committed_at limit @batchSize
      )`,
   ),
 });

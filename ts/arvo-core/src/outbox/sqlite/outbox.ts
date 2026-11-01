@@ -25,7 +25,7 @@ import { checkOptions } from './helpers/check-options.js';
 import { configureConnection } from './helpers/configure-connection.js';
 import { createOwnerOnlyFile } from './helpers/create-owner-only-file.js';
 import {
-  expiredEventsDeletedPerMarking,
+  expiredRowsDeletedPerMarking,
   pagesFreedPerMarking,
 } from './helpers/defaults.js';
 import { toCommittedEventRecord, toEventInsert } from './helpers/event-rows.js';
@@ -37,7 +37,10 @@ import { secondsAgo, secondsLater } from './helpers/seconds-modifier.js';
 import { readSqliteNow } from './helpers/sqlite-now.js';
 import { outboxSchema, outboxSchemaVersion } from './schema.js';
 import { type OutboxStatements, prepareStatements } from './statements.js';
-import type { ArvoSqliteOutboxOptions } from './types.js';
+import type {
+  ArvoSqliteOutboxDeletedCounts,
+  ArvoSqliteOutboxOptions,
+} from './types.js';
 
 /** What an open outbox holds: its connection to the file, and what it prepared on it. */
 type SqliteConnection = {
@@ -56,9 +59,12 @@ type SqliteConnection = {
  *
  * Several outboxes may share one file, in one process or several, and
  * together meet every rule of {@link IArvoOutbox}, leases included. It keeps
- * each execution's latest state, and deletes an event once it has been seen
- * for longer than `options.retentionMs.seenEvents`; an unseen event is never
- * deleted. A file it creates is readable and writable by its owner alone.
+ * each execution's latest state. It deletes an event once it has been seen
+ * for longer than `options.retentionMs.seenEvents`, and a state at
+ * `success`, `error`, `cancelled` or `failure` once its last commit is older
+ * than `options.retentionMs.terminalStates`, a few at a time as events are
+ * marked seen, or all at once with {@link ArvoSqliteOutbox.deleteExpired}.
+ * An unseen event, and a state at any other lifecycle, is never deleted. A file it creates is readable and writable by its owner alone.
  *
  * It limits nothing: its capacity is always `available`, and it refuses no
  * commit for lack of room. Watch the disk it is on.
@@ -131,6 +137,7 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
           })?.casVersion,
         });
         if (refusal !== null) return { committed: false, refusal };
+        const committedAt = readSqliteNow(statements.selectNow);
         statements.insertState.run({
           executionId: param.executionId,
           casVersion: param.casVersion,
@@ -139,12 +146,13 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
           version: param.version,
           lifecycle: param.lifecycle,
           document,
+          committedAt,
         });
         statements.deleteEarlierStates.run({
           executionId: param.executionId,
           casVersion: param.casVersion,
         });
-        this.insertEvents(statements, param.events);
+        this.insertEvents(statements, param.events, committedAt);
         return { committed: true };
       })
       .immediate();
@@ -154,7 +162,13 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
     const { database, statements } =
       this.lifecycle.resourcesFor('commitEvents');
     database
-      .transaction(() => this.insertEvents(statements, param.events))
+      .transaction(() =>
+        this.insertEvents(
+          statements,
+          param.events,
+          readSqliteNow(statements.selectNow),
+        ),
+      )
       .immediate();
     return { committed: true };
   }
@@ -225,7 +239,8 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
         for (const eventId of eventIds) {
           statements.markEventSeen.run({ eventId, seenAt });
         }
-        if (this.deleteExpiredBatch(statements) > 0) {
+        const deletedCounts = this.deleteExpiredBatch(statements);
+        if (deletedCounts.events > 0 || deletedCounts.states > 0) {
           database.pragma(`incremental_vacuum(${pagesFreedPerMarking})`);
         }
       })
@@ -234,33 +249,38 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
 
   /**
    * Deletes every event seen for longer than the outbox keeps seen events,
+   * and every terminal state last committed longer ago than it keeps them,
    * and gives the space back to the disk. Marking events seen already does
    * this a few at a time; call it to catch up on a schedule of your own.
    *
-   * @returns How many events were deleted.
+   * @returns How many events, and how many states, were deleted.
    */
-  deleteExpiredEvents(): number {
-    const { database, statements } = this.lifecycle.resourcesFor(
-      'deleteExpiredEvents',
-    );
+  deleteExpired(): ArvoSqliteOutboxDeletedCounts {
+    const { database, statements } =
+      this.lifecycle.resourcesFor('deleteExpired');
     let deletedEventCount = 0;
-    let deletedInBatchCount = expiredEventsDeletedPerMarking;
-    while (deletedInBatchCount === expiredEventsDeletedPerMarking) {
-      deletedInBatchCount = database
+    let deletedStateCount = 0;
+    let isBatchFull = true;
+    while (isBatchFull) {
+      const deletedCounts = database
         .transaction(() => this.deleteExpiredBatch(statements))
         .immediate();
-      deletedEventCount += deletedInBatchCount;
+      deletedEventCount += deletedCounts.events;
+      deletedStateCount += deletedCounts.states;
+      isBatchFull =
+        deletedCounts.events === expiredRowsDeletedPerMarking ||
+        deletedCounts.states === expiredRowsDeletedPerMarking;
     }
     database.pragma('incremental_vacuum');
-    return deletedEventCount;
+    return { events: deletedEventCount, states: deletedStateCount };
   }
 
-  /** Inserts each event not already stored, all landing at one time by SQLite's clock. */
+  /** Inserts each event not already stored, all landing at `committedAt`, the commit's one time by SQLite's clock. */
   private insertEvents(
     statements: OutboxStatements,
     eventRecords: readonly ArvoOutboxEventRecord[],
+    committedAt: string,
   ): void {
-    const committedAt = readSqliteNow(statements.selectNow);
     for (const eventRecord of eventRecords) {
       statements.insertEvent.run(toEventInsert(eventRecord, committedAt));
     }
@@ -285,14 +305,25 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
     }
   }
 
-  /** Deletes up to one batch of expired events, and says how many. */
-  private deleteExpiredBatch(statements: OutboxStatements): number {
-    if (this.options.retentionMs.seenEvents === Number.POSITIVE_INFINITY)
-      return 0;
-    return statements.deleteExpiredEvents.run({
-      cutOffModifier: secondsAgo(this.options.retentionMs.seenEvents),
-      batchSize: expiredEventsDeletedPerMarking,
-    }).changes;
+  /** Deletes up to one batch of expired events and one of expired terminal states, and says how many of each. */
+  private deleteExpiredBatch(
+    statements: OutboxStatements,
+  ): ArvoSqliteOutboxDeletedCounts {
+    const { seenEvents, terminalStates } = this.options.retentionMs;
+    const deleteBatch = (
+      statement: OutboxStatements['deleteExpiredEvents'],
+      retentionMs: number,
+    ) =>
+      retentionMs === Number.POSITIVE_INFINITY
+        ? 0
+        : statement.run({
+            cutOffModifier: secondsAgo(retentionMs),
+            batchSize: expiredRowsDeletedPerMarking,
+          }).changes;
+    return {
+      events: deleteBatch(statements.deleteExpiredEvents, seenEvents),
+      states: deleteBatch(statements.deleteExpiredStates, terminalStates),
+    };
   }
 
   /** Throws, before anything is created, where the file holds outbox tables of another version. */

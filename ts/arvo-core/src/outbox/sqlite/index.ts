@@ -4,4 +4,7 @@ export {
   tryCreateArvoSqliteOutbox,
 } from './factory.js';
 export { ArvoSqliteOutbox } from './outbox.js';
-export type { ArvoSqliteOutboxOptions } from './types.js';
+export type {
+  ArvoSqliteOutboxDeletedCounts,
+  ArvoSqliteOutboxOptions,
+} from './types.js';

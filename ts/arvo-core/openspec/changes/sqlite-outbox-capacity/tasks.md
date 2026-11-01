@@ -14,8 +14,8 @@ Until group 5, "run red" and "verify" mean `pnpm typecheck` and `pnpm lint` on t
 
 ## 3. Version 2 and terminal states
 
-- [ ] 3.1 Add to `tests/outbox/sqlite/outbox.spec.ts`: a version 1 file refused; a terminal state deleted once past its retention, its events kept; a `waiting` state kept; `Infinity` keeping everything; marking seen deleting a bounded batch of each; `deleteExpired()` answering how many of each. Run red.
-- [ ] 3.2 In `src/outbox/sqlite/schema.ts` move to version 2, add `committed_at` and the partial index; stamp it in `src/outbox/sqlite/statements.ts`; extend `deleteExpiredBatch` and **rename** `deleteExpiredEvents` to `deleteExpired` in `src/outbox/sqlite/outbox.ts`. Verify.
+- [x] 3.1 Add to `tests/outbox/sqlite/outbox.spec.ts`: a version 1 file refused; a terminal state deleted once past its retention, its events kept; a `waiting` state kept; `Infinity` keeping everything; marking seen deleting a bounded batch of each; `deleteExpired()` answering how many of each. Run red.
+- [x] 3.2 In `src/outbox/sqlite/schema.ts` move to version 2, add `committed_at` and the partial index; stamp it in `src/outbox/sqlite/statements.ts`; extend `deleteExpiredBatch` and **rename** `deleteExpiredEvents` to `deleteExpired`, answering `ArvoSqliteOutboxDeletedCounts`, in `src/outbox/sqlite/outbox.ts`; **rename** `expiredEventsDeletedPerMarking` to `expiredRowsDeletedPerMarking`, since it bounds states too. Verify.
 
 ## 4. The conformance kit
 

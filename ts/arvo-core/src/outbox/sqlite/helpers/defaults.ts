@@ -1,5 +1,5 @@
-/** The most expired events, and the most expired states, one marking deletes, so marking stays cheap however many expired. */
-export const expiredEventsDeletedPerMarking = 500;
+/** The most expired events, and the most expired states, one marking deletes, so marking stays cheap however many have expired. */
+export const expiredRowsDeletedPerMarking = 500;
 
 /** The most free pages one marking gives back to the disk. */
 export const pagesFreedPerMarking = 200;

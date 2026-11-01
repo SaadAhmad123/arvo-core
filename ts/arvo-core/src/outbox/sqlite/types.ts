@@ -41,3 +41,19 @@ export type ArvoSqliteOutboxOptions = {
     readonly terminalStates?: number;
   };
 };
+
+/**
+ * How many events and how many states {@link ArvoSqliteOutbox.deleteExpired}
+ * deleted.
+ *
+ * @example
+ * ```typescript
+ * const deletedCounts: ArvoSqliteOutboxDeletedCounts = outbox.deleteExpired();
+ * ```
+ */
+export type ArvoSqliteOutboxDeletedCounts = {
+  /** Events seen for longer than the outbox keeps them. */
+  readonly events: number;
+  /** Terminal states last committed longer ago than the outbox keeps them. */
+  readonly states: number;
+};
