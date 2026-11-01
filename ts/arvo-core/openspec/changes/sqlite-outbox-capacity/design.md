@@ -43,9 +43,9 @@ type ArvoSqliteOutboxOptions = {
 
 The constructor is `resolveOptions(checkOptions(options))`, then the lifecycle; it still touches no file.
 
-### Tables at version 2
+### When a state was last committed
 
-`outboxSchemaVersion` becomes `'2'`. `arvo_outbox_state` gains `committed_at text not null`, stamped by SQLite's clock in the commit, as events are. A partial index finds terminal states by age:
+`arvo_outbox_state` gains `committed_at text not null`, stamped by SQLite's clock in the commit, as events are. A partial index finds terminal states by age:
 
 ```sql
 create index if not exists arvo_outbox_state_terminal_by_commit
@@ -53,19 +53,17 @@ create index if not exists arvo_outbox_state_terminal_by_commit
   where lifecycle in ('success', 'error', 'cancelled', 'failure');
 ```
 
-A file at version 1 is upgraded on opening (**Upgrading an older file**); a newer one is refused by the existing check. Reading `lifecycle` is matching a field the commit hands the outbox, as in the in-memory outbox's design.
+How the file reaches these tables is under **Steps that build the tables**. Reading `lifecycle` is matching a field the commit hands the outbox, as in the in-memory outbox's design.
 
-### Upgrading an older file
+### Steps that build the tables
 
-`src/outbox/sqlite/migrations.ts` holds `outboxMigrations`, a frozen, ordered list of steps, each `{ fromVersion, toVersion, sql }`. A step is never edited once released, and only adds. The first, `1 → 2`, adds `committed_at` to `arvo_outbox_state`, with a constant default as SQLite requires of an added `not null` column, then sets every row's to SQLite's clock.
+`src/outbox/sqlite/migrations.ts` holds `outboxMigrations`, a frozen, ordered list of SQL steps, and is the only description of the tables. A file records in SQLite's `user_version` how many steps it has run. `helpers/apply-migrations.ts` runs, on opening, every step after that number, then records the new count, and refuses a file that has run more steps than exist, a newer release's. `openConnection` calls it inside one immediate transaction: a failing step rolls everything back, and a second outbox opening the file waits for the lock, then finds nothing to run. A new file runs every step, so a new file and an upgraded one are built the same way.
 
-`openConnection` reads the version, runs the steps and creates the tables in **one** immediate transaction, where today it reads the version outside one. The write lock is what makes it safe across processes: a second outbox waits, then reads the new version, and runs nothing. In that transaction: no version recorded, a new file, so the tables are created; the outbox's own version, nothing to run; an older version with a step for each version between, each is run and the version recorded; anything else, newer or unknown, refused as today. An error rolls everything back.
+Today there is one step, the tables as they are now, because no file has been released. To change the tables, append a step that only adds, and change `statements.ts` in the same commit; statements are prepared after the steps run, and preparing one fails where a column it uses is missing.
 
-Options gain `migrate?: boolean`, on where left out. Off, an older file is refused, its message saying to open it with `migrate` on or upgrade it first.
+The `arvo_outbox_meta` table and `schema.ts` are **removed**; `terminalLifecyclesSql` moves to `migrations.ts`. A file written before this change, with that table and no recorded steps, does not open; none was released.
 
-Each past version has a test file built from that version's tables, kept in `tests/outbox/sqlite/fixtures/`, so every step is tested from the file it upgrades.
-
-*Alternative:* refusing an older file, as before. Rejected: after the first release, users' files would stop opening on any change to the tables.
+*Alternatives:* a full description of the latest tables beside upgrade steps (rejected: two descriptions that can drift, and already did, since an added `not null` column needs a default a new table does not have); an option to refuse upgrading (rejected: nothing needs it).
 
 ### Deleting
 

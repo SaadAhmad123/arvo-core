@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
+import { ARVO_TERMINAL_LIFECYCLES } from '../../ArvoEventHandler/state/types.js';
 import type { ArvoOutboxCommittedEventRecord } from '../../ArvoOutbox/types/event-record.js';
-import { terminalLifecyclesSql } from './schema.js';
 
 /** SQLite's own clock, in the form `toISOString` writes. */
 const sqliteNow = `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
@@ -80,6 +80,11 @@ export type OutboxStatements = {
     batchSize: number;
   }>;
 };
+
+/** The terminal lifecycles as an SQL list, matching the index the latest step builds. */
+export const terminalLifecyclesSql = `(${ARVO_TERMINAL_LIFECYCLES.map(
+  (terminalLifecycle) => `'${terminalLifecycle}'`,
+).join(', ')})`;
 
 /** The statements an outbox runs, prepared once against its file. */
 export const prepareStatements = (

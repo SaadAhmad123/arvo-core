@@ -31,10 +31,10 @@ Until group 5, "run red" and "verify" mean `pnpm typecheck` and `pnpm lint` on t
 - [x] 6.1 Run `pnpm lint`, `pnpm typecheck` and `pnpm build`, all clean.
 - [x] 6.2 Check every new and changed file against `openspec/project.md`: **Documentation in source**, **Naming**, **Module-level state** and **Code style**. Verify with `node_modules/.bin/openspec validate sqlite-outbox-capacity --strict`.
 
-## 7. Upgrading an older file
+## 7. Steps that build the tables
 
-- [ ] 7.1 Add `tests/outbox/sqlite/fixtures/schema-version-1.ts`, the tables as they were at version 1. Add to `tests/outbox/sqlite/outbox.spec.ts`: a version 1 file holding states and events upgraded on opening, the version recorded and everything reading back, and a terminal state then deletable; two outboxes opening one version 1 file, both opening; `migrate: false` refusing a version 1 file, leaving it as it was; a newer version still refused. Add `migrate` to the option checks. Run red.
-- [ ] 7.2 Add `src/outbox/sqlite/migrations.ts` with the `1 → 2` step; read the version, run the steps and create the tables in one immediate transaction in `src/outbox/sqlite/outbox.ts`; add `migrate` to `types.ts`, `helpers/check-options.ts` and `helpers/resolve-options.ts`. Verify with the whole suite at 100% coverage of the files it touches, `pnpm lint`, `pnpm typecheck` and `pnpm build`.
+- [x] 7.1 Write `tests/outbox/sqlite/helpers/apply-migrations.spec.ts`: every step run on a new file and the count recorded; only the steps not yet run; nothing on a file that ran them all; a failing step leaving the file as it was; a file that ran more steps than exist refused, nothing run. **Replace** the version tests in `tests/outbox/sqlite/outbox.spec.ts`: a new file records the step count; a newer file refused, left as it was. Run red.
+- [x] 7.2 Add `src/outbox/sqlite/migrations.ts`, holding today's tables as its one step and saying in its TSDoc that `statements.ts` follows the latest step, and `src/outbox/sqlite/helpers/apply-migrations.ts`; call it in one immediate transaction in `src/outbox/sqlite/outbox.ts`. **Remove** `src/outbox/sqlite/schema.ts`, the `arvo_outbox_meta` table and `refuseUnknownSchemaVersion`. Verify with the whole suite, `pnpm lint`, `pnpm typecheck` and `pnpm build`.
 
 ## Workflow follow-up
 

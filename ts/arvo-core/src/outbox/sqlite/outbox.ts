@@ -21,6 +21,7 @@ import type {
 import type { JSONObject } from '../../types.js';
 import { refusalFor } from '../helpers/refusal-for.js';
 import { refuseInvalidListing } from '../helpers/refuse-invalid-listing.js';
+import { applyMigrations } from './helpers/apply-migrations.js';
 import { checkOptions } from './helpers/check-options.js';
 import { configureConnection } from './helpers/configure-connection.js';
 import { createOwnerOnlyFile } from './helpers/create-owner-only-file.js';
@@ -35,7 +36,7 @@ import {
 } from './helpers/resolve-options.js';
 import { secondsAgo, secondsLater } from './helpers/seconds-modifier.js';
 import { readSqliteNow } from './helpers/sqlite-now.js';
-import { outboxSchema, outboxSchemaVersion } from './schema.js';
+import { outboxMigrations } from './migrations.js';
 import { type OutboxStatements, prepareStatements } from './statements.js';
 import type {
   ArvoSqliteOutboxDeletedCounts,
@@ -101,7 +102,9 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
    * opening throws, the outbox stays unopened and may be opened again.
    *
    * @throws Where it has been closed: build a new one instead.
-   * @throws Whatever SQLite throws where the file cannot be opened, is not a SQLite database, or holds outbox tables of another version.
+   * A file written by an older release is upgraded as it opens.
+   *
+   * @throws Whatever SQLite throws where the file cannot be opened, is not a SQLite database, or holds outbox tables of a newer release.
    */
   async open(): Promise<void> {
     await this.lifecycle.open(() => this.openConnection());
@@ -296,8 +299,15 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
     });
     try {
       configureConnection(database);
-      this.refuseUnknownSchemaVersion(database);
-      database.transaction(() => database.exec(outboxSchema)).immediate();
+      database
+        .transaction(() =>
+          applyMigrations({
+            database,
+            migrations: outboxMigrations,
+            filename: this.options.filename,
+          }),
+        )
+        .immediate();
       return { database, statements: prepareStatements(database) };
     } catch (error_) {
       database.close();
@@ -324,25 +334,5 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
       events: deleteBatch(statements.deleteExpiredEvents, seenEvents),
       states: deleteBatch(statements.deleteExpiredStates, terminalStates),
     };
-  }
-
-  /** Throws, before anything is created, where the file holds outbox tables of another version. */
-  private refuseUnknownSchemaVersion(database: Database.Database): void {
-    const metaTable = database
-      .prepare<[], { name: string }>(
-        "select name from sqlite_schema where type = 'table' and name = 'arvo_outbox_meta'",
-      )
-      .get();
-    if (metaTable === undefined) return;
-    const versionRow = database
-      .prepare<[], { value: string }>(
-        "select value from arvo_outbox_meta where name = 'schema_version'",
-      )
-      .get();
-    if (versionRow === undefined || versionRow.value === outboxSchemaVersion)
-      return;
-    throw new Error(
-      `ArvoSqliteOutbox cannot open ${this.options.filename}: its outbox tables are at version ${versionRow.value}, and this outbox knows only version ${outboxSchemaVersion}. Open it with the version of arvo-core that wrote it.`,
-    );
   }
 }

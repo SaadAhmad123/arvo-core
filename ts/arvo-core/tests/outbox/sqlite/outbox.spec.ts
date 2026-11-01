@@ -18,6 +18,8 @@ import {
   type ArvoSqliteOutboxOptions,
   ArvoSqliteOutboxValidationError,
 } from '../../../src/outbox/sqlite/index.js';
+import { outboxMigrations } from '../../../src/outbox/sqlite/migrations.js';
+import { terminalLifecyclesSql } from '../../../src/outbox/sqlite/statements.js';
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), 'arvo-sqlite-outbox-'));
 const openedOutboxes: ArvoSqliteOutbox[] = [];
@@ -714,50 +716,49 @@ describe('ArvoSqliteOutbox and the safety of its file', () => {
     expect(outbox.readLatestState(crypto.randomUUID())).toBeNull();
   });
 
+  /** How many steps the file's outbox tables record having run. */
+  const recordedVersion = (filename: string) =>
+    Number(
+      inspect(filename, (inspector) =>
+        inspector.pragma('user_version', { simple: true }),
+      ),
+    );
+
   it('marks a file it creates with the version of its tables, and opens it again', async () => {
     const filename = newFilename();
     await openAndClose(filename);
-    expect(
-      inspect(filename, (inspector) =>
-        inspector
-          .prepare<[], { value: string }>(
-            "select value from arvo_outbox_meta where name = 'schema_version'",
-          )
-          .get(),
-      ),
-    ).toEqual({ value: '2' });
+    expect(recordedVersion(filename)).toBe(outboxMigrations.length);
     await expect(openOutbox({ filename })).resolves.toBeInstanceOf(
       ArvoSqliteOutbox,
     );
   });
 
-  it.each(['3', '1'])(
-    'refuses a file whose tables are at version %s, which it does not know, changing nothing',
-    async (fileVersion) => {
-      const filename = newFilename();
-      await openAndClose(filename);
-      writeAsAnotherConnection(filename, (otherWriter) =>
-        otherWriter
-          .prepare<{ fileVersion: string }>(
-            "update arvo_outbox_meta set value = @fileVersion where name = 'schema_version'",
-          )
-          .run({ fileVersion }),
-      );
-      const outbox = new ArvoSqliteOutbox({ filename });
-      await expect(outbox.open()).rejects.toThrow(
-        `ArvoSqliteOutbox cannot open ${filename}: its outbox tables are at version ${fileVersion}, and this outbox knows only version 2. Open it with the version of arvo-core that wrote it.`,
-      );
-      expect(
-        inspect(filename, (inspector) =>
-          inspector
-            .prepare<[], { value: string }>(
-              'select value from arvo_outbox_meta',
-            )
-            .get(),
-        ),
-      ).toEqual({ value: fileVersion });
-    },
-  );
+  it('indexes terminal states by the lifecycles the delete of expired states names', async () => {
+    const filename = newFilename();
+    await openAndClose(filename);
+    const indexSql = inspect(filename, (inspector) =>
+      inspector
+        .prepare<[], { sql: string }>(
+          "select sql from sqlite_schema where name = 'arvo_outbox_state_terminal_by_commit'",
+        )
+        .get(),
+    )?.sql;
+    expect(indexSql).toContain(`where lifecycle in ${terminalLifecyclesSql}`);
+  });
+
+  it('refuses a file written by a newer release, changing nothing', async () => {
+    const filename = newFilename();
+    await openAndClose(filename);
+    const newerVersion = outboxMigrations.length + 1;
+    writeAsAnotherConnection(filename, (otherWriter) =>
+      otherWriter.pragma(`user_version = ${newerVersion}`),
+    );
+    const outbox = new ArvoSqliteOutbox({ filename });
+    await expect(outbox.open()).rejects.toThrow(
+      `ArvoSqliteOutbox cannot open ${filename}: its outbox tables are at version ${newerVersion}, and this outbox knows only versions up to ${outboxMigrations.length}. Open it with the version of arvo-core that wrote it.`,
+    );
+    expect(recordedVersion(filename)).toBe(newerVersion);
+  });
 
   it('refuses a row no outbox could have written', async () => {
     const filename = newFilename();

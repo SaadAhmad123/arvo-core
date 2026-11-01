@@ -1,3 +1,4 @@
+import { ARVO_TERMINAL_LIFECYCLES } from '../../ArvoEventHandler/state/types.js';
 import type { IArvoOutbox } from '../../ArvoOutbox/interface.js';
 import { ArvoOutboxLifecycle } from '../../ArvoOutbox/lifecycle.js';
 import type {
@@ -85,14 +86,6 @@ const createMemoryStore = (): MemoryStore => ({
   latestLandedAtMs: Number.NEGATIVE_INFINITY,
   tolerating: { events: false, states: false },
 });
-
-/** The lifecycles an execution rests at once it is finished. */
-const TERMINAL_LIFECYCLES: readonly string[] = Object.freeze([
-  'success',
-  'error',
-  'cancelled',
-  'failure',
-]);
 
 /** Every capacity status, worst last. */
 const CAPACITY_STATUSES_BY_SEVERITY: readonly ArvoOutboxCapacityStatus[] =
@@ -211,7 +204,8 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
         ?.casVersion,
     });
     if (refusal !== null) return { committed: false, refusal };
-    const isTerminal = TERMINAL_LIFECYCLES.includes(param.lifecycle);
+    const terminalLifecycles: readonly string[] = ARVO_TERMINAL_LIFECYCLES;
+    const isTerminal = terminalLifecycles.includes(param.lifecycle);
     const addedStateCount = store.latestStateByExecution.has(param.executionId)
       ? 0
       : 1;
