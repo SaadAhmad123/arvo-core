@@ -136,7 +136,8 @@ export const describeSoak = (subject: LoadSubject): void => {
       expect(heapRise, JSON.stringify(lastQuarter)).toBeLessThan(0.25);
       expect(fileRise, JSON.stringify(lastQuarter)).toBeLessThan(0.25);
       expect(handleRise, JSON.stringify(lastQuarter)).toBeLessThan(0.25);
-      expect(activeTimerCount()).toBe(timersBefore);
+      // fewer is a timer of an earlier check expiring; more is one left behind
+      expect(activeTimerCount()).toBeLessThanOrEqual(timersBefore);
     });
   });
 };

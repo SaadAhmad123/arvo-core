@@ -21,7 +21,7 @@ All work is in `ts/sandbox`; no file under `ts/arvo-core/src` changes. Each grou
 
 ## 5. The soak
 
-- [ ] 5.1 Add the soak for both outboxes and its container. Verify `LOAD_SOAK_MINUTES=10 pnpm load:inmemory --soak` and the same for SQLite pass, with the samples in the report.
+- [x] 5.1 Add the soak for both outboxes and its container. Verify `LOAD_SOAK_MINUTES=10 pnpm load:inmemory --soak` and the same for SQLite pass, with the samples in the report.
 
 ## 6. Close out
 
