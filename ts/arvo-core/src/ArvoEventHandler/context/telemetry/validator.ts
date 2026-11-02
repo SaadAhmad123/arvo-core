@@ -2,16 +2,19 @@ import { ErrorIssue } from '../../../utils/error-issue.js';
 import type { ArvoExecutionContextTelemetryParam } from './types.js';
 
 /** What a span must answer to, for anything here to record against it. */
-const SPAN_ANSWERS = [
+const SPAN_ANSWERS = Object.freeze([
   'spanContext',
   'setAttributes',
   'addEvent',
   'setStatus',
   'recordException',
-] as const;
+] as const);
 
 /** What a meter must answer to, where one was given at all. */
-const METER_ANSWERS = ['createCounter', 'createHistogram'] as const;
+const METER_ANSWERS = Object.freeze([
+  'createCounter',
+  'createHistogram',
+] as const);
 
 /** Whether this value answers to each of those by name. */
 const missingMethods = (

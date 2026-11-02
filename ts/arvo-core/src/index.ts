@@ -137,6 +137,53 @@ export type {
 } from './ArvoEventHandler/types/version-map.js';
 export { ArvoEventHandlerVersion } from './ArvoEventHandler/version/index.js';
 export {
+  ArvoOutboxLifecycleError,
+  type ArvoOutboxLifecycleErrorKind,
+  type ArvoOutboxLifecycleErrorParam,
+} from './ArvoOutbox/errors.js';
+export type { IArvoOutbox } from './ArvoOutbox/interface.js';
+export { ArvoOutboxLifecycle } from './ArvoOutbox/lifecycle.js';
+export type {
+  ArvoOutboxBufferCapacity,
+  ArvoOutboxCapacity,
+  ArvoOutboxCapacityRequest,
+  ArvoOutboxCapacityStatus,
+} from './ArvoOutbox/types/capacity.js';
+export type {
+  ArvoOutboxCommitOutcome,
+  ArvoOutboxEventsCommit,
+  ArvoOutboxRefusal,
+  ArvoOutboxStateCommit,
+} from './ArvoOutbox/types/commit.js';
+export type {
+  ArvoOutboxCommittedEventRecord,
+  ArvoOutboxEventRecord,
+} from './ArvoOutbox/types/event-record.js';
+export type {
+  ArvoOutboxEventsFilter,
+  ArvoOutboxUnseenEventsParam,
+} from './ArvoOutbox/types/read.js';
+export {
+  ArvoOutboxDriverError,
+  type ArvoOutboxDriverErrorKind,
+  type ArvoOutboxDriverErrorParam,
+  ArvoOutboxDriverValidationError,
+} from './ArvoOutboxDriver/errors.js';
+export { ArvoOutboxDriver } from './ArvoOutboxDriver/index.js';
+export type {
+  ArvoOutboxDriverCallParam,
+  ArvoOutboxDriverCapacityParam,
+  ArvoOutboxDriverCommitEventsParam,
+  ArvoOutboxDriverCommitStateAndEventsParam,
+  ArvoOutboxDriverEventEntry,
+  ArvoOutboxDriverListUnseenEventsParam,
+  ArvoOutboxDriverMarkEventsSeenParam,
+  ArvoOutboxDriverParam,
+  ArvoOutboxDriverReadCommittedEventsParam,
+  ArvoOutboxDriverReadLatestStateParam,
+  ArvoOutboxDriverRestoreParam,
+} from './ArvoOutboxDriver/types.js';
+export {
   ArvoEventFactory,
   createArvoEventFactory,
   tryCreateArvoEventFactory,

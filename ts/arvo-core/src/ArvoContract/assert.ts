@@ -13,7 +13,7 @@ import type { ArvoContractEventAssertionScope } from './types.js';
  * was establishing, so the issue says what became unanswerable rather than
  * only that something did.
  */
-const BLOCKED_BY = {
+const BLOCKED_BY = Object.freeze({
   expectedType:
     'the expected type is not one this version declares, so there is no schema to check the payload against',
   structure:
@@ -22,7 +22,7 @@ const BLOCKED_BY = {
   version:
     'the version is not the one being asked about, so there is no declaration to check the event against',
   type: 'the type is not the shape being checked, so the payload belongs to a different schema',
-} as const;
+} as const);
 
 /** The two halves of a `dataschema`, once it has been read as one. */
 export type DataschemaParts = { uri: string; version: string };

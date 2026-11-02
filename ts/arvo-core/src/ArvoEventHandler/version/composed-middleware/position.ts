@@ -4,10 +4,11 @@
  */
 export type ArvoMiddlewareSource = 'supplied' | 'declared';
 
-const LIST_AS_WRITTEN: Record<ArvoMiddlewareSource, string> = {
-  supplied: 'execute({ middleware })',
-  declared: 'setupArvoEventHandler({ middleware })',
-};
+const LIST_AS_WRITTEN: Readonly<Record<ArvoMiddlewareSource, string>> =
+  Object.freeze({
+    supplied: 'execute({ middleware })',
+    declared: 'setupArvoEventHandler({ middleware })',
+  });
 
 /**
  * Names a middleware list, or one entry in it, as the code that wrote it

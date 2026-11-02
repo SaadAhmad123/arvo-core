@@ -39,7 +39,7 @@ const SEGMENT_GRAMMAR = /^(0|[1-9]\d*)$/;
 const NON_DIGIT = /[^0-9]/;
 
 /** The three segments, in order, named as they are reported. */
-const SEGMENT_NAMES = ['major', 'minor', 'patch'] as const;
+const SEGMENT_NAMES = Object.freeze(['major', 'minor', 'patch'] as const);
 
 /**
  * Diagnoses one segment, or returns `null` if it is well-formed.

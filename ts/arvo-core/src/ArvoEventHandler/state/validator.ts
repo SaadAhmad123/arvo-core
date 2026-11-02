@@ -23,15 +23,15 @@ const isCount = (candidate: unknown): boolean =>
   candidate >= 0;
 
 /** The identifiers, each of which must be there and must say something. */
-const IDENTIFIER_FIELDS = [
+const IDENTIFIER_FIELDS = Object.freeze([
   'subject',
   'executionId',
   'parentExecutionId',
   'source',
-] as const;
+] as const);
 
 /** The counts, each of which must be a whole number and cannot go backwards. */
-const COUNT_FIELDS = ['depth', 'casVersion'] as const;
+const COUNT_FIELDS = Object.freeze(['depth', 'casVersion'] as const);
 
 const checkIdentifiers = (
   record: Record<string, unknown>,

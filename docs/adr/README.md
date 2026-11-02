@@ -37,3 +37,5 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | [ADR-016](./016-executor-middleware.md) | Executor Middleware | Accepted |
 | [ADR-017](./017-dispatcher.md) | The Dispatcher | Accepted |
 | [ADR-018](./018-trace-context-across-layers.md) | Trace Context Across Layers | Accepted |
+| [ADR-019](./019-outbox.md) | The Outbox | Accepted |
+| [ADR-020](./020-outbox-driver.md) | The Outbox Driver | Accepted |

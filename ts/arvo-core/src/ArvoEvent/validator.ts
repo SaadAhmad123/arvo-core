@@ -6,7 +6,7 @@ import { isUriReference } from '../utils/uri.js';
 import { walkFlatMap, walkPayload } from './json.js';
 import type { ArvoEventFields, ArvoEventValidationOptions } from './types.js';
 
-const KNOWN_FIELDS = [
+const KNOWN_FIELDS = Object.freeze([
   'id',
   'parentid',
   'initid',
@@ -25,7 +25,7 @@ const KNOWN_FIELDS = [
   'traceparent',
   'tracestate',
   'executionunits',
-] as const satisfies readonly (keyof ArvoEventFields)[];
+] as const satisfies readonly (keyof ArvoEventFields)[]);
 
 /**
  * Fills in every field's default. The five fields with no sensible default —
@@ -151,7 +151,7 @@ const normalizeExecutionUnits = (executionUnits: unknown): unknown =>
     : executionUnits;
 
 /** Every top-level string field subject to the character-domain restriction — see {@link findForbiddenCodePoint}. */
-const CHARACTER_DOMAIN_FIELDS = [
+const CHARACTER_DOMAIN_FIELDS = Object.freeze([
   'id',
   'parentid',
   'initid',
@@ -165,7 +165,7 @@ const CHARACTER_DOMAIN_FIELDS = [
   'dataschema',
   'traceparent',
   'tracestate',
-] as const satisfies readonly (keyof ArvoEventFields)[];
+] as const satisfies readonly (keyof ArvoEventFields)[]);
 
 /**
  * C0/C1 controls, `DEL`, and Unicode noncharacters are exactly the standard

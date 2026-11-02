@@ -57,6 +57,8 @@ Rules that follow:
 
 Biome-enforced. Run `pnpm lint` before finishing any change.
 
+**No nested ternary.** A conditional expression never holds another in either branch. Where a value has more than two outcomes, give it a small function with an early `return` per outcome, so each case reads on its own line. Biome's `noNestedTernary` enforces it.
+
 ### Dependencies and reuse
 
 Before writing non-trivial logic, check whether something already in the dependency tree does it — see `package.json` for what is currently there. An existing dependency costs consumers nothing they are not already paying; a new one does.
@@ -74,6 +76,17 @@ Three counterweights, so this does not become an argument for adding packages fr
 Two mechanisms doing the same job is worse than either alone — two idioms, two error shapes, and no guarantee they agree.
 
 When bespoke wins, `design.md` records why, so the next person does not re-litigate it.
+
+### Module-level state
+
+**The package holds no state at module level.** Nothing a file declares outside a function or class may change, or carry anything from one call to the next, because whatever does is shared by every consumer that imports it and by every call they make.
+
+So, at module level:
+
+- **Not allowed:** an instance of a class, such as a serializer built once and shared; a `Set` or a `Map`, which freezing does not stop growing; any `let`; and an array or plain object that is not deeply frozen, whatever its type says.
+- **Allowed:** a primitive constant, such as a default or a name; a regular expression without the `g` or `y` flag, since with either it remembers where its last match ended; a function; and an array or object frozen with `Object.freeze`, holding only primitives, functions or other frozen values.
+
+A collaborator is built by the class that needs it, in its constructor, and passed to the helper functions that use it as an argument. A fixed list to look a name up in is a frozen array, checked with `includes`.
 
 ### Documentation in source
 

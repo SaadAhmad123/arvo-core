@@ -41,6 +41,9 @@
       },
       "suspicious": {
         "noExplicitAny": "off"
+      },
+      "style": {
+        "noNestedTernary": "error"
       }
     }
   },

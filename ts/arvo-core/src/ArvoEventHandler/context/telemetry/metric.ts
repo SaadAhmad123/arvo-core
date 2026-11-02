@@ -3,10 +3,10 @@ import { ARVO_TELEMETRY_PREFIX } from './prefix.js';
 import { reading, recording } from './recording.js';
 
 /** What a counter is where nothing is metering. */
-const NO_OP_COUNTER: Counter = { add: () => undefined };
+const NO_OP_COUNTER: Counter = Object.freeze({ add: () => undefined });
 
 /** What a histogram is where nothing is metering. */
-const NO_OP_HISTOGRAM: Histogram = { record: () => undefined };
+const NO_OP_HISTOGRAM: Histogram = Object.freeze({ record: () => undefined });
 
 import type { ArvoExecutionContextMeterParam } from './types.js';
 
