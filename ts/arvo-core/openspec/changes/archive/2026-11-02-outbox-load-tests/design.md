@@ -101,7 +101,7 @@ A run's machine is its CPU model, core count and memory, with the Docker limits.
 
 ## Risks / Trade-offs
 
-- [Docker on macOS runs a Linux VM, so numbers are not bare-metal numbers] → They are compared only with runs on the same machine.
+- [Docker may run its containers in a virtual machine, so numbers are not bare-metal numbers] → They are compared only with runs on a matching machine.
 - [A million events in memory may need more than the container allows] → `main` has two gigabytes; where a size check cannot fit, the report says skipped and why, and does not pass it.
 - [`libfaketime` may not reach SQLite's clock in every build] → The faked-clock container checks first that SQLite's own time moved, and reports the check skipped where it did not.
 - [The suite takes long] → The quick run is the default; the soak is asked for.
@@ -112,7 +112,7 @@ None. The suite is new and runs by hand.
 
 ## Findings
 
-From the runs of 2026-11-01 on an Apple M3 Max, Docker with 14 CPUs and 7.8 GB, each container capped as **Containers** says. Numbers are for comparing runs on this machine, not targets. None is fixed here; each points at a later change.
+From the runs of 2026-11-01, each container capped as **Containers** says. Numbers are for comparing runs on a matching machine, not targets. None is fixed here; each points at a later change.
 
 ### Pointing at `arvo-core`
 
@@ -130,7 +130,7 @@ From the runs of 2026-11-01 on an Apple M3 Max, Docker with 14 CPUs and 7.8 GB, 
 ### The soak
 
 - **SQLite passed its full hour**: about 39,000 orders, the heap held after collection level between 18 and 26 MB, the file flat. That is the result after fixing the suite's own leak: its timing wrapper kept every call's duration, which over a soak's millions of calls grew the heap steadily and looked like a leak in the outbox. It now keeps a fixed random sample.
-- **The in-memory soak is unresolved.** Twice it stopped partway: one batch of orders made almost no progress for minutes, its commits refused again and again as `revision_stale`, until its deadline. Short runs never show it. The Mac was sleeping around the first; the second is not explained. It may be the harness's own rerunning of stale commits, or a stall in the in-memory outbox under sustained contention. It needs its own look, starting from a soak that writes progress as it goes.
+- **The in-memory soak is unresolved.** Twice it stopped partway: one batch of orders made almost no progress for minutes, its commits refused again and again as `revision_stale`, until its deadline. Short runs never show it. The host was asleep around the first; the second is not explained. It may be the harness's own rerunning of stale commits, or a stall in the in-memory outbox under sustained contention. It needs its own look, starting from a soak that writes progress as it goes.
 
 ### Measured, worth keeping as a baseline
 

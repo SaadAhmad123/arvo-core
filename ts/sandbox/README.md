@@ -91,7 +91,7 @@ A quick run takes about a minute for the in-memory outbox and two to three for S
 
 **Where it runs.** Each container is capped in CPU, memory, swap and processes, runs as `node` with every capability dropped, has no network, sees no host folder but its own results folder, and is removed when it stops, even when you press Ctrl-C. SQLite files, child processes, the faked clock (`libfaketime`) and the 20 MB full disk all live inside their containers.
 
-**Reading a report.** Each run writes `load-results/<run>/report.md` and `report.json`, ignored by git, and prints the report. It lists every check passed, failed or skipped — a check that cannot run where it is says why, and never counts as passed — then every measurement beside the same one from the last run on a matching machine, marking a change of more than a fifth as worth a look. Numbers are Docker-on-this-machine numbers: compare them with each other, not with a server.
+**Reading a report.** Each run writes `load-results/<run>/report.md` and `report.json`, ignored by git, and prints the report. It lists every check passed, failed or skipped — a check that cannot run where it is says why, and never counts as passed — then every measurement beside the same one from the last run on a matching machine, marking a change of more than a fifth as worth a look. Numbers depend on the machine and Docker they ran under: compare them with each other, not with a server.
 
 **Disk.** The image is labelled `arvo.load`, and each run removes the image it replaced and no other. Docker's own disk is shared with whatever else you build; if a run fails with `ENOSPC`, Docker's disk is full.
 
