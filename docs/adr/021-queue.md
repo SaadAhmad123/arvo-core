@@ -104,12 +104,12 @@ erDiagram
 | `eventid` | the event | the event's `id`, unique everywhere under ADR-001, the same on every copy. For finding every trip of one event without opening the payload |
 | `eventsource`, `eventtype`, `eventsubject`, `eventexecutionid`, `eventto`, `eventdomain` | the event | the event's addressing, lifted out. For a queue to place by, where its technology places, and for whoever reads the queue to filter by, without a payload being opened. `eventto` is the destination, as ADR-001 makes it; nothing else names one |
 | `eventdepth` | the event | the event's `depth` under ADR-001, so a queue's contents can show runaway nesting without a payload being opened |
-| `payload` | the event | the event as a CloudEvent per ADR-003, written as JSON, byte for byte as given. The queue never opens it |
+| `payload` | the event | the event as a CloudEvent per ADR-003, written as JSON, byte for byte as given. Nothing a queue needs is inside it |
 | `delayms` | the caller | **read by the queue**: how long after being kept the queued event may first be handed out, on the queue's clock (rule 8). `0` on a first trip; the wait before a retry on a copy |
 | `attempt` | the caller | which attempt the next run of this queued event is, counting from zero as ADR-009 does. `0` on a first trip, `1` on the first copy. The queue never uses it |
 | `failurekind`, `failuremessage`, `failurestack`, `failuredata`, `failedat` | the caller | why the previous run of this event did not finish, for whoever reads the queue. All five are null on a first trip and set together on a copy. `failurekind` is informational: **nothing MAY decide anything from it**. `failuredata` is a JSON string whose content is the caller's. The queue never uses any of them |
 
-**A queue MUST NOT read anything off the payload.** Every value it needs arrives as a field beside it. `id` and `delayms` are the two it acts on under the rules below. The `event*` fields are there so that a queue whose technology places queued events, by destination, by workflow, by execution, has what it needs to do so; whether it does, and by which, is its own. Every field is stored and handed back exactly as given, so that what a mechanism in one language wrote, a mechanism in another reads unchanged.
+**A queue SHOULD NOT have to read anything off the payload.** Every value it needs arrives as a field beside it, and a queue that finds itself opening the payload has found a field this record is missing. `id` and `delayms` are the two it acts on under the rules below. The `event*` fields are there so that a queue whose technology places queued events, by destination, by workflow, by execution, has what it needs to do so; whether it does, and by which, is its own. Every field is stored and handed back exactly as given, so that what a mechanism in one language wrote, a mechanism in another reads unchanged.
 
 #### Where the fields come from
 
@@ -221,7 +221,7 @@ Where a taker dies, nobody makes a copy, so `attempt` does not move. The queued 
 - **Not the outbox.** It keeps nothing about an execution and answers nothing about what was committed. ADR-019 **Considered Alternatives** already rejects one piece doing both.
 - **Not a router.** It delivers to whoever dequeues; it sends nothing anywhere itself. Where it holds a queued event internally, and whether `eventto` or any other lifted field decides that, is its own business, and nothing Arvo defines depends on the answer.
 - **Not a judge.** It MUST NOT decide whether to retry, how long to wait, or when to give up. It stores `attempt`, `delayms` and the failure fields for whoever does.
-- **Not a parser.** It never opens the payload.
+- **Not a parser.** It should never need to open the payload: every value it could want is a field beside it.
 
 ## Consequences
 
