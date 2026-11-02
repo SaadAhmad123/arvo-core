@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-26
+- **Revised:** 2026-11-02, in place, wording only: the parties this ADR once called *sweeper* and *worker*, which no ADR defines, are now the mechanism and the delivery, which ADR-006 does. No rule changed
 - **Scope:** Arvo ecosystem
 - **Amends:** [ADR-006](./006-arvoeventhandler-protocol.md), **Required of infrastructure adapters** — one additive paragraph: a mechanism MAY meet obligations 2 and 5, and the preserving half of obligation 1, through an outbox as defined here; the publishing half of obligation 1 remains the mechanism's, carried out through the outbox's send operations. Additive: nothing already there is replaced
 - **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), three of whose five obligations on a mechanism this ADR gives a durable shape to; [ADR-007](./007-execution-record.md), which defines the record an outbox holds and the `cas_version` it compares; [ADR-008](./008-execution-faults-and-abandonment.md), whose abandonment pair an outbox must be able to commit in every shape the fault carries it; [ADR-010](./010-delivery-classification-and-entry-validation.md), whose gate makes a repeated delivery safe to discard, which is what lets an outbox resend without harm; [ADR-001](./001-arvoevent-structure.md), which makes an event's `id` unique everywhere; [ADR-003](./003-arvoevent-cloudevent-transformation.md), whose CloudEvent form is what an outbox stores an event as; [ADR-004](./004-multi-language-implementation-governance.md), which leaves API shape to each language; [ADR-015](./015-no-ordering-guarantee.md), which forbids any party from promising order
@@ -13,8 +14,8 @@ Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-a
 ## Terminology
 
 - **State** — the execution record of [ADR-007](./007-execution-record.md), exactly as that ADR defines it. It is called *state* in this ADR's data model because that is what a mechanism keeps between deliveries; *record* and *state* name one thing here.
-- **Queue** — wherever events wait for a worker to deliver them. It is infrastructure, outside this ADR and outside the outbox, as ADR-006 leaves it.
-- **Sweeper** — whatever asks the outbox for events not yet sent, puts them on the queue, and marks them seen. It is the mechanism's, not the outbox's.
+- **Queue** — wherever events wait between being committed and being delivered. It is infrastructure, outside this ADR and outside the outbox, as ADR-006 leaves it.
+- **Sending** — asking the outbox for events not yet sent, putting them on the queue, and marking them seen. It is the mechanism's, not the outbox's; what part of the mechanism does it is not defined here.
 
 ## Scope
 
@@ -28,7 +29,7 @@ This ADR is written so that someone who has never read another Arvo record can i
 
 - **API shape.** Method names, whether operations take one argument or several, how the implementation reports failure. Each language's own choice ([ADR-004](./004-multi-language-implementation-governance.md)). The names used here are the model's and illustrative.
 - **How Arvo calls an outbox.** The party on Arvo's side that builds what an outbox stores, checks what it returns, and turns its failures into Arvo's own is [ADR-020](./020-outbox-driver.md).
-- **Where events wait, and who sends them.** An outbox is not a queue and sends nothing. Where an event waits for a worker, who puts it there, and who takes it from there, is the mechanism's, as ADR-006 leaves it. The outbox only answers what has not been sent and records what has.
+- **Where events wait, and who sends them.** An outbox is not a queue and sends nothing. Where an event waits to be delivered, who puts it there, and who takes it from there, is the mechanism's, as ADR-006 leaves it. The outbox only answers what has not been sent and records what has.
 - **Retention.** How long an outbox keeps what it holds is the deployment's. This ADR says what a deletion costs and nothing more.
 - **How an outbox is built.** This ADR names no storage technology, no table layout and no technique. Every rule is a behaviour an implementation can be tested against.
 
@@ -125,7 +126,7 @@ Two fields are the outbox's own. **`committed_at` MUST be set once, as part of t
 
 #### What the payload is
 
-**The payload MUST be the event in CloudEvent form, as [ADR-003](./003-arvoevent-cloudevent-transformation.md) defines the transformation, written as a JSON string.** The outbox is where an event leaves the model for the queue, and ADR-003 fixes CloudEvents as the form an event takes outside Arvo, so what is stored is what is sent, and a sweeper puts the string on the queue exactly as it is. The party calling the outbox converts in both directions ([ADR-020](./020-outbox-driver.md)); the outbox never does.
+**The payload MUST be the event in CloudEvent form, as [ADR-003](./003-arvoevent-cloudevent-transformation.md) defines the transformation, written as a JSON string.** The outbox is where an event leaves the model for the queue, and ADR-003 fixes CloudEvents as the form an event takes outside Arvo, so what is stored is what is sent, and the mechanism puts the string on the queue exactly as it is. The party calling the outbox converts in both directions ([ADR-020](./020-outbox-driver.md)); the outbox never does.
 
 Every language implementation already has ADR-003's transformation, because ADR-000 binds transformability to the model, so a payload stored by one language is readable by another with nothing new required. This ADR fixes the form and not the bytes: ADR-003's deferred *canonical wire serialization* stays deferred, and recovery needs only that an outbox hands back the bytes it was given.
 
@@ -189,8 +190,8 @@ commit = {
 ### Sending
 
 12. **"Seen" means a queue has it.** An event MUST be marked seen only after it was handed to a queue and the queue acknowledged it, never before.
-13. **Nothing is listed before it is committed.** An event appears in `list_unseen_events` only once the commit it belongs to has landed, and only while it is not marked seen. `older_than` leaves out anything whose `committed_at` is more recent than that, so a worker that has just committed has time to send its own events before the sweeper takes them.
-14. **Handing the same event to two callers is permitted, and a lease is recommended.** A receiver discards a repeat at the gate ([ADR-010](./010-delivery-classification-and-entry-validation.md), step 9), so correctness never depends on handing an event out once. But several sweepers without a lease all take the same oldest events and all send them. An outbox meant for more than one sweeper SHOULD claim what it hands out, and let the claim lapse where it is never marked seen. **An outbox that leases MAY leave events under a live lease out of what it lists to other callers**; once the lease lapses they are listed again. That is the one way an unseen event may be absent from a list, and it is temporary.
+13. **Nothing is listed before it is committed.** An event appears in `list_unseen_events` only once the commit it belongs to has landed, and only while it is not marked seen. `older_than` leaves out anything whose `committed_at` is more recent than that, so whatever has just committed has time to send its own events before another caller takes them.
+14. **Handing the same event to two callers is permitted, and a lease is recommended.** A receiver discards a repeat at the gate ([ADR-010](./010-delivery-classification-and-entry-validation.md), step 9), so correctness never depends on handing an event out once. But several callers without a lease all take the same oldest events and all send them. An outbox meant for more than one such caller SHOULD claim what it hands out, and let the claim lapse where it is never marked seen. **An outbox that leases MAY leave events under a live lease out of what it lists to other callers**; once the lease lapses they are listed again. That is the one way an unseen event may be absent from a list, and it is temporary.
 15. **`mark_events_seen` is final and MAY be repeated.** Marking an already-seen event again does nothing.
 16. **The queue MUST keep what it accepts.** Once an event is marked seen, the outbox is done with it. A queue that can lose an accepted message does not meet this ADR, and nothing may mark an event seen on its behalf.
 
@@ -219,25 +220,25 @@ What an outbox holds can grow without bound. `capacity` gives an outbox a way to
 
 The rules above exist to keep this sequence working, and it is the one part of an outbox that is easy to get wrong without seeing it whole.
 
-1. A worker delivers an event. The handler runs. The commit succeeds: the record and the events are now in the outbox.
-2. The worker dies before it sends the events, or before it tells the queue the delivery is done.
+1. An event is delivered. The handler runs. The commit succeeds: the record and the events are now in the outbox.
+2. The process that delivered it dies before it sends the events, or before it tells the queue the delivery is done.
 3. The queue never heard back, so later it delivers the same event again. This may be minutes or hours later, depending on the queue.
-4. A new worker runs the handler. The handler reads the record, finds the event's `id` already in `event_ids`, and refuses ([ADR-010](./010-delivery-classification-and-entry-validation.md), step 9; or `record_unexpected` for an init). That refusal is correct.
-5. The new worker still has to finish what the first did not: send the events. It may not run the handler again to get them. It reads them back, `read_committed_events` by this delivery's `triggering_event_id`, and sends exactly those bytes.
+4. A new delivery runs the handler. The handler reads the record, finds the event's `id` already in `event_ids`, and refuses ([ADR-010](./010-delivery-classification-and-entry-validation.md), step 9; or `record_unexpected` for an init). That refusal is correct.
+5. The new delivery still has to finish what the first did not: send the events. It may not run the handler again to get them. It reads them back, `read_committed_events` by this delivery's `triggering_event_id`, and sends exactly those bytes.
 
 ```mermaid
 sequenceDiagram
     participant Q as Queue
-    participant W1 as Worker 1
+    participant W1 as Delivery 1
     participant O as Outbox
-    participant W2 as Worker 2
+    participant W2 as Delivery 2
     Q->>W1: event E
     W1->>O: commit record + events
     Note over W1: dies before sending
     Q->>W2: event E again (never acknowledged)
     Note over W2: handler refuses: already handled
     W2->>O: read_committed_events(triggering_event_id = E)
-    O-->>W2: the events worker 1 committed, byte for byte
+    O-->>W2: the events delivery 1 committed, byte for byte
     W2->>Q: send them, mark seen
 ```
 
@@ -252,7 +253,7 @@ Step 5 only works if the event records are still there, and only if they are exa
 
 ### What an outbox is not
 
-- **Not a queue.** Where an event waits for a worker is a different thing, and ADR-006 leaves it with the mechanism. An outbox says what was committed and whether a queue has taken it.
+- **Not a queue.** Where an event waits to be delivered is a different thing, and ADR-006 leaves it with the mechanism. An outbox says what was committed and whether a queue has taken it.
 - **Not a router.** It MUST NOT decide anything from `to` or `domain`. They are kept for indexing.
 - **Not a judge.** It MUST NOT decide whether a record is valid, whether an execution is finished, or whether to retry.
 - **Not a parser.** It reads nothing off the record and nothing off an event payload. Every value it uses arrives as a field.
@@ -299,7 +300,7 @@ Considered: the outbox reading `execution_id`, and the index fields, out of the 
 
 ### The payload in the event's own JSON shape
 
-Considered: storing the payload as the event's own fields written as JSON, ADR-001's shape, and converting to a CloudEvent only where a transport wants one. Rejected because the outbox is where an event leaves the model, ADR-003 fixes the form it leaves in, and storing that form means a sweeper sends the stored bytes untouched, so what was committed is what is sent. The state's own events stay in ADR-001's shape, under ADR-007.
+Considered: storing the payload as the event's own fields written as JSON, ADR-001's shape, and converting to a CloudEvent only where a transport wants one. Rejected because the outbox is where an event leaves the model, ADR-003 fixes the form it leaves in, and storing that form means the mechanism sends the stored bytes untouched, so what was committed is what is sent. The state's own events stay in ADR-001's shape, under ADR-007.
 
 ### A refusal as a thrown error
 
@@ -345,15 +346,15 @@ None to the membership list. The outbox is an infrastructure adapter under ADR-0
 
 ### Required of infrastructure adapters
 
-One thing added to ADR-006 **Required of infrastructure adapters**, additively: **a mechanism MAY meet obligations 2 and 5, and the preserving half of obligation 1, through an outbox conforming to this ADR**, and where it does, the outbox meets them on its behalf. The publishing half of obligation 1, that every committed event reaches its destination at least once, remains the mechanism's: it is met only where the mechanism runs a sweeper against `list_unseen_events` and `mark_events_seen`, and an outbox alone meets no part of it. Obligations 3 and 4, abandonment and retry, remain the mechanism's policy, written against the outbox's operations. A mechanism MUST NOT mark an event seen on behalf of a queue that can lose it (rule 16).
+One thing added to ADR-006 **Required of infrastructure adapters**, additively: **a mechanism MAY meet obligations 2 and 5, and the preserving half of obligation 1, through an outbox conforming to this ADR**, and where it does, the outbox meets them on its behalf. The publishing half of obligation 1, that every committed event reaches its destination at least once, remains the mechanism's: it is met only where the mechanism lists unseen events, sends them and marks them seen, and an outbox alone meets no part of it. Obligations 3 and 4, abandonment and retry, remain the mechanism's policy, written against the outbox's operations. A mechanism MUST NOT mark an event seen on behalf of a queue that can lose it (rule 16).
 
 ### Left deferred
 
-- **Where events wait, and who moves them.** The queue, the sweeper, and the loop that delivers. ADR-006 leaves them with the mechanism; a later ADR is the place.
+- **Where events wait, and who moves them.** The queue, what puts events on it, and what delivers from it. ADR-006 leaves them with the mechanism; a later ADR is the place.
 - **What a mechanism does with each refusal.** Re-read and run again, retry later, give up: policy, the mechanism's, for a later ADR.
 - **How a mechanism treats a repeated opening event.** Recovery step 4 has the handler refuse it as `record_unexpected`, a fault; ADR-010 permits a mechanism to treat that as a repeat rather than a failure, and the recovery sequence assumes it does. Which it does, and when, is policy, for a later ADR.
 - **What a caller does with an outbox's capacity.** The outbox only signals its room; what follows from each answer is the caller's policy, for a later ADR.
-- **What an operator watches.** The one number this ADR makes available is how many events are unseen and older than the grace period: near zero when healthy, growing when a sweeper has stalled or a queue refuses events. Publishing it is the mechanism's, for a later ADR.
+- **What an operator watches.** The one number this ADR makes available is how many events are unseen and older than the grace period: near zero when healthy, growing when sending has stalled or a queue refuses events. Publishing it is the mechanism's, for a later ADR.
 - **Retention.** Deliberately the deployment's.
 - **Conformance tests for an outbox.** The next piece of work after this ADR is accepted: a suite every outbox implementation runs, as ADR-004 asks of every protocol piece.
 - **Canonical wire serialization.** This ADR fixes the payload's form and not its bytes. Byte-for-byte canonical JSON stays where ADR-003 left it.
