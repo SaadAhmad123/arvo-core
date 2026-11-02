@@ -156,7 +156,8 @@ export const dockerRunArguments = (param: {
   `LOAD_MEMORY_MB=${param.container.memoryMb}`,
   // Node's own heap limit sits well below the container's: give it most of it
   '--env',
-  `NODE_OPTIONS=--max-old-space-size=${Math.floor(param.container.memoryMb * 0.8)}`,
+  // and let the soak collect garbage before it samples, so a sample is what is still held
+  `NODE_OPTIONS=--max-old-space-size=${Math.floor(param.container.memoryMb * 0.8)} --expose-gc`,
   LOAD_IMAGE,
   'node_modules/.bin/vitest',
   'run',

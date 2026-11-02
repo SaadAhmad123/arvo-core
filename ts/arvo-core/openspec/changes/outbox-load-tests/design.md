@@ -109,3 +109,37 @@ A run's machine is its CPU model, core count and memory, with the Docker limits.
 ## Migration Plan
 
 None. The suite is new and runs by hand.
+
+## Findings
+
+From the runs of 2026-11-01 on an Apple M3 Max, Docker with 14 CPUs and 7.8 GB, each container capped as **Containers** says. Numbers are for comparing runs on this machine, not targets. None is fixed here; each points at a later change.
+
+### Pointing at `arvo-core`
+
+- **The driver builds a zod schema on every call that checks an answer.** A stack sampled during a run under pressure sat in `check-capacity.ts` building its schema, and every commit now asks capacity first, so every commit builds at least two schemas (capacity and outcome). Building a schema per call keeps `project.md`'s **Module-level state** rule, but the driver could build its schemas once, in its constructor, as it builds its serializer. A later change to `ArvoOutboxDriver`.
+- **The in-memory outbox takes about 2.4 KB a held event.** A million held events, each with a 16-byte payload, brought the process to about 2.4 GB; at that size a read of one delivery took up to about 100 ms, the time of a major garbage collection. The buffers' TSDoc says they count events, not bytes; it should also say about how much memory an event takes, so a size can be chosen against a memory limit. A later docs change to `src/outbox/inmemory/types.ts`.
+- **SQLite's `deleteExpired()` holds the thread for its whole run.** Deleting 50,000 expired events and 20,000 expired states took about 2.4 s, in batches each a transaction of its own, without yielding between them: a process calling it on its event loop stops for that long. Either its TSDoc says so, or it yields between batches. A later change to `src/outbox/sqlite/outbox.ts`.
+- **A SQLite file made read-only leaves its side files read-only.** Opening fails cleanly, but SQLite creates `-wal` and `-shm` with the main file's permissions, so making only the main file writable again does not let it open. Worth one sentence in `ArvoSqliteOutboxOptions.filename`'s TSDoc: a repair covers all three files.
+
+### Pointing at a mechanism, for the later ADR on mechanism policy
+
+- **A worker that only retries when the outbox is full starves the in-memory outbox's sweep.** Every in-memory operation answers without yielding, so a worker loop that redelivers on `exhausted` and takes the next delivery at once never lets the sweep's timer run, and nothing ever frees room. A mechanism must back off, by any time at all, when it is refused for room.
+- **Recovery must resend only what was never sent.** A repeated delivery that resends every event its first delivery committed makes each of those a repeat downstream, which recovers in turn, without end. A mechanism resends the events whose record says `seen: false`.
+- **More workers than four make fan-in executions slower.** Through the order handler, which waits on many answers at once, orders per second fell from about 26 at four workers to about 17 at sixteen in memory, and from about 16 to about 11 on SQLite, while deliveries per second rose: answers to one order race, all but one is refused as `revision_stale`, and each refused one runs again. Serializing deliveries per execution, or a mechanism's own concurrency limit per subject, would recover it.
+
+### The soak
+
+- **SQLite passed its full hour**: about 39,000 orders, the heap held after collection level between 18 and 26 MB, the file flat. That is the result after fixing the suite's own leak: its timing wrapper kept every call's duration, which over a soak's millions of calls grew the heap steadily and looked like a leak in the outbox. It now keeps a fixed random sample.
+- **The in-memory soak is unresolved.** Twice it stopped partway: one batch of orders made almost no progress for minutes, its commits refused again and again as `revision_stale`, until its deadline. Short runs never show it. The Mac was sleeping around the first; the second is not explained. It may be the harness's own rerunning of stale commits, or a stall in the in-memory outbox under sustained contention. It needs its own look, starting from a soak that writes progress as it goes.
+
+### Measured, worth keeping as a baseline
+
+| | In memory | SQLite |
+|---|---|---|
+| Orders per second, 4 workers | about 26 | about 16 |
+| One commit of a state, p99 | 0.06 ms | 2–3 ms |
+| Commit of 10,000 events of 1 KB | about 93 ms | about 205 ms |
+| Read of one delivery among a million events, p99 | about 100 ms (collection) | 1.4 ms |
+| Memory holding a million events | about 2.4 GB | about 290 MB |
+| Longest thread block, 64 workers | about 75 ms | about 100 ms |
+| A commit while another writer holds the file, 200 ms wait | — | refused as `unavailable` after about 250 ms |

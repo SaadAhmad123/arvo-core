@@ -10,9 +10,19 @@ import { recordMeasurement } from './results.js';
  * was blocked, and how long garbage collection paused it.
  */
 
-/** Samples of how long one kind of operation took, in milliseconds. */
+/** The most samples kept for one kind of operation, however many calls are timed. */
+const KEPT_SAMPLE_COUNT = 10_000;
+
+/**
+ * Samples of how long one kind of operation took, in milliseconds. Past a
+ * fixed number it keeps a uniform random sample, so timing a soak's millions
+ * of calls holds the same memory as timing a hundred; the count and the
+ * slowest are kept exactly.
+ */
 export class LatencySamples {
-  readonly #samplesMs: number[] = [];
+  readonly #keptSamplesMs: number[] = [];
+  #count = 0;
+  #slowestMs = 0;
 
   /** Times one call, answering what it answered. */
   async time<Answer>(call: () => Answer): Promise<Awaited<Answer>> {
@@ -20,24 +30,37 @@ export class LatencySamples {
     try {
       return await call();
     } finally {
-      this.#samplesMs.push(Number(process.hrtime.bigint() - startedAt) / 1e6);
+      this.add(Number(process.hrtime.bigint() - startedAt) / 1e6);
     }
   }
 
   /** Adds one sample taken elsewhere. */
   add(sampleMs: number): void {
-    this.#samplesMs.push(sampleMs);
+    this.#count += 1;
+    if (sampleMs > this.#slowestMs) this.#slowestMs = sampleMs;
+    if (this.#keptSamplesMs.length < KEPT_SAMPLE_COUNT) {
+      this.#keptSamplesMs.push(sampleMs);
+      return;
+    }
+    // each of the samples so far stays kept with the same chance
+    const replacedPosition = Math.floor(Math.random() * this.#count);
+    if (replacedPosition < KEPT_SAMPLE_COUNT) {
+      this.#keptSamplesMs[replacedPosition] = sampleMs;
+    }
   }
 
   /** How many calls were timed. */
   get count(): number {
-    return this.#samplesMs.length;
+    return this.#count;
   }
 
-  /** The value below which `share` of samples fall. */
+  /** The value below which `share` of samples fall; the slowest exactly at one. */
   percentile(share: number): number {
-    if (this.#samplesMs.length === 0) return 0;
-    const sorted = [...this.#samplesMs].sort((first, second) => first - second);
+    if (this.#count === 0) return 0;
+    if (share >= 1) return this.#slowestMs;
+    const sorted = [...this.#keptSamplesMs].sort(
+      (first, second) => first - second,
+    );
     return (
       sorted[Math.min(sorted.length - 1, Math.floor(share * sorted.length))] ??
       0

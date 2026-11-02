@@ -37,107 +37,145 @@ const activeTimerCount = () =>
     .length;
 
 /** Ordinary traffic, for a long time, watching for what keeps growing. */
+/** How long the soak runs, as asked. */
+const soakMinutes = Number(process.env.LOAD_SOAK_MINUTES ?? '60');
+
 export const describeSoak = (subject: LoadSubject): void => {
   describe(`${subject.name}: resources over time`, () => {
-    it('levels off in memory and on disk under steady traffic, and leaves nothing behind once closed', async () => {
-      const soakMinutes = Number(process.env.LOAD_SOAK_MINUTES ?? '60');
-      const soakEndsAt = Date.now() + soakMinutes * 60 * 1000;
-      const sampleEveryMs = Math.max(5000, (soakMinutes * 60 * 1000) / 40);
-      const timersBefore = activeTimerCount();
-      const opened = await subject.open({
-        inmemory: {
-          retentionMs: { seenEvents: 30_000, terminalStates: 60_000 },
-        },
-        sqlite: { retentionMs: { seenEvents: 30_000, terminalStates: 60_000 } },
-      });
-      const samples: {
-        memoryMb: number;
-        heapMb: number;
-        fileMb: number;
-        walMb: number;
-        handles: number;
-      }[] = [];
-      let nextSampleAt = Date.now();
-      let ordersAnswered = 0;
-      try {
-        while (Date.now() < soakEndsAt) {
-          const outcome = await runOrders({
-            subject: opened,
-            orderCount: 10,
-            width: 10,
-            depth: 2,
-            workerCount: 8,
-          });
-          ordersAnswered += outcome.answeredOrders;
-          if (opened.deleteExpired !== null) opened.deleteExpired();
-          if (Date.now() >= nextSampleAt) {
-            const memory = process.memoryUsage();
-            samples.push({
-              memoryMb: memory.rss / 1024 / 1024,
-              heapMb: memory.heapUsed / 1024 / 1024,
-              fileMb:
-                opened.filename === null ? 0 : fileSizeMb(opened.filename),
-              walMb:
-                opened.filename === null
-                  ? 0
-                  : fileSizeMb(`${opened.filename}-wal`),
-              handles: process.getActiveResourcesInfo().length,
+    it(
+      'levels off in memory and on disk under steady traffic, and leaves nothing behind once closed',
+      async () => {
+        const soakEndsAt = Date.now() + soakMinutes * 60 * 1000;
+        const sampleEveryMs = Math.max(5000, (soakMinutes * 60 * 1000) / 40);
+        const timersBefore = activeTimerCount();
+        const opened = await subject.open({
+          inmemory: {
+            retentionMs: { seenEvents: 30_000, terminalStates: 60_000 },
+          },
+          sqlite: {
+            retentionMs: { seenEvents: 30_000, terminalStates: 60_000 },
+          },
+        });
+        const samples: {
+          memoryMb: number;
+          heapMb: number;
+          fileMb: number;
+          walMb: number;
+          handles: number;
+        }[] = [];
+        let nextSampleAt = Date.now();
+        let ordersAnswered = 0;
+        try {
+          while (Date.now() < soakEndsAt) {
+            const outcome = await runOrders({
+              subject: opened,
+              orderCount: 10,
+              width: 10,
+              depth: 2,
+              workerCount: 8,
             });
-            nextSampleAt += sampleEveryMs;
+            ordersAnswered += outcome.answeredOrders;
+            if (opened.deleteExpired !== null) opened.deleteExpired();
+            if (Date.now() >= nextSampleAt) {
+              // collected first, so the heap sampled is what is still held, not when collection last ran
+              if (typeof globalThis.gc === 'function') globalThis.gc();
+              const memory = process.memoryUsage();
+              samples.push({
+                memoryMb: memory.rss / 1024 / 1024,
+                heapMb: memory.heapUsed / 1024 / 1024,
+                fileMb:
+                  opened.filename === null ? 0 : fileSizeMb(opened.filename),
+                walMb:
+                  opened.filename === null
+                    ? 0
+                    : fileSizeMb(`${opened.filename}-wal`),
+                handles: process.getActiveResourcesInfo().length,
+              });
+              nextSampleAt += sampleEveryMs;
+            }
+            await waitMs(50);
           }
-          await waitMs(50);
+        } finally {
+          await opened.close();
         }
-      } finally {
-        await opened.close();
-      }
-      await waitMs(100);
-      recordMeasurement({
-        check: 'soak',
-        name: 'orders answered',
-        value: ordersAnswered,
-        unit: 'orders',
-      });
-      for (const [sampleNumber, sample] of samples.entries()) {
+        await waitMs(100);
         recordMeasurement({
           check: 'soak',
-          name: `sample ${String(sampleNumber).padStart(2, '0')} memory`,
-          value: sample.memoryMb,
-          unit: 'MB',
+          name: 'orders answered',
+          value: ordersAnswered,
+          unit: 'orders',
         });
-        if (sample.fileMb > 0) {
+        for (const [sampleNumber, sample] of samples.entries()) {
           recordMeasurement({
             check: 'soak',
-            name: `sample ${String(sampleNumber).padStart(2, '0')} file`,
-            value: sample.fileMb + sample.walMb,
+            name: `sample ${String(sampleNumber).padStart(2, '0')} heap`,
+            value: sample.heapMb,
             unit: 'MB',
           });
+          recordMeasurement({
+            check: 'soak',
+            name: `sample ${String(sampleNumber).padStart(2, '0')} memory`,
+            value: sample.memoryMb,
+            unit: 'MB',
+          });
+          if (sample.fileMb > 0) {
+            recordMeasurement({
+              check: 'soak',
+              name: `sample ${String(sampleNumber).padStart(2, '0')} file`,
+              value: sample.fileMb + sample.walMb,
+              unit: 'MB',
+            });
+          }
         }
-      }
-      // what still rises through the last quarter is still growing
-      const lastQuarter = samples.slice(Math.floor((samples.length * 3) / 4));
-      const heapRise = riseShare(lastQuarter.map((sample) => sample.heapMb));
-      const fileRise = riseShare(
-        lastQuarter.map((sample) => sample.fileMb + sample.walMb),
-      );
-      const handleRise = riseShare(lastQuarter.map((sample) => sample.handles));
-      recordMeasurement({
-        check: 'soak',
-        name: 'heap rise in the last quarter',
-        value: heapRise * 100,
-        unit: '%',
-      });
-      recordMeasurement({
-        check: 'soak',
-        name: 'file rise in the last quarter',
-        value: fileRise * 100,
-        unit: '%',
-      });
-      expect(samples.length).toBeGreaterThanOrEqual(4);
-      expect(heapRise, JSON.stringify(lastQuarter)).toBeLessThan(0.25);
-      expect(fileRise, JSON.stringify(lastQuarter)).toBeLessThan(0.25);
-      expect(handleRise, JSON.stringify(lastQuarter)).toBeLessThan(0.25);
-      // fewer is a timer of an earlier check expiring; more is one left behind
-      expect(activeTimerCount()).toBeLessThanOrEqual(timersBefore);
-    });
+        // what still rises through the last quarter is still growing
+        const lastQuarter = samples.slice(Math.floor((samples.length * 3) / 4));
+        const heapRise = riseShare(lastQuarter.map((sample) => sample.heapMb));
+        const fileRise = riseShare(
+          lastQuarter.map((sample) => sample.fileMb + sample.walMb),
+        );
+        const handleRise = riseShare(
+          lastQuarter.map((sample) => sample.handles),
+        );
+        recordMeasurement({
+          check: 'soak',
+          name: 'heap rise in the last quarter',
+          value: heapRise * 100,
+          unit: '%',
+        });
+        recordMeasurement({
+          check: 'soak',
+          name: 'file rise in the last quarter',
+          value: fileRise * 100,
+          unit: '%',
+        });
+        expect(samples.length).toBeGreaterThanOrEqual(4);
+        // a slow, steady climb hides from the last quarter's rise: compare the last quarter with the second
+        const meanHeapMb = (part: readonly { heapMb: number }[]) =>
+          part.reduce((total, sample) => total + sample.heapMb, 0) /
+          Math.max(part.length, 1);
+        const quarterLength = Math.floor(samples.length / 4);
+        const secondQuarterMb = meanHeapMb(
+          samples.slice(quarterLength, 2 * quarterLength),
+        );
+        const lastQuarterMb = meanHeapMb(samples.slice(3 * quarterLength));
+        recordMeasurement({
+          check: 'soak',
+          name: 'heap, last quarter over second',
+          value: (lastQuarterMb / secondQuarterMb - 1) * 100,
+          unit: '%',
+        });
+        expect(
+          lastQuarterMb,
+          JSON.stringify(samples.map((sample) => Math.round(sample.heapMb))),
+        ).toBeLessThan(secondQuarterMb * 1.15);
+        expect(heapRise, JSON.stringify(lastQuarter)).toBeLessThan(0.25);
+        expect(fileRise, JSON.stringify(lastQuarter)).toBeLessThan(0.25);
+        expect(handleRise, JSON.stringify(lastQuarter)).toBeLessThan(0.25);
+        // fewer is a timer of an earlier check expiring; more is one left behind
+        expect(activeTimerCount()).toBeLessThanOrEqual(timersBefore);
+        // as long as it is asked to run, and ten minutes more to finish its last orders
+      },
+      (soakMinutes + 10) * 60 * 1000,
+    );
   });
 };
