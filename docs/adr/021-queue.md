@@ -86,7 +86,7 @@ erDiagram
         string failure_kind           "nullable; set with the other failure fields, rule 30"
         string failure_message        "nullable"
         string failure_stack          "nullable"
-        string failure_data           "nullable: a JSON string for the consumer"
+        string failure_details           "nullable: a JSON string for the consumer"
         string failed_at              "nullable: when the previous run failed"
     }
     LEASE {
@@ -106,7 +106,7 @@ erDiagram
 | `payload` | the event | the event as a CloudEvent per ADR-003, written as JSON, byte for byte as given. Nothing a queue needs is inside it |
 | `delay_ms` | the caller | **read by the queue**: how long after being kept the queued event may first be handed out, on the queue's clock (rule 8). `0` on a first trip; the wait before a retry on a copy |
 | `attempt` | the caller | which attempt the next run of this queued event is, counting from zero as ADR-009 does. `0` on a first trip, `1` on the first copy. The queue never uses it |
-| `failure_kind`, `failure_message`, `failure_stack`, `failure_data`, `failed_at` | the caller | why the previous run of this event did not finish, for whoever reads the queue. All five are null on a first trip and set on a copy or a move (rule 30). `failure_kind` is informational: **nothing MAY decide anything from it**. `failure_data` is a JSON string whose content is the caller's. The queue never uses any of them |
+| `failure_kind`, `failure_message`, `failure_stack`, `failure_details`, `failed_at` | the caller | why the previous run of this event did not finish, for whoever reads the queue. All five are null on a first trip and set on a copy or a move (rule 30). `failure_kind` is informational: **nothing MAY decide anything from it**. `failure_details` is a JSON string whose content is the caller's. The queue never uses any of them |
 
 **A queue SHOULD NOT have to read anything off the payload.** Every value it needs arrives as a field beside it, and a queue that finds itself opening the payload has found a field this record is missing. `id` and `delay_ms` are the two it acts on under the rules below. The `event_*` fields are there so that a queue whose technology places queued events, by destination, by workflow, by execution, has what it needs to do so; whether it does, and by which, is its own. Every field is stored and handed back exactly as given, so that what a mechanism in one language wrote, a mechanism in another reads unchanged.
 
@@ -126,14 +126,14 @@ What each field may hold, so that two implementations agree before a value cross
 | `delay_ms` | an integer, zero or more |
 | `attempt` | an integer, zero or more |
 | `failure_kind`, `failure_message`, `failure_stack` | a string as above, or null |
-| `failure_data` | a string holding a JSON document, or null |
+| `failure_details` | a string holding a JSON document, or null |
 | `failed_at`, `enqueued_at` | RFC 3339 with an offset, as ADR-001 fixes `time`; `failed_at` nullable |
 | `lease_id` | non-empty string, not guessable (rule 13) |
 | `handout_count` | an integer, one or more |
-| `at_most` | an integer, one or more |
+| `max_count` | an integer, one or more |
 | `capacity`'s `events[].id` | a non-empty string, as `id` |
-| `capacity`'s `events[].bytes` | an integer, zero or more: the payload's size |
-| `held`, `size`, `limit`, `limit_bytes`, `oldest_ready_age_ms` | an integer, zero or more |
+| `capacity`'s `events[].payload_bytes` | an integer, zero or more: the payload's size |
+| `held_count`, `target_count`, `limit_count`, `limit_bytes`, `oldest_ready_age_ms` | an integer, zero or more |
 | `too_large_ids` | ids from the asked-for list, each at most once |
 | `lease_ms` | an integer, one or more, and at most the queue's lease ceiling (rule 16) |
 
@@ -155,7 +155,7 @@ Three fields are the queue's own and travel with every hand-out:
 
 ```
 enqueue(queued_events)                 → per queued event: kept | refused(reason)
-dequeue(at_most, lease_ms)             → leases, each with its queued event
+dequeue(max_count, lease_ms)             → leases, each with its queued event
 extend(lease_ids, lease_ms)            → per lease: kept | lease_lost
 acknowledge(lease_ids)                 → per lease: kept | lease_lost
 capacity(events)                       → room for those: a status, and the kinds behind it
@@ -179,7 +179,7 @@ capacity(events)                       → room for those: a status, and the kin
 7. **Order is never promised.** A queue hands queued events out in whatever order suits it. Nothing downstream may rely on any order ([ADR-015](./015-no-ordering-guarantee.md)).
 8. **The delay is kept.** A queued event MUST NOT be handed out until `delay_ms` has passed since the queue kept it, measured on the queue's own clock. `delay_ms` is the only clock-bearing value a caller gives a queue, and it is a duration so that only one clock is ever involved.
 9. **Every hand-out is counted.** `handout_count` MUST be `1` the first time a queued event is handed out and one higher each time after, counting every taker in every process, and surviving the queue's own crash.
-10. **Up to `at_most`, never more.** `dequeue` MAY return fewer, including none.
+10. **Up to `max_count`, never more.** `dequeue` MAY return fewer, including none.
 
 ### Leases
 
@@ -195,7 +195,7 @@ capacity(events)                       → room for those: a status, and the kin
 A queue feels pressure at two ends and per event: no room to keep more, at the in end, on a bounded queue; takers not keeping up, at the out end, on every queue; and a payload too big to keep at all. Events that cannot be queued stay in the outbox unseen and are tried again, so a caller that cannot ask first hammers a full queue at exactly the moment it is struggling. `capacity` is the one question that answers all three, asked with the events the caller means to enqueue: each one's `id` and its payload's size in bytes, and nothing else.
 
 17. **`capacity` MUST answer a status for the asked-for events, and MAY answer the kinds and numbers behind it.** The status is one of `available`, `tolerating` or `exhausted`. Behind it the queue MAY give up to three kinds, each with its own status in the same three words:
-    - `room` — whether it can keep that many more. It MAY give how many it would then hold, what it is meant to hold (past this, `tolerating`) and the most it should ever hold (past this, `exhausted`).
+    - `room` — whether it can keep that many more. It MAY give how many it would then hold (`held_count`), what it is meant to hold (`target_count`; past this, `tolerating`) and the most it should ever hold (`limit_count`; past this, `exhausted`).
     - `payload` — whether each payload can be kept at all. `exhausted` here never clears. It MAY give the limit in bytes where the limit is one number, and MUST give the ids whose payload cannot be kept, as `too_large_ids`, where it answers other than `available`.
     - `backlog` — how far behind the takers are, by the age of the oldest ready queued event. It MAY give that age.
 
@@ -217,8 +217,8 @@ A queue feels pressure at two ends and per event: no room to keep more, at the i
 ### Copies and moves
 
 28. **A retry is a copy with a new `id`.** A mechanism that will run a queued event again later makes a new queued event: the same `payload`, `attempt` one higher, the failure fields set, `delay_ms` as its wait, and a **new `id`**. It enqueues the copy and then acknowledges the lease it holds, in that order, so that a crash between the two leaves a duplicate and never a loss. The queue sees two unrelated queued events, and rule 5 is why it must.
-29. **A move keeps its `id`.** A mechanism that takes a queued event off one queue and puts it on another, as to a dead-letter queue, enqueues it there **with the same `id`** and `attempt` unchanged, and then acknowledges the lease it holds. If it crashes between the two, the queued event comes back and is moved again, and the receiving queue MAY recognise the repeat under rule 5. The receiving queue's `handout_count` starts again, because it is that queue's own; a mechanism that wants the count it left behind kept writes it into `failure_data`. A replay, from a dead-letter queue back to a working one, is a copy under rule 28 and not a move: it carries a new `id`, so that rule 5 on the working queue can never swallow it. `too_large` is final for a copy: the same bytes will be refused again, so a mechanism MUST NOT answer it with a retry.
-30. **The failure fields travel together.** On a first trip all five are null. On a copy, and on a move, the caller MUST set `failure_kind`, `failure_message` and `failed_at`, MAY set `failure_stack` and `failure_data`, and MUST NOT set any of the five while `failure_kind` is null.
+29. **A move keeps its `id`.** A mechanism that takes a queued event off one queue and puts it on another, as to a dead-letter queue, enqueues it there **with the same `id`** and `attempt` unchanged, and then acknowledges the lease it holds. If it crashes between the two, the queued event comes back and is moved again, and the receiving queue MAY recognise the repeat under rule 5. The receiving queue's `handout_count` starts again, because it is that queue's own; a mechanism that wants the count it left behind kept writes it into `failure_details`. A replay, from a dead-letter queue back to a working one, is a copy under rule 28 and not a move: it carries a new `id`, so that rule 5 on the working queue can never swallow it. `too_large` is final for a copy: the same bytes will be refused again, so a mechanism MUST NOT answer it with a retry.
+30. **The failure fields travel together.** On a first trip all five are null. On a copy, and on a move, the caller MUST set `failure_kind`, `failure_message` and `failed_at`, MAY set `failure_stack` and `failure_details`, and MUST NOT set any of the five while `failure_kind` is null.
 
 ### How the operations compose
 
@@ -382,7 +382,7 @@ interface Queue
     list of { id: string, outcome: 'kept' }
           | { id: string, outcome: 'refused', reason: 'too_large' | 'no_room' }
 
-  dequeue(at_most: integer, lease_ms: integer):
+  dequeue(max_count: integer, lease_ms: integer):
     list of { lease_id: string, queued_event: QueuedEvent, handout_count: integer, enqueued_at: timestamp }
 
   extend(lease_ids: list of string, lease_ms: integer):
@@ -391,17 +391,17 @@ interface Queue
   acknowledge(lease_ids: list of string):
     list of { lease_id: string, outcome: 'kept' | 'lease_lost' }
 
-  capacity(events: list of { id: string, bytes: integer }): {
+  capacity(events: list of { id: string, payload_bytes: integer }): {
     status: 'available' | 'tolerating' | 'exhausted',          the worst of the kinds
     kinds: {
-      room?:    { status, held?: integer, size?: integer, limit?: integer },
+      room?:    { status, held_count?: integer, target_count?: integer, limit_count?: integer },
       payload?: { status, limit_bytes?: integer, too_large_ids?: list of string },
       backlog?: { status, oldest_ready_age_ms?: integer }
     }
   }
-    held                — how many it would hold with the asked-for events added
-    size                — what it is meant to hold; past this, tolerating
-    limit               — the most it should ever hold; past this, exhausted
+    held_count          — how many it would hold with the asked-for events added
+    target_count        — what it is meant to hold; past this, tolerating
+    limit_count         — the most it should ever hold; past this, exhausted
     too_large_ids       — the ids whose payload cannot be kept
     oldest_ready_age_ms — how long the oldest ready queued event has waited
 

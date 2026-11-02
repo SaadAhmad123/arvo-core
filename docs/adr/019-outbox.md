@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-26
-- **Revised:** 2026-11-02, in place, wording only: the parties this ADR once called *sweeper* and *worker*, which no ADR defines, are now the mechanism and the delivery, which ADR-006 does. No rule changed
+- **Revised:** 2026-11-02, in place, wording only: the parties this ADR once called *sweeper* and *worker*, which no ADR defines, are now the mechanism and the delivery, which ADR-006 does; and the illustrative names `at_most`, `held`, `size` and `limit` became `max_count`, `held_count`, `target_count` and `limit_count`, each saying what it counts. No rule changed
 - **Scope:** Arvo ecosystem
 - **Amends:** [ADR-006](./006-arvoeventhandler-protocol.md), **Required of infrastructure adapters** — one additive paragraph: a mechanism MAY meet obligations 2 and 5, and the preserving half of obligation 1, through an outbox as defined here; the publishing half of obligation 1 remains the mechanism's, carried out through the outbox's send operations. Additive: nothing already there is replaced
 - **Depends on:** [ADR-006](./006-arvoeventhandler-protocol.md), three of whose five obligations on a mechanism this ADR gives a durable shape to; [ADR-007](./007-execution-record.md), which defines the record an outbox holds and the `cas_version` it compares; [ADR-008](./008-execution-faults-and-abandonment.md), whose abandonment pair an outbox must be able to commit in every shape the fault carries it; [ADR-010](./010-delivery-classification-and-entry-validation.md), whose gate makes a repeated delivery safe to discard, which is what lets an outbox resend without harm; [ADR-001](./001-arvoevent-structure.md), which makes an event's `id` unique everywhere; [ADR-003](./003-arvoevent-cloudevent-transformation.md), whose CloudEvent form is what an outbox stores an event as; [ADR-004](./004-multi-language-implementation-governance.md), which leaves API shape to each language; [ADR-015](./015-no-ordering-guarantee.md), which forbids any party from promising order
@@ -139,7 +139,7 @@ read_latest_state(execution_id)              → record | none
 commit_state_and_events(commit)              → committed | refused(reason)
 commit_events(events)                        → done | refused(capacity_exhausted)
 read_committed_events(filter)                → events, as committed
-list_unseen_events(at_most, older_than)      → events, oldest committed first
+list_unseen_events(max_count, older_than)    → events, oldest committed first
 mark_events_seen(event_ids)                  → done
 capacity(events, state)                      → room for that much: per kind, and overall
 ```
@@ -380,19 +380,19 @@ interface Outbox
     filter: { execution_id } | { triggering_event_id } | { execution_id, triggering_event_id }
   ): list of EventRecord + committed_at + seen
 
-  list_unseen_events(at_most: integer, older_than: duration): list of EventRecord + committed_at + seen
+  list_unseen_events(max_count: integer, older_than: duration): list of EventRecord + committed_at + seen
 
   mark_events_seen(event_ids: list of string): nothing
 
   capacity(request: { events: integer, state?: { cas_version: integer } }): {
     status: 'available' | 'tolerating' | 'exhausted',          the worst of the kinds
     kinds: {
-      events?:     { status, held?: integer, size?: integer, limit?: integer },
-      states?:     { status, held?: integer, size?: integer, limit?: integer }
+      events?:     { status, held_count?: integer, target_count?: integer, limit_count?: integer },
+      states?:     { status, held_count?: integer, target_count?: integer, limit_count?: integer }
     }
   }
-    held  — how much it would hold with the request added
-    size  — what it is meant to hold; past this, tolerating
-    limit — the most it should ever hold; past this, exhausted
+    held_count   — how much it would hold with the request added
+    target_count — what it is meant to hold; past this, tolerating
+    limit_count  — the most it should ever hold; past this, exhausted
 ```
 
