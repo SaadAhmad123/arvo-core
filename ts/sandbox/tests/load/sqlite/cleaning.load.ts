@@ -122,7 +122,7 @@ describe('sqlite: cleaning up', () => {
       let deletedEvents = 0;
       let committersRunning = committers.length;
       for (const committer of committers) {
-        void committer.ended.then(() => {
+        committer.child.once('exit', () => {
           committersRunning -= 1;
         });
       }

@@ -65,7 +65,7 @@ export const startChild = <Message>(
         return;
       }
       waiters.push({ matches, settle });
-      void ended.then(() =>
+      child.once('exit', () =>
         reject(new Error(`${scriptName} ended before the message awaited`)),
       );
     });

@@ -172,11 +172,12 @@ describe('a before part that writes through the context', () => {
 
   it('may store a value whose own getter writes middleware data, without looping', async () => {
     let seenLazyValue: unknown;
+    let touchedWrite: Promise<void> | undefined;
     const { executionResult } = await runWithBeforePart(
       async (ctx) => {
         await ctx.setMiddleware('lazy', {
           get value() {
-            void ctx.setMiddleware('touched', true);
+            touchedWrite = ctx.setMiddleware('touched', true);
             return 'read';
           },
         });
@@ -184,7 +185,7 @@ describe('a before part that writes through the context', () => {
       {
         execute: async (ctx) => {
           seenLazyValue = (ctx.middleware.lazy as { value: string }).value;
-          await Promise.resolve();
+          await touchedWrite;
           expect(ctx.middleware.touched).toBe(true);
           return answeringExecutor(ctx);
         },

@@ -98,6 +98,9 @@ export class ArvoThreadedBroker {
   readonly #queue: WireEvent[] = [];
   readonly #attempts = new Map<string, number>();
   #resolveSettle: (() => void) | null = null;
+  #rejectSettle: ((failure: unknown) => void) | null = null;
+  /** The first failure no settle was waiting to hear, given to the next one. */
+  #unheardFailure: { failure: unknown } | null = null;
   readonly #threadCount: number;
   readonly #charges: ChargeBehaviour;
   readonly #executorDelay: number;
@@ -122,7 +125,9 @@ export class ArvoThreadedBroker {
         workerData: { charges: this.#charges },
       });
       const lane: Lane = { worker, held: null, alive: true };
-      worker.on('message', (message) => void this.#onMessage(lane, message));
+      worker.on('message', (message) =>
+        this.#onMessage(lane, message).catch((failure) => this.#fail(failure)),
+      );
       worker.on('error', (workerError) => this.#onError(lane, workerError));
       worker.unref();
       this.#lanes.push(lane);
@@ -179,20 +184,38 @@ export class ArvoThreadedBroker {
   /** Runs until every thread is idle and nothing is queued. */
   async settle(timeoutMs = 20_000): Promise<this> {
     this.#pump();
+    if (this.#unheardFailure !== null) throw this.#unheardFailure.failure;
     if (this.#isQuiet()) return this;
 
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.#resolveSettle = null;
+        this.#rejectSettle = null;
         reject(new Error('these threads did not settle'));
       }, timeoutMs);
       this.#resolveSettle = () => {
         clearTimeout(timeout);
         this.#resolveSettle = null;
+        this.#rejectSettle = null;
         resolve();
+      };
+      this.#rejectSettle = (failure) => {
+        clearTimeout(timeout);
+        this.#resolveSettle = null;
+        this.#rejectSettle = null;
+        reject(failure);
       };
     });
     return this;
+  }
+
+  /** A dispatch or an answer that failed, failing the settle waiting on it. */
+  #fail(failure: unknown): void {
+    if (this.#rejectSettle !== null) {
+      this.#rejectSettle(failure);
+      return;
+    }
+    this.#unheardFailure ??= { failure };
   }
 
   /** The next event off the queue, in order or out of it. */
@@ -220,7 +243,7 @@ export class ArvoThreadedBroker {
       const wireEvent = this.#nextEvent();
       if (wireEvent === undefined) break;
       lane.held = { carried: wireEvent, executionId: null };
-      void this.#dispatch(lane, wireEvent);
+      this.#dispatch(lane, wireEvent).catch((failure) => this.#fail(failure));
     }
     if (this.#isQuiet()) this.#resolveSettle?.();
   }

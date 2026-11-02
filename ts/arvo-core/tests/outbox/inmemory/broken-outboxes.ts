@@ -47,7 +47,9 @@ const rewriteCommittedEvents =
   ) =>
   (workingOutbox: ArvoMemoryOutbox): Partial<IArvoOutbox> => ({
     readCommittedEvents: async (filter) =>
-      (await workingOutbox.readCommittedEvents(filter)).map(rewrite),
+      (await workingOutbox.readCommittedEvents(filter)).map(
+        (committedEvent, position) => rewrite(committedEvent, position),
+      ),
   });
 
 /** An outbox remembering the latest revision it committed for each execution. */
@@ -455,7 +457,7 @@ export const brokenOutboxByCaseName: Record<string, () => IArvoOutbox> = {
       close: () => {
         closeCount += 1;
         if (closeCount > 1) throw new Error('the outbox is already closed');
-        workingOutbox.close();
+        return workingOutbox.close();
       },
     };
   }),
