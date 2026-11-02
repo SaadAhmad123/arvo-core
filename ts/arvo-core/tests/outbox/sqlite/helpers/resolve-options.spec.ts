@@ -5,10 +5,10 @@ describe('resolving the options of a SQLite outbox', () => {
   it('applies every default where nothing but the file is given', () => {
     expect(resolveOptions({ filename: 'outbox.sqlite' })).toEqual({
       filename: 'outbox.sqlite',
-      busyTimeoutMs: 5000,
+      busyTimeoutMs: 1000,
       retentionMs: {
-        seenEvents: 7 * 24 * 60 * 60 * 1000,
-        terminalStates: 7 * 24 * 60 * 60 * 1000,
+        seenEvents: 24 * 60 * 60 * 1000,
+        terminalStates: 24 * 60 * 60 * 1000,
       },
     });
   });
@@ -24,7 +24,7 @@ describe('resolving the options of a SQLite outbox', () => {
       filename: 'outbox.sqlite',
       busyTimeoutMs: 0,
       retentionMs: {
-        seenEvents: 7 * 24 * 60 * 60 * 1000,
+        seenEvents: 24 * 60 * 60 * 1000,
         terminalStates: Number.POSITIVE_INFINITY,
       },
     });

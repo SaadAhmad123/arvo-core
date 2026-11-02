@@ -5,15 +5,15 @@ import type {
 
 /** Each buffer of an outbox built with none given. */
 const DEFAULT_BUFFER: ArvoMemoryOutboxBuffer = Object.freeze({
-  size: 10_000,
+  size: 50_000,
   tolerance: 0.2,
 });
 
 /** How long an outbox built with none given keeps a seen event. */
-const DEFAULT_SEEN_EVENTS_RETENTION_MS = 5 * 60 * 1000;
+const DEFAULT_SEEN_EVENTS_RETENTION_MS = 60 * 1000;
 
 /** How long an outbox built with none given keeps a terminal state. */
-const DEFAULT_TERMINAL_STATES_RETENTION_MS = 60 * 60 * 1000;
+const DEFAULT_TERMINAL_STATES_RETENTION_MS = 10 * 60 * 1000;
 
 /** The shortest time between two sweeps. */
 const SHORTEST_SWEEP_INTERVAL_MS = 1000;

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { checkCapacity } from '../../../src/ArvoOutboxDriver/helpers/check-capacity.js';
+import {
+  buildCapacitySchema,
+  checkCapacity,
+} from '../../../src/ArvoOutboxDriver/helpers/check-capacity.js';
 
 /** The paths of every issue an answer is refused with. */
 const issuePathsFor = (answer: unknown) => {
-  const capacityResult = checkCapacity(answer);
+  const capacityResult = checkCapacity(buildCapacitySchema(), answer);
   if (capacityResult.ok) throw new Error('the answer was not refused');
   return capacityResult.error.map((issue) => issue.path);
 };
@@ -26,11 +29,14 @@ describe("checking a capacity answer's shape", () => {
       },
     ],
   ])('accepts %s, as given', (_answerDescription, answer) => {
-    expect(checkCapacity(answer)).toEqual({ ok: true, value: answer });
+    expect(checkCapacity(buildCapacitySchema(), answer)).toEqual({
+      ok: true,
+      value: answer,
+    });
   });
 
   it('hands back no field the answer did not give', () => {
-    const capacityResult = checkCapacity({
+    const capacityResult = checkCapacity(buildCapacitySchema(), {
       status: 'available',
       buffers: { states: { status: 'available', size: 4 } },
     });

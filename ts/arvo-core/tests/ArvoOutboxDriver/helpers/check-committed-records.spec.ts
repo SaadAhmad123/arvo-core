@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ArvoOutboxCommittedEventRecord } from '../../../src/ArvoOutbox/types/event-record.js';
-import { checkCommittedRecords } from '../../../src/ArvoOutboxDriver/helpers/check-committed-records.js';
+import {
+  buildCommittedRecordsSchema,
+  checkCommittedRecords,
+} from '../../../src/ArvoOutboxDriver/helpers/check-committed-records.js';
 
 /** A committed event record with every field of the type it must have. */
 const completeRecord: ArvoOutboxCommittedEventRecord = {
@@ -27,18 +30,27 @@ describe("checking a read of events' answer", () => {
       completeRecord,
       { ...completeRecord, id: 'event-2', casVersion: null, seen: true },
     ];
-    const recordsResult = checkCommittedRecords(answer);
+    const recordsResult = checkCommittedRecords(
+      buildCommittedRecordsSchema(),
+      answer,
+    );
     expect(recordsResult.ok && recordsResult.value).toEqual(answer);
   });
 
   it('accepts no records', () => {
-    expect(checkCommittedRecords([])).toEqual({ ok: true, value: [] });
+    expect(checkCommittedRecords(buildCommittedRecordsSchema(), [])).toEqual({
+      ok: true,
+      value: [],
+    });
   });
 
   it.each([null, undefined, 'records', { records: [] }])(
     'refuses %o, which is not a list, as a malformed response',
     (answer) => {
-      const recordsResult = checkCommittedRecords(answer);
+      const recordsResult = checkCommittedRecords(
+        buildCommittedRecordsSchema(),
+        answer,
+      );
       expect(!recordsResult.ok && recordsResult.error.kind).toBe(
         'malformed_response',
       );
@@ -66,10 +78,10 @@ describe("checking a read of events' answer", () => {
   ])(
     'refuses a record whose %s is %o, as a malformed event, naming it',
     (field, fieldValue) => {
-      const recordsResult = checkCommittedRecords([
-        completeRecord,
-        { ...completeRecord, [field]: fieldValue },
-      ]);
+      const recordsResult = checkCommittedRecords(
+        buildCommittedRecordsSchema(),
+        [completeRecord, { ...completeRecord, [field]: fieldValue }],
+      );
       expect(!recordsResult.ok && recordsResult.error.kind).toBe(
         'malformed_event',
       );
@@ -81,7 +93,10 @@ describe("checking a read of events' answer", () => {
   );
 
   it('refuses a record that is not an object, as a malformed event', () => {
-    const recordsResult = checkCommittedRecords([completeRecord, 'a record']);
+    const recordsResult = checkCommittedRecords(buildCommittedRecordsSchema(), [
+      completeRecord,
+      'a record',
+    ]);
     expect(
       !recordsResult.ok &&
         recordsResult.error.issues.map((issue) => issue.path),
@@ -89,7 +104,7 @@ describe("checking a read of events' answer", () => {
   });
 
   it('names every field wrong across every record at once', () => {
-    const recordsResult = checkCommittedRecords([
+    const recordsResult = checkCommittedRecords(buildCommittedRecordsSchema(), [
       { ...completeRecord, id: 1 },
       { ...completeRecord, seen: 'no', time: 0 },
     ]);

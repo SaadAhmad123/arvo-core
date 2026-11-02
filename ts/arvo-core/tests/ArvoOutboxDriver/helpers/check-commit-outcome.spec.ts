@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { checkCommitOutcome } from '../../../src/ArvoOutboxDriver/helpers/check-commit-outcome.js';
+import {
+  buildCommitOutcomeSchema,
+  checkCommitOutcome,
+} from '../../../src/ArvoOutboxDriver/helpers/check-commit-outcome.js';
 
 describe("checking a commit's answer", () => {
   it.each([
@@ -8,12 +11,18 @@ describe("checking a commit's answer", () => {
     { committed: false, refusal: 'revision_stale' },
     { committed: false, refusal: 'capacity_exhausted' },
   ])('accepts %o', (outcome) => {
-    expect(checkCommitOutcome(outcome)).toEqual({ ok: true, value: outcome });
+    expect(checkCommitOutcome(buildCommitOutcomeSchema(), outcome)).toEqual({
+      ok: true,
+      value: outcome,
+    });
   });
 
   it('hands back no refusal beside a commit that landed', () => {
     expect(
-      checkCommitOutcome({ committed: true, refusal: 'state_exists' }),
+      checkCommitOutcome(buildCommitOutcomeSchema(), {
+        committed: true,
+        refusal: 'state_exists',
+      }),
     ).toEqual({ ok: true, value: { committed: true } });
   });
 
@@ -36,7 +45,10 @@ describe("checking a commit's answer", () => {
   ])(
     'refuses %s, with one issue at its path',
     (_answerDescription, answer, path) => {
-      const outcomeResult = checkCommitOutcome(answer);
+      const outcomeResult = checkCommitOutcome(
+        buildCommitOutcomeSchema(),
+        answer,
+      );
       expect(
         !outcomeResult.ok && outcomeResult.error.map((issue) => issue.path),
       ).toEqual([path]);

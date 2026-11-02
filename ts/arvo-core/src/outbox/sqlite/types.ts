@@ -13,7 +13,9 @@
 export type ArvoSqliteOutboxOptions = {
   /**
    * The SQLite file, created where missing. A file on the machine's own
-   * disk, not a network file system.
+   * disk, not a network file system. SQLite keeps `-wal` and `-shm` files
+   * beside it with the same permissions: a change to this file's
+   * permissions must reach them too, or it will not open.
    */
   readonly filename: string;
   /**

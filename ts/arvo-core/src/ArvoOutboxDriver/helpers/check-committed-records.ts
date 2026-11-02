@@ -12,8 +12,8 @@ export type CommittedRecordsFailure = {
   readonly issues: readonly ErrorIssue[];
 };
 
-/** The shape of every committed event record, built per check so no schema is shared. */
-const buildCommittedRecordsSchema = () =>
+/** The shape of every committed event record, built once by each driver and held by it. */
+export const buildCommittedRecordsSchema = () =>
   z.array(
     z.object({
       id: z.string(),
@@ -34,12 +34,18 @@ const buildCommittedRecordsSchema = () =>
     }),
   );
 
+/** The committed records' schema, as {@link buildCommittedRecordsSchema} builds it. */
+export type CommittedRecordsSchema = ReturnType<
+  typeof buildCommittedRecordsSchema
+>;
+
 /**
  * A read of events' answer as committed event records, every field of every
  * one with its type, or why not: `malformed_response` where the answer is no
  * list, `malformed_event` naming every field wrong in any record.
  */
 export const checkCommittedRecords = (
+  schema: CommittedRecordsSchema,
   answer: unknown,
 ): Result<
   readonly ArvoOutboxCommittedEventRecord[],
@@ -59,11 +65,7 @@ export const checkCommittedRecords = (
       }),
     );
   }
-  const recordsResult = checkAgainstSchema(
-    buildCommittedRecordsSchema(),
-    answer,
-    'records',
-  );
+  const recordsResult = checkAgainstSchema(schema, answer, 'records');
   if (!recordsResult.ok) {
     return fromNeverthrow(
       err({ kind: 'malformed_event', issues: recordsResult.error }),

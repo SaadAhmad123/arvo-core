@@ -12,9 +12,18 @@ import { ArvoOutboxDriverError } from './errors.js';
 import { buildCapacityRequest } from './helpers/build-capacity-request.js';
 import { buildEventRecord } from './helpers/build-event-record.js';
 import { callOutbox } from './helpers/call-outbox.js';
-import { checkCapacity } from './helpers/check-capacity.js';
-import { checkCommitOutcome } from './helpers/check-commit-outcome.js';
-import { checkCommittedRecords } from './helpers/check-committed-records.js';
+import {
+  buildCapacitySchema,
+  checkCapacity,
+} from './helpers/check-capacity.js';
+import {
+  buildCommitOutcomeSchema,
+  checkCommitOutcome,
+} from './helpers/check-commit-outcome.js';
+import {
+  buildCommittedRecordsSchema,
+  checkCommittedRecords,
+} from './helpers/check-committed-records.js';
 import { checkState } from './helpers/check-state.js';
 import { liftCommitFields } from './helpers/lift-commit-fields.js';
 import { recordCapacityQuestion } from './helpers/record-capacity-question.js';
@@ -69,6 +78,11 @@ import type {
 export class ArvoOutboxDriver {
   readonly #outbox: IArvoOutbox;
   readonly #cloudEventSerializer: ArvoEventSerializer;
+  readonly #answerSchemas = {
+    capacity: buildCapacitySchema(),
+    commitOutcome: buildCommitOutcomeSchema(),
+    committedRecords: buildCommittedRecordsSchema(),
+  };
 
   /**
    * @param param - The outbox the driver calls. See {@link ArvoOutboxDriverParam}.
@@ -463,7 +477,10 @@ export class ArvoOutboxDriver {
       this.#outbox.capacity(capacityRequest),
     );
     if (!answerResult.ok) return answerResult;
-    const capacityResult = checkCapacity(answerResult.value);
+    const capacityResult = checkCapacity(
+      this.#answerSchemas.capacity,
+      answerResult.value,
+    );
     if (!capacityResult.ok) {
       return fromNeverthrow(
         err(
@@ -515,7 +532,10 @@ export class ArvoOutboxDriver {
   ): AsyncResult<void, ArvoOutboxDriverError> {
     const answerResult = await callOutbox(operationName, commit);
     if (!answerResult.ok) return answerResult;
-    const outcomeResult = checkCommitOutcome(answerResult.value);
+    const outcomeResult = checkCommitOutcome(
+      this.#answerSchemas.commitOutcome,
+      answerResult.value,
+    );
     if (!outcomeResult.ok) {
       return fromNeverthrow(
         err(
@@ -551,7 +571,10 @@ export class ArvoOutboxDriver {
   > {
     const answerResult = await callOutbox(param.operationName, param.read);
     if (!answerResult.ok) return answerResult;
-    const recordsResult = checkCommittedRecords(answerResult.value);
+    const recordsResult = checkCommittedRecords(
+      this.#answerSchemas.committedRecords,
+      answerResult.value,
+    );
     if (!recordsResult.ok) {
       return fromNeverthrow(
         err(

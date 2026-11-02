@@ -256,6 +256,11 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
    * and gives the space back to the disk. Marking events seen already does
    * this a few at a time; call it to catch up on a schedule of your own.
    *
+   * It runs to the end without letting anything else run: it holds the
+   * thread for as long as the deleting takes, which grows with how much has
+   * expired. Call it where a pause is acceptable, or often enough that little
+   * builds up.
+   *
    * @returns How many events, and how many states, were deleted.
    */
   deleteExpired(): ArvoSqliteOutboxDeletedCounts {

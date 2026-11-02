@@ -5,12 +5,12 @@ describe('resolving the options of an in-memory outbox', () => {
   it('applies every default where nothing is given', () => {
     const resolvedOptions = resolveOptions({});
     expect(resolvedOptions.buffers).toEqual({
-      events: { size: 10_000, tolerance: 0.2 },
-      states: { size: 10_000, tolerance: 0.2 },
+      events: { size: 50_000, tolerance: 0.2 },
+      states: { size: 50_000, tolerance: 0.2 },
     });
     expect(resolvedOptions.retentionMs).toEqual({
-      seenEvents: 5 * 60 * 1000,
-      terminalStates: 60 * 60 * 1000,
+      seenEvents: 60 * 1000,
+      terminalStates: 10 * 60 * 1000,
     });
     expect(resolvedOptions.clock()).toBeInstanceOf(Date);
   });
@@ -24,12 +24,12 @@ describe('resolving the options of an in-memory outbox', () => {
     });
     expect(resolvedOptions.clock).toBe(clock);
     expect(resolvedOptions.buffers).toEqual({
-      events: { size: 10_000, tolerance: 0.2 },
+      events: { size: 50_000, tolerance: 0.2 },
       states: { size: 5, tolerance: 0 },
     });
     expect(resolvedOptions.retentionMs).toEqual({
       seenEvents: 0,
-      terminalStates: 60 * 60 * 1000,
+      terminalStates: 10 * 60 * 1000,
     });
   });
 

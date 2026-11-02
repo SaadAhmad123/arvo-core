@@ -1,13 +1,13 @@
 import type { ArvoSqliteOutboxOptions } from '../types.js';
 
 /** How long an outbox built with none given waits for a file another writer holds. */
-const DEFAULT_BUSY_TIMEOUT_MS = 5000;
+const DEFAULT_BUSY_TIMEOUT_MS = 1000;
 
 /** How long an outbox built with none given keeps a seen event. */
-const DEFAULT_SEEN_EVENTS_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_SEEN_EVENTS_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 /** How long an outbox built with none given keeps a terminal state. */
-const DEFAULT_TERMINAL_STATES_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_TERMINAL_STATES_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 /** Every option of an outbox, none left out. */
 export type ArvoSqliteOutboxResolvedOptions = {
