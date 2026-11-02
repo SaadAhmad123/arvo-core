@@ -6,7 +6,7 @@
 - **Amends:** [ADR-006](./006-arvoeventhandler-protocol.md), **Required of infrastructure adapters** — one additive paragraph: a mechanism MAY carry events between deliveries through a queue as defined here, and where it does, the queue meets [ADR-019](./019-outbox.md) rule 16's demand on its behalf. Additive: nothing already there is replaced
 - **Depends on:** [ADR-019](./019-outbox.md), whose rule 16 demands something of a queue without naming one, and whose payload is what a queue carries; [ADR-003](./003-arvoevent-cloudevent-transformation.md), whose CloudEvent form that payload is in; [ADR-001](./001-arvoevent-structure.md), which makes an event's `id` unique everywhere; [ADR-009](./009-execution-bounds.md), which fixes that every delivery carries its attempt number, counted from zero, and that the wait before a retry is the mechanism's to apply; [ADR-008](./008-execution-faults-and-abandonment.md), whose fault carries the kind and the retry permission a mechanism reads when it decides to send an event back; [ADR-010](./010-delivery-classification-and-entry-validation.md), whose gate makes a repeated delivery safe to discard, which is what lets a queue deliver more than once; [ADR-014](./014-idempotency-keys.md), for the same reason on the application's side; [ADR-015](./015-no-ordering-guarantee.md), which forbids any party from promising order; [ADR-004](./004-multi-language-implementation-governance.md), which leaves API shape to each language
 - **Addresses, in part:** [ADR-000](./000-arvo-system-identity-and-architectural-principles.md) Deferred Decisions — "Infrastructure adapter interfaces and conformance", the transport adapter; [ADR-019](./019-outbox.md) **Left deferred** — "where events wait", the first of its three parts. Who moves them stays deferred
-- **Left deferred:** the party on Arvo's side that calls a queue; who moves events into and out of a queue; every retry policy; what the handler is told from a queued event; a `too_large` event; a crash loop; capacity; what an operator watches beyond depth; conformance tests. See **Left deferred**
+- **Left deferred:** the party on Arvo's side that calls a queue; who moves events into and out of a queue; every retry policy; what the handler is told from a queued event; what is done with a `too_large` event; a crash loop; what an operator watches; conformance tests. See **Left deferred**
 
 Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-architectural-principles.md).
 
@@ -24,7 +24,7 @@ Conformance language is as defined in [ADR-000](./000-arvo-system-identity-and-a
 
 ### What this ADR defines
 
-The **queue**: the second durable piece Arvo offers, beside the outbox, so that a mechanism need not build its own. Where an event waits between being committed and being delivered. What a queued event carries, and which of it the queue may read. The operations a queue offers, what each must do, and what each may refuse. What a lease is, and the rules that make it safe. How a retry is carried, as a copy, and how a dead letter is carried, as a move. And the one promise that makes it a queue rather than a buffer: **a queued event the queue has said it kept is handed out at least once, hidden from everyone else while one taker holds it, and gone for good once that taker says it is finished.**
+The **queue**: the second durable piece Arvo offers, beside the outbox, so that a mechanism need not build its own. Where an event waits between being committed and being delivered. What a queued event carries, and which of it the queue may read. The operations a queue offers, what each must do, and what each may refuse, including how it says how much room it has. What a lease is, and the rules that make it safe. How a retry is carried, as a copy, and how a dead letter is carried, as a move. And the one promise that makes it a queue rather than a buffer: **a queued event the queue has said it kept is handed out at least once, hidden from everyone else while one taker holds it, and gone for good once that taker says it is finished.**
 
 This ADR is written so that someone who has never read another Arvo record can implement a queue on their own technology and get it right.
 
@@ -50,7 +50,7 @@ The result is the same as it was for storage before ADR-019: every mechanism wri
 
 ### What a mechanism needs from a queue
 
-Put events in, and know for each one whether it is now safe. Take events out, knowing how many times each has been out before. Say an event is finished. Have an event come back when its taker did not finish it. Nothing else touches the queue: deciding whether to retry, how long to wait, and when to give up reads the queue's answers and writes nothing of its own.
+Ask whether there is room, and whether each event fits, before sending. Put events in, and know for each one whether it is now safe. Take events out, knowing how many times each has been out before. Say an event is finished. Have an event come back when its taker did not finish it. Nothing else touches the queue: deciding whether to retry, how long to wait, and when to give up reads the queue's answers and writes nothing of its own.
 
 That is a small, fixed surface, and it is the same under every broker and every database that can act as one. Naming it lets a queue adapter be written once per technology rather than once per mechanism, and lets Arvo check it once.
 
@@ -83,7 +83,7 @@ erDiagram
         string payload                "the event as CloudEvent JSON, untouched"
         int    delay_ms               "read by the queue: not handed out before this has passed"
         int    attempt                "ADR-009: 0 on a first trip, 1 on the first retry"
-        string failure_kind           "nullable; set with the other failure fields, rule 21"
+        string failure_kind           "nullable; set with the other failure fields, rule 30"
         string failure_message        "nullable"
         string failure_stack          "nullable"
         string failure_data           "nullable: a JSON string for the consumer"
@@ -100,13 +100,13 @@ erDiagram
 
 | Field | From | Role |
 |---|---|---|
-| `id` | the caller | **key**. Names this trip. A retry copy carries a new one; a move to another queue keeps its own (rules 19 and 20). The one field a queue MAY deduplicate on (rule 5) |
+| `id` | the caller | **key**. Names this trip. A retry copy carries a new one; a move to another queue keeps its own (rules 28 and 29). The one field a queue MAY deduplicate on (rule 5) |
 | `event_id` | the event | the event's `id`, unique everywhere under ADR-001, the same on every copy. For finding every trip of one event without opening the payload |
 | `event_source`, `event_type`, `event_subject`, `event_execution_id`, `event_to`, `event_domain` | the event | the event's addressing, lifted out. For a queue to place by, where its technology places, and for whoever reads the queue to filter by, without a payload being opened. `event_to` is the destination, as ADR-001 makes it; nothing else names one |
 | `payload` | the event | the event as a CloudEvent per ADR-003, written as JSON, byte for byte as given. Nothing a queue needs is inside it |
 | `delay_ms` | the caller | **read by the queue**: how long after being kept the queued event may first be handed out, on the queue's clock (rule 8). `0` on a first trip; the wait before a retry on a copy |
 | `attempt` | the caller | which attempt the next run of this queued event is, counting from zero as ADR-009 does. `0` on a first trip, `1` on the first copy. The queue never uses it |
-| `failure_kind`, `failure_message`, `failure_stack`, `failure_data`, `failed_at` | the caller | why the previous run of this event did not finish, for whoever reads the queue. All five are null on a first trip and set on a copy or a move (rule 21). `failure_kind` is informational: **nothing MAY decide anything from it**. `failure_data` is a JSON string whose content is the caller's. The queue never uses any of them |
+| `failure_kind`, `failure_message`, `failure_stack`, `failure_data`, `failed_at` | the caller | why the previous run of this event did not finish, for whoever reads the queue. All five are null on a first trip and set on a copy or a move (rule 30). `failure_kind` is informational: **nothing MAY decide anything from it**. `failure_data` is a JSON string whose content is the caller's. The queue never uses any of them |
 
 **A queue SHOULD NOT have to read anything off the payload.** Every value it needs arrives as a field beside it, and a queue that finds itself opening the payload has found a field this record is missing. `id` and `delay_ms` are the two it acts on under the rules below. The `event_*` fields are there so that a queue whose technology places queued events, by destination, by workflow, by execution, has what it needs to do so; whether it does, and by which, is its own. Every field is stored and handed back exactly as given, so that what a mechanism in one language wrote, a mechanism in another reads unchanged.
 
@@ -131,6 +131,10 @@ What each field may hold, so that two implementations agree before a value cross
 | `lease_id` | non-empty string, not guessable (rule 13) |
 | `handout_count` | an integer, one or more |
 | `at_most` | an integer, one or more |
+| `capacity`'s `events[].id` | a non-empty string, as `id` |
+| `capacity`'s `events[].bytes` | an integer, zero or more: the payload's size |
+| `held`, `size`, `limit`, `limit_bytes`, `oldest_ready_age_ms` | an integer, zero or more |
+| `too_large` ids | ids from the asked-for list, each at most once |
 | `lease_ms` | an integer, one or more, and at most the queue's lease ceiling (rule 16) |
 
 #### What the payload is
@@ -154,10 +158,10 @@ enqueue(queued_events)                 → per queued event: kept | refused(reas
 dequeue(at_most, lease_ms)             → leases, each with its queued event
 extend(lease_ids, lease_ms)            → per lease: kept | lease_lost
 acknowledge(lease_ids)                 → per lease: kept | lease_lost
-depth()                                → ready, leased, delayed: how many of each
+capacity(events)                       → room for those: a status, and the kinds behind it
 ```
 
-**A queue MUST offer every one of these, with these behaviours, and SHOULD offer nothing that reaches a delivery.** A queue MAY be asked read-only questions beyond these, about what it holds: a look at what is ready without leasing it, say, for whoever reads a dead-letter queue.
+**A queue MUST offer every one of these, with these behaviours, and SHOULD offer nothing that reaches a delivery.** A queue MAY be asked read-only questions beyond these, about what it holds: how many queued events are ready, leased and delayed, say, or a look at what is ready without leasing it, for whoever reads a dead-letter queue.
 
 **An implementer's operations are plain.** They return values and they may throw whatever their technology throws. A queue MUST NOT be required to produce Arvo's faults, results or errors; turning its answers and failures into those is the caller's, as [ADR-020](./020-outbox-driver.md) does for the outbox and a later ADR will do here.
 
@@ -167,7 +171,7 @@ depth()                                → ready, leased, delayed: how many of e
 2. **Every outcome is per queued event.** One `enqueue` may keep some and refuse others. The answer MUST carry one outcome for every `id` given, none missing.
 3. **A refusal is an answer, not a failure.** A queued event too large for the queue, or a queue with no room, is ordinary, and the queue MUST report either as a value: `too_large` or `no_room`. The queue MUST throw only where it could not do its work at all. Where `enqueue` throws, the caller learns nothing about which queued events were kept, and the right response is to enqueue the same batch again with the same `id`s; that is why `id` is the caller's to choose, and what rule 5 is for.
 4. **Every field comes back as it went in.** A queued event MUST be stored as given and handed back as given, `payload` included. The queue MUST NOT alter, add to or drop any field. Which fields it reads for its own placement is its own business, and no placement excuses it from any rule here: a queued event placed anywhere is still kept, still handed out at least once, still hidden under its lease.
-5. **A queue MAY deduplicate, by `id` only, and only against what it still holds.** A queue MAY treat a queued event whose `id` it currently holds, not yet acknowledged, as already kept: write nothing for it, answer `kept`, and do not fail. It MUST NOT remember an acknowledged `id` for this purpose: an `id` enqueued again after its queued event was acknowledged is a new queued event, kept and handed out like any other. It MUST NOT deduplicate on `event_id` or anything else: the same event is legitimately on a queue more than once (rule 19). Nothing above the queue may rely on a queue deduplicating at all.
+5. **A queue MAY deduplicate, by `id` only, and only against what it still holds.** A queue MAY treat a queued event whose `id` it currently holds, not yet acknowledged, as already kept: write nothing for it, answer `kept`, and do not fail. It MUST NOT remember an acknowledged `id` for this purpose: an `id` enqueued again after its queued event was acknowledged is a new queued event, kept and handed out like any other. It MUST NOT deduplicate on `event_id` or anything else: the same event is legitimately on a queue more than once (rule 28). Nothing above the queue may rely on a queue deduplicating at all.
 
 ### Handing out
 
@@ -186,19 +190,35 @@ depth()                                → ready, leased, delayed: how many of e
 15. **Acknowledged is gone.** A queued event whose lease is acknowledged MUST never be handed out again, whatever happens afterwards.
 16. **Leases have a ceiling.** A queue MUST hold, in its own options, a longest total time one lease may run, and MUST refuse an extension that would take the lease past it, as `lease_lost`. The refusal grants nothing and takes nothing: the lease keeps the expiry it had (rule 12). A `dequeue` or `extend` asking a `lease_ms` above the ceiling on its own is the caller's error and MUST throw; a queue MUST NOT grant a shorter lease than it was asked for, so a taker always knows how long it holds. The value is the deployment's; that there is one, and that it is kept, is the rule, so that a taker that is alive but stuck cannot hide a queued event for ever.
 
-### Watching
+### Capacity
 
-17. **`depth` tells the truth as of now.** It answers how many queued events are ready to be handed out, how many are under a live lease, and how many are kept but still inside their delay, as the queue stands at the moment of the call, as nearly as its technology allows. It is a gauge, not a transaction, and asking changes nothing.
+A queue feels pressure at two ends and per event: no room to keep more, at the in end, on a bounded queue; takers not keeping up, at the out end, on every queue; and a payload too big to keep at all. Events that cannot be queued stay in the outbox unseen and are tried again, so a caller that cannot ask first hammers a full queue at exactly the moment it is struggling. `capacity` is the one question that answers all three, asked with the events the caller means to enqueue: each one's `id` and its payload's size in bytes, and nothing else.
+
+17. **`capacity` MUST answer a status for the asked-for events, and MAY answer the kinds and numbers behind it.** The status is one of `available`, `tolerating` or `exhausted`. Behind it the queue MAY give up to three kinds, each with its own status in the same three words:
+    - `room` — whether it can keep that many more. It MAY give how many it would then hold, what it is meant to hold (past this, `tolerating`) and the most it should ever hold (past this, `exhausted`).
+    - `payload` — whether each payload can be kept at all. `exhausted` here never clears. It MAY give the limit in bytes where the limit is one number, and MUST give the ids whose payload cannot be kept where it answers other than `available`.
+    - `backlog` — how far behind the takers are, by the age of the oldest ready queued event. It MAY give that age.
+
+    A queue that limits nothing and measures nothing answers `available` with no kinds, and pays nothing for this operation.
+18. **The status is the worst of the kinds.** `exhausted` before `tolerating` before `available`; `available` where there are no kinds. A caller that reads one word is safe: `available` means send, anything else means look inside or do not.
+19. **Asking changes nothing.** The answer describes the queue as it would be with the asked-for events added, not as it is made to be. It MAY be an estimate.
+20. **Everything held counts.** Ready, leased and delayed queued events all take room; acknowledged ones count for nothing. A queue that deduplicates (rule 5) MAY leave out ids it already holds.
+21. **An answer MAY hold steady.** A queue that has answered `tolerating` for a kind MAY keep doing so until that kind has eased well below where it began, so that one event in or out does not flip the answer.
+22. **An answer can be overtaken.** Other callers land between asking and enqueueing, and an estimate can be off. Nothing held is lost or altered by this. **A queue whose limit must never be passed MUST refuse inside `enqueue`**, with `no_room` or `too_large`, because `capacity` alone cannot hold a line.
+23. **Whether `enqueue` enforces it is the implementer's.** A queue MAY refuse at `enqueue` what it would answer `exhausted` for, and need not. `capacity` states the queue's room; it does not oblige the queue to defend it.
+24. **`payload` at `available` is a promise.** An id the `payload` kind did not name will not be refused as `too_large` by the `enqueue` that follows, so a caller can set aside the named ones and send the rest. Nothing else in the answer is a promise: `room` at `available` can still meet `no_room`, and a queue that gave no `payload` kind may still refuse a payload.
+25. **`backlog` describes the takers, not the queue.** It is given so that a caller can ease off a queue whose takers are behind. The queue is asked to do nothing about it, and this ADR says nothing about how old is too old.
+26. **Nothing here is policy.** What a caller does with `tolerating`, with `exhausted` of any kind, or with an old backlog is the mechanism's, and deferred.
 
 ### Lifecycle
 
-18. **Nothing works before open or after close.** Where a queue has an open and a close, every other operation MUST throw outside them. Leases already granted keep their timers and end on their own; a caller closing its handle on the queue does not end the leases it holds.
+27. **Nothing works before open or after close.** Where a queue has an open and a close, every other operation MUST throw outside them. Leases already granted keep their timers and end on their own; a caller closing its handle on the queue does not end the leases it holds.
 
 ### Copies and moves
 
-19. **A retry is a copy with a new `id`.** A mechanism that will run a queued event again later makes a new queued event: the same `payload`, `attempt` one higher, the failure fields set, `delay_ms` as its wait, and a **new `id`**. It enqueues the copy and then acknowledges the lease it holds, in that order, so that a crash between the two leaves a duplicate and never a loss. The queue sees two unrelated queued events, and rule 5 is why it must.
-20. **A move keeps its `id`.** A mechanism that takes a queued event off one queue and puts it on another, as to a dead-letter queue, enqueues it there **with the same `id`** and `attempt` unchanged, and then acknowledges the lease it holds. If it crashes between the two, the queued event comes back and is moved again, and the receiving queue MAY recognise the repeat under rule 5. The receiving queue's `handout_count` starts again, because it is that queue's own; a mechanism that wants the count it left behind kept writes it into `failure_data`. A replay, from a dead-letter queue back to a working one, is a copy under rule 19 and not a move: it carries a new `id`, so that rule 5 on the working queue can never swallow it. `too_large` is final for a copy: the same bytes will be refused again, so a mechanism MUST NOT answer it with a retry.
-21. **The failure fields travel together.** On a first trip all five are null. On a copy, and on a move, the caller MUST set `failure_kind`, `failure_message` and `failed_at`, MAY set `failure_stack` and `failure_data`, and MUST NOT set any of the five while `failure_kind` is null.
+28. **A retry is a copy with a new `id`.** A mechanism that will run a queued event again later makes a new queued event: the same `payload`, `attempt` one higher, the failure fields set, `delay_ms` as its wait, and a **new `id`**. It enqueues the copy and then acknowledges the lease it holds, in that order, so that a crash between the two leaves a duplicate and never a loss. The queue sees two unrelated queued events, and rule 5 is why it must.
+29. **A move keeps its `id`.** A mechanism that takes a queued event off one queue and puts it on another, as to a dead-letter queue, enqueues it there **with the same `id`** and `attempt` unchanged, and then acknowledges the lease it holds. If it crashes between the two, the queued event comes back and is moved again, and the receiving queue MAY recognise the repeat under rule 5. The receiving queue's `handout_count` starts again, because it is that queue's own; a mechanism that wants the count it left behind kept writes it into `failure_data`. A replay, from a dead-letter queue back to a working one, is a copy under rule 28 and not a move: it carries a new `id`, so that rule 5 on the working queue can never swallow it. `too_large` is final for a copy: the same bytes will be refused again, so a mechanism MUST NOT answer it with a retry.
+30. **The failure fields travel together.** On a first trip all five are null. On a copy, and on a move, the caller MUST set `failure_kind`, `failure_message` and `failed_at`, MAY set `failure_stack` and `failure_data`, and MUST NOT set any of the five while `failure_kind` is null.
 
 ### How the operations compose
 
@@ -214,10 +234,10 @@ flowchart LR
 ```
 
 - **Again now.** Some failures are worth one more try at once: the outbox refused a commit as `revision_stale`, so re-read and run again. The taker keeps its lease, extends it if the tries run long (rule 16 bounds how long), and acknowledges when done.
-- **Again later.** The mechanism makes a copy (rule 19). `attempt` goes up by one, `delay_ms` carries the wait it chose, and the failure fields say why. How long the wait is, and when the attempts are spent, is read off the fault ADR-008 and ADR-009 define, and applying it is the mechanism's.
-- **Give up.** The mechanism moves the queued event (rule 20) to a dead-letter queue, which is a queue under this ADR and nothing more, with the failure fields set so that whoever reads it knows why without finding the outbox record. Some dead letters never had a record: an event nobody handles, or a payload that will not parse. The failure fields are how those are explained.
+- **Again later.** The mechanism makes a copy (rule 28). `attempt` goes up by one, `delay_ms` carries the wait it chose, and the failure fields say why. How long the wait is, and when the attempts are spent, is read off the fault ADR-008 and ADR-009 define, and applying it is the mechanism's.
+- **Give up.** The mechanism moves the queued event (rule 29) to a dead-letter queue, which is a queue under this ADR and nothing more, with the failure fields set so that whoever reads it knows why without finding the outbox record. Some dead letters never had a record: an event nobody handles, or a payload that will not parse. The failure fields are how those are explained.
 
-  **A dead-letter queue is built from the same queued event and the same five operations.** It needs no field this ADR does not already define: the `event_*` fields say what and whose the event is, `attempt` says how far it got, the failure fields say why it stopped, and `payload` is the event itself, ready to be replayed as a copy on the working queue (rule 20). An implementation that offers one queue offers a dead-letter queue by making a second one.
+  **A dead-letter queue is built from the same queued event and the same five operations.** It needs no field this ADR does not already define: the `event_*` fields say what and whose the event is, `attempt` says how far it got, the failure fields say why it stopped, and `payload` is the event itself, ready to be replayed as a copy on the working queue (rule 29). An implementation that offers one queue offers a dead-letter queue by making a second one.
 
 #### A crash is not a retry
 
@@ -252,6 +272,7 @@ Where a taker dies, nobody makes a copy, so `attempt` does not move. The queued 
 - A retry and a redelivery after a crash are told apart by two numbers the model owns, so ADR-009's attempt bound can be enforced on either.
 - Two mechanisms can share one queue, and an application can change mechanism without its handlers noticing.
 - Dead letters need no second design. They are a second queue, and the failure fields make them readable.
+- A caller can ask before it sends, in one question, whether there is room, whether each payload fits, and whether the takers are keeping up, and a queue that limits nothing answers in one word.
 
 ### Paid for
 
@@ -298,9 +319,21 @@ Considered: a `not_before` timestamp instead of `delay_ms`. Rejected because it 
 
 Considered: letting a queue that cannot extend a lease leave the operation out, so more technologies fit. Rejected because the model needs it: a taker that tries again in place, which ADR-019's `revision_stale` invites, must be able to keep its lease honestly or give up its work, and because declaring which operations a queue supports is the capability profile ADR-000 defers, which this ADR will not settle by the back door. A technology that cannot extend a lease builds it or is not an Arvo queue.
 
+### Capacity asked with a count
+
+Considered: `capacity` asked with how many events, as the outbox is, and the size of the largest. Rejected because it pre-digests the batch on the queue's behalf and so assumes which totals the queue limits on: some limit the count, some the largest payload, some the bytes of a batch or of everything held. Given one entry per event, each with its `id` and size, the queue works out whichever sums it needs, and can name the ids that will not fit. The cost is a short string and a number per event, and the queue still opens nothing.
+
+### One status word for every kind of pressure
+
+Considered: a single status whose values include `too_large`, instead of kinds each with a status. Rejected because room and size are different problems with different answers: no room clears with time, too large never does, and a caller splitting a batch needs both answers at once. One word can hold only one of them. The kinds keep one vocabulary, and the summary stays the worst of them, so a caller that reads one word is still told the truth.
+
+### A pile count instead of capacity
+
+Considered: an operation answering how many queued events are ready, leased and delayed. Rejected as a required operation because no rule of the model depends on it, and it asks every queue to count exactly where some cannot cheaply. A queue MAY answer it as a read-only question; what an operator watches is deferred.
+
 ### Deduplication required
 
-Considered: every queue dropping a repeated `id`. Rejected because it would make rule 20's idempotent move depend on the queue, where ADR-010's gate already makes the repeat harmless, and because it asks every technology for an index it may not have for a guarantee nothing needs. Permitted, never relied on.
+Considered: every queue dropping a repeated `id`. Rejected because it would make rule 29's idempotent move depend on the queue, where ADR-010's gate already makes the repeat harmless, and because it asks every technology for an index it may not have for a guarantee nothing needs. Permitted, never relied on.
 
 ### No failure fields
 
@@ -324,18 +357,17 @@ None to the membership list. The queue is an infrastructure adapter under ADR-00
 
 ### Required of infrastructure adapters
 
-One thing added to ADR-006 **Required of infrastructure adapters**, additively: **a mechanism MAY carry events between deliveries through a queue conforming to this ADR**, and where it does, the queue meets ADR-019 rule 16's demand on its behalf: an event marked seen after the queue answered `kept` is safe. The publishing half of ADR-006 obligation 1 remains the mechanism's, met where it enqueues what the outbox holds unseen and dequeues to deliver; obligation 4, that every retry is a fresh delivery, is met because every run, whether again in place under a lease or from a copy under rule 19, enters the handler afresh with nothing carried from the run before. A mechanism MUST NOT mark an event seen on an answer other than `kept`.
+One thing added to ADR-006 **Required of infrastructure adapters**, additively: **a mechanism MAY carry events between deliveries through a queue conforming to this ADR**, and where it does, the queue meets ADR-019 rule 16's demand on its behalf: an event marked seen after the queue answered `kept` is safe. The publishing half of ADR-006 obligation 1 remains the mechanism's, met where it enqueues what the outbox holds unseen and dequeues to deliver; obligation 4, that every retry is a fresh delivery, is met because every run, whether again in place under a lease or from a copy under rule 28, enters the handler afresh with nothing carried from the run before. A mechanism MUST NOT mark an event seen on an answer other than `kept`.
 
 ### Left deferred
 
 - **The party on Arvo's side that calls a queue.** What turns an event into a queued event and back, checks every answer, and turns a queue's failures into Arvo's own. The next ADR, shaped as [ADR-020](./020-outbox-driver.md) is for the outbox.
 - **Who moves events.** What takes events from the outbox to a queue, and from a queue through a handler. The mechanism's, as ADR-006 and ADR-019 leave them, for a later ADR.
-- **A `too_large` event.** It cannot be retried (rule 20), and a dead-letter queue with the same limit refuses the same bytes, so the event stays unseen in the outbox with nowhere to go. Where it goes, and whether a dead-letter queue takes a larger size than the working queue, is open, and a mechanism MUST have an answer before it claims conformance.
+- **What is done with a `too_large` event.** `capacity` lets a caller see one before sending (rule 24), and rule 29 says it is never retried. Where it goes instead, and whether a dead-letter queue takes a larger size than the working queue, is policy, and a mechanism MUST have an answer before it claims conformance.
 - **A crash loop.** A redelivery after a crash never raises `attempt` (**A crash is not a retry**), so a queued event whose every run kills its taker would loop for ever unless the mechanism reads `handout_count` and acts. What it does is policy, deferred below; that it MUST do something is not, and no mechanism may claim conformance to this ADR's use until a later ADR says what.
 - **Policy.** The lease length, the wait before each retry, the attempt bound's value, which failures are tried again now, which later and which never, whether a replay from a dead-letter queue resets `attempt`, and what a mechanism does when `handout_count` says a queued event keeps coming back without a copy being made. All for a later ADR, read where ADR-008 and ADR-009 already put the figures.
 - **What the handler is told.** ADR-009 has the mechanism supply `attempt`. That it is the queued event's `attempt` is the natural reading, and a later ADR will say so or say otherwise.
-- **Capacity.** The outbox answers how much room it has before a commit; this ADR gives a queue only `no_room` at enqueue. Whether a queue should answer the same question is left open.
-- **What an operator watches.** `depth` gives three counts. Whether the age of the oldest ready queued event, the number that shows nothing is dequeuing, should join them is left open.
+- **What an operator watches.** `capacity` makes one number available, the age of the oldest ready queued event, which shows when nothing is dequeuing. Which numbers a queue must publish, and how, is for a later ADR.
 - **The lease ceiling's default.** Rule 16 requires one; its name and default value are each implementation's, for now.
 - **Whether a handler's produced events may go straight onto a queue** by whatever ran it, rather than only from the outbox's unseen list. Faster, and a second path for events to travel. Open.
 - **Conformance tests for a queue.** A suite every queue implementation runs, as ADR-004 asks of every protocol piece, one check per rule above except rule 1, each proved by a queue broken in exactly that way. Rule 1 is a durability promise that only a crash test can show, and the suite MUST say so rather than claim it.
@@ -359,7 +391,19 @@ interface Queue
   acknowledge(lease_ids: list of string):
     list of { lease_id: string, outcome: 'kept' | 'lease_lost' }
 
-  depth(): { ready: integer, leased: integer, delayed: integer }
+  capacity(events: list of { id: string, bytes: integer }): {
+    status: 'available' | 'tolerating' | 'exhausted',          the worst of the kinds
+    kinds: {
+      room?:    { status, held?: integer, size?: integer, limit?: integer },
+      payload?: { status, limit_bytes?: integer, too_large?: list of string },
+      backlog?: { status, oldest_ready_age_ms?: integer }
+    }
+  }
+    held                — how many it would hold with the asked-for events added
+    size                — what it is meant to hold; past this, tolerating
+    limit               — the most it should ever hold; past this, exhausted
+    too_large           — the ids whose payload cannot be kept
+    oldest_ready_age_ms — how long the oldest ready queued event has waited
 
   open(): nothing          optional
   close(): nothing         optional
