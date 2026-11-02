@@ -537,12 +537,12 @@ export const brokenOutboxByCaseName: Record<string, () => IArvoOutbox> = {
 
   'changes nothing it holds when asked its capacity': breakOutbox(
     (workingOutbox) => ({
-      capacity: async (request) => {
-        const unseenEvents = await workingOutbox.listUnseenEvents({
+      capacity: (request) => {
+        const unseenEvents = workingOutbox.listUnseenEvents({
           atMost: 100,
           olderThanMs: 0,
         });
-        await workingOutbox.markEventsSeen(
+        workingOutbox.markEventsSeen(
           unseenEvents.map((unseenEvent) => unseenEvent.id),
         );
         return workingOutbox.capacity(request);
@@ -552,8 +552,8 @@ export const brokenOutboxByCaseName: Record<string, () => IArvoOutbox> = {
 
   'answers a commit of events alone with whether it committed': breakOutbox(
     (workingOutbox) => ({
-      commitEvents: async (param) => {
-        await workingOutbox.commitEvents(param);
+      commitEvents: (param) => {
+        workingOutbox.commitEvents(param);
         // deliberately no outcome, as an outbox written before it had one answers
         return JSON.parse('null');
       },

@@ -33,8 +33,9 @@ const givenBuffers = (buffers: {
 /** The outbox's answer to every capacity request a case asks. */
 const askEveryCapacityRequest = (outbox: IArvoOutbox) =>
   Promise.all(
+    // an outbox may answer directly or through a promise: each is made a promise
     CAPACITY_REQUESTS.map((capacityRequest) =>
-      outbox.capacity(capacityRequest),
+      Promise.resolve(outbox.capacity(capacityRequest)),
     ),
   );
 
