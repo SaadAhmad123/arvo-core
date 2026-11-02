@@ -134,7 +134,7 @@ What each field may hold, so that two implementations agree before a value cross
 | `capacity`'s `events[].id` | a non-empty string, as `id` |
 | `capacity`'s `events[].bytes` | an integer, zero or more: the payload's size |
 | `held`, `size`, `limit`, `limit_bytes`, `oldest_ready_age_ms` | an integer, zero or more |
-| `too_large` ids | ids from the asked-for list, each at most once |
+| `too_large_ids` | ids from the asked-for list, each at most once |
 | `lease_ms` | an integer, one or more, and at most the queue's lease ceiling (rule 16) |
 
 #### What the payload is
@@ -196,7 +196,7 @@ A queue feels pressure at two ends and per event: no room to keep more, at the i
 
 17. **`capacity` MUST answer a status for the asked-for events, and MAY answer the kinds and numbers behind it.** The status is one of `available`, `tolerating` or `exhausted`. Behind it the queue MAY give up to three kinds, each with its own status in the same three words:
     - `room` — whether it can keep that many more. It MAY give how many it would then hold, what it is meant to hold (past this, `tolerating`) and the most it should ever hold (past this, `exhausted`).
-    - `payload` — whether each payload can be kept at all. `exhausted` here never clears. It MAY give the limit in bytes where the limit is one number, and MUST give the ids whose payload cannot be kept where it answers other than `available`.
+    - `payload` — whether each payload can be kept at all. `exhausted` here never clears. It MAY give the limit in bytes where the limit is one number, and MUST give the ids whose payload cannot be kept, as `too_large_ids`, where it answers other than `available`.
     - `backlog` — how far behind the takers are, by the age of the oldest ready queued event. It MAY give that age.
 
     A queue that limits nothing and measures nothing answers `available` with no kinds, and pays nothing for this operation.
@@ -395,14 +395,14 @@ interface Queue
     status: 'available' | 'tolerating' | 'exhausted',          the worst of the kinds
     kinds: {
       room?:    { status, held?: integer, size?: integer, limit?: integer },
-      payload?: { status, limit_bytes?: integer, too_large?: list of string },
+      payload?: { status, limit_bytes?: integer, too_large_ids?: list of string },
       backlog?: { status, oldest_ready_age_ms?: integer }
     }
   }
     held                — how many it would hold with the asked-for events added
     size                — what it is meant to hold; past this, tolerating
     limit               — the most it should ever hold; past this, exhausted
-    too_large           — the ids whose payload cannot be kept
+    too_large_ids       — the ids whose payload cannot be kept
     oldest_ready_age_ms — how long the oldest ready queued event has waited
 
   open(): nothing          optional
