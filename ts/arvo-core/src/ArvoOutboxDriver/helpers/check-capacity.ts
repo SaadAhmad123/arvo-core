@@ -10,9 +10,9 @@ export const buildCapacitySchema = () => {
   const countSchema = z.number().int().nonnegative().optional();
   const bufferSchema = z.object({
     status: statusSchema,
-    held: countSchema,
-    size: countSchema,
-    limit: countSchema,
+    heldCount: countSchema,
+    targetCount: countSchema,
+    limitCount: countSchema,
   });
   return z.object({
     status: statusSchema,

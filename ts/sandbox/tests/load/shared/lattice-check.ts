@@ -53,7 +53,7 @@ export const runOrders = async (param: {
     workerCount: param.workerCount,
     sweeper:
       param.sweeper === undefined
-        ? { intervalMs: 50, olderThanMs: 200, atMost: 500, leaseMs: 5000 }
+        ? { intervalMs: 50, olderThanMs: 200, maxCount: 500, leaseMs: 5000 }
         : param.sweeper,
     unsentShare: param.unsentShare ?? 0.05,
     askCapacityFirst: param.askCapacityFirst ?? true,

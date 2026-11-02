@@ -164,7 +164,11 @@ const argumentOfCall = (
 const exhaustedCapacity: ArvoOutboxCapacity = Object.freeze({
   status: 'exhausted',
   buffers: Object.freeze({
-    events: Object.freeze({ status: 'exhausted', held: 11, limit: 10 }),
+    events: Object.freeze({
+      status: 'exhausted',
+      heldCount: 11,
+      limitCount: 10,
+    }),
   }),
 });
 
@@ -297,7 +301,7 @@ describe('ArvoOutboxDriver on the way out', () => {
       triggeringEvent,
     });
     const entries = await driver.listUnseenEvents({
-      atMost: 10,
+      maxCount: 10,
       olderThanMs: 0,
       restoreEvents: false,
     });
@@ -307,14 +311,14 @@ describe('ArvoOutboxDriver on the way out', () => {
   it('passes how many, how old and how long to lease through to the outbox', async () => {
     const { driver, outboxCalls } = await openDriver();
     await driver.listUnseenEvents({
-      atMost: 5,
+      maxCount: 5,
       olderThanMs: 100,
       leaseMs: 1000,
     });
-    await driver.listUnseenEvents({ atMost: 5, olderThanMs: 100 });
+    await driver.listUnseenEvents({ maxCount: 5, olderThanMs: 100 });
     expect(outboxCalls.map((outboxCall) => outboxCall.argument)).toEqual([
-      { atMost: 5, olderThanMs: 100, leaseMs: 1000 },
-      { atMost: 5, olderThanMs: 100 },
+      { maxCount: 5, olderThanMs: 100, leaseMs: 1000 },
+      { maxCount: 5, olderThanMs: 100 },
     ]);
   });
 
@@ -324,7 +328,7 @@ describe('ArvoOutboxDriver on the way out', () => {
     await driver.commitEvents({ events: [event], triggeringEvent });
     await driver.markEventsSeen({ eventIds: [event.id] });
     expect(
-      await driver.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+      await driver.listUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
     ).toEqual([]);
   });
 });
@@ -346,7 +350,7 @@ describe('ArvoOutboxDriver and what it reports', () => {
     readCommittedEvents: () =>
       driver.tryReadCommittedEvents({ filter: { executionId: 'execution-1' } }),
     listUnseenEvents: () =>
-      driver.tryListUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+      driver.tryListUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
     markEventsSeen: () => driver.tryMarkEventsSeen({ eventIds: [] }),
     capacity: () => driver.tryCapacity(),
   });
@@ -574,7 +578,7 @@ describe('ArvoOutboxDriver and what it reports', () => {
             filter: { executionId: 'execution-1' },
           }),
         listUnseenEvents: () =>
-          driver.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+          driver.listUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
         markEventsSeen: () => driver.markEventsSeen({ eventIds: [] }),
         capacity: () => driver.capacity(),
       }[operationName];

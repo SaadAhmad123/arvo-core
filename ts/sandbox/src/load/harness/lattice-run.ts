@@ -31,7 +31,7 @@ const WIRE = new ArvoEventSerializer({ type: 'arvoevent' });
 export type SweeperSettings = {
   readonly intervalMs: number;
   readonly olderThanMs: number;
-  readonly atMost: number;
+  readonly maxCount: number;
   readonly leaseMs?: number;
 };
 
@@ -330,7 +330,7 @@ export const runLattice = async (
       await new Promise((settle) => setTimeout(settle, settings.intervalMs));
       try {
         const entries = await param.driver.listUnseenEvents({
-          atMost: settings.atMost,
+          maxCount: settings.maxCount,
           olderThanMs: settings.olderThanMs,
           ...(settings.leaseMs === undefined
             ? {}

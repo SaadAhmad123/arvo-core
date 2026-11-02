@@ -25,7 +25,7 @@ describe('inmemory: failures forced on purpose', () => {
         expect(!committed.ok && committed.error.kind).toBe('unavailable');
         expect(await opened.driver.readLatestState({ executionId })).toBeNull();
         const listed = await opened.driver.tryListUnseenEvents({
-          atMost: 10,
+          maxCount: 10,
           olderThanMs: 0,
         });
         expect(!listed.ok && listed.error.kind).toBe('unavailable');

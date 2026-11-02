@@ -24,7 +24,7 @@ export type ArvoOutboxEventsFilter =
  * Which unseen events to list.
  *
  * List the events not yet seen, oldest `committedAt` first, at most
- * `atMost` of them, leaving out any that landed less than `olderThanMs`
+ * `maxCount` of them, leaving out any that landed less than `olderThanMs`
  * ago by the outbox's own clock. An event exactly `olderThanMs` old is
  * listed.
  *
@@ -37,12 +37,12 @@ export type ArvoOutboxEventsFilter =
  *
  * @example
  * ```typescript
- * const param: ArvoOutboxUnseenEventsParam = { atMost, olderThanMs, leaseMs };
+ * const param: ArvoOutboxUnseenEventsParam = { maxCount, olderThanMs, leaseMs };
  * ```
  */
 export type ArvoOutboxUnseenEventsParam = {
   /** The most events to list. */
-  readonly atMost: number;
+  readonly maxCount: number;
   /** How long, in milliseconds, an event must have been committed to be listed. */
   readonly olderThanMs: number;
   /** How long, in whole milliseconds greater than zero, to claim what is listed. */

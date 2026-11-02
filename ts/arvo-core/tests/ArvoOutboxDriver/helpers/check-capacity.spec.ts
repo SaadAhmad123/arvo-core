@@ -23,8 +23,18 @@ describe("checking a capacity answer's shape", () => {
       {
         status: 'exhausted',
         buffers: {
-          events: { status: 'exhausted', held: 11, size: 8, limit: 10 },
-          states: { status: 'available', held: 0, size: 5, limit: 6 },
+          events: {
+            status: 'exhausted',
+            heldCount: 11,
+            targetCount: 8,
+            limitCount: 10,
+          },
+          states: {
+            status: 'available',
+            heldCount: 0,
+            targetCount: 5,
+            limitCount: 6,
+          },
         },
       },
     ],
@@ -38,10 +48,10 @@ describe("checking a capacity answer's shape", () => {
   it('hands back no field the answer did not give', () => {
     const capacityResult = checkCapacity(buildCapacitySchema(), {
       status: 'available',
-      buffers: { states: { status: 'available', size: 4 } },
+      buffers: { states: { status: 'available', targetCount: 4 } },
     });
     expect(capacityResult.ok && capacityResult.value.buffers).toStrictEqual({
-      states: { status: 'available', size: 4 },
+      states: { status: 'available', targetCount: 4 },
     });
   });
 
@@ -89,13 +99,13 @@ describe("checking a capacity answer's shape", () => {
     ['fractional', 1.5],
     ['not a number', '3'],
     ['not finite', Number.POSITIVE_INFINITY],
-  ])('refuses a number that is %s', (_numberDescription, held) => {
+  ])('refuses a number that is %s', (_numberDescription, heldCount) => {
     expect(
       issuePathsFor({
         status: 'available',
-        buffers: { events: { status: 'available', held } },
+        buffers: { events: { status: 'available', heldCount } },
       }),
-    ).toEqual(['capacity.buffers.events.held']);
+    ).toEqual(['capacity.buffers.events.heldCount']);
   });
 
   it('reports every problem at once', () => {
@@ -103,15 +113,20 @@ describe("checking a capacity answer's shape", () => {
       issuePathsFor({
         status: 'full',
         buffers: {
-          events: { status: 'available', held: -1, size: 'eight', limit: 0.5 },
+          events: {
+            status: 'available',
+            heldCount: -1,
+            targetCount: 'eight',
+            limitCount: 0.5,
+          },
           states: { status: 'gone' },
         },
       }),
     ).toEqual([
       'capacity.status',
-      'capacity.buffers.events.held',
-      'capacity.buffers.events.size',
-      'capacity.buffers.events.limit',
+      'capacity.buffers.events.heldCount',
+      'capacity.buffers.events.targetCount',
+      'capacity.buffers.events.limitCount',
       'capacity.buffers.states.status',
     ]);
   });

@@ -372,7 +372,7 @@ export class ArvoOutboxDriver {
           restoreEvents: param.restoreEvents ?? true,
           read: () =>
             this.#outbox.listUnseenEvents({
-              atMost: param.atMost,
+              maxCount: param.maxCount,
               olderThanMs: param.olderThanMs,
               ...(param.leaseMs === undefined
                 ? {}

@@ -89,7 +89,7 @@ describe('the load harness', () => {
     expect(outcome.retries).toBeGreaterThan(0);
     expect(await ledger.problems(driver)).toEqual([]);
     expect(
-      await driver.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+      await driver.listUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
     ).toEqual([]);
   });
 
@@ -109,7 +109,7 @@ describe('the load harness', () => {
       ledger,
       queue,
       workerCount: 4,
-      sweeper: { intervalMs: 20, olderThanMs: 0, atMost: 100, leaseMs: 1000 },
+      sweeper: { intervalMs: 20, olderThanMs: 0, maxCount: 100, leaseMs: 1000 },
       unsentShare: 0.3,
       askCapacityFirst: false,
       deadlineMs: 60_000,

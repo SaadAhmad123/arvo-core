@@ -133,7 +133,7 @@ export interface IArvoOutbox {
    * committed where two landed at the same time.
    *
    * Leave out anything that landed less than `param.olderThanMs` ago by
-   * your own clock, and list no more than `param.atMost`. Where
+   * your own clock, and list no more than `param.maxCount`. Where
    * `param.leaseMs` is given you may claim what you list for that long,
    * leaving it out of every other listing until the claim lapses or the
    * event is marked seen; you need not.

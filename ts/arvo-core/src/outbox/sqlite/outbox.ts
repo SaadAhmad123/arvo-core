@@ -213,7 +213,7 @@ export class ArvoSqliteOutbox implements IArvoOutbox {
       const eventRows = statements.selectUnseenEvents.all({
         now,
         cutOffModifier: secondsAgo(param.olderThanMs),
-        atMost: param.atMost,
+        maxCount: param.maxCount,
       });
       if (param.leaseMs !== undefined) {
         const leaseModifier = secondsLater(param.leaseMs);

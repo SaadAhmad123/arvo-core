@@ -292,7 +292,7 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
     const unseenEvents: ArvoOutboxCommittedEventRecord[] = [];
     // a leased event is skipped, not removed, so landing order survives its lapse
     for (const storedEvent of store.unseenEventsById.values()) {
-      if (unseenEvents.length >= param.atMost) break;
+      if (unseenEvents.length >= param.maxCount) break;
       if (storedEvent.committedAtMs > cutOffMs) break;
       if (storedEvent.leasedUntilMs > nowMs) continue;
       if (param.leaseMs !== undefined) {
@@ -319,12 +319,12 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
   capacity(request: ArvoOutboxCapacityRequest): ArvoOutboxCapacity {
     const store = this.lifecycle.resourcesFor('capacity');
     const eventsCapacity = bufferCapacity({
-      held: store.eventsById.size + request.events,
+      heldCount: store.eventsById.size + request.events,
       buffer: this.options.buffers.events,
       tolerating: store.tolerating.events,
     });
     const statesCapacity = bufferCapacity({
-      held:
+      heldCount:
         store.latestStateByExecution.size +
         (request.state?.casVersion === 0 ? 1 : 0),
       buffer: this.options.buffers.states,
@@ -433,8 +433,8 @@ export class ArvoMemoryOutbox implements IArvoOutbox {
     readonly addedStateCount: number;
   }): boolean {
     const { events: eventsBuffer, states: statesBuffer } = this.options.buffers;
-    const isExhausted = (held: number, buffer: ArvoMemoryOutboxBuffer) =>
-      bufferCapacity({ held, buffer, tolerating: false }).status ===
+    const isExhausted = (heldCount: number, buffer: ArvoMemoryOutboxBuffer) =>
+      bufferCapacity({ heldCount, buffer, tolerating: false }).status ===
       'exhausted';
     return (
       isExhausted(

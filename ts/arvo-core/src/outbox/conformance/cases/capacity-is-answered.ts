@@ -49,7 +49,7 @@ const readEverythingHeld = async (
     await outbox.readCommittedEvents({ executionId }),
   ),
   unseenEventIds: sortedEventIds(
-    await outbox.listUnseenEvents({ atMost: 100, olderThanMs: 0 }),
+    await outbox.listUnseenEvents({ maxCount: 100, olderThanMs: 0 }),
   ),
 });
 
@@ -66,9 +66,9 @@ export const capacityIsAnsweredCases: readonly ArvoOutboxConformanceCase[] =
               buffer.status,
             );
             for (const bufferCount of [
-              buffer.held,
-              buffer.size,
-              buffer.limit,
+              buffer.heldCount,
+              buffer.targetCount,
+              buffer.limitCount,
             ]) {
               if (bufferCount === undefined) continue;
               expect(Number.isInteger(bufferCount), bufferName).toBe(true);

@@ -37,7 +37,7 @@ export const unseenEventsAreListedOldestFirstCases: readonly ArvoOutboxConforman
         const eventIdsInCommitOrder = await commitOneAfterAnother(outbox);
         const unseenEvents = await outbox.listUnseenEvents({
           ...listEveryUnseenEvent,
-          atMost: 2,
+          maxCount: 2,
         });
         expect(unseenEvents.map((event) => event.id)).toEqual(
           eventIdsInCommitOrder.slice(0, 2),

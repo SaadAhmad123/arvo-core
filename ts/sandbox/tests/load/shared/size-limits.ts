@@ -35,7 +35,7 @@ export const describeSizeLimits = (subject: LoadSubject): void => {
           unit: 'MB',
         });
         if (subject.name === 'inmemory')
-          expect(capacity.buffers.events?.held).toBe(1_000_001);
+          expect(capacity.buffers.events?.heldCount).toBe(1_000_001);
         const reads = new LatencySamples();
         for (const triggeringEventId of sampleTriggeringEventIds) {
           const entries = await reads.time(() =>
@@ -53,7 +53,7 @@ export const describeSizeLimits = (subject: LoadSubject): void => {
         for (let round = 0; round < 20; round += 1) {
           const entries = await listings.time(() =>
             opened.driver.listUnseenEvents({
-              atMost: 1000,
+              maxCount: 1000,
               olderThanMs: 0,
               restoreEvents: false,
             }),
