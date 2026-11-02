@@ -36,10 +36,60 @@ const activeTimerCount = () =>
   process.getActiveResourcesInfo().filter((resource) => resource === 'Timeout')
     .length;
 
-/** Ordinary traffic, for a long time, watching for what keeps growing. */
 /** How long the soak runs, as asked. */
 const soakMinutes = Number(process.env.LOAD_SOAK_MINUTES ?? '60');
 
+/** What one sample of the soak's resources holds. */
+type ResourceSample = {
+  memoryMb: number;
+  heapMb: number;
+  fileMb: number;
+  walMb: number;
+  handles: number;
+};
+
+/** The resources this process and its file hold now. */
+const sampleResources = (filename: string | null): ResourceSample => {
+  // collected first, so the heap sampled is what is still held, not when collection last ran
+  if (typeof globalThis.gc === 'function') globalThis.gc();
+  const memory = process.memoryUsage();
+  return {
+    memoryMb: memory.rss / 1024 / 1024,
+    heapMb: memory.heapUsed / 1024 / 1024,
+    fileMb: filename === null ? 0 : fileSizeMb(filename),
+    walMb: filename === null ? 0 : fileSizeMb(`${filename}-wal`),
+    handles: process.getActiveResourcesInfo().length,
+  };
+};
+
+/** Records every sample's heap, memory and, where there is one, file size. */
+const recordSamples = (samples: readonly ResourceSample[]): void => {
+  for (const [sampleNumber, sample] of samples.entries()) {
+    const sampleName = `sample ${String(sampleNumber).padStart(2, '0')}`;
+    recordMeasurement({
+      check: 'soak',
+      name: `${sampleName} heap`,
+      value: sample.heapMb,
+      unit: 'MB',
+    });
+    recordMeasurement({
+      check: 'soak',
+      name: `${sampleName} memory`,
+      value: sample.memoryMb,
+      unit: 'MB',
+    });
+    if (sample.fileMb > 0) {
+      recordMeasurement({
+        check: 'soak',
+        name: `${sampleName} file`,
+        value: sample.fileMb + sample.walMb,
+        unit: 'MB',
+      });
+    }
+  }
+};
+
+/** Ordinary traffic, for a long time, watching for what keeps growing. */
 export const describeSoak = (subject: LoadSubject): void => {
   describe(`${subject.name}: resources over time`, () => {
     it(
@@ -56,13 +106,7 @@ export const describeSoak = (subject: LoadSubject): void => {
             retentionMs: { seenEvents: 30_000, terminalStates: 60_000 },
           },
         });
-        const samples: {
-          memoryMb: number;
-          heapMb: number;
-          fileMb: number;
-          walMb: number;
-          handles: number;
-        }[] = [];
+        const samples: ResourceSample[] = [];
         let nextSampleAt = Date.now();
         let ordersAnswered = 0;
         try {
@@ -77,20 +121,7 @@ export const describeSoak = (subject: LoadSubject): void => {
             ordersAnswered += outcome.answeredOrders;
             if (opened.deleteExpired !== null) opened.deleteExpired();
             if (Date.now() >= nextSampleAt) {
-              // collected first, so the heap sampled is what is still held, not when collection last ran
-              if (typeof globalThis.gc === 'function') globalThis.gc();
-              const memory = process.memoryUsage();
-              samples.push({
-                memoryMb: memory.rss / 1024 / 1024,
-                heapMb: memory.heapUsed / 1024 / 1024,
-                fileMb:
-                  opened.filename === null ? 0 : fileSizeMb(opened.filename),
-                walMb:
-                  opened.filename === null
-                    ? 0
-                    : fileSizeMb(`${opened.filename}-wal`),
-                handles: process.getActiveResourcesInfo().length,
-              });
+              samples.push(sampleResources(opened.filename));
               nextSampleAt += sampleEveryMs;
             }
             await waitMs(50);
@@ -105,28 +136,7 @@ export const describeSoak = (subject: LoadSubject): void => {
           value: ordersAnswered,
           unit: 'orders',
         });
-        for (const [sampleNumber, sample] of samples.entries()) {
-          recordMeasurement({
-            check: 'soak',
-            name: `sample ${String(sampleNumber).padStart(2, '0')} heap`,
-            value: sample.heapMb,
-            unit: 'MB',
-          });
-          recordMeasurement({
-            check: 'soak',
-            name: `sample ${String(sampleNumber).padStart(2, '0')} memory`,
-            value: sample.memoryMb,
-            unit: 'MB',
-          });
-          if (sample.fileMb > 0) {
-            recordMeasurement({
-              check: 'soak',
-              name: `sample ${String(sampleNumber).padStart(2, '0')} file`,
-              value: sample.fileMb + sample.walMb,
-              unit: 'MB',
-            });
-          }
-        }
+        recordSamples(samples);
         // what still rises through the last quarter is still growing
         const lastQuarter = samples.slice(Math.floor((samples.length * 3) / 4));
         const heapRise = riseShare(lastQuarter.map((sample) => sample.heapMb));

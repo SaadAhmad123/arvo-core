@@ -60,7 +60,12 @@ export const describeSizeLimits = (subject: LoadSubject): void => {
           );
           expect(entries).toHaveLength(1000);
           const committedAts = entries.map((entry) => entry.record.committedAt);
-          expect(committedAts).toEqual([...committedAts].sort());
+          expect(committedAts).toEqual(
+            [...committedAts].sort(
+              (firstTime, secondTime) =>
+                Date.parse(firstTime) - Date.parse(secondTime),
+            ),
+          );
           expect((committedAts[0] ?? '') >= previousLast).toBe(true);
           previousLast = committedAts.at(-1) ?? '';
           await opened.driver.markEventsSeen({

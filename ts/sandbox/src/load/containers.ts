@@ -40,8 +40,12 @@ const PROCESS_CAP = 512;
 /** Where libfaketime is in the image. */
 const FAKETIME_LIBRARY = '/usr/local/lib/libfaketime.so.1';
 
-/** The file the faked clock reads its time from, inside its container. */
-export const FAKED_CLOCK_FILE = '/tmp/arvo-faked-clock';
+/**
+ * The file the faked clock reads its time from, inside its container: in
+ * the home folder of the user the container runs as, which no other user
+ * can write to.
+ */
+export const FAKED_CLOCK_FILE = '/home/node/arvo-faked-clock';
 
 /** The containers one outbox's run starts, the soak only where asked. */
 export const containersFor = (param: {

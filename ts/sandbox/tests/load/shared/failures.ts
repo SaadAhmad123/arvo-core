@@ -1,6 +1,10 @@
 import { ArvoOutboxDriver, type IArvoOutbox } from 'arvo-core';
 import { describe, expect, it } from 'vitest';
-import { buildEvent, buildState } from '../../../src/load/harness/builders.js';
+import {
+  buildEvent,
+  buildState,
+  byText,
+} from '../../../src/load/harness/builders.js';
 import { recordMeasurement } from '../../../src/load/harness/results.js';
 import type { LoadSubject } from '../../../src/load/harness/subjects.js';
 
@@ -71,7 +75,7 @@ export const describeSharedFailures = (subject: LoadSubject): void => {
             kindCounts[kind] = (kindCounts[kind] ?? 0) + 1;
           }
         }
-        expect(Object.keys(kindCounts).sort()).toEqual(
+        expect(Object.keys(kindCounts).sort(byText)).toEqual(
           expect.arrayContaining([
             'malformed_response',
             'malformed_state',

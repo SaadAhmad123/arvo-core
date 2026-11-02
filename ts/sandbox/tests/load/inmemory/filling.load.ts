@@ -12,7 +12,7 @@ import {
 import { runOrders } from '../shared/lattice-check.js';
 
 /** Commits one event alone, answering whether the outbox took it. */
-const commitOneEvent = async (opened: OpenedSubject) => {
+const commitOneEvent = (opened: OpenedSubject) => {
   const executionId = crypto.randomUUID();
   return opened.driver.tryCommitEvents({
     events: [buildEvent({ executionId, dataBytes: 32 })],

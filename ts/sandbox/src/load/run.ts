@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { cpus, totalmem } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,9 +28,37 @@ import {
 const SANDBOX = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const RESULTS_ROOT = join(SANDBOX, 'load-results');
 
+/** The folders a command is looked for in: fixed ones only, never `PATH`. */
+const COMMAND_FOLDERS = Object.freeze([
+  '/usr/local/bin',
+  '/opt/homebrew/bin',
+  '/usr/bin',
+  '/bin',
+  '/Applications/Docker.app/Contents/Resources/bin',
+]);
+
+/** The absolute path of a command, looked for only in the fixed folders, or none. */
+const commandPath = (commandName: string): string | null =>
+  COMMAND_FOLDERS.map((folder) => join(folder, commandName)).find((candidate) =>
+    existsSync(candidate),
+  ) ?? null;
+
+/** The absolute path of a command the runner needs, or a clear stop where it is in none of the fixed folders. */
+const requireCommand = (commandName: string): string => {
+  const foundPath = commandPath(commandName);
+  if (foundPath === null) {
+    throw new Error(
+      `the load suite needs ${commandName}, and found it in none of ${COMMAND_FOLDERS.join(', ')}`,
+    );
+  }
+  return foundPath;
+};
+
 /** Runs `docker` and answers what it printed, or throws what went wrong. */
 const docker = (dockerArguments: readonly string[]): string => {
-  const dockerRun = spawnSync('docker', dockerArguments, { encoding: 'utf8' });
+  const dockerRun = spawnSync(requireCommand('docker'), dockerArguments, {
+    encoding: 'utf8',
+  });
   if (dockerRun.status !== 0) {
     throw new Error(
       `docker ${dockerArguments.join(' ')} failed: ${dockerRun.stderr || dockerRun.error?.message}`,
@@ -67,10 +95,14 @@ const describeMachine = (): LoadMachine => {
   const arvoCorePackage = JSON.parse(
     readFileSync(join(SANDBOX, '../arvo-core/package.json'), 'utf8'),
   ) as { version: string };
-  const arvoCoreCommit = spawnSync('git', ['rev-parse', '--short', 'HEAD'], {
-    cwd: SANDBOX,
-    encoding: 'utf8',
-  }).stdout.trim();
+  const gitPath = commandPath('git');
+  const arvoCoreCommit =
+    gitPath === null
+      ? 'an unknown commit'
+      : spawnSync(gitPath, ['rev-parse', '--short', 'HEAD'], {
+          cwd: SANDBOX,
+          encoding: 'utf8',
+        }).stdout.trim();
   return {
     cpuModel: cpus()[0]?.model ?? 'unknown',
     cpuCount: cpus().length,
@@ -84,7 +116,7 @@ const describeMachine = (): LoadMachine => {
 /** Runs one container to its end, its output shown as it goes. */
 const runContainer = (dockerArguments: readonly string[]): Promise<number> =>
   new Promise((settle) => {
-    const containerProcess = spawn('docker', dockerArguments, {
+    const containerProcess = spawn(requireCommand('docker'), dockerArguments, {
       stdio: 'inherit',
     });
     containerProcess.once('exit', (exitCode) => settle(exitCode ?? 1));
@@ -135,7 +167,11 @@ const readArguments = () => {
 
 const main = async (): Promise<number> => {
   const requested = readArguments();
-  if (spawnSync('docker', ['info'], { stdio: 'ignore' }).status !== 0) {
+  const dockerPath = commandPath('docker');
+  if (
+    dockerPath === null ||
+    spawnSync(dockerPath, ['info'], { stdio: 'ignore' }).status !== 0
+  ) {
     console.error(
       'The load suite runs only inside Docker, and Docker is not running. Start Docker and run it again.',
     );

@@ -56,23 +56,26 @@ export const createCatalogueData = (param: {
 
 /** The catalogue's operations over the data. */
 const catalogueOver = (data: CatalogueData): Catalogue => ({
-  itemsIn: async (category) => data.skusByCategory.get(category) ?? [],
-  childrenOf: async (category) =>
-    [...data.skusByCategory.keys()].filter(
-      (candidate) =>
-        candidate.startsWith(`${category}/`) &&
-        candidate.split('/').length === category.split('/').length + 1,
+  itemsIn: (category) =>
+    Promise.resolve(data.skusByCategory.get(category) ?? []),
+  childrenOf: (category) =>
+    Promise.resolve(
+      [...data.skusByCategory.keys()].filter(
+        (candidate) =>
+          candidate.startsWith(`${category}/`) &&
+          candidate.split('/').length === category.split('/').length + 1,
+      ),
     ),
-  heldOf: async (sku) => data.heldBySku.get(sku) ?? 0,
-  reserve: async (sku, wanted, idempotencyKey) => {
+  heldOf: (sku) => Promise.resolve(data.heldBySku.get(sku) ?? 0),
+  reserve: (sku, wanted, idempotencyKey) => {
     const alreadyTaken = data.takenByIdempotencyKey.get(idempotencyKey);
-    if (alreadyTaken !== undefined) return alreadyTaken;
+    if (alreadyTaken !== undefined) return Promise.resolve(alreadyTaken);
     const held = data.heldBySku.get(sku);
-    if (held === undefined) return 0;
+    if (held === undefined) return Promise.resolve(0);
     const taking = Math.min(held, wanted);
     data.takenByIdempotencyKey.set(idempotencyKey, taking);
     data.heldBySku.set(sku, held - taking);
-    return taking;
+    return Promise.resolve(taking);
   },
 });
 
@@ -84,12 +87,14 @@ export class InMemoryCatalogue
 
   constructor(private readonly data: CatalogueData) {}
 
-  async open(scope: ArvoDependencyScope): Promise<void> {
+  open(scope: ArvoDependencyScope): Promise<void> {
     this.#scope = scope;
+    return Promise.resolve();
   }
 
-  async close(): Promise<void> {
+  close(): Promise<void> {
     this.#scope = null;
+    return Promise.resolve();
   }
 
   get attributes(): DistributedDependencies {

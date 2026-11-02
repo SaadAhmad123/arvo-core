@@ -7,4 +7,5 @@ const heldBlocks: Buffer[] = [];
 for (;;) {
   // filled, so the memory is really taken rather than only promised
   heldBlocks.push(Buffer.alloc(64 * 1024 * 1024, 1));
+  process.title = `exhaust-memory holding ${heldBlocks.length} blocks`;
 }

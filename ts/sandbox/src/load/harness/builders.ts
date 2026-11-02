@@ -80,3 +80,7 @@ export const nestedBody = (depth: number): JSONObject => {
 /** Waits real time, for an outbox's own timer to run. */
 export const waitMs = (durationMs: number) =>
   new Promise<void>((settle) => setTimeout(settle, durationMs));
+
+/** Orders text by its characters, as `sort` should be told to. */
+export const byText = (first: string, second: string): number =>
+  first.localeCompare(second);

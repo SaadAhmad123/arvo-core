@@ -131,7 +131,7 @@ const previousReport = (param: {
 }): LoadReport | null => {
   const earlierRuns = readdirSync(param.resultsRoot)
     .filter((runFolder) => runFolder < param.runId)
-    .sort()
+    .sort((firstRun, secondRun) => firstRun.localeCompare(secondRun))
     .reverse();
   for (const runFolder of earlierRuns) {
     const reportFile = join(param.resultsRoot, runFolder, 'report.json');

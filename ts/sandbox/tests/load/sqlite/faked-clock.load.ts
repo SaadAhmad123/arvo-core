@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
-import { buildRecord } from '../../../src/load/harness/builders.js';
+import { buildRecord, byText } from '../../../src/load/harness/builders.js';
 import { recordSkip } from '../../../src/load/harness/results.js';
 import { countRows } from '../../../src/load/harness/sqlite-file.js';
 import {
@@ -106,8 +106,8 @@ describe('sqlite: a clock that jumps', () => {
       setFakedTime(baseMs - 24 * hourMs);
       const afterJump = await commitUnseen(opened, 100);
       setFakedTime(baseMs + 60_000);
-      expect((await listAllUnseen(opened)).sort()).toEqual(
-        [...beforeJump, ...afterJump].sort(),
+      expect((await listAllUnseen(opened)).sort(byText)).toEqual(
+        [...beforeJump, ...afterJump].sort(byText),
       );
     } finally {
       setFakedTime(realNowMs());
@@ -173,8 +173,8 @@ describe('sqlite: a clock that jumps', () => {
         await opened.driver.listUnseenEvents({ atMost: 100, olderThanMs: 0 }),
       ).toEqual([]);
       setFakedTime(baseMs + 2 * hourMs);
-      expect((await listAllUnseen(opened)).sort()).toEqual(
-        [...eventIds].sort(),
+      expect((await listAllUnseen(opened)).sort(byText)).toEqual(
+        [...eventIds].sort(byText),
       );
       await opened.driver.listUnseenEvents({
         atMost: 100,
@@ -187,8 +187,8 @@ describe('sqlite: a clock that jumps', () => {
         await opened.driver.listUnseenEvents({ atMost: 100, olderThanMs: 0 }),
       ).toEqual([]);
       setFakedTime(baseMs + 4 * hourMs);
-      expect((await listAllUnseen(opened)).sort()).toEqual(
-        [...eventIds].sort(),
+      expect((await listAllUnseen(opened)).sort(byText)).toEqual(
+        [...eventIds].sort(byText),
       );
     } finally {
       setFakedTime(realNowMs());

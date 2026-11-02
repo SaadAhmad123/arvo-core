@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildEvent,
   buildState,
+  byText,
   nestedBody,
 } from '../../../src/load/harness/builders.js';
 import {
@@ -91,9 +92,9 @@ export const describeSpeed = (subject: LoadSubject): void => {
             const readBack = await opened.driver.readCommittedEvents({
               filter: { triggeringEventId: triggeringEvent.id },
             });
-            expect(readBack.map((entry) => entry.event?.id).sort()).toEqual(
-              events.map((event) => event.id).sort(),
-            );
+            expect(
+              readBack.map((entry) => entry.event?.id ?? '').sort(byText),
+            ).toEqual(events.map((event) => event.id).sort(byText));
           }
           commits.report(check, 'commit');
           const listings = new LatencySamples();

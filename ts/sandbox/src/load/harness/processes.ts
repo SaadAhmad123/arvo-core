@@ -43,11 +43,12 @@ export const startChild = <Message>(
   child.on('message', (message) => {
     const typedMessage = message as Message;
     messages.push(typedMessage);
-    for (const waiter of [...waiters]) {
-      if (waiter.matches(typedMessage)) {
-        waiters.splice(waiters.indexOf(waiter), 1);
-        waiter.settle(typedMessage);
-      }
+    const matchedWaiters = waiters.filter((waiter) =>
+      waiter.matches(typedMessage),
+    );
+    for (const waiter of matchedWaiters) {
+      waiters.splice(waiters.indexOf(waiter), 1);
+      waiter.settle(typedMessage);
     }
   });
   const ended = new Promise<{
