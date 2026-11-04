@@ -39,4 +39,4 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | [ADR-018](./018-trace-context-across-layers.md) | Trace Context Across Layers | Accepted |
 | [ADR-019](./019-outbox.md) | The Outbox | Accepted |
 | [ADR-020](./020-outbox-driver.md) | The Outbox Driver | Accepted |
-| [ADR-021](./021-queue.md) | The Queue | Proposed |
+| [ADR-021](./021-queue.md) | The Queue | Accepted |
