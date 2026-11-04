@@ -25,14 +25,14 @@ const eventsBuffer = async (opened: OpenedSubject) => {
   const capacity = await opened.outbox.capacity({ events: 0 });
   return {
     status: capacity.buffers.events?.status ?? capacity.status,
-    held: capacity.buffers.events?.held ?? 0,
+    heldCount: capacity.buffers.events?.heldCount ?? 0,
   };
 };
 
 /** Marks every unseen event seen, so the sweep may delete them. */
-const markEverythingSeen = async (opened: OpenedSubject, atMost: number) => {
+const markEverythingSeen = async (opened: OpenedSubject, maxCount: number) => {
   const entries = await opened.driver.listUnseenEvents({
-    atMost,
+    maxCount,
     olderThanMs: 0,
     restoreEvents: false,
   });
@@ -59,7 +59,7 @@ describe('inmemory: filling up and recovering', () => {
           refusedCount += 1;
         }
         const buffer = await eventsBuffer(opened);
-        expect(buffer.held).toBeLessThanOrEqual(120);
+        expect(buffer.heldCount).toBeLessThanOrEqual(120);
         statuses.push(buffer.status);
       }
       expect(refusedCount).toBe(30);
@@ -90,14 +90,14 @@ describe('inmemory: filling up and recovering', () => {
       await waitMs(1300);
       expect(await eventsBuffer(opened)).toEqual({
         status: 'tolerating',
-        held: 90,
+        heldCount: 90,
       });
       // drain to 75: past where it stops tolerating
       await markEverythingSeen(opened, 15);
       await waitMs(1300);
       expect(await eventsBuffer(opened)).toEqual({
         status: 'available',
-        held: 75,
+        heldCount: 75,
       });
       expect((await commitOneEvent(opened)).ok).toBe(true);
     } finally {
@@ -107,8 +107,8 @@ describe('inmemory: filling up and recovering', () => {
 
   it('never tolerates with no tolerance, and doubles its size with full tolerance', async () => {
     for (const buffer of [
-      { tolerance: 0, limit: 10, toleratingSeen: false },
-      { tolerance: 1, limit: 20, toleratingSeen: true },
+      { tolerance: 0, limitCount: 10, toleratingSeen: false },
+      { tolerance: 1, limitCount: 20, toleratingSeen: true },
     ]) {
       const opened = await inMemorySubject.open({
         inmemory: {
@@ -123,7 +123,7 @@ describe('inmemory: filling up and recovering', () => {
           if ((await eventsBuffer(opened)).status === 'tolerating')
             toleratingSeen = true;
         }
-        expect(committedCount).toBe(buffer.limit);
+        expect(committedCount).toBe(buffer.limitCount);
         expect(toleratingSeen).toBe(buffer.toleratingSeen);
       } finally {
         await opened.close();
@@ -149,7 +149,7 @@ describe('inmemory: filling up and recovering', () => {
         await commitOneEvent(large);
       expect(await eventsBuffer(large)).toEqual({
         status: 'available',
-        held: 100,
+        heldCount: 100,
       });
     } finally {
       await large.close();
@@ -214,7 +214,12 @@ describe('inmemory: filling up and recovering', () => {
         width: 10,
         depth: 2,
         workerCount: 8,
-        sweeper: { intervalMs: 20, olderThanMs: 0, atMost: 200, leaseMs: 5000 },
+        sweeper: {
+          intervalMs: 20,
+          olderThanMs: 0,
+          maxCount: 200,
+          leaseMs: 5000,
+        },
       });
       const pressured =
         outcome.pausedForRoom +

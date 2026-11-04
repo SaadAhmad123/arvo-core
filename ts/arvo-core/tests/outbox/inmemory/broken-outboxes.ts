@@ -398,7 +398,7 @@ export const brokenOutboxByCaseName: Record<string, () => IArvoOutbox> = {
         const committedEvents = await workingOutbox.readCommittedEvents(filter);
         return committedEvents.length > 0
           ? committedEvents
-          : workingOutbox.listUnseenEvents({ atMost: 1000, olderThanMs: 0 });
+          : workingOutbox.listUnseenEvents({ maxCount: 1000, olderThanMs: 0 });
       },
     }),
   ),
@@ -413,7 +413,7 @@ export const brokenOutboxByCaseName: Record<string, () => IArvoOutbox> = {
   'lists no more unseen events than asked for, the oldest': breakOutbox(
     (workingOutbox) => ({
       listUnseenEvents: (param) =>
-        workingOutbox.listUnseenEvents({ ...param, atMost: 1000 }),
+        workingOutbox.listUnseenEvents({ ...param, maxCount: 1000 }),
     }),
   ),
 
@@ -510,7 +510,7 @@ export const brokenOutboxByCaseName: Record<string, () => IArvoOutbox> = {
         for (const eventId of eventIds) {
           const [listedEvent] = (
             await workingOutbox.listUnseenEvents({
-              atMost: 1000,
+              maxCount: 1000,
               olderThanMs: 0,
             })
           ).filter((unseenEvent) => unseenEvent.id === eventId);
@@ -541,7 +541,7 @@ export const brokenOutboxByCaseName: Record<string, () => IArvoOutbox> = {
     (workingOutbox) => ({
       capacity: (request) => {
         const unseenEvents = workingOutbox.listUnseenEvents({
-          atMost: 100,
+          maxCount: 100,
           olderThanMs: 0,
         });
         workingOutbox.markEventsSeen(

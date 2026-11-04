@@ -16,7 +16,7 @@ const everyOperation = (outbox: IArvoOutbox) => {
       ),
     async () => outbox.commitEvents({ events: [buildEventRecord()] }),
     async () => outbox.readCommittedEvents({ executionId }),
-    async () => outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+    async () => outbox.listUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
     async () => outbox.markEventsSeen([crypto.randomUUID()]),
   ];
 };

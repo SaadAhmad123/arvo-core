@@ -165,7 +165,7 @@ export type RecordStore = {
    */
   drainOutbox(
     send: (one: CommittedEvent) => Promise<void>,
-    param?: { atMost?: number; afterMs?: number },
+    param?: { maxCount?: number; afterMs?: number },
   ): Promise<number>;
 };
 
@@ -326,7 +326,7 @@ export const storeFor = (pool: Pool): RecordStore => ({
     return marked.rowCount ?? 0;
   },
 
-  drainOutbox: async (send, { atMost = DRAIN_BATCH, afterMs = 0 } = {}) => {
+  drainOutbox: async (send, { maxCount = DRAIN_BATCH, afterMs = 0 } = {}) => {
     const client: PoolClient = await pool.connect();
     let published = 0;
 
@@ -347,7 +347,7 @@ export const storeFor = (pool: Pool): RecordStore => ({
          -- from several workers divides the work rather than repeating
          -- it.
          FOR UPDATE SKIP LOCKED`,
-        [atMost, afterMs],
+        [maxCount, afterMs],
       );
 
       for (const claimedEvent of claimed.rows) {

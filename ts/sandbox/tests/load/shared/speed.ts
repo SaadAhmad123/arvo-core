@@ -102,7 +102,7 @@ export const describeSpeed = (subject: LoadSubject): void => {
           for (;;) {
             const entries = await listings.time(() =>
               opened.driver.listUnseenEvents({
-                atMost: 1000,
+                maxCount: 1000,
                 olderThanMs: 0,
                 restoreEvents: false,
               }),

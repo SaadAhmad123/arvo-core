@@ -78,10 +78,10 @@ describe('ArvoMemoryOutbox and its clock', () => {
     outbox.commitEvents({ events: [buildEventRecord()] });
     moveTo(startMs + 1000);
     expect(
-      outbox.listUnseenEvents({ atMost: 10, olderThanMs: 1000 }),
+      outbox.listUnseenEvents({ maxCount: 10, olderThanMs: 1000 }),
     ).toHaveLength(1);
     expect(
-      outbox.listUnseenEvents({ atMost: 10, olderThanMs: 1001 }),
+      outbox.listUnseenEvents({ maxCount: 10, olderThanMs: 1001 }),
     ).toHaveLength(0);
   });
 
@@ -103,7 +103,7 @@ describe('ArvoMemoryOutbox and its clock', () => {
     );
     outbox.commitEvents({ events: eventsInCommitOrder.slice(2) });
     const unseenEvents = outbox.listUnseenEvents({
-      atMost: 10,
+      maxCount: 10,
       olderThanMs: 0,
     });
     expect(unseenEvents.map((event) => event.id)).toEqual(
@@ -121,7 +121,7 @@ describe('ArvoMemoryOutbox and its clock', () => {
     outbox.commitEvents({ events: [laterEvent] });
     moveTo(startMs);
     const unseenEvents = outbox.listUnseenEvents({
-      atMost: 10,
+      maxCount: 10,
       olderThanMs: 0,
     });
     expect(unseenEvents.map((event) => event.id)).toEqual([
@@ -154,7 +154,7 @@ describe('ArvoMemoryOutbox and its clock', () => {
       clock: () => new Date(Number.NaN),
     });
     expect(() =>
-      outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+      outbox.listUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
     ).toThrow(
       "ArvoMemoryOutbox's clock returned Invalid Date; a clock must return a valid Date.",
     );
@@ -261,7 +261,7 @@ describe('ArvoMemoryOutbox and what it holds', () => {
     if (readState) readState.step = 'changed';
     for (const readEvents of [
       outbox.readCommittedEvents({ executionId }),
-      outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+      outbox.listUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
     ]) {
       for (const readEvent of readEvents)
         Object.assign(readEvent, { payload: '"changed"', seen: true });
@@ -326,7 +326,7 @@ describe('ArvoMemoryOutbox and what it holds', () => {
       ),
       outbox.commitEvents({ events: [] }),
       outbox.readCommittedEvents({ executionId }),
-      outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+      outbox.listUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
       outbox.markEventsSeen([]),
     ];
     for (const answer of answers) expect(answer).not.toBeInstanceOf(Promise);
@@ -581,8 +581,18 @@ describe('ArvoMemoryOutbox and its capacity', () => {
     expect(outbox.capacity({ events: 2, state: { casVersion: 0 } })).toEqual({
       status: 'available',
       buffers: {
-        events: { status: 'available', held: 5, size: 10, limit: 12 },
-        states: { status: 'available', held: 2, size: 10, limit: 12 },
+        events: {
+          status: 'available',
+          heldCount: 5,
+          targetCount: 10,
+          limitCount: 12,
+        },
+        states: {
+          status: 'available',
+          heldCount: 2,
+          targetCount: 10,
+          limitCount: 12,
+        },
       },
     });
   });
@@ -592,13 +602,13 @@ describe('ArvoMemoryOutbox and its capacity', () => {
     commitNewExecution(outbox, 0);
     expect(
       outbox.capacity({ events: 0, state: { casVersion: 1 } }).buffers.states
-        ?.held,
+        ?.heldCount,
     ).toBe(1);
   });
 
   it('counts no state for events alone', async () => {
     const outbox = await openSmallOutbox();
-    expect(outbox.capacity({ events: 1 }).buffers.states?.held).toBe(0);
+    expect(outbox.capacity({ events: 1 }).buffers.states?.heldCount).toBe(0);
   });
 
   it('answers the worst of its buffers overall', async () => {
@@ -617,7 +627,7 @@ describe('ArvoMemoryOutbox and its capacity', () => {
     const outbox = await openSmallOutbox();
     const executionId = commitNewExecution(outbox, 1);
     outbox.capacity({ events: 100, state: { casVersion: 0 } });
-    expect(outbox.capacity({ events: 0 }).buffers.events?.held).toBe(1);
+    expect(outbox.capacity({ events: 0 }).buffers.events?.heldCount).toBe(1);
     expect(outbox.readLatestState(executionId)).not.toBeNull();
   });
 
@@ -647,7 +657,7 @@ describe('ArvoMemoryOutbox and leases', () => {
     outbox.commitEvents({ events });
     const listedEventIds = (leaseMs?: number) =>
       outbox
-        .listUnseenEvents({ atMost: 10, olderThanMs: 0, leaseMs })
+        .listUnseenEvents({ maxCount: 10, olderThanMs: 0, leaseMs })
         .map((event) => event.id);
     return {
       ...settableClock,
@@ -679,7 +689,7 @@ describe('ArvoMemoryOutbox and leases', () => {
     const { outbox, eventIds, listedEventIds } =
       await outboxWithTwoUnseenEvents();
     const leasedEvents = outbox.listUnseenEvents({
-      atMost: 1,
+      maxCount: 1,
       olderThanMs: 0,
       leaseMs: 1000,
     });
@@ -712,7 +722,7 @@ describe('ArvoMemoryOutbox and leases', () => {
       const { outbox, eventIds, listedEventIds } =
         await outboxWithTwoUnseenEvents();
       expect(() =>
-        outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0, leaseMs }),
+        outbox.listUnseenEvents({ maxCount: 10, olderThanMs: 0, leaseMs }),
       ).toThrow(
         `ArvoMemoryOutbox cannot lease events for ${leaseMs} milliseconds; a lease must be a whole number of milliseconds greater than zero, or left out for none.`,
       );
@@ -726,7 +736,7 @@ describe('ArvoMemoryOutbox and a listing that is no listing', () => {
     const outbox = await openMemoryOutbox();
     outbox.commitEvents({ events: [buildEventRecord()] });
     expect(() =>
-      outbox.listUnseenEvents({ atMost: -1, olderThanMs: 0 }),
+      outbox.listUnseenEvents({ maxCount: -1, olderThanMs: 0 }),
     ).toThrow('ArvoMemoryOutbox cannot list -1 unseen events');
   });
 });
@@ -868,13 +878,13 @@ describe('ArvoMemoryOutbox and its sweep', () => {
     sweepAt(startMs + 6000);
     expect(outbox.capacity({ events: 0 }).buffers.events).toMatchObject({
       status: 'tolerating',
-      held: 9,
+      heldCount: 9,
     });
     outbox.markEventsSeen(heldEvents.slice(2, 3).map((event) => event.id));
     sweepAt(startMs + 12_000);
     expect(outbox.capacity({ events: 0 }).buffers.events).toMatchObject({
       status: 'available',
-      held: 8,
+      heldCount: 8,
     });
   });
 
@@ -958,7 +968,7 @@ describe('ArvoMemoryOutbox and its life', () => {
         ),
       () => outbox.commitEvents({ events: [] }),
       () => outbox.readCommittedEvents({ executionId }),
-      () => outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+      () => outbox.listUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
       () => outbox.markEventsSeen([]),
     ];
   };

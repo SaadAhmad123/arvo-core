@@ -51,7 +51,9 @@ describe('an outbox driver error', () => {
   it('carries the capacity answer that stopped a commit', () => {
     const capacity: ArvoOutboxCapacity = {
       status: 'exhausted',
-      buffers: { events: { status: 'exhausted', held: 11, limit: 10 } },
+      buffers: {
+        events: { status: 'exhausted', heldCount: 11, limitCount: 10 },
+      },
     };
     const error = new ArvoOutboxDriverError({
       kind: 'capacity_exhausted',

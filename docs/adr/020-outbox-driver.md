@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-26
+- **Revised:** 2026-11-02, in place, wording only: the party this ADR once called *the sweeper*, which no ADR defines, is now the mechanism, which ADR-006 does. No rule changed
 - **Scope:** Arvo ecosystem
 - **Amends:** nothing. Every rule here is new
 - **Depends on:** [ADR-019](./019-outbox.md), which defines the outbox this ADR puts one party in front of; [ADR-006](./006-arvoeventhandler-protocol.md), which defines the state function a handler is given and the fault a handler raises where that function fails; [ADR-008](./008-execution-faults-and-abandonment.md), which fixes what a fault is and so what this ADR's error is not; [ADR-003](./003-arvoevent-cloudevent-transformation.md), whose transformation this party applies in both directions; [ADR-018](./018-trace-context-across-layers.md), which fixes how a party that carries an event joins its trace, and so what this party, which carries none, is not
@@ -76,7 +77,7 @@ The driver takes exactly what the handler's produced response carries: the next 
 
 **The driver owns the conversion in both directions.** It converts every event to CloudEvent JSON on the way in, and on the way out **it MUST be able to restore every payload it reads back**: parse the string and apply ADR-003's strict Arvo-shaped reverse, which is total for an event Arvo itself produced, so that what reaches Arvo from `read_committed_events` and `list_unseen_events` is a live event beside its record. A payload that does not restore to a valid event is a malformed return, kind `malformed_event`. Nothing in Arvo above the driver converts an event, and no outbox ever handles a live one.
 
-**Restoring is on by default and MAY be turned off per read.** Both reads take a flag, *restore events*, defaulting to on. Off, the driver returns the records with their payload strings as stored and no live event: the sweeper needs only the string, to put on the queue as it is, and restoring every payload there would be wasted work that could fail a sweep on an event that only needed forwarding. With restoring off, `malformed_event` cannot arise on that call; the record's fields are still checked, so `malformed_response` can.
+**Restoring is on by default and MAY be turned off per read.** Both reads take a flag, *restore events*, defaulting to on. Off, the driver returns the records with their payload strings as stored and no live event: sending needs only the string, to put on the queue as it is, and restoring every payload there would be wasted work that could fail a send on an event that only needed forwarding. With restoring off, `malformed_event` cannot arise on that call; the record's fields are still checked, so `malformed_response` can.
 
 ```mermaid
 flowchart LR
@@ -96,7 +97,7 @@ flowchart LR
     end
     H -- "1. commit" --> F
     F -- "2. payload" --> P
-    P -- "3. recovery or sweep,<br/>restore on" --> B
+    P -- "3. recovery or sending,<br/>restore on" --> B
     B -- "4. live event" --> R
     P -- "5. send the string as it is" --> Q
 ```
@@ -150,8 +151,8 @@ The driver checks the outbox's answer like every other (**On the way out**), and
 | commit with a record | after the handler returned | the error, kind `capacity_exhausted`, `state_exists`, `revision_stale`, `unavailable` or `malformed_response` |
 | commit events alone | when abandoning at the gate | the error, kind `capacity_exhausted`, `unavailable` or `malformed_response` |
 | read committed events | on a repeated delivery | the error, kind `unavailable`, `malformed_response`, or `malformed_event` where restoring is on |
-| list unseen events | the sweeper, outside any delivery | the error, kind `unavailable`, `malformed_response`, or `malformed_event` where restoring is on |
-| mark events seen | the sweeper, outside any delivery | the error, kind `unavailable` |
+| list unseen events | the mechanism, outside any delivery | the error, kind `unavailable`, `malformed_response`, or `malformed_event` where restoring is on |
+| mark events seen | the mechanism, outside any delivery | the error, kind `unavailable` |
 
 A failed or refused commit is not a fault because it happens after the handler is done and nothing landed. What follows is to run the delivery again, and whether to is the mechanism's policy, exactly as for any retryable fault.
 
@@ -166,7 +167,7 @@ flowchart TD
 
 ### The driver decides nothing
 
-**The driver MUST NOT retry, re-read on a refusal, abandon, or sweep on a timer.** It translates, checks and reports. Every decision about what to do next is the mechanism's. This is the same line ADR-017 draws for the dispatcher, for the same reason: a party that both reports and decides is a mechanism in all but name.
+**The driver MUST NOT retry, re-read on a refusal, abandon, or list unseen events on a timer.** It translates, checks and reports. Every decision about what to do next is the mechanism's. This is the same line ADR-017 draws for the dispatcher, for the same reason: a party that both reports and decides is a mechanism in all but name.
 
 ### Telemetry
 
@@ -175,7 +176,7 @@ flowchart TD
 ### What the driver is not
 
 - **Not an outbox.** It holds nothing and stores nothing.
-- **Not the mechanism.** It has no loop, no clock and no policy.
+- **Not the mechanism.** It has no clock and no policy, and runs nothing of its own accord.
 - **Not a place for logic.** Its value is that it is boring.
 
 ## Consequences
@@ -193,7 +194,7 @@ flowchart TD
 - **One more component every implementation must write and test,** between the mechanism and the outbox. Accepted because it replaces the same translation written in every place an outbox is touched.
 - **Every return is checked on every call,** including the payload fields of every event record. Accepted because the cost is small beside a call to the outbox, and the alternative is trusting what was stored.
 - **A refusal reaches Arvo as an error** even though it is ordinary. Accepted because on Arvo's side a commit that did not happen is a failure of the call, and one field tells the mechanism it was a race and not an outage.
-- **A read has two shapes,** with and without the live event. Accepted because the sweeper and recovery genuinely need different things, and one flag is cheaper than two operations.
+- **A read has two shapes,** with and without the live event. Accepted because sending and recovery genuinely need different things, and one flag is cheaper than two operations.
 - **Every commit asks the outbox a question first.** Accepted because it is what stops a commit an outbox has no room for, and how quickly the outbox answers is its own to decide.
 - **The question can be overtaken** by other commits landing before the driver's own. Accepted because nothing is lost by it, and an outbox that must keep its limit exactly refuses at commit.
 

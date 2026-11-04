@@ -67,7 +67,7 @@ export const describeSharedFailures = (subject: LoadSubject): void => {
               triggeringEvent: buildEvent({ executionId, dataBytes: 16 }),
             }),
             await driver.tryReadLatestState({ executionId }),
-            await driver.tryListUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+            await driver.tryListUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
             await driver.tryCapacity(),
           ];
           for (const answer of answers) {

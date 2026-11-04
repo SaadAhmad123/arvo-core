@@ -24,7 +24,7 @@ process.send?.({ kind: 'ready' });
 
 while (!stopping) {
   const listed = outbox.listUnseenEvents({
-    atMost: 100,
+    maxCount: 100,
     olderThanMs: 0,
     leaseMs: input.leaseMs,
   });

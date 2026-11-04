@@ -52,7 +52,7 @@ const commitSeenEvents = async (opened: OpenedSubject, count: number) => {
 
 /** How many events the outbox holds. */
 const eventsHeld = async (opened: OpenedSubject) =>
-  (await opened.outbox.capacity({ events: 0 })).buffers.events?.held ?? 0;
+  (await opened.outbox.capacity({ events: 0 })).buffers.events?.heldCount ?? 0;
 
 describe('inmemory: cleaning up', () => {
   it('deletes fifty thousand expired seen events in one sweep, timing how long it held the thread', async () => {
@@ -145,7 +145,7 @@ describe('inmemory: cleaning up', () => {
       await letOneSweepRun();
       thread.report('sweep of twenty thousand terminal states');
       const statesHeld = (await opened.outbox.capacity({ events: 0 })).buffers
-        .states?.held;
+        .states?.heldCount;
       expect(statesHeld).toBe(1000);
       expect(
         await opened.driver.readLatestState({ executionId: finished[0] ?? '' }),

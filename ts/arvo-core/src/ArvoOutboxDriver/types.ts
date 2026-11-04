@@ -149,14 +149,14 @@ export type ArvoOutboxDriverReadCommittedEventsParam =
     };
 
 /**
- * Which unseen events to list, and whether to restore them. `atMost`,
+ * Which unseen events to list, and whether to restore them. `maxCount`,
  * `olderThanMs` and `leaseMs` are passed to the outbox as they are; see
  * {@link ArvoOutboxUnseenEventsParam}.
  *
  * @example
  * ```typescript
  * const param: ArvoOutboxDriverListUnseenEventsParam = {
- *   atMost,
+ *   maxCount,
  *   olderThanMs,
  *   restoreEvents: false,
  * };

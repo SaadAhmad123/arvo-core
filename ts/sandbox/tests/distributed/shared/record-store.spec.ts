@@ -277,8 +277,8 @@ describe('the record store', () => {
     // holds, so an event is sent once even though neither knows about
     // the other.
     const [left, right] = await Promise.all([
-      store.drainOutbox(collect, { atMost: 3 }),
-      store.drainOutbox(collect, { atMost: 3 }),
+      store.drainOutbox(collect, { maxCount: 3 }),
+      store.drainOutbox(collect, { maxCount: 3 }),
     ]);
 
     expect(new Set(sent).size).toBe(sent.length);

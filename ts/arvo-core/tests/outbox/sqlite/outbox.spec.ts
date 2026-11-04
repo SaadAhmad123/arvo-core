@@ -275,7 +275,7 @@ describe('ArvoSqliteOutbox and how it answers', () => {
       ),
       outbox.commitEvents({ events: [] }),
       outbox.readCommittedEvents({ executionId }),
-      outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+      outbox.listUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
       outbox.markEventsSeen([]),
       outbox.deleteExpired(),
     ];
@@ -623,7 +623,7 @@ describe('ArvoSqliteOutbox and leases', () => {
       leaseMs?: number,
     ) =>
       listingOutbox
-        .listUnseenEvents({ atMost: 10, olderThanMs: 0, leaseMs })
+        .listUnseenEvents({ maxCount: 10, olderThanMs: 0, leaseMs })
         .map((event) => event.id);
     return {
       filename,
@@ -665,7 +665,7 @@ describe('ArvoSqliteOutbox and leases', () => {
     const { outbox, eventIds, listedEventIds } =
       await outboxWithTwoUnseenEvents();
     const leasedEvents = outbox.listUnseenEvents({
-      atMost: 1,
+      maxCount: 1,
       olderThanMs: 0,
       leaseMs: 60_000,
     });
@@ -688,7 +688,7 @@ describe('ArvoSqliteOutbox and leases', () => {
       const { outbox, eventIds, listedEventIds } =
         await outboxWithTwoUnseenEvents();
       expect(() =>
-        outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0, leaseMs }),
+        outbox.listUnseenEvents({ maxCount: 10, olderThanMs: 0, leaseMs }),
       ).toThrow(
         `ArvoSqliteOutbox cannot lease events for ${leaseMs} milliseconds; a lease must be a whole number of milliseconds greater than zero, or left out for none.`,
       );
@@ -781,7 +781,7 @@ describe('ArvoSqliteOutbox and the safety of its file', () => {
     const outbox = await openOutbox({ filename: newFilename() });
     outbox.commitEvents({ events: [buildEventRecord()] });
     expect(() =>
-      outbox.listUnseenEvents({ atMost: -1, olderThanMs: 0 }),
+      outbox.listUnseenEvents({ maxCount: -1, olderThanMs: 0 }),
     ).toThrow('ArvoSqliteOutbox cannot list -1 unseen events');
   });
 });
@@ -798,7 +798,7 @@ describe('ArvoSqliteOutbox and its life', () => {
         ),
       () => outbox.commitEvents({ events: [] }),
       () => outbox.readCommittedEvents({ executionId }),
-      () => outbox.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+      () => outbox.listUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
       () => outbox.markEventsSeen([]),
       () => outbox.deleteExpired(),
     ];

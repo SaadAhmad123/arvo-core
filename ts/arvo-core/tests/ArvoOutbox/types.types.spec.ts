@@ -160,9 +160,9 @@ describe('asking how much room an outbox has', () => {
     const bare: ArvoOutboxBufferCapacity = { status: 'tolerating' };
     const full: ArvoOutboxBufferCapacity = {
       status: 'exhausted',
-      held: 12,
-      size: 8,
-      limit: 10,
+      heldCount: 12,
+      targetCount: 8,
+      limitCount: 10,
     };
     const answer: ArvoOutboxCapacity = {
       status: 'exhausted',
@@ -184,16 +184,16 @@ describe('asking how much room an outbox has', () => {
 describe('listing unseen events', () => {
   it('takes how many to list, how recent is too recent, and how long to claim them', () => {
     expectTypeOf<ArvoOutboxUnseenEventsParam>().toEqualTypeOf<{
-      readonly atMost: number;
+      readonly maxCount: number;
       readonly olderThanMs: number;
       readonly leaseMs?: number;
     }>();
   });
 
   it('claims nothing where no lease is given', () => {
-    const param: ArvoOutboxUnseenEventsParam = { atMost: 10, olderThanMs: 0 };
+    const param: ArvoOutboxUnseenEventsParam = { maxCount: 10, olderThanMs: 0 };
     // @ts-expect-error no lease is left out, never null
     const nullLease: ArvoOutboxUnseenEventsParam = { ...param, leaseMs: null };
-    expect(nullLease.atMost).toBe(param.atMost);
+    expect(nullLease.maxCount).toBe(param.maxCount);
   });
 });

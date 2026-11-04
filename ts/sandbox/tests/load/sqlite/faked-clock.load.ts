@@ -81,7 +81,7 @@ const commitUnseen = async (opened: OpenedSubject, count: number) => {
 const listAllUnseen = async (opened: OpenedSubject) =>
   (
     await opened.driver.listUnseenEvents({
-      atMost: 10_000,
+      maxCount: 10_000,
       olderThanMs: 0,
       restoreEvents: false,
     })
@@ -164,27 +164,27 @@ describe('sqlite: a clock that jumps', () => {
     try {
       const eventIds = await commitUnseen(opened, 20);
       await opened.driver.listUnseenEvents({
-        atMost: 100,
+        maxCount: 100,
         olderThanMs: 0,
         leaseMs: hourMs,
         restoreEvents: false,
       });
       expect(
-        await opened.driver.listUnseenEvents({ atMost: 100, olderThanMs: 0 }),
+        await opened.driver.listUnseenEvents({ maxCount: 100, olderThanMs: 0 }),
       ).toEqual([]);
       setFakedTime(baseMs + 2 * hourMs);
       expect((await listAllUnseen(opened)).sort(byText)).toEqual(
         [...eventIds].sort(byText),
       );
       await opened.driver.listUnseenEvents({
-        atMost: 100,
+        maxCount: 100,
         olderThanMs: 0,
         leaseMs: hourMs,
         restoreEvents: false,
       });
       setFakedTime(baseMs);
       expect(
-        await opened.driver.listUnseenEvents({ atMost: 100, olderThanMs: 0 }),
+        await opened.driver.listUnseenEvents({ maxCount: 100, olderThanMs: 0 }),
       ).toEqual([]);
       setFakedTime(baseMs + 4 * hourMs);
       expect((await listAllUnseen(opened)).sort(byText)).toEqual(

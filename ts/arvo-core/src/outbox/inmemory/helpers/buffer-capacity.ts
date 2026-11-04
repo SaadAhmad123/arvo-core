@@ -5,41 +5,42 @@ import type {
 import type { ArvoMemoryOutboxBuffer } from '../types.js';
 
 /** The most a buffer holds before it is exhausted, as a whole number. */
-const limitOfBuffer = (buffer: ArvoMemoryOutboxBuffer): number =>
+const limitCountOfBuffer = (buffer: ArvoMemoryOutboxBuffer): number =>
   Math.floor(buffer.size * (1 + buffer.tolerance));
 
-/** The status of a buffer holding `held` with the limit given. */
+/** The status of a buffer holding `heldCount` with the limit given. */
 const statusOfBuffer = (param: {
-  readonly held: number;
-  readonly limit: number;
+  readonly heldCount: number;
+  readonly limitCount: number;
   readonly buffer: ArvoMemoryOutboxBuffer;
   readonly tolerating: boolean;
 }): ArvoOutboxCapacityStatus => {
-  if (param.held > param.limit) return 'exhausted';
-  if (param.held > param.buffer.size || param.tolerating) return 'tolerating';
+  if (param.heldCount > param.limitCount) return 'exhausted';
+  if (param.heldCount > param.buffer.size || param.tolerating)
+    return 'tolerating';
   return 'available';
 };
 
 /**
- * One buffer's capacity holding `held`: exhausted past its limit, else
+ * One buffer's capacity holding `heldCount`: exhausted past its limit, else
  * tolerating past its size or while its steady flag is set, else available.
  */
 export const bufferCapacity = (param: {
-  readonly held: number;
+  readonly heldCount: number;
   readonly buffer: ArvoMemoryOutboxBuffer;
   readonly tolerating: boolean;
 }): ArvoOutboxBufferCapacity => {
-  const limit = limitOfBuffer(param.buffer);
+  const limitCount = limitCountOfBuffer(param.buffer);
   return {
-    status: statusOfBuffer({ ...param, limit }),
-    held: param.held,
-    size: param.buffer.size,
-    limit,
+    status: statusOfBuffer({ ...param, limitCount }),
+    heldCount: param.heldCount,
+    targetCount: param.buffer.size,
+    limitCount,
   };
 };
 
-/** Whether a buffer holding `held` has drained far enough to stop tolerating. */
+/** Whether a buffer holding `heldCount` has drained far enough to stop tolerating. */
 export const isDrained = (
-  held: number,
+  heldCount: number,
   buffer: ArvoMemoryOutboxBuffer,
-): boolean => held <= Math.floor(buffer.size * (1 - buffer.tolerance));
+): boolean => heldCount <= Math.floor(buffer.size * (1 - buffer.tolerance));

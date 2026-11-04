@@ -77,7 +77,7 @@ export const describeAtOnce = (subject: LoadSubject): void => {
         const sweepUntilEmpty = async () => {
           for (;;) {
             const entries = await opened.driver.listUnseenEvents({
-              atMost: 100,
+              maxCount: 100,
               olderThanMs: 0,
               leaseMs: 60_000,
               restoreEvents: false,
@@ -113,7 +113,7 @@ export const describeAtOnce = (subject: LoadSubject): void => {
         const records = Array.from({ length: 50 }, () => buildRecord());
         await opened.outbox.commitEvents({ events: records });
         const slowSweep = await opened.driver.listUnseenEvents({
-          atMost: 50,
+          maxCount: 50,
           olderThanMs: 0,
           leaseMs: 100,
           restoreEvents: false,
@@ -121,14 +121,14 @@ export const describeAtOnce = (subject: LoadSubject): void => {
         expect(slowSweep).toHaveLength(50);
         expect(
           await opened.driver.listUnseenEvents({
-            atMost: 50,
+            maxCount: 50,
             olderThanMs: 0,
             leaseMs: 100,
           }),
         ).toHaveLength(0);
         await waitMs(300);
         const secondSweep = await opened.driver.listUnseenEvents({
-          atMost: 50,
+          maxCount: 50,
           olderThanMs: 0,
           leaseMs: 100,
           restoreEvents: false,
@@ -141,7 +141,10 @@ export const describeAtOnce = (subject: LoadSubject): void => {
           eventIds: slowSweep.map((entry) => entry.record.id),
         });
         expect(
-          await opened.driver.listUnseenEvents({ atMost: 50, olderThanMs: 0 }),
+          await opened.driver.listUnseenEvents({
+            maxCount: 50,
+            olderThanMs: 0,
+          }),
         ).toEqual([]);
       } finally {
         await opened.close();
@@ -163,7 +166,7 @@ export const describeAtOnce = (subject: LoadSubject): void => {
             // only what was marked seen before this listing began may not be in it
             const markedBeforeListing = new Set(markedIds);
             const entries = await opened.driver.listUnseenEvents({
-              atMost: 100,
+              maxCount: 100,
               olderThanMs: 0,
               restoreEvents: false,
             });
@@ -185,7 +188,10 @@ export const describeAtOnce = (subject: LoadSubject): void => {
         };
         await Promise.all([lister(), marker()]);
         expect(
-          await opened.driver.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+          await opened.driver.listUnseenEvents({
+            maxCount: 10,
+            olderThanMs: 0,
+          }),
         ).toEqual([]);
       } finally {
         await opened.close();
@@ -204,7 +210,7 @@ export const describeAtOnce = (subject: LoadSubject): void => {
           sweeper: {
             intervalMs: 10,
             olderThanMs: 0,
-            atMost: 200,
+            maxCount: 200,
             leaseMs: 2000,
           },
           unsentShare: 0.3,

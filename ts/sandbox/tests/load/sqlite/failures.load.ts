@@ -124,7 +124,7 @@ describe('sqlite: failures forced on purpose', () => {
     const fresh = await sqliteSubject.open({ sqlite: { filename } });
     try {
       expect(
-        await fresh.driver.listUnseenEvents({ atMost: 10, olderThanMs: 0 }),
+        await fresh.driver.listUnseenEvents({ maxCount: 10, olderThanMs: 0 }),
       ).toEqual([]);
       expect(existsSync(filename)).toBe(true);
     } finally {
@@ -152,7 +152,7 @@ describe('sqlite: failures forced on purpose', () => {
     try {
       reopened = await sqliteSubject.open({ sqlite: { filename } });
       const listed = await reopened.driver.tryListUnseenEvents({
-        atMost: 1000,
+        maxCount: 1000,
         olderThanMs: 0,
       });
       if (!listed.ok)

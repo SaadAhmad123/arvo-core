@@ -55,7 +55,7 @@ export type OutboxStatements = {
     EventRow
   >;
   readonly selectUnseenEvents: Database.Statement<
-    { now: string; cutOffModifier: string; atMost: number },
+    { now: string; cutOffModifier: string; maxCount: number },
     EventRow
   >;
   readonly leaseEvent: Database.Statement<{
@@ -137,14 +137,14 @@ export const prepareStatements = (
      order by sequence`,
   ),
   selectUnseenEvents: database.prepare<
-    { now: string; cutOffModifier: string; atMost: number },
+    { now: string; cutOffModifier: string; maxCount: number },
     EventRow
   >(
     `select ${eventColumns} from arvo_outbox_event
      where seen = 0
        and committed_at <= strftime('%Y-%m-%dT%H:%M:%fZ', @now, @cutOffModifier)
        and (leased_until is null or leased_until <= @now)
-     order by committed_at, sequence limit @atMost`,
+     order by committed_at, sequence limit @maxCount`,
   ),
   leaseEvent: database.prepare<{
     eventId: string;

@@ -4,9 +4,9 @@ import { refuseInvalidListing } from '../../../src/outbox/helpers/refuse-invalid
 describe('refusing a listing of unseen events that is no listing', () => {
   it('accepts a whole number to list, any age from zero, and a lease or none', () => {
     for (const param of [
-      { atMost: 0, olderThanMs: 0 },
-      { atMost: 10, olderThanMs: 1.5 },
-      { atMost: 10, olderThanMs: 0, leaseMs: 1 },
+      { maxCount: 0, olderThanMs: 0 },
+      { maxCount: 10, olderThanMs: 1.5 },
+      { maxCount: 10, olderThanMs: 0, leaseMs: 1 },
     ]) {
       expect(() => refuseInvalidListing('AnOutbox', param)).not.toThrow();
     }
@@ -14,11 +14,11 @@ describe('refusing a listing of unseen events that is no listing', () => {
 
   it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
     'refuses to list %s events',
-    (atMost) => {
+    (maxCount) => {
       expect(() =>
-        refuseInvalidListing('AnOutbox', { atMost, olderThanMs: 0 }),
+        refuseInvalidListing('AnOutbox', { maxCount, olderThanMs: 0 }),
       ).toThrow(
-        `AnOutbox cannot list ${atMost} unseen events; atMost must be a whole number, zero or more.`,
+        `AnOutbox cannot list ${maxCount} unseen events; maxCount must be a whole number, zero or more.`,
       );
     },
   );
@@ -27,7 +27,7 @@ describe('refusing a listing of unseen events that is no listing', () => {
     'refuses to list events at least %s milliseconds old',
     (olderThanMs) => {
       expect(() =>
-        refuseInvalidListing('AnOutbox', { atMost: 10, olderThanMs }),
+        refuseInvalidListing('AnOutbox', { maxCount: 10, olderThanMs }),
       ).toThrow(
         `AnOutbox cannot list unseen events older than ${olderThanMs} milliseconds; olderThanMs must be a finite number, zero or more.`,
       );
@@ -39,7 +39,7 @@ describe('refusing a listing of unseen events that is no listing', () => {
     (leaseMs) => {
       expect(() =>
         refuseInvalidListing('AnOutbox', {
-          atMost: 10,
+          maxCount: 10,
           olderThanMs: 0,
           leaseMs,
         }),

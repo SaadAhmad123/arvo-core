@@ -48,21 +48,21 @@ export type ArvoOutboxCapacityStatus = 'available' | 'tolerating' | 'exhausted';
  * ```typescript
  * const buffer: ArvoOutboxBufferCapacity = {
  *   status: 'tolerating',
- *   held,
- *   size,
- *   limit,
+ *   heldCount,
+ *   targetCount,
+ *   limitCount,
  * };
  * ```
  */
 export type ArvoOutboxBufferCapacity = {
   /** How much room this buffer would have. */
   readonly status: ArvoOutboxCapacityStatus;
-  /** How much it would hold, with what it is asked about added. */
-  readonly held?: number;
-  /** What it is meant to hold; past this, it is `tolerating`. */
-  readonly size?: number;
+  /** How many it would hold, with what it is asked about added. */
+  readonly heldCount?: number;
+  /** How many it is meant to hold; past this, it is `tolerating`. */
+  readonly targetCount?: number;
   /** The most it should ever hold; past this, it is `exhausted`. */
-  readonly limit?: number;
+  readonly limitCount?: number;
 };
 
 /**
@@ -78,7 +78,7 @@ export type ArvoOutboxBufferCapacity = {
  * ```typescript
  * const capacity: ArvoOutboxCapacity = {
  *   status: 'tolerating',
- *   buffers: { events: { status: 'tolerating', held, size, limit } },
+ *   buffers: { events: { status: 'tolerating', heldCount, targetCount, limitCount } },
  * };
  * ```
  */
