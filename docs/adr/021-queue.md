@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-02
+- **Revised:** 2026-11-04, in place, one rule: a lease asked for longer than the ceiling is refused as `lease_too_long`, a value, where rule 16 had the queue throw; and refusing an extension past the ceiling answers `lease_too_long`, not `lease_lost`, since the lease is intact. Rule 3 already said a refusal is an answer and a throw is an outage; rule 16 contradicted it. Nothing had implemented the rule
 - **Scope:** Arvo ecosystem
 - **Amends:** [ADR-006](./006-arvoeventhandler-protocol.md), **Required of infrastructure adapters** — one additive paragraph: a mechanism MAY carry events between deliveries through a queue as defined here, and where it does, the queue meets [ADR-019](./019-outbox.md) rule 16's demand on its behalf. Additive: nothing already there is replaced
 - **Depends on:** [ADR-019](./019-outbox.md), whose rule 16 demands something of a queue without naming one, and whose payload is what a queue carries; [ADR-003](./003-arvoevent-cloudevent-transformation.md), whose CloudEvent form that payload is in; [ADR-001](./001-arvoevent-structure.md), which makes an event's `id` unique everywhere; [ADR-009](./009-execution-bounds.md), which fixes that every delivery carries its attempt number, counted from zero, and that the wait before a retry is the mechanism's to apply; [ADR-008](./008-execution-faults-and-abandonment.md), whose fault carries the kind and the retry permission a mechanism reads when it decides to send an event back; [ADR-010](./010-delivery-classification-and-entry-validation.md), whose gate makes a repeated delivery safe to discard, which is what lets a queue deliver more than once; [ADR-014](./014-idempotency-keys.md), for the same reason on the application's side; [ADR-015](./015-no-ordering-guarantee.md), which forbids any party from promising order; [ADR-004](./004-multi-language-implementation-governance.md), which leaves API shape to each language
@@ -135,7 +136,8 @@ What each field may hold, so that two implementations agree before a value cross
 | `capacity`'s `events[].payload_bytes` | an integer, zero or more: the payload's size |
 | `held_count`, `target_count`, `limit_count`, `limit_bytes`, `oldest_ready_age_ms` | an integer, zero or more |
 | `too_large_ids` | ids from the asked-for list, each at most once |
-| `lease_ms` | an integer, one or more, and at most the queue's lease ceiling (rule 16) |
+| `lease_ms` | an integer, one or more; above the queue's lease ceiling it is refused (rule 16) |
+| `ceiling_ms` | an integer, one or more: the ceiling, carried on a `lease_too_long` refusal |
 
 #### What the payload is
 
@@ -155,8 +157,8 @@ Three fields are the queue's own and travel with every hand-out:
 
 ```
 enqueue(queued_events)                 → per queued event: kept | refused(reason)
-dequeue(max_count, lease_ms)             → leases, each with its queued event
-extend(lease_ids, lease_ms)            → per lease: kept | lease_lost
+dequeue(max_count, lease_ms)           → leases, each with its queued event | refused(lease_too_long)
+extend(lease_ids, lease_ms)            → per lease: kept | lease_lost | lease_too_long
 acknowledge(lease_ids)                 → per lease: kept | lease_lost
 capacity(events)                       → room for those: a status, and the kinds behind it
 ```
@@ -188,7 +190,7 @@ capacity(events)                       → room for those: a status, and the kin
 13. **A lease id is a plain string anyone may present.** `extend` and `acknowledge` MUST accept a lease id from any caller, in any process, as long as the lease is live. A queue MUST NOT bind a lease to a connection, a session or the process that took it. Because holding the string is holding the lease, a lease id MUST NOT be guessable: not a counter, not the queued event's `id`.
 14. **A queue MUST NOT lie about a lease.** Where `extend` or `acknowledge` is asked about a lease that has already ended, however it ended, the queue MUST answer `lease_lost` for it, and MUST NOT answer `kept`, because the queued event may already be in another taker's hands. It MUST NOT throw for it: it could do its work, and the answer is no. Every outcome is per lease, as rule 2 is per queued event. A taker that is told `lease_lost` does nothing further for that queued event: if the lease ran out, the queue has already made the event ready again (rule 12); if it was acknowledged, the event is finished. Either way there is nothing left for the taker to do, and making a copy would only add a repeat.
 15. **Acknowledged is gone.** A queued event whose lease is acknowledged MUST never be handed out again, whatever happens afterwards.
-16. **Leases have a ceiling.** A queue MUST hold, in its own options, a longest total time one lease may run, and MUST refuse an extension that would take the lease past it, as `lease_lost`. The refusal grants nothing and takes nothing: the lease keeps the expiry it had (rule 12). A `dequeue` or `extend` asking a `lease_ms` above the ceiling on its own is the caller's error and MUST throw; a queue MUST NOT grant a shorter lease than it was asked for, so a taker always knows how long it holds. The value is the deployment's; that there is one, and that it is kept, is the rule, so that a taker that is alive but stuck cannot hide a queued event for ever.
+16. **Leases have a ceiling.** A queue MUST hold, in its own options, a longest total time one lease may run, and MUST refuse an extension that would take the lease past it, as `lease_too_long`, carrying the ceiling. The refusal grants nothing and takes nothing: the lease keeps the expiry it had (rule 12), so it is not `lease_lost`, which means only that a lease has ended. A `dequeue` asking a `lease_ms` above the ceiling on its own is refused whole, as `lease_too_long` carrying the ceiling, and leases nothing; an `extend` asking one answers `lease_too_long` for every lease named. Neither is a throw: the queue could do its work, and the answer is no (rule 3). A queue MUST NOT grant a shorter lease than it was asked for, so a taker always knows how long it holds. The value is the deployment's; that there is one, and that it is kept, is the rule, so that a taker that is alive but stuck cannot hide a queued event for ever.
 
 ### Capacity
 
@@ -383,10 +385,12 @@ interface Queue
           | { id: string, outcome: 'refused', reason: 'too_large' | 'no_room' }
 
   dequeue(max_count: integer, lease_ms: integer):
-    list of { lease_id: string, queued_event: QueuedEvent, handout_count: integer, enqueued_at: timestamp }
+      { leases: list of { lease_id: string, queued_event: QueuedEvent, handout_count: integer, enqueued_at: timestamp } }
+    | { refusal: 'lease_too_long', ceiling_ms: integer }
 
   extend(lease_ids: list of string, lease_ms: integer):
     list of { lease_id: string, outcome: 'kept' | 'lease_lost' }
+          | { lease_id: string, outcome: 'lease_too_long', ceiling_ms: integer }
 
   acknowledge(lease_ids: list of string):
     list of { lease_id: string, outcome: 'kept' | 'lease_lost' }
