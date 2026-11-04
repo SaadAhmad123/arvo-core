@@ -40,3 +40,4 @@ This repository is the canonical source of Arvo ecosystem ADRs until a dedicated
 | [ADR-019](./019-outbox.md) | The Outbox | Accepted |
 | [ADR-020](./020-outbox-driver.md) | The Outbox Driver | Accepted |
 | [ADR-021](./021-queue.md) | The Queue | Accepted |
+| [ADR-022](./022-queue-driver.md) | The Queue Driver | Accepted |

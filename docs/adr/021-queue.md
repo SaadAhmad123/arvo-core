@@ -2,10 +2,10 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-02
-- **Revised:** 2026-11-04, in place, one rule: a lease asked for longer than the ceiling is refused as `lease_too_long`, a value, where rule 16 had the queue throw; and refusing an extension past the ceiling answers `lease_too_long`, not `lease_lost`, since the lease is intact. Rule 3 already said a refusal is an answer and a throw is an outage; rule 16 contradicted it. Nothing had implemented the rule
+- **Revised:** 2026-11-04, in place, one rule: a lease asked for longer than the ceiling is refused as `lease_too_long`, a value, where rule 16 had the queue throw; and refusing an extension past the ceiling answers `lease_too_long`, not `lease_lost`, since the lease is intact. Rule 3 already said a refusal is an answer and a throw is an outage; rule 16 contradicted it. Nothing had implemented the rule. Same day, wording: `capacity` is asked with each queued event's whole size, not its payload's, since the queue keeps and limits the whole queued event; the `payload` kind is named `size` and the entry's `payload_bytes` is `bytes`; and each field of the queued event states how its value is written and counted, so that `bytes` is their sum and one figure on both sides
 - **Scope:** Arvo ecosystem
 - **Amends:** [ADR-006](./006-arvoeventhandler-protocol.md), **Required of infrastructure adapters** — one additive paragraph: a mechanism MAY carry events between deliveries through a queue as defined here, and where it does, the queue meets [ADR-019](./019-outbox.md) rule 16's demand on its behalf. Additive: nothing already there is replaced
-- **Depends on:** [ADR-019](./019-outbox.md), whose rule 16 demands something of a queue without naming one, and whose payload is what a queue carries; [ADR-003](./003-arvoevent-cloudevent-transformation.md), whose CloudEvent form that payload is in; [ADR-001](./001-arvoevent-structure.md), which makes an event's `id` unique everywhere; [ADR-009](./009-execution-bounds.md), which fixes that every delivery carries its attempt number, counted from zero, and that the wait before a retry is the mechanism's to apply; [ADR-008](./008-execution-faults-and-abandonment.md), whose fault carries the kind and the retry permission a mechanism reads when it decides to send an event back; [ADR-010](./010-delivery-classification-and-entry-validation.md), whose gate makes a repeated delivery safe to discard, which is what lets a queue deliver more than once; [ADR-014](./014-idempotency-keys.md), for the same reason on the application's side; [ADR-015](./015-no-ordering-guarantee.md), which forbids any party from promising order; [ADR-004](./004-multi-language-implementation-governance.md), which leaves API shape to each language
+- **Depends on:** [ADR-019](./019-outbox.md), whose rule 16 demands something of a queue without naming one, and whose payload is what a queue carries; [ADR-003](./003-arvoevent-cloudevent-transformation.md), whose CloudEvent form that payload is in; [ADR-001](./001-arvoevent-structure.md), which makes an event's `id` unique everywhere; [ADR-002](./002-arvoevent-field-domain-constraints.md), whose string rules the queued event's fields and their byte count rest on; [ADR-009](./009-execution-bounds.md), which fixes that every delivery carries its attempt number, counted from zero, and that the wait before a retry is the mechanism's to apply; [ADR-008](./008-execution-faults-and-abandonment.md), whose fault carries the kind and the retry permission a mechanism reads when it decides to send an event back; [ADR-010](./010-delivery-classification-and-entry-validation.md), whose gate makes a repeated delivery safe to discard, which is what lets a queue deliver more than once; [ADR-014](./014-idempotency-keys.md), for the same reason on the application's side; [ADR-015](./015-no-ordering-guarantee.md), which forbids any party from promising order; [ADR-004](./004-multi-language-implementation-governance.md), which leaves API shape to each language
 - **Addresses, in part:** [ADR-000](./000-arvo-system-identity-and-architectural-principles.md) Deferred Decisions — "Infrastructure adapter interfaces and conformance", the transport adapter; [ADR-019](./019-outbox.md) **Left deferred** — "where events wait", the first of its three parts. Who moves them stays deferred
 - **Left deferred:** the party on Arvo's side that calls a queue; who moves events into and out of a queue; every retry policy; what the handler is told from a queued event; what is done with a `too_large` event; a crash loop; what an operator watches; conformance tests. See **Left deferred**
 
@@ -119,29 +119,40 @@ erDiagram
 
 What each field may hold, so that two implementations agree before a value crosses between them. ADR-002's constraints on an event's own fields carry over to the `event_*` fields, which hold those same values.
 
+The queued event's fields, each with how its value is written and so how many bytes it counts for:
+
+| Field | Domain | Written as, counted as |
+|---|---|---|
+| `id`, `event_id`, `event_source`, `event_type`, `event_subject`, `event_execution_id` | non-empty string; no control characters or unpaired surrogates, as ADR-002 constrains every string field of an event | its UTF-8 bytes |
+| `event_to`, `event_domain` | the same, or null | its UTF-8 bytes; null counts nothing |
+| `payload` | the event as CloudEvent JSON (**What the payload is**) | its UTF-8 bytes |
+| `delay_ms`, `attempt` | an integer, zero or more | decimal digits, no sign, no padding |
+| `failure_kind`, `failure_message`, `failure_stack` | a string as above, or null | its UTF-8 bytes; null counts nothing |
+| `failure_details` | a string holding a JSON document, or null | its UTF-8 bytes; null counts nothing |
+| `failed_at` | RFC 3339 with an offset, as ADR-001 fixes `time`, or null | its UTF-8 bytes; null counts nothing |
+
+**A queued event's `bytes` is the sum of the last column.** It counts the fields' own content and nothing of any written form around them: no key names, no quotes, no separators. It is the figure a `capacity` entry carries, and the figure a queue MUST judge `too_large` by, at `capacity` and at `enqueue` alike; a queue need not trust the figure it is given, since it holds every field and can count for itself. How a queue's own storage wraps the fields is its own, and never enters the figure.
+
+The lease's fields and the operations' arguments:
+
 | Field | Domain |
 |---|---|
-| `id`, `event_id`, `event_source`, `event_type`, `event_subject`, `event_execution_id` | non-empty string; no control characters or unpaired surrogates, as ADR-002 constrains every string field of an event |
-| `event_to`, `event_domain` | the same, or null |
-| `payload` | a string holding a JSON document |
-| `delay_ms` | an integer, zero or more |
-| `attempt` | an integer, zero or more |
-| `failure_kind`, `failure_message`, `failure_stack` | a string as above, or null |
-| `failure_details` | a string holding a JSON document, or null |
-| `failed_at`, `enqueued_at` | RFC 3339 with an offset, as ADR-001 fixes `time`; `failed_at` nullable |
+| `enqueued_at` | RFC 3339 with an offset, as ADR-001 fixes `time` |
 | `lease_id` | non-empty string, not guessable (rule 13) |
 | `handout_count` | an integer, one or more |
 | `max_count` | an integer, one or more |
-| `capacity`'s `events[].id` | a non-empty string, as `id` |
-| `capacity`'s `events[].payload_bytes` | an integer, zero or more: the payload's size |
-| `held_count`, `target_count`, `limit_count`, `limit_bytes`, `oldest_ready_age_ms` | an integer, zero or more |
-| `too_large_ids` | ids from the asked-for list, each at most once |
 | `lease_ms` | an integer, one or more; above the queue's lease ceiling it is refused (rule 16) |
 | `ceiling_ms` | an integer, one or more: the ceiling, carried on a `lease_too_long` refusal |
+| `capacity`'s `events[].id` | a non-empty string, as `id` |
+| `capacity`'s `events[].bytes` | an integer, zero or more: the queued event's `bytes`, as counted above |
+| `held_count`, `target_count`, `limit_count`, `limit_bytes`, `oldest_ready_age_ms` | an integer, zero or more |
+| `too_large_ids` | ids from the asked-for list, each at most once |
 
 #### What the payload is
 
 **The payload MUST be the event in CloudEvent form, as ADR-003 defines the transformation, written as a JSON string.** ADR-003 fixes CloudEvents as the form an event takes outside Arvo, and a queue is outside Arvo, so what goes on is what comes off: whoever enqueues puts the bytes on, and whoever dequeues takes the same bytes off. Nothing about a trip is written into the payload: a copy for a retry carries the same bytes as the trip before it. What a queued event knows about its trip lives beside the payload, never inside it.
+
+This is the same form [ADR-019](./019-outbox.md) fixes for the outbox's event record, under its own **What the payload is**, and for the same reason. The two ADRs fix the form and not the bytes, and each hands back the bytes it was given, so a payload taken from either is a valid payload for the other, byte for byte, with no conversion between them.
 
 #### The lease
 
@@ -194,11 +205,11 @@ capacity(events)                       → room for those: a status, and the kin
 
 ### Capacity
 
-A queue feels pressure at two ends and per event: no room to keep more, at the in end, on a bounded queue; takers not keeping up, at the out end, on every queue; and a payload too big to keep at all. Events that cannot be queued stay in the outbox unseen and are tried again, so a caller that cannot ask first hammers a full queue at exactly the moment it is struggling. `capacity` is the one question that answers all three, asked with the events the caller means to enqueue: each one's `id` and its payload's size in bytes, and nothing else.
+A queue feels pressure at two ends and per event: no room to keep more, at the in end, on a bounded queue; takers not keeping up, at the out end, on every queue; and a queued event too big to keep at all. Events that cannot be queued stay in the outbox unseen and are tried again, so a caller that cannot ask first hammers a full queue at exactly the moment it is struggling. `capacity` is the one question that answers all three, asked with the queued events the caller means to enqueue: each one's `id` and its whole size in bytes, payload and every field beside it, and nothing else. A stack trace or `failure_details` can outweigh the payload, so the payload's size alone would not be the queue's cost.
 
 17. **`capacity` MUST answer a status for the asked-for events, and MAY answer the kinds and numbers behind it.** The status is one of `available`, `tolerating` or `exhausted`. Behind it the queue MAY give up to three kinds, each with its own status in the same three words:
     - `room` — whether it can keep that many more. It MAY give how many it would then hold (`held_count`), what it is meant to hold (`target_count`; past this, `tolerating`) and the most it should ever hold (`limit_count`; past this, `exhausted`).
-    - `payload` — whether each payload can be kept at all. `exhausted` here never clears. It MAY give the limit in bytes where the limit is one number, and MUST give the ids whose payload cannot be kept, as `too_large_ids`, where it answers other than `available`.
+    - `size` — whether each queued event can be kept at all, by its size. `exhausted` here never clears. It MAY give the limit in bytes where the limit is one number, and MUST give the ids of the queued events that cannot be kept, as `too_large_ids`, where it answers other than `available`.
     - `backlog` — how far behind the takers are, by the age of the oldest ready queued event. It MAY give that age.
 
     A queue that limits nothing and measures nothing answers `available` with no kinds, and pays nothing for this operation.
@@ -208,7 +219,7 @@ A queue feels pressure at two ends and per event: no room to keep more, at the i
 21. **An answer MAY hold steady.** A queue that has answered `tolerating` for a kind MAY keep doing so until that kind has eased well below where it began, so that one event in or out does not flip the answer.
 22. **An answer can be overtaken.** Other callers land between asking and enqueueing, and an estimate can be off. Nothing held is lost or altered by this. **A queue whose limit must never be passed MUST refuse inside `enqueue`**, with `no_room` or `too_large`, because `capacity` alone cannot hold a line.
 23. **Whether `enqueue` enforces it is the implementer's.** A queue MAY refuse at `enqueue` what it would answer `exhausted` for, and need not. `capacity` states the queue's room; it does not oblige the queue to defend it.
-24. **`payload` at `available` is a promise.** An id the `payload` kind did not name will not be refused as `too_large` by the `enqueue` that follows, so a caller can set aside the named ones and send the rest. Nothing else in the answer is a promise: `room` at `available` can still meet `no_room`, and a queue that gave no `payload` kind may still refuse a payload.
+24. **`size` at `available` is a promise.** An id the `size` kind did not name will not be refused as `too_large` by the `enqueue` that follows, so a caller can set aside the named ones and send the rest. Nothing else in the answer is a promise: `room` at `available` can still meet `no_room`, and a queue that gave no `size` kind may still refuse a queued event as too large.
 25. **`backlog` describes the takers, not the queue.** It is given so that a caller can ease off a queue whose takers are behind. The queue is asked to do nothing about it, and this ADR says nothing about how old is too old.
 26. **Nothing here is policy.** What a caller does with `tolerating`, with `exhausted` of any kind, or with an old backlog is the mechanism's, and deferred.
 
@@ -219,7 +230,7 @@ A queue feels pressure at two ends and per event: no room to keep more, at the i
 ### Copies and moves
 
 28. **A retry is a copy with a new `id`.** A mechanism that will run a queued event again later makes a new queued event: the same `payload`, `attempt` one higher, the failure fields set, `delay_ms` as its wait, and a **new `id`**. It enqueues the copy and then acknowledges the lease it holds, in that order, so that a crash between the two leaves a duplicate and never a loss. The queue sees two unrelated queued events, and rule 5 is why it must.
-29. **A move keeps its `id`.** A mechanism that takes a queued event off one queue and puts it on another, as to a dead-letter queue, enqueues it there **with the same `id`** and `attempt` unchanged, and then acknowledges the lease it holds. If it crashes between the two, the queued event comes back and is moved again, and the receiving queue MAY recognise the repeat under rule 5. The receiving queue's `handout_count` starts again, because it is that queue's own; a mechanism that wants the count it left behind kept writes it into `failure_details`. A replay, from a dead-letter queue back to a working one, is a copy under rule 28 and not a move: it carries a new `id`, so that rule 5 on the working queue can never swallow it. `too_large` is final for a copy: the same bytes will be refused again, so a mechanism MUST NOT answer it with a retry.
+29. **A move keeps its `id`.** A mechanism that takes a queued event off one queue and puts it on another, as to a dead-letter queue, enqueues it there **with the same `id`** and `attempt` unchanged, and then acknowledges the lease it holds. If it crashes between the two, the queued event comes back and is moved again, and the receiving queue MAY recognise the repeat under rule 5. The receiving queue's `handout_count` starts again, because it is that queue's own; a mechanism that wants the count it left behind kept writes it into `failure_details`. A replay, from a dead-letter queue back to a working one, is an enqueue like any other; the working queue no longer holds the `id` it once acknowledged (rule 5), so nothing there can swallow it, whatever `attempt` the replay carries. `too_large` is final for a copy: the same bytes will be refused again, so a mechanism MUST NOT answer it with a retry.
 30. **The failure fields travel together.** On a first trip all five are null. On a copy, and on a move, the caller MUST set `failure_kind`, `failure_message` and `failed_at`, MAY set `failure_stack` and `failure_details`, and MUST NOT set any of the five while `failure_kind` is null.
 
 ### How the operations compose
@@ -323,7 +334,7 @@ Considered: letting a queue that cannot extend a lease leave the operation out, 
 
 ### Capacity asked with a count
 
-Considered: `capacity` asked with how many events, as the outbox is, and the size of the largest. Rejected because it pre-digests the batch on the queue's behalf and so assumes which totals the queue limits on: some limit the count, some the largest payload, some the bytes of a batch or of everything held. Given one entry per event, each with its `id` and size, the queue works out whichever sums it needs, and can name the ids that will not fit. The cost is a short string and a number per event, and the queue still opens nothing.
+Considered: `capacity` asked with how many events, as the outbox is, and the size of the largest. Rejected because it pre-digests the batch on the queue's behalf and so assumes which totals the queue limits on: some limit the count, some the largest entry, some the bytes of a batch or of everything held. Given one entry per event, each with its `id` and size, the queue works out whichever sums it needs, and can name the ids that will not fit. The cost is a short string and a number per event, and the queue still opens nothing.
 
 ### One status word for every kind of pressure
 
@@ -395,18 +406,18 @@ interface Queue
   acknowledge(lease_ids: list of string):
     list of { lease_id: string, outcome: 'kept' | 'lease_lost' }
 
-  capacity(events: list of { id: string, payload_bytes: integer }): {
+  capacity(events: list of { id: string, bytes: integer }): {
     status: 'available' | 'tolerating' | 'exhausted',          the worst of the kinds
     kinds: {
       room?:    { status, held_count?: integer, target_count?: integer, limit_count?: integer },
-      payload?: { status, limit_bytes?: integer, too_large_ids?: list of string },
+      size?:    { status, limit_bytes?: integer, too_large_ids?: list of string },
       backlog?: { status, oldest_ready_age_ms?: integer }
     }
   }
     held_count          — how many it would hold with the asked-for events added
     target_count        — what it is meant to hold; past this, tolerating
     limit_count         — the most it should ever hold; past this, exhausted
-    too_large_ids       — the ids whose payload cannot be kept
+    too_large_ids       — the ids of the queued events that cannot be kept, by size
     oldest_ready_age_ms — how long the oldest ready queued event has waited
 
   open(): nothing          optional

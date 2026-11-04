@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-26
-- **Revised:** 2026-11-02, in place, wording only: the party this ADR once called *the sweeper*, which no ADR defines, is now the mechanism, which ADR-006 does. No rule changed
+- **Revised:** 2026-11-02, in place, wording only: the party this ADR once called *the sweeper*, which no ADR defines, is now the mechanism, which ADR-006 does. No rule changed; 2026-11-04, the appendix's `at_most` follows ADR-019's `max_count`
 - **Scope:** Arvo ecosystem
 - **Amends:** nothing. Every rule here is new
 - **Depends on:** [ADR-019](./019-outbox.md), which defines the outbox this ADR puts one party in front of; [ADR-006](./006-arvoeventhandler-protocol.md), which defines the state function a handler is given and the fault a handler raises where that function fails; [ADR-008](./008-execution-faults-and-abandonment.md), which fixes what a fault is and so what this ADR's error is not; [ADR-003](./003-arvoevent-cloudevent-transformation.md), whose transformation this party applies in both directions; [ADR-018](./018-trace-context-across-layers.md), which fixes how a party that carries an event joins its trace, and so what this party, which carries none, is not
@@ -268,7 +268,7 @@ driver, holding one Outbox
   commit_events(events, triggering_event)     → nothing,     or raises OutboxError
   read_committed_events(filter, restore_events = true)
                                               → list of { event?, record }, or raises OutboxError
-  list_unseen_events(at_most, older_than, restore_events = true)
+  list_unseen_events(max_count, older_than, restore_events = true)
                                               → list of { event?, record }, or raises OutboxError
                                                  (event present where restoring is on; a payload
                                                   that will not restore is malformed_event)
